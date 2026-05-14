@@ -92,17 +92,15 @@
             passwordInput.value
           );
 
-        if(result.success) {
+       if(result.success) {
 
-          status.innerText =
-            "Logged In Successfully ✅";
+  window.location.href = "./dashboard/";
 
-        } else {
+} else {
 
-          status.innerText =
-            result.error;
+  status.innerText = result.error;
 
-        }
+}
 
       });
 
