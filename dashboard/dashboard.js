@@ -1,3 +1,11 @@
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  doc,
+  getDoc
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { protectPage } from "../core/auth/auth-guard.js";
 import auth from "../core/firebase/firebase-auth.js";
 import db from "../core/firebase/firebase-db.js";
@@ -7,11 +15,6 @@ import { logoutUser } from "../core/auth/auth.js";
 import {
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-
-import {
-  doc,
-  getDoc
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 protectPage();
 
@@ -44,7 +47,7 @@ if (userSnap.exists()) {
     `${window.location.origin}/Familybusiness/templates/${projectSlug}/?user=${user.uid}`;
 
   linkInput.value = link;
-
+loadOrders(user.uid);
 }
 
 });
@@ -70,3 +73,50 @@ document
       "تم نسخ الرابط ✅";
 
   });
+async function loadOrders(providerId) {
+
+  const ordersContainer =
+    document.getElementById("ordersContainer");
+
+  ordersContainer.innerHTML = "جاري التحميل...";
+
+  const q = query(
+    collection(db, "orders"),
+    where("providerId", "==", providerId)
+  );
+
+  const snapshot = await getDocs(q);
+
+  ordersContainer.innerHTML = "";
+
+  if (snapshot.empty) {
+
+    ordersContainer.innerHTML =
+      "<p>لا توجد طلبات بعد</p>";
+
+    return;
+
+  }
+
+  snapshot.forEach((docSnap) => {
+
+    const order = docSnap.data();
+
+    const card = document.createElement("div");
+
+    card.style.border = "1px solid #ddd";
+    card.style.padding = "10px";
+    card.style.margin = "10px 0";
+
+    card.innerHTML = `
+      <p><b>الاسم:</b> ${order.customerName}</p>
+      <p><b>الهاتف:</b> ${order.customerPhone}</p>
+      <p><b>العنوان:</b> ${order.customerAddress}</p>
+      <p><b>الحالة:</b> ${order.status}</p>
+    `;
+
+    ordersContainer.appendChild(card);
+
+  });
+
+}
