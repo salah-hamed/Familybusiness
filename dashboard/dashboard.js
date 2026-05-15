@@ -27,16 +27,25 @@ onAuthStateChanged(auth, async (user) => {
   const userRef = doc(db, "users", user.uid);
   const userSnap = await getDoc(userRef);
 
-  if (userSnap.exists()) {
+if (userSnap.exists()) {
 
-    const data = userSnap.data();
+  const data = userSnap.data();
 
-    userName.innerText = "Name: " + data.name;
-    userEmail.innerText = "Email: " + data.email;
-    projectType.innerText = "Project: " + (data.projectType || "Not selected");
-    status.innerText = "Active: " + data.isActive;
+  userName.innerText = "Name: " + data.name;
+  userEmail.innerText = "Email: " + data.email;
+  projectType.innerText = "Project: " + (data.projectType || "cleaning");
+  status.innerText = "Active: " + data.isActive;
 
-  }
+  const linkInput = document.getElementById("projectLink");
+
+  const projectSlug = data.projectType || "cleaning";
+
+  const link =
+    `${window.location.origin}/Familybusiness/templates/${projectSlug}/?user=${user.uid}`;
+
+  linkInput.value = link;
+
+}
 
 });
 
