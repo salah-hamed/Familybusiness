@@ -58,3 +58,15 @@ document
     window.location.href = "/Familybusiness/";
 
   });
+document
+  .getElementById("copyLinkBtn")
+  .addEventListener("click", async () => {
+
+    const link = document.getElementById("projectLink").value;
+
+    await navigator.clipboard.writeText(link);
+
+    document.getElementById("copyStatus").innerText =
+      "تم نسخ الرابط ✅";
+
+  });
