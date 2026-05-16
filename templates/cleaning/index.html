@@ -1,28 +1,101 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ar">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
-  <title>Cleaning Service</title>
+  <title>خدمة تنظيف</title>
+
+  <style>
+    body{
+      font-family:Arial;
+      max-width:600px;
+      margin:auto;
+      padding:20px;
+      background:#f8f8f8;
+    }
+
+    .box{
+      background:white;
+      padding:20px;
+      border-radius:12px;
+      box-shadow:0 2px 8px rgba(0,0,0,.08);
+    }
+
+    input,button,a{
+      width:100%;
+      margin:8px 0;
+      padding:12px;
+      border-radius:8px;
+      border:1px solid #ddd;
+      box-sizing:border-box;
+      text-align:center;
+      text-decoration:none;
+    }
+
+    button{
+      background:#111;
+      color:white;
+      border:none;
+    }
+
+    .linkBtn{
+      display:block;
+      background:#f0f0f0;
+      color:black;
+    }
+
+    .cta{
+      margin-top:25px;
+      font-size:14px;
+      text-align:center;
+    }
+  </style>
+
 </head>
 <body>
 
-  <h1>طلب خدمة تنظيف</h1>
+<div class="box">
+
+  <h1 id="businessTitle">خدمة تنظيف</h1>
+
+  <p>احجز خدمة تنظيف منزل بسهولة وسرعة.</p>
 
   <input id="customerName" placeholder="الاسم">
-  <br><br>
 
   <input id="customerPhone" placeholder="رقم الهاتف">
-  <br><br>
 
   <input id="customerAddress" placeholder="العنوان">
-  <br><br>
 
-  <button id="submitOrder">إرسال الطلب</button>
+  <button id="submitOrder">
+    إرسال الطلب
+  </button>
+
+  <a id="whatsappBtn" class="linkBtn" target="_blank">
+    تواصل واتساب
+  </a>
+
+  <a id="paymentBtn" class="linkBtn" target="_blank">
+    الدفع عبر InstaPay
+  </a>
 
   <p id="status"></p>
 
-  <script type="module" src="./app.js"></script>
+</div>
+
+<div class="cta">
+
+  عندك فكرة مشروع خدمي؟  
+  ابدأ مشروعك الخاص الآن من خلال
+
+  <br><br>
+
+  <a href="https://salah-hamed.github.io/Familybusiness/">
+    Familybusiness Platform
+  </a>
+
+</div>
+
+<script type="module" src="./app.js"></script>
 
 </body>
 </html>
