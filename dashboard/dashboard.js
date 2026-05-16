@@ -1,10 +1,11 @@
-import {
+import {import {
   collection,
   query,
   where,
   getDocs,
   doc,
-  getDoc
+  getDoc,
+  updateDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { protectPage } from "../core/auth/auth-guard.js";
 import auth from "../core/firebase/firebase-auth.js";
@@ -47,6 +48,14 @@ if (userSnap.exists()) {
     `${window.location.origin}/Familybusiness/templates/${projectSlug}/?user=${user.uid}`;
 
   linkInput.value = link;
+  document.getElementById("businessName").value =
+  data.businessName || "";
+
+document.getElementById("whatsappNumber").value =
+  data.whatsappNumber || "";
+
+document.getElementById("instapayLink").value =
+  data.instapayLink || "";
 loadOrders(user.uid);
 }
 
@@ -120,3 +129,29 @@ async function loadOrders(providerId) {
   });
 
 }
+document
+  .getElementById("saveSettingsBtn")
+  .addEventListener("click", async () => {
+
+    const user = auth.currentUser;
+
+    if (!user) return;
+
+    await updateDoc(
+      doc(db, "users", user.uid),
+      {
+        businessName:
+          document.getElementById("businessName").value,
+
+        whatsappNumber:
+          document.getElementById("whatsappNumber").value,
+
+        instapayLink:
+          document.getElementById("instapayLink").value
+      }
+    );
+
+    document.getElementById("settingsStatus").innerText =
+      "تم حفظ الإعدادات ✅";
+
+  });
