@@ -1,46 +1,88 @@
 import { createOrder } from "./orders.js";
+import db from "../../core/firebase/firebase-db.js";
+
+import {
+  doc,
+  getDoc
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const customerName = document.getElementById("customerName");
 const customerPhone = document.getElementById("customerPhone");
 const customerAddress = document.getElementById("customerAddress");
 const status = document.getElementById("status");
 
-document
-  .getElementById("submitOrder")
-  .addEventListener("click", async () => {
+const businessTitle = document.getElementById("businessTitle");
+const whatsappBtn = document.getElementById("whatsappBtn");
+const paymentBtn = document.getElementById("paymentBtn");
 
-    const params = new URLSearchParams(window.location.search);
+init();
 
-    const providerId = params.get("user");
+async function init() {
 
-    if (!providerId) {
+  const params =
+    new URLSearchParams(window.location.search);
 
-      status.innerText = "الرابط غير صالح";
-      return;
+  const providerId =
+    params.get("user");
 
-    }
+  if (!providerId) {
 
-    const order = {
+    status.innerText = "الرابط غير صالح";
+    return;
 
-      providerId,
-      templateType: "cleaning",
-      customerName: customerName.value,
-      customerPhone: customerPhone.value,
-      customerAddress: customerAddress.value,
-      status: "new"
+  }
 
-    };
+  const userRef =
+    doc(db, "users", providerId);
 
-    const result = await createOrder(order);
+  const userSnap =
+    await getDoc(userRef);
 
-    if (result.success) {
+  if (!userSnap.exists()) return;
 
-      status.innerText = "تم إرسال الطلب ✅";
+  const userData =
+    userSnap.data();
 
-    } else {
+  businessTitle.innerText =
+    userData.businessName || "خدمة تنظيف";
 
-      status.innerText = result.error;
+  if (userData.whatsappNumber) {
 
-    }
+    whatsappBtn.href =
+      `https://wa.me/${userData.whatsappNumber}`;
 
-  });
+  }
+
+  if (userData.instapayLink) {
+
+    paymentBtn.href =
+      userData.instapayLink;
+
+  }
+
+  document
+    .getElementById("submitOrder")
+    .addEventListener("click", async () => {
+
+      const order = {
+
+        providerId,
+        templateType: "cleaning",
+        customerName: customerName.value,
+        customerPhone: customerPhone.value,
+        customerAddress: customerAddress.value,
+        status: "new"
+
+      };
+
+      const result =
+        await createOrder(order);
+
+      status.innerText =
+        result.success
+          ? "تم إرسال الطلب ✅"
+          : result.error;
+
+    });
+
+}
