@@ -2,87 +2,123 @@ import { createOrder } from "./orders.js";
 import db from "../../core/firebase/firebase-db.js";
 
 import {
-  doc,
-  getDoc
+doc,
+getDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-const customerName = document.getElementById("customerName");
-const customerPhone = document.getElementById("customerPhone");
-const customerAddress = document.getElementById("customerAddress");
-const status = document.getElementById("status");
+const fields = [
+"customerName",
+"customerPhone",
+"customerAddress",
+"location"
+];
 
-const businessTitle = document.getElementById("businessTitle");
-const whatsappBtn = document.getElementById("whatsappBtn");
-const paymentBtn = document.getElementById("paymentBtn");
+fields.forEach(id => {
+const el = document.getElementById(id);
+
+el.value = localStorage.getItem(id) || "";
+
+el.addEventListener("input", () => {
+localStorage.setItem(id, el.value);
+});
+});
+
+const rooms = document.getElementById("rooms");
+const bathrooms = document.getElementById("bathrooms");
+const kitchen = document.getElementById("kitchen");
+const priceBox = document.getElementById("priceBox");
+
+function calculatePrice(){
+
+let price = 100;
+
+price += Number(rooms.value) * 40;
+price += Number(bathrooms.value) * 20;
+
+if(kitchen.value === "yes"){
+price += 30;
+}
+
+priceBox.innerText = price + " جنيه";
+
+}
+
+rooms.onchange = calculatePrice;
+bathrooms.onchange = calculatePrice;
+kitchen.onchange = calculatePrice;
+
+calculatePrice();
 
 init();
 
-async function init() {
+async function init(){
 
-  const params =
-    new URLSearchParams(window.location.search);
+const params = new URLSearchParams(window.location.search);
+const providerId = params.get("user");
 
-  const providerId =
-    params.get("user");
+if(!providerId) return;
 
-  if (!providerId) {
+const userSnap = await getDoc(doc(db,"users",providerId));
 
-    status.innerText = "الرابط غير صالح";
-    return;
+if(!userSnap.exists()) return;
 
-  }
+const userData = userSnap.data();
 
-  const userRef =
-    doc(db, "users", providerId);
+document.getElementById("businessTitle").innerText =
+userData.businessName || "خدمة تنظيف";
 
-  const userSnap =
-    await getDoc(userRef);
+document.getElementById("whatsappBtn").href =
+`https://wa.me/${userData.whatsappNumber || ""}`;
 
-  if (!userSnap.exists()) return;
+document.getElementById("paymentBtn").href =
+userData.instapayLink || "#";
 
-  const userData =
-    userSnap.data();
+document
+.getElementById("submitOrder")
+.addEventListener("click", async ()=>{
 
-  businessTitle.innerText =
-    userData.businessName || "خدمة تنظيف";
+const order = {
 
-  if (userData.whatsappNumber) {
+providerId,
+templateType:"cleaning",
 
-    whatsappBtn.href =
-      `https://wa.me/${userData.whatsappNumber}`;
+customerName:
+document.getElementById("customerName").value,
 
-  }
+customerPhone:
+document.getElementById("customerPhone").value,
 
-  if (userData.instapayLink) {
+customerAddress:
+document.getElementById("customerAddress").value,
 
-    paymentBtn.href =
-      userData.instapayLink;
+rooms: rooms.value,
+bathrooms: bathrooms.value,
+kitchen: kitchen.value,
 
-  }
+visitDate:
+document.getElementById("visitDate").value,
 
-  document
-    .getElementById("submitOrder")
-    .addEventListener("click", async () => {
+visitTime:
+document.getElementById("visitTime").value,
 
-      const order = {
+location:
+document.getElementById("location").value,
 
-        providerId,
-        templateType: "cleaning",
-        customerName: customerName.value,
-        customerPhone: customerPhone.value,
-        customerAddress: customerAddress.value,
-        status: "new"
+price:
+priceBox.innerText,
 
-      };
+status:"new"
 
-      const result =
-        await createOrder(order);
+};
 
-      status.innerText =
-        result.success
-          ? "تم إرسال الطلب ✅"
-          : result.error;
+const result = await createOrder(order);
 
-    });
+document.getElementById("status").innerText =
+result.success ? "تم الإرسال ✅" : result.error;
+
+document.getElementById("orderState").innerText =
+"قيد المراجعة";
+
+});
 
 }
