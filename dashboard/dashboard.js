@@ -131,27 +131,44 @@ async function loadOrders(providerId) {
 }
 document
   .getElementById("saveSettingsBtn")
-  .addEventListener("click", async () => {
+  .addEventListener("click", async function () {
 
-    const user = auth.currentUser;
+    try {
 
-    if (!user) return;
+      const user = auth.currentUser;
 
-    await updateDoc(
-      doc(db, "users", user.uid),
-      {
-        businessName:
-          document.getElementById("businessName").value,
-
-        whatsappNumber:
-          document.getElementById("whatsappNumber").value,
-
-        instapayLink:
-          document.getElementById("instapayLink").value
+      if (!user) {
+        return;
       }
-    );
 
-    document.getElementById("settingsStatus").innerText =
-      "تم حفظ الإعدادات ✅";
+      const businessName =
+        document.getElementById("businessName").value;
+
+      const whatsappNumber =
+        document.getElementById("whatsappNumber").value;
+
+      const instapayLink =
+        document.getElementById("instapayLink").value;
+
+      await updateDoc(
+        doc(db, "users", user.uid),
+        {
+          businessName,
+          whatsappNumber,
+          instapayLink
+        }
+      );
+
+      document.getElementById("settingsStatus").innerText =
+        "تم حفظ الإعدادات ✅";
+
+    } catch(error) {
+
+      document.getElementById("settingsStatus").innerText =
+        error.message;
+
+      console.log(error);
+
+    }
 
   });
