@@ -1,4 +1,13 @@
-import {import {
+import { protectPage } from "../core/auth/auth-guard.js";
+import auth from "../core/firebase/firebase-auth.js";
+import db from "../core/firebase/firebase-db.js";
+import { logoutUser } from "../core/auth/auth.js";
+
+import {
+  onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+import {
   collection,
   query,
   where,
@@ -7,15 +16,7 @@ import {import {
   getDoc,
   updateDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { protectPage } from "../core/auth/auth-guard.js";
-import auth from "../core/firebase/firebase-auth.js";
-import db from "../core/firebase/firebase-db.js";
 
-import { logoutUser } from "../core/auth/auth.js";
-
-import {
-  onAuthStateChanged
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 protectPage();
 
@@ -24,42 +25,51 @@ const userEmail = document.getElementById("userEmail");
 const projectType = document.getElementById("projectType");
 const status = document.getElementById("status");
 
+const projectLink = document.getElementById("projectLink");
+const businessName = document.getElementById("businessName");
+const whatsappNumber = document.getElementById("whatsappNumber");
+const instapayLink = document.getElementById("instapayLink");
+
+
 onAuthStateChanged(auth, async (user) => {
 
   if (!user) return;
 
-  const userRef = doc(db, "users", user.uid);
-  const userSnap = await getDoc(userRef);
+  try {
 
-if (userSnap.exists()) {
+    const userRef = doc(db, "users", user.uid);
+    const userSnap = await getDoc(userRef);
 
-  const data = userSnap.data();
+    if (!userSnap.exists()) return;
 
-  userName.innerText = "Name: " + data.name;
-  userEmail.innerText = "Email: " + data.email;
-  projectType.innerText = "Project: " + (data.projectType || "cleaning");
-  status.innerText = "Active: " + data.isActive;
+    const data = userSnap.data();
 
-  const linkInput = document.getElementById("projectLink");
+    userName.innerText = "Name: " + data.name;
+    userEmail.innerText = "Email: " + data.email;
+    projectType.innerText = "Project: " + (data.projectType || "cleaning");
+    status.innerText = "Active: " + data.isActive;
 
-  const projectSlug = data.projectType || "cleaning";
+    const projectSlug = data.projectType || "cleaning";
 
-  const link =
-    `${window.location.origin}/Familybusiness/templates/${projectSlug}/?user=${user.uid}`;
+    const link =
+      `${window.location.origin}/Familybusiness/templates/${projectSlug}/?user=${user.uid}`;
 
-  linkInput.value = link;
-  document.getElementById("businessName").value =
-  data.businessName || "";
+    projectLink.value = link;
 
-document.getElementById("whatsappNumber").value =
-  data.whatsappNumber || "";
+    businessName.value = data.businessName || "";
+    whatsappNumber.value = data.whatsappNumber || "";
+    instapayLink.value = data.instapayLink || "";
 
-document.getElementById("instapayLink").value =
-  data.instapayLink || "";
-loadOrders(user.uid);
-}
+    await loadOrders(user.uid);
+
+  } catch(error) {
+
+    console.log(error);
+
+  }
 
 });
+
 
 document
   .getElementById("logoutBtn")
@@ -70,92 +80,36 @@ document
     window.location.href = "/Familybusiness/";
 
   });
+
+
 document
   .getElementById("copyLinkBtn")
   .addEventListener("click", async () => {
 
-    const link = document.getElementById("projectLink").value;
-
-    await navigator.clipboard.writeText(link);
+    await navigator.clipboard.writeText(projectLink.value);
 
     document.getElementById("copyStatus").innerText =
       "تم نسخ الرابط ✅";
 
   });
-async function loadOrders(providerId) {
 
-  const ordersContainer =
-    document.getElementById("ordersContainer");
 
-  ordersContainer.innerHTML = "جاري التحميل...";
-
-  const q = query(
-    collection(db, "orders"),
-    where("providerId", "==", providerId)
-  );
-
-  const snapshot = await getDocs(q);
-
-  ordersContainer.innerHTML = "";
-
-  if (snapshot.empty) {
-
-    ordersContainer.innerHTML =
-      "<p>لا توجد طلبات بعد</p>";
-
-    return;
-
-  }
-
-  snapshot.forEach((docSnap) => {
-
-    const order = docSnap.data();
-
-    const card = document.createElement("div");
-
-    card.style.border = "1px solid #ddd";
-    card.style.padding = "10px";
-    card.style.margin = "10px 0";
-
-    card.innerHTML = `
-      <p><b>الاسم:</b> ${order.customerName}</p>
-      <p><b>الهاتف:</b> ${order.customerPhone}</p>
-      <p><b>العنوان:</b> ${order.customerAddress}</p>
-      <p><b>الحالة:</b> ${order.status}</p>
-    `;
-
-    ordersContainer.appendChild(card);
-
-  });
-
-}
 document
   .getElementById("saveSettingsBtn")
-  .addEventListener("click", async function () {
+  .addEventListener("click", async () => {
 
     try {
 
       const user = auth.currentUser;
 
-      if (!user) {
-        return;
-      }
-
-      const businessName =
-        document.getElementById("businessName").value;
-
-      const whatsappNumber =
-        document.getElementById("whatsappNumber").value;
-
-      const instapayLink =
-        document.getElementById("instapayLink").value;
+      if (!user) return;
 
       await updateDoc(
         doc(db, "users", user.uid),
         {
-          businessName,
-          whatsappNumber,
-          instapayLink
+          businessName: businessName.value,
+          whatsappNumber: whatsappNumber.value,
+          instapayLink: instapayLink.value
         }
       );
 
@@ -172,3 +126,62 @@ document
     }
 
   });
+
+
+async function loadOrders(providerId) {
+
+  const ordersContainer =
+    document.getElementById("ordersContainer");
+
+  ordersContainer.innerHTML = "جاري التحميل...";
+
+  try {
+
+    const q = query(
+      collection(db, "orders"),
+      where("providerId", "==", providerId)
+    );
+
+    const snapshot = await getDocs(q);
+
+    ordersContainer.innerHTML = "";
+
+    if (snapshot.empty) {
+
+      ordersContainer.innerHTML =
+        "<p>لا توجد طلبات بعد</p>";
+
+      return;
+
+    }
+
+    snapshot.forEach((docSnap) => {
+
+      const order = docSnap.data();
+
+      const card = document.createElement("div");
+
+      card.style.border = "1px solid #ddd";
+      card.style.padding = "10px";
+      card.style.margin = "10px 0";
+
+      card.innerHTML = `
+        <p><b>الاسم:</b> ${order.customerName}</p>
+        <p><b>الهاتف:</b> ${order.customerPhone}</p>
+        <p><b>العنوان:</b> ${order.customerAddress}</p>
+        <p><b>الحالة:</b> ${order.status}</p>
+      `;
+
+      ordersContainer.appendChild(card);
+
+    });
+
+  } catch(error) {
+
+    ordersContainer.innerHTML = error.message;
+
+    console.log(error);
+
+  }
+
+}
