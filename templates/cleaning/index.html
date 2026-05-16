@@ -6,34 +6,41 @@
 <title>خدمة تنظيف</title>
 
 <style>
+
 body{
 margin:0;
 font-family:Arial;
-background:#f5f5f5;
 direction:rtl;
+background:linear-gradient(135deg,#4f46e5,#06b6d4);
+color:#fff;
 }
 
 .container{
-max-width:500px;
+max-width:520px;
 margin:auto;
 padding:15px;
 }
 
-.card{
-background:#fff;
-padding:18px;
-border-radius:16px;
-box-shadow:0 3px 12px rgba(0,0,0,.08);
-margin-bottom:15px;
+.header{
+text-align:center;
+padding:20px 10px;
 }
 
-input,select,button,a{
+.card{
+background:#fff;
+color:#111;
+padding:15px;
+border-radius:18px;
+margin-bottom:15px;
+box-shadow:0 10px 25px rgba(0,0,0,.2);
+}
+
+input,select,button{
 width:100%;
 padding:12px;
-margin:7px 0;
-border-radius:10px;
+margin:8px 0;
+border-radius:12px;
 border:1px solid #ddd;
-box-sizing:border-box;
 font-size:15px;
 }
 
@@ -41,106 +48,92 @@ button{
 background:#111;
 color:#fff;
 border:none;
-}
-
-a{
-display:block;
-text-align:center;
-text-decoration:none;
-background:#f1f1f1;
-color:#111;
-}
-
-.price{
-font-size:22px;
 font-weight:bold;
+}
+
+.priceBox{
+font-size:24px;
 text-align:center;
+font-weight:bold;
+color:#4f46e5;
 margin:10px 0;
 }
 
 .cta{
 text-align:center;
-font-size:14px;
-padding:20px;
+font-size:13px;
+margin-top:20px;
+opacity:.9;
 }
+
+a{
+display:block;
+text-align:center;
+padding:12px;
+border-radius:12px;
+background:#fff;
+color:#111;
+text-decoration:none;
+margin:8px 0;
+font-weight:bold;
+}
+
 </style>
 
 </head>
+
 <body>
 
 <div class="container">
 
+<div class="header">
+<h1 id="businessTitle">خدمة تنظيف</h1>
+<p>احصل على خدمة تنظيف احترافية خلال دقائق</p>
+</div>
+
 <div class="card">
 
-<h2 id="businessTitle">خدمة تنظيف</h2>
-
-<p>احجز خدمة تنظيف منزل بسهولة.</p>
-
 <input id="customerName" placeholder="الاسم">
-
-<input id="customerPhone" placeholder="الهاتف">
-
+<input id="customerPhone" placeholder="رقم الهاتف">
 <input id="customerAddress" placeholder="العنوان">
 
 <select id="rooms">
-<option value="1">غرفة واحدة</option>
+<option value="1">غرفة</option>
 <option value="2">غرفتين</option>
 <option value="3">3 غرف</option>
-<option value="4">4 غرف</option>
 </select>
 
 <select id="bathrooms">
 <option value="1">حمام</option>
-<option value="2">2 حمام</option>
-<option value="3">3 حمام</option>
+<option value="2">حمامين</option>
 </select>
 
 <select id="kitchen">
-<option value="yes">يوجد مطبخ</option>
+<option value="yes">مطبخ</option>
 <option value="no">بدون مطبخ</option>
 </select>
 
-<input type="date" id="visitDate">
-
-<input type="time" id="visitTime">
-
-<input id="location" placeholder="الموقع">
-
-<div class="price" id="priceBox">
-150 جنيه
+<div class="priceBox" id="priceBox">
+جاري حساب السعر...
 </div>
 
 <button id="submitOrder">
-إرسال الطلب
+احجز الآن
 </button>
 
-<a id="whatsappBtn" target="_blank">
-تواصل واتساب
-</a>
-
-<a id="paymentBtn" target="_blank">
-الدفع الآن
-</a>
-
-<p id="status"></p>
+<div id="status"></div>
 
 </div>
 
 <div class="card">
-<h3>حالة الطلب</h3>
-<p id="orderState">لم يتم الطلب بعد</p>
+
+<a id="whatsappBtn">تواصل واتساب</a>
+<a id="paymentBtn">الدفع الآن</a>
+
 </div>
 
 <div class="cta">
-
-ابدأ مشروعك الخاص الآن
-
-<br><br>
-
-<a href="https://salah-hamed.github.io/Familybusiness/">
-الدخول للمنصة
-</a>
-
+🚀 اطلب خدمتك بسهولة خلال دقائق بدون أي تعقيد
 </div>
 
 </div>
