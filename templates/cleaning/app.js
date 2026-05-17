@@ -1,6 +1,10 @@
 import { createOrder } from "./orders.js";
 import db from "../../core/firebase/firebase-db.js";
-import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+import {
+doc,
+getDoc
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 let priceConfig = {
 base:100,
@@ -14,27 +18,37 @@ const bathrooms = document.getElementById("bathrooms");
 const kitchen = document.getElementById("kitchen");
 const priceBox = document.getElementById("priceBox");
 
+const whatsappBtn = document.getElementById("whatsappBtn");
+const paymentBtn = document.getElementById("paymentBtn");
+
 function calcPrice(){
+
 let price = priceConfig.base;
 
-price += rooms.value * priceConfig.room;
-price += bathrooms.value * priceConfig.bathroom;
-if(kitchen.value==="yes") price += priceConfig.kitchen;
+price += Number(rooms.value) * priceConfig.room;
+price += Number(bathrooms.value) * priceConfig.bathroom;
+if(kitchen.value === "yes") price += priceConfig.kitchen;
 
 priceBox.innerText = price + " جنيه";
 return price;
+
 }
 
 rooms.onchange = calcPrice;
 bathrooms.onchange = calcPrice;
 kitchen.onchange = calcPrice;
 
+calcPrice();
+
 async function init(){
 
-const providerId = new URLSearchParams(location.search).get("user");
+const providerId =
+new URLSearchParams(location.search).get("user");
+
 if(!providerId) return;
 
 const snap = await getDoc(doc(db,"users",providerId));
+
 if(!snap.exists()) return;
 
 const data = snap.data();
@@ -42,16 +56,24 @@ const data = snap.data();
 document.getElementById("businessTitle").innerText =
 data.businessName || "خدمة تنظيف";
 
-document.getElementById("whatsappBtn").href =
-`https://wa.me/${data.whatsappNumber || ""}`;
+// WhatsApp fix
+if(data.whatsappNumber){
 
-document.getElementById("paymentBtn").href =
-data.instapayLink || "#";
+const cleanNumber = data.whatsappNumber.replace(/\D/g,"");
 
-// لو صاحب المشروع حاطط تسعير خاص
-if(data.priceConfig){
-priceConfig = {...priceConfig,...data.priceConfig};
-calcPrice();
+whatsappBtn.href = cleanNumber
+? `https://wa.me/20${cleanNumber}`
+: "#";
+
+}else{
+whatsappBtn.classList.add("hidden");
+}
+
+// InstaPay fix
+if(data.instapayLink && data.instapayLink.startsWith("http")){
+paymentBtn.href = data.instapayLink;
+}else{
+paymentBtn.classList.add("hidden");
 }
 
 document.getElementById("submitOrder").onclick = async ()=>{
@@ -79,4 +101,3 @@ res.success ? "تم استلام طلبك بنجاح 🎉" : res.error;
 }
 
 init();
-calcPrice();
