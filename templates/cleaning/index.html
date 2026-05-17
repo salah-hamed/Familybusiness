@@ -42,6 +42,7 @@ margin:8px 0;
 border-radius:12px;
 border:1px solid #ddd;
 font-size:15px;
+box-sizing:border-box;
 }
 
 button{
@@ -49,21 +50,7 @@ background:#111;
 color:#fff;
 border:none;
 font-weight:bold;
-}
-
-.priceBox{
-font-size:24px;
-text-align:center;
-font-weight:bold;
-color:#4f46e5;
-margin:10px 0;
-}
-
-.cta{
-text-align:center;
-font-size:13px;
-margin-top:20px;
-opacity:.9;
+cursor:pointer;
 }
 
 a{
@@ -78,6 +65,25 @@ margin:8px 0;
 font-weight:bold;
 }
 
+.priceBox{
+font-size:22px;
+text-align:center;
+font-weight:bold;
+color:#111;
+margin:10px 0;
+}
+
+.cta{
+text-align:center;
+font-size:13px;
+margin-top:20px;
+opacity:.95;
+}
+
+.hidden{
+display:none;
+}
+
 </style>
 
 </head>
@@ -88,7 +94,7 @@ font-weight:bold;
 
 <div class="header">
 <h1 id="businessTitle">خدمة تنظيف</h1>
-<p>احصل على خدمة تنظيف احترافية خلال دقائق</p>
+<p>احجز خدمتك بسهولة خلال دقائق</p>
 </div>
 
 <div class="card">
@@ -113,13 +119,9 @@ font-weight:bold;
 <option value="no">بدون مطبخ</option>
 </select>
 
-<div class="priceBox" id="priceBox">
-جاري حساب السعر...
-</div>
+<div class="priceBox" id="priceBox">0 جنيه</div>
 
-<button id="submitOrder">
-احجز الآن
-</button>
+<button id="submitOrder">احجز الآن</button>
 
 <div id="status"></div>
 
@@ -127,13 +129,13 @@ font-weight:bold;
 
 <div class="card">
 
-<a id="whatsappBtn">تواصل واتساب</a>
-<a id="paymentBtn">الدفع الآن</a>
+<a id="whatsappBtn" target="_blank">تواصل واتساب</a>
+<a id="paymentBtn" target="_blank">الدفع الآن</a>
 
 </div>
 
 <div class="cta">
-🚀 اطلب خدمتك بسهولة خلال دقائق بدون أي تعقيد
+🚀 ابدأ مشروعك الخاص الآن وامتلك نشاطك الخدمي خلال دقائق
 </div>
 
 </div>
