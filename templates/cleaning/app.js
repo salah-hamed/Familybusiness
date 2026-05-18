@@ -1,6 +1,5 @@
 import { createOrder } from "./orders.js";
 import db from "../../core/firebase/firebase-db.js";
-
 import { cleaningConfig } from "../../core/templates/cleaning.config.js";
 
 import {
@@ -10,44 +9,79 @@ getDoc
 
 let config = cleaningConfig;
 
-const rooms = document.getElementById("rooms");
-const bathrooms = document.getElementById("bathrooms");
-const kitchen = document.getElementById("kitchen");
-const priceBox = document.getElementById("priceBox");
+/* =========================
+   SAFE DOM INIT
+========================= */
+
+function getEl(id){
+return document.getElementById(id);
+}
+
+const rooms = getEl("rooms");
+const bathrooms = getEl("bathrooms");
+const kitchen = getEl("kitchen");
+const priceBox = getEl("priceBox");
+
+/* =========================
+   PRICE ENGINE
+========================= */
 
 function calcPrice(){
 
+if(!priceBox) return 0;
+
 let price = config.basePrice;
 
-price += Number(rooms.value) * config.fields.rooms.price;
-price += Number(bathrooms.value) * config.fields.bathrooms.price;
+price += Number(rooms?.value || 0) * config.fields.rooms.price;
+price += Number(bathrooms?.value || 0) * config.fields.bathrooms.price;
 
-if(kitchen.value === "yes"){
+if(kitchen?.value === "yes"){
 price += config.fields.kitchen.price;
 }
 
 priceBox.innerText = price + " جنيه";
 return price;
-
 }
+
+/* =========================
+   INIT EVENTS
+========================= */
+
+function initPriceListeners(){
+
+if(!rooms || !bathrooms || !kitchen) return;
 
 rooms.onchange = calcPrice;
 bathrooms.onchange = calcPrice;
 kitchen.onchange = calcPrice;
 
 calcPrice();
+}
 
-/* GPS */
-document.getElementById("getLocationBtn").onclick = () => {
+/* =========================
+   GPS
+========================= */
+
+const gpsBtn = getEl("getLocationBtn");
+
+if(gpsBtn){
+gpsBtn.onclick = () => {
 
 navigator.geolocation.getCurrentPosition((pos)=>{
 
-document.getElementById("location").value =
-`${pos.coords.latitude}, ${pos.coords.longitude}`;
+const loc = getEl("location");
+if(loc){
+loc.value = `${pos.coords.latitude}, ${pos.coords.longitude}`;
+}
 
 });
 
 };
+}
+
+/* =========================
+   LOAD USER TEMPLATE
+========================= */
 
 async function init(){
 
@@ -62,58 +96,66 @@ if(!snap.exists()) return;
 
 const data = snap.data();
 
-document.getElementById("businessTitle").innerText =
-data.businessName || "خدمة تنظيف";
+/* title */
+const title = getEl("businessTitle");
+if(title){
+title.innerText = data.businessName || "خدمة تنظيف";
+}
 
 /* WhatsApp */
-if(data.whatsappNumber){
+const wa = getEl("whatsappBtn");
+if(wa && data.whatsappNumber){
 
-const clean =
-data.whatsappNumber.replace(/\D/g,"");
-
-document.getElementById("whatsappBtn").href =
-`https://wa.me/20${clean}`;
+const clean = data.whatsappNumber.replace(/\D/g,"");
+wa.href = `https://wa.me/20${clean}`;
 
 }
 
-/* InstaPay */
-if(data.instapayLink){
-
-document.getElementById("paymentBtn").href =
-data.instapayLink;
-
+/* Payment */
+const pay = getEl("paymentBtn");
+if(pay && data.instapayLink){
+pay.href = data.instapayLink;
 }
 
-/* Order submit */
-document.getElementById("submitOrder").onclick = async ()=>{
+/* ORDER */
+const submit = getEl("submitOrder");
+
+if(submit){
+submit.onclick = async ()=>{
 
 const order = {
-
 providerId,
 templateType:"cleaning",
 
-customerName:document.getElementById("customerName").value,
-customerPhone:document.getElementById("customerPhone").value,
-customerAddress:document.getElementById("customerAddress").value,
-location:document.getElementById("location").value,
+customerName:getEl("customerName")?.value || "",
+customerPhone:getEl("customerPhone")?.value || "",
+customerAddress:getEl("customerAddress")?.value || "",
+location:getEl("location")?.value || "",
 
-rooms:rooms.value,
-bathrooms:bathrooms.value,
-kitchen:kitchen.value,
+rooms:rooms?.value,
+bathrooms:bathrooms?.value,
+kitchen:kitchen?.value,
 
 price:calcPrice(),
-
 status:"new"
 };
 
 const res = await createOrder(order);
 
-document.getElementById("status").innerText =
-res.success
+const status = getEl("status");
+if(status){
+status.innerText = res.success
 ? "تم استلام الطلب بنجاح 🎉"
 : res.error;
+}
 
 };
+
+}
+
+/* start pricing */
+initPriceListeners();
+calcPrice();
 
 }
 
