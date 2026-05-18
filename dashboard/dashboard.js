@@ -16,21 +16,6 @@ import {
   getDoc,
   updateDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-if(data.priceConfig){
-
-document.getElementById("basePrice").value =
-data.priceConfig.base || "";
-
-document.getElementById("roomPrice").value =
-data.priceConfig.room || "";
-
-document.getElementById("bathroomPrice").value =
-data.priceConfig.bathroom || "";
-
-document.getElementById("kitchenPrice").value =
-data.priceConfig.kitchen || "";
-
-}
 
 protectPage();
 
@@ -43,7 +28,6 @@ const projectLink = document.getElementById("projectLink");
 const businessName = document.getElementById("businessName");
 const whatsappNumber = document.getElementById("whatsappNumber");
 const instapayLink = document.getElementById("instapayLink");
-
 
 onAuthStateChanged(auth, async (user) => {
 
@@ -64,19 +48,70 @@ onAuthStateChanged(auth, async (user) => {
     status.innerText = "Active: " + data.isActive;
 
     const projectSlug = data.projectType || "cleaning";
-
-    const link =
+    projectLink.value =
       `${window.location.origin}/Familybusiness/templates/${projectSlug}/?user=${user.uid}`;
-
-    projectLink.value = link;
 
     businessName.value = data.businessName || "";
     whatsappNumber.value = data.whatsappNumber || "";
     instapayLink.value = data.instapayLink || "";
 
+    if (data.priceConfig) {
+      document.getElementById("basePrice").value = data.priceConfig.base || "";
+      document.getElementById("roomPrice").value = data.priceConfig.room || "";
+      document.getElementById("bathroomPrice").value = data.priceConfig.bathroom || "";
+      document.getElementById("kitchenPrice").value = data.priceConfig.kitchen || "";
+    }
+
     await loadOrders(user.uid);
 
-  } catch(error) {
+  } catch (error) {
+    console.log(error);
+  }
+
+});
+
+
+document.getElementById("logoutBtn").addEventListener("click", async () => {
+
+  await logoutUser();
+  window.location.href = "/Familybusiness/";
+
+});
+
+
+document.getElementById("copyLinkBtn").addEventListener("click", async () => {
+
+  await navigator.clipboard.writeText(projectLink.value);
+
+  document.getElementById("copyStatus").innerText =
+    "تم نسخ الرابط ✅";
+
+});
+
+
+document.getElementById("saveSettingsBtn").addEventListener("click", async () => {
+
+  try {
+
+    const user = auth.currentUser;
+    if (!user) return;
+
+    await updateDoc(
+      doc(db, "users", user.uid),
+      {
+        businessName: businessName.value,
+        whatsappNumber: whatsappNumber.value,
+        instapayLink: instapayLink.value
+      }
+    );
+
+    document.getElementById("settingsStatus").innerText =
+      "تم حفظ الإعدادات ✅";
+
+  } catch (error) {
+
+    document.getElementById("settingsStatus").innerText =
+      error.message;
 
     console.log(error);
 
@@ -85,61 +120,38 @@ onAuthStateChanged(auth, async (user) => {
 });
 
 
-document
-  .getElementById("logoutBtn")
-  .addEventListener("click", async () => {
+document.getElementById("savePricingBtn").addEventListener("click", async () => {
 
-    await logoutUser();
+  try {
 
-    window.location.href = "/Familybusiness/";
+    const user = auth.currentUser;
+    if (!user) return;
 
-  });
-
-
-document
-  .getElementById("copyLinkBtn")
-  .addEventListener("click", async () => {
-
-    await navigator.clipboard.writeText(projectLink.value);
-
-    document.getElementById("copyStatus").innerText =
-      "تم نسخ الرابط ✅";
-
-  });
-
-
-document
-  .getElementById("saveSettingsBtn")
-  .addEventListener("click", async () => {
-
-    try {
-
-      const user = auth.currentUser;
-
-      if (!user) return;
-
-      await updateDoc(
-        doc(db, "users", user.uid),
-        {
-          businessName: businessName.value,
-          whatsappNumber: whatsappNumber.value,
-          instapayLink: instapayLink.value
+    await updateDoc(
+      doc(db, "users", user.uid),
+      {
+        priceConfig: {
+          base: Number(document.getElementById("basePrice").value),
+          room: Number(document.getElementById("roomPrice").value),
+          bathroom: Number(document.getElementById("bathroomPrice").value),
+          kitchen: Number(document.getElementById("kitchenPrice").value)
         }
-      );
+      }
+    );
 
-      document.getElementById("settingsStatus").innerText =
-        "تم حفظ الإعدادات ✅";
+    document.getElementById("pricingStatus").innerText =
+      "تم حفظ الأسعار ✅";
 
-    } catch(error) {
+  } catch (error) {
 
-      document.getElementById("settingsStatus").innerText =
-        error.message;
+    document.getElementById("pricingStatus").innerText =
+      error.message;
 
-      console.log(error);
+    console.log(error);
 
-    }
+  }
 
-  });
+});
 
 
 async function loadOrders(providerId) {
@@ -161,12 +173,8 @@ async function loadOrders(providerId) {
     ordersContainer.innerHTML = "";
 
     if (snapshot.empty) {
-
-      ordersContainer.innerHTML =
-        "<p>لا توجد طلبات بعد</p>";
-
+      ordersContainer.innerHTML = "<p>لا توجد طلبات بعد</p>";
       return;
-
     }
 
     snapshot.forEach((docSnap) => {
@@ -182,7 +190,7 @@ async function loadOrders(providerId) {
       card.innerHTML = `
         <p><b>الاسم:</b> ${order.customerName}</p>
         <p><b>الهاتف:</b> ${order.customerPhone}</p>
-        <p><b>العنوان:</b> ${order.customerAddress}</p>
+        <p><b>العنوان:</b> ${order.customerAddress || ""}</p>
         <p><b>الحالة:</b> ${order.status}</p>
       `;
 
@@ -190,45 +198,11 @@ async function loadOrders(providerId) {
 
     });
 
-  } catch(error) {
+  } catch (error) {
 
     ordersContainer.innerHTML = error.message;
-
     console.log(error);
 
   }
 
-}
-document
-.getElementById("savePricingBtn")
-.addEventListener("click", async ()=>{
-
-try{
-
-const user = auth.currentUser;
-
-if(!user) return;
-
-await updateDoc(
-doc(db,"users",user.uid),
-{
-priceConfig:{
-base:Number(document.getElementById("basePrice").value),
-room:Number(document.getElementById("roomPrice").value),
-bathroom:Number(document.getElementById("bathroomPrice").value),
-kitchen:Number(document.getElementById("kitchenPrice").value)
-}
-}
-);
-
-document.getElementById("pricingStatus").innerText =
-"تم حفظ الأسعار ✅";
-
-}catch(error){
-
-document.getElementById("pricingStatus").innerText =
-error.message;
-
-}
-
-});
+      }
