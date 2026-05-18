@@ -6,7 +6,6 @@
 <title>خدمة تنظيف</title>
 
 <style>
-
 body{
 margin:0;
 font-family:Arial;
@@ -29,17 +28,17 @@ padding:20px 10px;
 .card{
 background:#fff;
 color:#111;
-padding:15px;
-border-radius:18px;
+padding:16px;
+border-radius:20px;
 margin-bottom:15px;
-box-shadow:0 10px 25px rgba(0,0,0,.2);
+box-shadow:0 10px 25px rgba(0,0,0,.18);
 }
 
 input,select,button{
 width:100%;
-padding:12px;
+padding:14px;
 margin:8px 0;
-border-radius:12px;
+border-radius:14px;
 border:1px solid #ddd;
 font-size:15px;
 box-sizing:border-box;
@@ -53,39 +52,59 @@ font-weight:bold;
 cursor:pointer;
 }
 
-a{
+.actionBtn{
 display:block;
+width:100%;
+padding:14px;
+border-radius:14px;
 text-align:center;
-padding:12px;
-border-radius:12px;
-background:#fff;
-color:#111;
 text-decoration:none;
-margin:8px 0;
 font-weight:bold;
+margin:8px 0;
+box-sizing:border-box;
+}
+
+.whatsapp{
+background:#25D366;
+color:#fff;
+}
+
+.payment{
+background:#4f46e5;
+color:#fff;
+}
+
+.locationBtn{
+background:#0ea5e9;
 }
 
 .priceBox{
-font-size:22px;
+font-size:24px;
 text-align:center;
 font-weight:bold;
+color:#4f46e5;
+margin:14px 0;
+}
+
+.ctaBox{
+background:#fff;
 color:#111;
-margin:10px 0;
-}
-
-.cta{
+padding:18px;
+border-radius:18px;
 text-align:center;
-font-size:13px;
-margin-top:20px;
-opacity:.95;
 }
 
-.hidden{
-display:none;
+.ctaLink{
+display:inline-block;
+margin-top:12px;
+background:#111;
+color:#fff;
+padding:12px 20px;
+border-radius:12px;
+text-decoration:none;
+font-weight:bold;
 }
-
 </style>
-
 </head>
 
 <body>
@@ -94,7 +113,7 @@ display:none;
 
 <div class="header">
 <h1 id="businessTitle">خدمة تنظيف</h1>
-<p>احجز خدمتك بسهولة خلال دقائق</p>
+<p>احجز خدمتك خلال دقائق</p>
 </div>
 
 <div class="card">
@@ -102,6 +121,12 @@ display:none;
 <input id="customerName" placeholder="الاسم">
 <input id="customerPhone" placeholder="رقم الهاتف">
 <input id="customerAddress" placeholder="العنوان">
+
+<button class="locationBtn" id="getLocationBtn">
+📍 تحديد موقعي الحالي
+</button>
+
+<input id="location" placeholder="الموقع">
 
 <select id="rooms">
 <option value="1">غرفة</option>
@@ -119,7 +144,7 @@ display:none;
 <option value="no">بدون مطبخ</option>
 </select>
 
-<div class="priceBox" id="priceBox">0 جنيه</div>
+<div class="priceBox" id="priceBox"></div>
 
 <button id="submitOrder">احجز الآن</button>
 
@@ -129,13 +154,31 @@ display:none;
 
 <div class="card">
 
-<a id="whatsappBtn" target="_blank">تواصل واتساب</a>
-<a id="paymentBtn" target="_blank">الدفع الآن</a>
+<a id="whatsappBtn" class="actionBtn whatsapp" target="_blank">
+تواصل عبر واتساب
+</a>
+
+<a id="paymentBtn" class="actionBtn payment" target="_blank">
+الدفع عبر InstaPay
+</a>
 
 </div>
 
-<div class="cta">
-🚀 ابدأ مشروعك الخاص الآن وامتلك نشاطك الخدمي خلال دقائق
+<div class="ctaBox">
+
+<h3>ابدأ مشروعك الخاص الآن</h3>
+
+<p>
+امتلك مشروعًا رقميًا جاهزًا وابدأ البيع فورًا
+</p>
+
+<a
+class="ctaLink"
+href="https://salah-hamed.github.io/Familybusiness/"
+>
+استكشف المشاريع المتاحة
+</a>
+
 </div>
 
 </div>
