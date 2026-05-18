@@ -6,12 +6,7 @@ doc,
 getDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-let priceConfig = {
-base:100,
-room:40,
-bathroom:20,
-kitchen:30
-};
+let config = cleaningConfig;
 
 const rooms = document.getElementById("rooms");
 const bathrooms = document.getElementById("bathrooms");
@@ -19,18 +14,18 @@ const kitchen = document.getElementById("kitchen");
 const priceBox = document.getElementById("priceBox");
 
 function calcPrice(){
+function calcPrice(){
 
-let price = priceConfig.base;
+let price = config.basePrice;
 
-price += Number(rooms.value) * priceConfig.room;
-price += Number(bathrooms.value) * priceConfig.bathroom;
+price += Number(rooms.value) * config.fields.rooms.price;
+price += Number(bathrooms.value) * config.fields.bathrooms.price;
 
 if(kitchen.value === "yes"){
-price += priceConfig.kitchen;
+price += config.fields.kitchen.price;
 }
 
 priceBox.innerText = price + " جنيه";
-
 return price;
 }
 
