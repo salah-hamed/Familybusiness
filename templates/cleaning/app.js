@@ -1,6 +1,8 @@
 import { createOrder } from "./orders.js";
 import db from "../../core/firebase/firebase-db.js";
 
+import { cleaningConfig } from "../../core/templates/cleaning.config.js";
+
 import {
 doc,
 getDoc
@@ -14,7 +16,6 @@ const kitchen = document.getElementById("kitchen");
 const priceBox = document.getElementById("priceBox");
 
 function calcPrice(){
-function calcPrice(){
 
 let price = config.basePrice;
 
@@ -27,6 +28,7 @@ price += config.fields.kitchen.price;
 
 priceBox.innerText = price + " جنيه";
 return price;
+
 }
 
 rooms.onchange = calcPrice;
@@ -35,9 +37,8 @@ kitchen.onchange = calcPrice;
 
 calcPrice();
 
-document
-.getElementById("getLocationBtn")
-.onclick = () => {
+/* GPS */
+document.getElementById("getLocationBtn").onclick = () => {
 
 navigator.geolocation.getCurrentPosition((pos)=>{
 
@@ -64,11 +65,7 @@ const data = snap.data();
 document.getElementById("businessTitle").innerText =
 data.businessName || "خدمة تنظيف";
 
-if(data.priceConfig){
-priceConfig = {...priceConfig,...data.priceConfig};
-calcPrice();
-}
-
+/* WhatsApp */
 if(data.whatsappNumber){
 
 const clean =
@@ -79,6 +76,7 @@ document.getElementById("whatsappBtn").href =
 
 }
 
+/* InstaPay */
 if(data.instapayLink){
 
 document.getElementById("paymentBtn").href =
@@ -86,26 +84,18 @@ data.instapayLink;
 
 }
 
-document
-.getElementById("submitOrder")
-.onclick = async ()=>{
+/* Order submit */
+document.getElementById("submitOrder").onclick = async ()=>{
 
 const order = {
 
 providerId,
 templateType:"cleaning",
 
-customerName:
-document.getElementById("customerName").value,
-
-customerPhone:
-document.getElementById("customerPhone").value,
-
-customerAddress:
-document.getElementById("customerAddress").value,
-
-location:
-document.getElementById("location").value,
+customerName:document.getElementById("customerName").value,
+customerPhone:document.getElementById("customerPhone").value,
+customerAddress:document.getElementById("customerAddress").value,
+location:document.getElementById("location").value,
 
 rooms:rooms.value,
 bathrooms:bathrooms.value,
@@ -114,7 +104,6 @@ kitchen:kitchen.value,
 price:calcPrice(),
 
 status:"new"
-
 };
 
 const res = await createOrder(order);
