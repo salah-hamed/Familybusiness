@@ -16,7 +16,21 @@ import {
   getDoc,
   updateDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+if(data.priceConfig){
 
+document.getElementById("basePrice").value =
+data.priceConfig.base || "";
+
+document.getElementById("roomPrice").value =
+data.priceConfig.room || "";
+
+document.getElementById("bathroomPrice").value =
+data.priceConfig.bathroom || "";
+
+document.getElementById("kitchenPrice").value =
+data.priceConfig.kitchen || "";
+
+}
 
 protectPage();
 
@@ -185,3 +199,36 @@ async function loadOrders(providerId) {
   }
 
 }
+document
+.getElementById("savePricingBtn")
+.addEventListener("click", async ()=>{
+
+try{
+
+const user = auth.currentUser;
+
+if(!user) return;
+
+await updateDoc(
+doc(db,"users",user.uid),
+{
+priceConfig:{
+base:Number(document.getElementById("basePrice").value),
+room:Number(document.getElementById("roomPrice").value),
+bathroom:Number(document.getElementById("bathroomPrice").value),
+kitchen:Number(document.getElementById("kitchenPrice").value)
+}
+}
+);
+
+document.getElementById("pricingStatus").innerText =
+"تم حفظ الأسعار ✅";
+
+}catch(error){
+
+document.getElementById("pricingStatus").innerText =
+error.message;
+
+}
+
+});
