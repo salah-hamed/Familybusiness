@@ -1,162 +1,103 @@
 import { createOrder } from "./orders.js";
 import db from "../../core/firebase/firebase-db.js";
-import { cleaningConfig } from "../../core/templates/cleaning.config.js";
 
 import {
-doc,
-getDoc
+  doc,
+  getDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-let config = cleaningConfig;
+const rooms = document.getElementById("rooms");
+const bathrooms = document.getElementById("bathrooms");
+const kitchen = document.getElementById("kitchen");
+const priceBox = document.getElementById("priceBox");
 
-/* =========================
-   SAFE DOM INIT
-========================= */
+let priceConfig = {
+  base: 100,
+  room: 40,
+  bathroom: 20,
+  kitchen: 30
+};
 
-function getEl(id){
-return document.getElementById(id);
+function calcPrice() {
+  let price = Number(priceConfig.base || 0);
+
+  price += Number(rooms.value || 0) * Number(priceConfig.room || 0);
+  price += Number(bathrooms.value || 0) * Number(priceConfig.bathroom || 0);
+
+  if (kitchen.value === "yes") {
+    price += Number(priceConfig.kitchen || 0);
+  }
+
+  priceBox.innerText = price + " جنيه";
+  return price;
 }
-
-const rooms = getEl("rooms");
-const bathrooms = getEl("bathrooms");
-const kitchen = getEl("kitchen");
-const priceBox = getEl("priceBox");
-
-/* =========================
-   PRICE ENGINE
-========================= */
-
-function calcPrice(){
-
-if(!priceBox) return 0;
-
-let price = config.basePrice;
-
-price += Number(rooms?.value || 0) * config.fields.rooms.price;
-price += Number(bathrooms?.value || 0) * config.fields.bathrooms.price;
-
-if(kitchen?.value === "yes"){
-price += config.fields.kitchen.price;
-}
-
-priceBox.innerText = price + " جنيه";
-return price;
-}
-
-/* =========================
-   INIT EVENTS
-========================= */
-
-function initPriceListeners(){
-
-if(!rooms || !bathrooms || !kitchen) return;
 
 rooms.onchange = calcPrice;
 bathrooms.onchange = calcPrice;
 kitchen.onchange = calcPrice;
 
-calcPrice();
-}
-
-/* =========================
-   GPS
-========================= */
-
-const gpsBtn = getEl("getLocationBtn");
-
-if(gpsBtn){
-gpsBtn.onclick = () => {
-
-navigator.geolocation.getCurrentPosition((pos)=>{
-
-const loc = getEl("location");
-if(loc){
-loc.value = `${pos.coords.latitude}, ${pos.coords.longitude}`;
-}
-
-});
-
-};
-}
-
-/* =========================
-   LOAD USER TEMPLATE
-========================= */
-
-async function init(){
-
-const providerId =
-new URLSearchParams(location.search).get("user");
-
-if(!providerId) return;
-
-const snap = await getDoc(doc(db,"users",providerId));
-
-if(!snap.exists()) return;
-
-const data = snap.data();
-
-/* title */
-const title = getEl("businessTitle");
-if(title){
-title.innerText = data.businessName || "خدمة تنظيف";
-}
-
-/* WhatsApp */
-const wa = getEl("whatsappBtn");
-if(wa && data.whatsappNumber){
-
-const clean = data.whatsappNumber.replace(/\D/g,"");
-wa.href = `https://wa.me/20${clean}`;
-
-}
-
-/* Payment */
-const pay = getEl("paymentBtn");
-if(pay && data.instapayLink){
-pay.href = data.instapayLink;
-}
-
-/* ORDER */
-const submit = getEl("submitOrder");
-
-if(submit){
-submit.onclick = async ()=>{
-
-const order = {
-providerId,
-templateType:"cleaning",
-
-customerName:getEl("customerName")?.value || "",
-customerPhone:getEl("customerPhone")?.value || "",
-customerAddress:getEl("customerAddress")?.value || "",
-location:getEl("location")?.value || "",
-
-rooms:rooms?.value,
-bathrooms:bathrooms?.value,
-kitchen:kitchen?.value,
-
-price:calcPrice(),
-status:"new"
+document.getElementById("getLocationBtn").onclick = () => {
+  navigator.geolocation.getCurrentPosition((pos) => {
+    document.getElementById("location").value =
+      `${pos.coords.latitude}, ${pos.coords.longitude}`;
+  });
 };
 
-const res = await createOrder(order);
+async function init() {
+  const providerId = new URLSearchParams(location.search).get("user");
+  if (!providerId) return;
 
-const status = getEl("status");
-if(status){
-status.innerText = res.success
-? "تم استلام الطلب بنجاح 🎉"
-: res.error;
-}
+  const snap = await getDoc(doc(db, "users", providerId));
+  if (!snap.exists()) return;
 
-};
+  const data = snap.data();
 
-}
+  document.getElementById("businessTitle").innerText =
+    data.businessName || "خدمة تنظيف";
 
-/* start pricing */
-initPriceListeners();
-calcPrice();
+  if (data.priceConfig) {
+    priceConfig = {
+      ...priceConfig,
+      ...data.priceConfig
+    };
+  }
 
+  calcPrice();
+
+  if (data.whatsappNumber) {
+    const clean = data.whatsappNumber.replace(/\D/g, "");
+    document.getElementById("whatsappBtn").href =
+      `https://wa.me/20${clean}`;
+  }
+
+  if (data.instapayLink) {
+    document.getElementById("paymentBtn").href =
+      data.instapayLink;
+  }
+
+  document.getElementById("submitOrder").onclick = async () => {
+    const order = {
+      providerId,
+      templateType: "cleaning",
+
+      customerName: document.getElementById("customerName").value,
+      customerPhone: document.getElementById("customerPhone").value,
+      customerAddress: document.getElementById("customerAddress").value,
+      location: document.getElementById("location").value,
+
+      rooms: rooms.value,
+      bathrooms: bathrooms.value,
+      kitchen: kitchen.value,
+
+      price: calcPrice(),
+      status: "new"
+    };
+
+    const res = await createOrder(order);
+
+    document.getElementById("status").innerText =
+      res.success ? "تم استلام الطلب بنجاح 🎉" : res.error;
+  };
 }
 
 init();
