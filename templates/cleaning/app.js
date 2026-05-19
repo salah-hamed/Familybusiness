@@ -56,9 +56,6 @@ async function init() {
     data.businessName || "خدمة تنظيف";
 
   if (data.priceConfig) {
-    priceConfig = {
-      ...priceConfig,
-  if (data.priceConfig) {
 
   priceConfig.base = Number(data.priceConfig.base || 100);
   priceConfig.room = Number(data.priceConfig.room || 40);
