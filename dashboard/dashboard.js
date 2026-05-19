@@ -137,7 +137,7 @@ document.getElementById("savePricingBtn").addEventListener("click", async () => 
   bathroom: Number(document.getElementById("bathroomPrice").value),
   kitchen: Number(document.getElementById("kitchenPrice").value),
   stairs: Number(document.getElementById("stairsPrice").value)
-                                       }
+  }
       }
     );
 
