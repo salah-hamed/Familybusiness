@@ -58,9 +58,18 @@ async function init() {
   if (data.priceConfig) {
     priceConfig = {
       ...priceConfig,
-      ...data.priceConfig
-    };
-  }
+  if (data.priceConfig) {
+
+  priceConfig.base = Number(data.priceConfig.base || 100);
+  priceConfig.room = Number(data.priceConfig.room || 40);
+  priceConfig.bathroom = Number(data.priceConfig.bathroom || 20);
+  priceConfig.kitchen = Number(data.priceConfig.kitchen || 30);
+
+  document.getElementById("status").innerText =
+    "السعر الأساسي: " + priceConfig.base +
+    " | الغرفة: " + priceConfig.room;
+
+}
 
   calcPrice();
 
