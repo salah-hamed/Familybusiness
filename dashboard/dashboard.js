@@ -56,10 +56,11 @@ onAuthStateChanged(auth, async (user) => {
     instapayLink.value = data.instapayLink || "";
 
     if (data.priceConfig) {
-      document.getElementById("basePrice").value = data.priceConfig.base || "";
-      document.getElementById("roomPrice").value = data.priceConfig.room || "";
-      document.getElementById("bathroomPrice").value = data.priceConfig.bathroom || "";
-      document.getElementById("kitchenPrice").value = data.priceConfig.kitchen || "";
+  document.getElementById("basePrice").value = data.priceConfig.base || "";
+  document.getElementById("roomPrice").value = data.priceConfig.room || "";
+  document.getElementById("bathroomPrice").value = data.priceConfig.bathroom || "";
+  document.getElementById("kitchenPrice").value = data.priceConfig.kitchen || "";
+  document.getElementById("stairsPrice").value = data.priceConfig.stairs || "";
     }
 
     await loadOrders(user.uid);
@@ -131,11 +132,12 @@ document.getElementById("savePricingBtn").addEventListener("click", async () => 
       doc(db, "users", user.uid),
       {
         priceConfig: {
-          base: Number(document.getElementById("basePrice").value),
-          room: Number(document.getElementById("roomPrice").value),
-          bathroom: Number(document.getElementById("bathroomPrice").value),
-          kitchen: Number(document.getElementById("kitchenPrice").value)
-        }
+  base: Number(document.getElementById("basePrice").value),
+  room: Number(document.getElementById("roomPrice").value),
+  bathroom: Number(document.getElementById("bathroomPrice").value),
+  kitchen: Number(document.getElementById("kitchenPrice").value),
+  stairs: Number(document.getElementById("stairsPrice").value)
+                                       }
       }
     );
 
