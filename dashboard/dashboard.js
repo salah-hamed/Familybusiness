@@ -1,3 +1,5 @@
+let currentUser = null;
+let isAuthReady = false;
 import { protectPage } from "../core/auth/auth-guard.js";
 import auth from "../core/firebase/firebase-auth.js";
 import db from "../core/firebase/firebase-db.js";
@@ -30,6 +32,9 @@ const whatsappNumber = document.getElementById("whatsappNumber");
 const instapayLink = document.getElementById("instapayLink");
 
 onAuthStateChanged(auth, async (user) => {
+
+  currentUser = user || null;
+  isAuthReady = !!user;
 
   if (!user) return;
 
@@ -94,11 +99,10 @@ document.getElementById("saveSettingsBtn").addEventListener("click", async () =>
 
   try {
 
-    const user = auth.currentUser;
-    if (!user) return;
+    if (!isAuthReady || !currentUser) return;
 
     await updateDoc(
-      doc(db, "users", user.uid),
+      doc(db, "users", currentUser.uid),
       {
         businessName: businessName.value,
         whatsappNumber: whatsappNumber.value,
@@ -125,11 +129,10 @@ document.getElementById("savePricingBtn").addEventListener("click", async () => 
 
   try {
 
-    const user = auth.currentUser;
-    if (!user) return;
+    if (!isAuthReady || !currentUser) return;
 
     await updateDoc(
-      doc(db, "users", user.uid),
+      doc(db, "users", currentUser.uid),
       {
         priceConfig: {
   base: Number(document.getElementById("basePrice").value),
