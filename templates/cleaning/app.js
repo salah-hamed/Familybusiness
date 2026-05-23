@@ -34,15 +34,11 @@ function calcPrice() {
     Number(priceConfig.bathroom || 0);
 
   if (kitchen.value === "yes") {
-
     price += Number(priceConfig.kitchen || 0);
-
   }
 
   if (stairs.value === "yes") {
-
     price += Number(priceConfig.stairs || 0);
-
   }
 
   priceBox.innerText = price + " جنيه";
