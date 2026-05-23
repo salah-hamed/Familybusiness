@@ -1,52 +1,73 @@
-:root {
-  --primary: #4f46e5;
-  --secondary: #06b6d4;
-  --bg: #f9fafb;
-  --text: #111827;
-  --card: #ffffff;
-}
-
 body {
   font-family: Arial, sans-serif;
-  background: var(--bg);
-  color: var(--text);
+  background: linear-gradient(135deg, #4f46e5, #06b6d4);
   margin: 0;
-  padding: 0;
+  direction: rtl;
+  color: #111;
 }
 
 .container {
-  padding: 15px;
-  max-width: 500px;
+  max-width: 520px;
   margin: auto;
+  padding: 15px;
+}
+
+.header {
+  text-align: center;
+  color: white;
+  margin-bottom: 15px;
 }
 
 .card {
-  background: var(--card);
-  border-radius: 16px;
-  padding: 15px;
+  background: #fff;
+  padding: 16px;
+  border-radius: 18px;
   margin-bottom: 15px;
-  box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+  box-shadow: 0 10px 25px rgba(0,0,0,.15);
 }
 
 input, select {
   width: 100%;
   padding: 12px;
   margin-top: 8px;
-  margin-bottom: 12px;
-  border-radius: 10px;
+  border-radius: 12px;
   border: 1px solid #ddd;
 }
 
 button {
   width: 100%;
-  padding: 12px;
+  padding: 14px;
+  border-radius: 14px;
   border: none;
-  border-radius: 10px;
-  background: var(--primary);
-  color: white;
-  font-size: 16px;
+  background: #111;
+  color: #fff;
+  font-weight: bold;
+  margin-top: 10px;
 }
 
-button:hover {
-  background: var(--secondary);
+.actionBtn {
+  display: block;
+  text-align: center;
+  padding: 14px;
+  border-radius: 14px;
+  text-decoration: none;
+  font-weight: bold;
+  margin-top: 10px;
+}
+
+.whatsapp {
+  background: #25D366;
+  color: #fff;
+}
+
+.payment {
+  background: #4f46e5;
+  color: #fff;
+}
+
+.priceBox {
+  font-size: 24px;
+  font-weight: bold;
+  text-align: center;
+  margin: 10px 0;
 }
