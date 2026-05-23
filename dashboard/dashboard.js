@@ -209,5 +209,3 @@ async function loadOrders(providerId) {
     console.log(error);
 
   }
-
-      }
