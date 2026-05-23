@@ -4,195 +4,103 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>خدمة تنظيف</title>
+
+<!-- Core Design System -->
 <link rel="stylesheet" href="../../core/ui/theme.css">
-<style>
-body{
-margin:0;
-font-family:Arial;
-direction:rtl;
-background:linear-gradient(135deg,#4f46e5,#06b6d4);
-color:#fff;
-}
 
-.container{
-max-width:520px;
-margin:auto;
-padding:15px;
-}
-
-.header{
-text-align:center;
-padding:20px 10px;
-}
-
-.card{
-background:#fff;
-color:#111;
-padding:16px;
-border-radius:20px;
-margin-bottom:15px;
-box-shadow:0 10px 25px rgba(0,0,0,.18);
-}
-
-input,select,button{
-width:100%;
-padding:14px;
-margin:8px 0;
-border-radius:14px;
-border:1px solid #ddd;
-font-size:15px;
-box-sizing:border-box;
-}
-
-button{
-background:#111;
-color:#fff;
-border:none;
-font-weight:bold;
-cursor:pointer;
-}
-
-.actionBtn{
-display:block;
-width:100%;
-padding:14px;
-border-radius:14px;
-text-align:center;
-text-decoration:none;
-font-weight:bold;
-margin:8px 0;
-box-sizing:border-box;
-}
-
-.whatsapp{
-background:#25D366;
-color:#fff;
-}
-
-.payment{
-background:#4f46e5;
-color:#fff;
-}
-
-.locationBtn{
-background:#0ea5e9;
-}
-
-.priceBox{
-font-size:24px;
-text-align:center;
-font-weight:bold;
-color:#4f46e5;
-margin:14px 0;
-}
-
-.ctaBox{
-background:#fff;
-color:#111;
-padding:18px;
-border-radius:18px;
-text-align:center;
-}
-
-.ctaLink{
-display:inline-block;
-margin-top:12px;
-background:#111;
-color:#fff;
-padding:12px 20px;
-border-radius:12px;
-text-decoration:none;
-font-weight:bold;
-}
-</style>
 </head>
 
 <body>
 
 <div class="container">
 
-<div class="header">
-<h1 id="businessTitle">خدمة تنظيف</h1>
-<p>احجز خدمتك خلال دقائق</p>
-</div>
+  <div class="header">
+    <h1 id="businessTitle">خدمة تنظيف</h1>
+    <p>احجز خدمتك خلال دقائق</p>
+  </div>
 
-<div class="card">
+  <div class="card">
 
-<input id="customerName" placeholder="الاسم">
-<input id="customerPhone" placeholder="رقم الهاتف">
-<input id="customerAddress" placeholder="العنوان">
+    <input id="customerName" placeholder="الاسم">
+    <input id="customerPhone" placeholder="رقم الهاتف">
+    <input id="customerAddress" placeholder="العنوان">
 
-<button class="locationBtn" id="getLocationBtn">
-📍 تحديد موقعي الحالي
-</button>
+    <button class="locationBtn" id="getLocationBtn">
+      📍 تحديد موقعي الحالي
+    </button>
 
-<input id="location" placeholder="الموقع">
+    <input id="location" placeholder="الموقع">
 
-<select id="rooms">
-<option value="1">غرفة</option>
-<option value="2">غرفتين</option>
-<option value="3">3 غرف</option>
-</select>
+    <select id="rooms">
+      <option value="1">غرفة</option>
+      <option value="2">غرفتين</option>
+      <option value="3">3 غرف</option>
+    </select>
 
-<select id="bathrooms">
-<option value="1">حمام</option>
-<option value="2">حمامين</option>
-</select>
+    <select id="bathrooms">
+      <option value="1">حمام</option>
+      <option value="2">حمامين</option>
+    </select>
 
-<select id="kitchen">
-<option value="yes">مطبخ</option>
-<option value="no">بدون مطبخ</option>
-</select>
-<label>تنظيف السلم</label>
-<select id="stairs">
-  <option value="no">لا</option>
-  <option value="yes">نعم</option>
-</select>
-<br><br>
+    <select id="kitchen">
+      <option value="yes">مطبخ</option>
+      <option value="no">بدون مطبخ</option>
+    </select>
 
-<label>تاريخ الزيارة</label>
-<input type="date" id="visitDate">
-<br><br>
+    <label>تنظيف السلم</label>
+    <select id="stairs">
+      <option value="no">لا</option>
+      <option value="yes">نعم</option>
+    </select>
 
-<label>وقت الزيارة</label>
-<input type="time" id="visitTime">
-<br><br>
-<div class="priceBox" id="priceBox"></div>
+    <br><br>
 
-<button id="submitOrder">احجز الآن</button>
+    <label>تاريخ الزيارة</label>
+    <input type="date" id="visitDate">
 
-<div id="status"></div>
+    <br><br>
 
-</div>
+    <label>وقت الزيارة</label>
+    <input type="time" id="visitTime">
 
-<div class="card">
+    <br><br>
 
-<a id="whatsappBtn" class="actionBtn whatsapp" target="_blank">
-تواصل عبر واتساب
-</a>
+    <div class="priceBox" id="priceBox"></div>
 
-<a id="paymentBtn" class="actionBtn payment" target="_blank">
-الدفع عبر InstaPay
-</a>
+    <button id="submitOrder">احجز الآن</button>
 
-</div>
+    <div id="status"></div>
 
-<div class="ctaBox">
+  </div>
 
-<h3>ابدأ مشروعك الخاص الآن</h3>
+  <div class="card">
 
-<p>
-امتلك مشروعًا رقميًا جاهزًا وابدأ البيع فورًا
-</p>
+    <a id="whatsappBtn" class="actionBtn whatsapp" target="_blank">
+      تواصل عبر واتساب
+    </a>
 
-<a
-class="ctaLink"
-href="https://salah-hamed.github.io/Familybusiness/"
->
-استكشف المشاريع المتاحة
-</a>
+    <a id="paymentBtn" class="actionBtn payment" target="_blank">
+      الدفع عبر InstaPay
+    </a>
 
-</div>
+  </div>
+
+  <div class="ctaBox">
+
+    <h3>ابدأ مشروعك الخاص الآن</h3>
+
+    <p>
+      امتلك مشروعًا رقميًا جاهزًا وابدأ البيع فورًا
+    </p>
+
+    <a
+      class="ctaLink"
+      href="https://salah-hamed.github.io/Familybusiness/"
+    >
+      استكشف المشاريع المتاحة
+    </a>
+
+  </div>
 
 </div>
 
