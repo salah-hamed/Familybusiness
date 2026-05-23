@@ -1,116 +1,77 @@
-html {
-  background: yellow !important;
-}
-/* =========================
-   GLOBAL THEME
-========================= */
-
-:root {
-  --primary: #4f46e5;
-  --secondary: #06b6d4;
-  --bg: #f5f7fb;
-  --card: #ffffff;
-  --text: #111827;
-  --muted: #6b7280;
-  --radius: 16px;
-}
-
+/* ===== RESET ===== */
 * {
+  margin: 0;
+  padding: 0;
   box-sizing: border-box;
 }
 
+/* ===== FULL SCREEN FIX ===== */
+html, body {
+  height: 100%;
+  width: 100%;
+}
+
 body {
-  margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial;
-  background: var(--bg);
-  color: var(--text);
-  -webkit-text-size-adjust: 100%;
+  background: #f5f7fb;
+  color: #111;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
-/* =========================
-   LAYOUT
-========================= */
-
+/* ===== APP WRAPPER ===== */
 .container {
+  min-height: 100vh;
+  width: 100%;
   max-width: 480px;
-  margin: auto;
-  padding: 14px;
+  margin: 0 auto;
+  padding: 16px;
 }
 
+/* ===== HEADER ===== */
 .header {
   text-align: center;
   padding: 20px 10px;
 }
 
 .header h1 {
-  margin: 0;
   font-size: 22px;
+  margin-bottom: 6px;
 }
 
-.header p {
-  color: var(--muted);
-  margin-top: 6px;
-}
-
-/* =========================
-   CARDS
-========================= */
-
+/* ===== CARDS ===== */
 .card {
-  background: var(--card);
-  border-radius: var(--radius);
+  background: #fff;
+  border-radius: 18px;
   padding: 16px;
-  margin: 12px 0;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+  margin-bottom: 14px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.08);
 }
 
-/* =========================
-   INPUTS
-========================= */
-
-input,
-select {
+/* ===== INPUTS ===== */
+input, select {
   width: 100%;
   padding: 14px;
   margin: 8px 0;
   border-radius: 12px;
   border: 1px solid #e5e7eb;
   font-size: 15px;
-  outline: none;
-  transition: 0.2s;
 }
 
-input:focus,
-select:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(79,70,229,0.15);
-}
-
-/* =========================
-   BUTTONS
-========================= */
-
+/* ===== BUTTONS ===== */
 button {
   width: 100%;
   padding: 14px;
   border-radius: 12px;
   border: none;
-  font-size: 15px;
   font-weight: 600;
+  font-size: 15px;
   cursor: pointer;
   color: #fff;
-  background: linear-gradient(135deg, var(--primary), var(--secondary));
-  transition: 0.2s;
+  background: linear-gradient(135deg, #4f46e5, #06b6d4);
 }
 
-button:hover {
-  transform: translateY(-1px);
-}
-
-/* =========================
-   ACTION BUTTONS
-========================= */
-
+/* ===== ACTION BUTTONS ===== */
 .actionBtn {
   display: block;
   text-align: center;
@@ -118,99 +79,31 @@ button:hover {
   border-radius: 12px;
   text-decoration: none;
   font-weight: 600;
-  margin: 10px 0;
-  color: #fff;
+  margin-top: 10px;
 }
 
 .whatsapp {
   background: #25D366;
+  color: #fff;
 }
 
 .payment {
-  background: var(--primary);
+  background: #4f46e5;
+  color: #fff;
 }
 
-/* =========================
-   LOCATION BUTTON
-========================= */
-
-.locationBtn {
-  background: #0ea5e9;
-}
-
-/* =========================
-   PRICE DISPLAY
-========================= */
-
+/* ===== PRICE ===== */
 .priceBox {
-  font-size: 30px;
+  font-size: 28px;
   font-weight: 800;
   text-align: center;
-  color: var(--primary);
+  color: #4f46e5;
   margin: 15px 0;
 }
 
-/* =========================
-   STATUS TEXT
-========================= */
-
-#status {
-  text-align: center;
-  margin-top: 10px;
-  color: var(--muted);
-}
-
-/* =========================
-   CTA SECTION
-========================= */
-
-.ctaBox {
-  background: #fff;
-  padding: 18px;
-  border-radius: var(--radius);
-  text-align: center;
-  margin-top: 20px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.06);
-}
-
-.ctaLink {
-  display: inline-block;
-  margin-top: 12px;
-  padding: 12px 18px;
-  border-radius: 12px;
-  background: #111;
-  color: #fff;
-  text-decoration: none;
-}
-
-/* =========================
-   MOBILE OPTIMIZATION
-========================= */
-
-body {
-  -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
-}
-
-@media (max-width: 600px) {
-  .container {
-    padding: 10px;
-  }
-
-  .card {
-    margin: 10px 0;
-  }
-     }
-.container {
-  min-height: 100vh;
-  background: transparent;
-}
-body {
-  min-height: 100vh;
-  background: #f5f7fb;
-  }
-html, body {
-  height: 100%;
-  margin: 0;
-  padding: 0;
+/* ===== FIX MOBILE BOTTOM SPACE ISSUE ===== */
+body::after {
+  content: "";
+  display: block;
+  height: 30px;
 }
