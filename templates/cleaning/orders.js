@@ -17,7 +17,7 @@ export async function createOrder(orderData) {
 
     return { success: true };
 
-  } catch(error) {
+  } catch (error) {
 
     return {
       success: false,
@@ -25,5 +25,4 @@ export async function createOrder(orderData) {
     };
 
   }
-
 }
