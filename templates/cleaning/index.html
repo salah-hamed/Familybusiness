@@ -2,7 +2,7 @@
 <html lang="ar">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>خدمة تنظيف</title>
 
 <style>
@@ -104,6 +104,27 @@ border-radius:12px;
 text-decoration:none;
 font-weight:bold;
 }
+  html, body {
+  width: 100%;
+  overflow-x: hidden;
+}
+
+.container {
+  width: 100%;
+  padding: 12px;
+}
+
+input, select, button {
+  font-size: 16px; /* مهم للموبايل عشان يمنع zoom عند التركيز */
+}
+
+h1, h2, h3, p {
+  word-wrap: break-word;
+  }
+  body {
+  -webkit-text-size-adjust: 100%;
+  touch-action: manipulation;
+  }
 </style>
 </head>
 
