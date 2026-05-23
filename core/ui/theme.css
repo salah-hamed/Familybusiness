@@ -163,3 +163,6 @@ p {
 * {
   -webkit-tap-highlight-color: transparent;
 }
+body {
+  outline: 10px solid red !important;
+}
