@@ -201,3 +201,16 @@ body {
     margin: 10px 0;
   }
      }
+.container {
+  min-height: 100vh;
+  background: transparent;
+}
+body {
+  min-height: 100vh;
+  background: #f5f7fb;
+  }
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
