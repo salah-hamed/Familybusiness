@@ -492,3 +492,139 @@ button:active{
   }
 
     }
+/* =========================
+   MOBILE SHELL
+========================= */
+
+.mobileShell{
+
+  max-width:520px;
+
+  margin:auto;
+
+  min-height:100vh;
+
+  background:#f3f6fb;
+
+  position:relative;
+
+  overflow:hidden;
+
+}
+
+/* =========================
+   FLOATING BUTTON
+========================= */
+
+.floatingBtn{
+
+  position:fixed;
+
+  bottom:85px;
+
+  left:50%;
+
+  transform:translateX(-50%);
+
+  width:90%;
+
+  max-width:460px;
+
+  z-index:999;
+
+  border-radius:22px;
+
+  padding:18px;
+
+  font-size:17px;
+
+  font-weight:800;
+
+  background:
+  linear-gradient(
+  135deg,
+  #4f46e5,
+  #06b6d4
+  );
+
+  box-shadow:
+  0 15px 40px rgba(79,70,229,.35);
+
+}
+
+/* =========================
+   BOTTOM NAV
+========================= */
+
+.bottomNav{
+
+  position:fixed;
+
+  bottom:0;
+
+  left:50%;
+
+  transform:translateX(-50%);
+
+  width:100%;
+
+  max-width:520px;
+
+  height:72px;
+
+  background:#fff;
+
+  display:flex;
+
+  justify-content:space-around;
+
+  align-items:center;
+
+  border-top-left-radius:24px;
+
+  border-top-right-radius:24px;
+
+  box-shadow:
+  0 -10px 30px rgba(0,0,0,.08);
+
+  z-index:998;
+
+}
+
+/* =========================
+   NAV ITEM
+========================= */
+
+.navItem{
+
+  display:flex;
+
+  flex-direction:column;
+
+  align-items:center;
+
+  gap:4px;
+
+  font-size:13px;
+
+  color:#6b7280;
+
+  font-weight:600;
+
+}
+
+.navItem.active{
+
+  color:#4f46e5;
+
+}
+
+/* =========================
+   EXTRA BOTTOM SPACE
+========================= */
+
+.bottomSpace{
+
+  height:160px;
+
+}
