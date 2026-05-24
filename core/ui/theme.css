@@ -1,109 +1,494 @@
-/* ===== RESET ===== */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+/* =========================
+   RESET
+========================= */
+
+*{
+  margin:0;
+  padding:0;
+  box-sizing:border-box;
 }
 
-/* ===== FULL SCREEN FIX ===== */
-html, body {
-  height: 100%;
-  width: 100%;
+/* =========================
+   ROOT COLORS
+========================= */
+
+:root{
+
+  --primary:#4f46e5;
+  --secondary:#06b6d4;
+
+  --bg:#f3f6fb;
+
+  --card:#ffffff;
+
+  --text:#111827;
+
+  --muted:#6b7280;
+
+  --success:#25D366;
+
+  --radius:22px;
+
 }
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial;
-  background: #f5f7fb;
-  color: #111;
-  -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
+/* =========================
+   BODY
+========================= */
+
+html,
+body{
+  width:100%;
+  min-height:100%;
 }
 
-/* ===== APP WRAPPER ===== */
-.container {
-  min-height: 100vh;
-  width: 100%;
-  max-width: 480px;
-  margin: 0 auto;
-  padding: 16px;
+body{
+
+  font-family:
+  -apple-system,
+  BlinkMacSystemFont,
+  "Segoe UI",
+  Arial;
+
+  background:var(--bg);
+
+  color:var(--text);
+
+  direction:rtl;
+
+  -webkit-tap-highlight-color:transparent;
+
+  touch-action:manipulation;
+
 }
 
-/* ===== HEADER ===== */
-.header {
-  text-align: center;
-  padding: 20px 10px;
+/* =========================
+   APP WRAPPER
+========================= */
+
+.app{
+
+  width:100%;
+
+  max-width:520px;
+
+  margin:auto;
+
+  padding:16px;
+
 }
 
-.header h1 {
-  font-size: 22px;
-  margin-bottom: 6px;
+/* =========================
+   TOP BAR
+========================= */
+
+.topBar{
+
+  display:flex;
+
+  justify-content:space-between;
+
+  align-items:center;
+
+  margin-bottom:18px;
+
+  padding-top:8px;
+
 }
 
-/* ===== CARDS ===== */
-.card {
-  background: #fff;
-  border-radius: 18px;
-  padding: 16px;
-  margin-bottom: 14px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+.topBar h1{
+
+  font-size:28px;
+
+  font-weight:800;
+
+  margin-bottom:5px;
+
 }
 
-/* ===== INPUTS ===== */
-input, select {
-  width: 100%;
-  padding: 14px;
-  margin: 8px 0;
-  border-radius: 12px;
-  border: 1px solid #e5e7eb;
-  font-size: 15px;
+.subtitle{
+
+  color:var(--muted);
+
+  font-size:14px;
+
 }
 
-/* ===== BUTTONS ===== */
-button {
-  width: 100%;
-  padding: 14px;
-  border-radius: 12px;
-  border: none;
-  font-weight: 600;
-  font-size: 15px;
-  cursor: pointer;
-  color: #fff;
-  background: linear-gradient(135deg, #4f46e5, #06b6d4);
+/* =========================
+   HERO CARD
+========================= */
+
+.heroCard{
+
+  background:
+  linear-gradient(
+  135deg,
+  var(--primary),
+  var(--secondary)
+  );
+
+  color:#fff;
+
+  padding:24px;
+
+  border-radius:28px;
+
+  margin-bottom:18px;
+
+  box-shadow:
+  0 15px 35px rgba(79,70,229,.25);
+
 }
 
-/* ===== ACTION BUTTONS ===== */
-.actionBtn {
-  display: block;
-  text-align: center;
-  padding: 14px;
-  border-radius: 12px;
-  text-decoration: none;
-  font-weight: 600;
-  margin-top: 10px;
+.heroCard h2{
+
+  font-size:24px;
+
+  margin-bottom:10px;
+
 }
 
-.whatsapp {
-  background: #25D366;
-  color: #fff;
+.heroCard p{
+
+  opacity:.95;
+
+  line-height:1.7;
+
 }
 
-.payment {
-  background: #4f46e5;
-  color: #fff;
+/* =========================
+   CARD
+========================= */
+
+.card{
+
+  background:var(--card);
+
+  border-radius:var(--radius);
+
+  padding:18px;
+
+  margin-bottom:16px;
+
+  box-shadow:
+  0 10px 30px rgba(0,0,0,.06);
+
 }
 
-/* ===== PRICE ===== */
-.priceBox {
-  font-size: 28px;
-  font-weight: 800;
-  text-align: center;
-  color: #4f46e5;
-  margin: 15px 0;
+/* =========================
+   SECTION TITLE
+========================= */
+
+.sectionTitle{
+
+  font-size:18px;
+
+  margin-bottom:14px;
+
+  font-weight:700;
+
 }
 
-/* ===== FIX MOBILE BOTTOM SPACE ISSUE ===== */
-body::after {
-  content: "";
-  display: block;
-  height: 30px;
+/* =========================
+   LABELS
+========================= */
+
+label{
+
+  display:block;
+
+  margin-top:12px;
+
+  margin-bottom:6px;
+
+  font-size:14px;
+
+  color:var(--muted);
+
 }
+
+/* =========================
+   INPUTS
+========================= */
+
+input,
+select{
+
+  width:100%;
+
+  padding:15px;
+
+  border-radius:16px;
+
+  border:1px solid #e5e7eb;
+
+  background:#fff;
+
+  font-size:15px;
+
+  outline:none;
+
+  transition:.2s;
+
+}
+
+input:focus,
+select:focus{
+
+  border-color:var(--primary);
+
+  box-shadow:
+  0 0 0 4px rgba(79,70,229,.12);
+
+}
+
+/* =========================
+   BUTTONS
+========================= */
+
+button{
+
+  width:100%;
+
+  border:none;
+
+  border-radius:18px;
+
+  padding:16px;
+
+  cursor:pointer;
+
+  color:#fff;
+
+  font-size:16px;
+
+  font-weight:700;
+
+  background:
+  linear-gradient(
+  135deg,
+  var(--primary),
+  var(--secondary)
+  );
+
+  box-shadow:
+  0 10px 25px rgba(79,70,229,.20);
+
+  transition:.2s;
+
+}
+
+button:active{
+
+  transform:scale(.98);
+
+}
+
+/* =========================
+   LOCATION BTN
+========================= */
+
+.locationBtn{
+
+  margin:10px 0;
+
+  background:#0ea5e9;
+
+}
+
+/* =========================
+   PRICE CARD
+========================= */
+
+.priceCard{
+
+  background:#fff;
+
+  border-radius:28px;
+
+  padding:24px;
+
+  text-align:center;
+
+  margin-bottom:18px;
+
+  box-shadow:
+  0 15px 35px rgba(0,0,0,.08);
+
+}
+
+.priceCard p{
+
+  color:var(--muted);
+
+  margin-bottom:10px;
+
+}
+
+/* =========================
+   PRICE
+========================= */
+
+.priceBox{
+
+  font-size:38px;
+
+  font-weight:900;
+
+  color:var(--primary);
+
+  margin-bottom:18px;
+
+}
+
+/* =========================
+   STATUS
+========================= */
+
+#status{
+
+  margin-top:14px;
+
+  color:var(--muted);
+
+  font-size:14px;
+
+}
+
+/* =========================
+   ACTION BUTTONS
+========================= */
+
+.actionBtn{
+
+  display:block;
+
+  text-align:center;
+
+  text-decoration:none;
+
+  padding:16px;
+
+  border-radius:18px;
+
+  color:#fff;
+
+  font-weight:700;
+
+  margin-bottom:12px;
+
+}
+
+.whatsapp{
+
+  background:var(--success);
+
+}
+
+.payment{
+
+  background:var(--primary);
+
+}
+
+/* =========================
+   CTA BOX
+========================= */
+
+.ctaBox{
+
+  background:#fff;
+
+  border-radius:28px;
+
+  padding:24px;
+
+  text-align:center;
+
+  margin-bottom:30px;
+
+  box-shadow:
+  0 10px 30px rgba(0,0,0,.06);
+
+}
+
+.ctaBox h3{
+
+  font-size:22px;
+
+  margin-bottom:10px;
+
+}
+
+.ctaBox p{
+
+  color:var(--muted);
+
+  line-height:1.8;
+
+}
+
+/* =========================
+   CTA LINK
+========================= */
+
+.ctaLink{
+
+  display:inline-block;
+
+  margin-top:16px;
+
+  padding:14px 22px;
+
+  border-radius:18px;
+
+  background:#111827;
+
+  color:#fff;
+
+  text-decoration:none;
+
+  font-weight:700;
+
+}
+
+/* =========================
+   SPACING
+========================= */
+
+.bottomSpace{
+
+  height:50px;
+
+}
+
+/* =========================
+   MOBILE
+========================= */
+
+@media(max-width:600px){
+
+  .app{
+
+    padding:14px;
+
+  }
+
+  .topBar h1{
+
+    font-size:24px;
+
+  }
+
+  .heroCard h2{
+
+    font-size:21px;
+
+  }
+
+  .priceBox{
+
+    font-size:34px;
+
+  }
+
+    }
