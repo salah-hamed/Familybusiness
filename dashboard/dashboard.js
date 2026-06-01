@@ -201,7 +201,6 @@ if (order.status === "accepted") stats.accepted++;
 if (order.status === "done") stats.done++;
 if (order.status === "canceled") stats.canceled++;
   const orderId = docSnap.id;
-});
       document.getElementById("newOrders").innerText = stats.new;
 document.getElementById("acceptedOrders").innerText = stats.accepted;
 document.getElementById("doneOrders").innerText = stats.done;
