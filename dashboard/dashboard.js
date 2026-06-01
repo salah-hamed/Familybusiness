@@ -184,7 +184,8 @@ async function loadOrders(providerId) {
 
     snapshot.forEach((docSnap) => {
 
-      const order = docSnap.data();
+  const order = docSnap.data();
+  const orderId = docSnap.id;
 
       const card = document.createElement("div");
 
@@ -200,12 +201,7 @@ card.innerHTML = `
   box-shadow:0 10px 25px rgba(0,0,0,0.08);
 ">
 
-  <div style="
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    margin-bottom:10px;
-  ">
+  <div style="display:flex;justify-content:space-between;align-items:center;">
     <h3 style="margin:0;color:#4f46e5;">طلب جديد</h3>
 
     <span style="
@@ -229,25 +225,23 @@ card.innerHTML = `
   <p><b>الهاتف:</b> ${order.customerPhone || "-"}</p>
   <p><b>العنوان:</b> ${order.customerAddress || "-"}</p>
 
-  <hr style="margin:10px 0;border:0;border-top:1px solid #eee;">
+  <p><b>السعر:</b> ${order.price || 0} جنيه</p>
 
-  <p><b>الغرف:</b> ${order.rooms || "-"}</p>
-  <p><b>الحمامات:</b> ${order.bathrooms || "-"}</p>
-  <p><b>المطبخ:</b> ${order.kitchen || "-"}</p>
-  <p><b>السلم:</b> ${order.stairs || "-"}</p>
+  <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
 
-  <p><b>التاريخ:</b> ${order.visitDate || "-"}</p>
-  <p><b>الوقت:</b> ${order.visitTime || "-"}</p>
+    <button class="acceptBtn">قبول</button>
+    <button class="doneBtn">تم التنفيذ</button>
+    <button class="cancelBtn">إلغاء</button>
 
-  <p style="font-size:18px;font-weight:bold;color:#4f46e5;">
-    السعر: ${order.price || 0} جنيه
-  </p>
+  </div>
 
 </div>
 `;
 
       ordersContainer.appendChild(card);
-
+const acceptBtn = card.querySelector(".acceptBtn");
+const doneBtn = card.querySelector(".doneBtn");
+const cancelBtn = card.querySelector(".cancelBtn");
     });
 
   } catch (error) {
