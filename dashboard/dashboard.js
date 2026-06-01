@@ -242,6 +242,26 @@ card.innerHTML = `
 const acceptBtn = card.querySelector(".acceptBtn");
 const doneBtn = card.querySelector(".doneBtn");
 const cancelBtn = card.querySelector(".cancelBtn");
+      acceptBtn.onclick = async () => {
+  await updateDoc(doc(db, "orders", orderId), {
+    status: "accepted"
+  });
+  loadOrders(providerId);
+};
+
+doneBtn.onclick = async () => {
+  await updateDoc(doc(db, "orders", orderId), {
+    status: "done"
+  });
+  loadOrders(providerId);
+};
+
+cancelBtn.onclick = async () => {
+  await updateDoc(doc(db, "orders", orderId), {
+    status: "canceled"
+  });
+  loadOrders(providerId);
+};
     });
 
   } catch (error) {
