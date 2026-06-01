@@ -1,3 +1,9 @@
+let stats = {
+  new: 0,
+  accepted: 0,
+  done: 0,
+  canceled: 0
+};
 let currentUser = null;
 let isAuthReady = false;
 import { protectPage } from "../core/auth/auth-guard.js";
@@ -174,7 +180,12 @@ async function loadOrders(providerId) {
     );
 
     const snapshot = await getDocs(q);
-
+stats = {
+  new: 0,
+  accepted: 0,
+  done: 0,
+  canceled: 0
+};
     ordersContainer.innerHTML = "";
 
     if (snapshot.empty) {
@@ -185,6 +196,14 @@ async function loadOrders(providerId) {
     snapshot.forEach((docSnap) => {
 
   const order = docSnap.data();
+      if (order.status === "new") stats.new++;
+if (order.status === "accepted") stats.accepted++;
+if (order.status === "done") stats.done++;
+if (order.status === "canceled") stats.canceled++;
+document.getElementById("newOrders").innerText = stats.new;
+document.getElementById("acceptedOrders").innerText = stats.accepted;
+document.getElementById("doneOrders").innerText = stats.done;
+document.getElementById("canceledOrders").innerText = stats.canceled;
   const orderId = docSnap.id;
 
       const card = document.createElement("div");
