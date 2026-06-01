@@ -119,7 +119,11 @@ async function init() {
       bathrooms: bathrooms.value,
       kitchen: kitchen.value,
       stairs: stairs.value,
+visitDate:
+document.getElementById("visitDate").value,
 
+visitTime:
+document.getElementById("visitTime").value,
       price: calcPrice(),
       status: "new"
     };
