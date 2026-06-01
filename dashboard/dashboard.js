@@ -193,11 +193,34 @@ async function loadOrders(providerId) {
       card.style.margin = "10px 0";
 
       card.innerHTML = `
-        <p><b>الاسم:</b> ${order.customerName}</p>
-        <p><b>الهاتف:</b> ${order.customerPhone}</p>
-        <p><b>العنوان:</b> ${order.customerAddress || ""}</p>
-        <p><b>الحالة:</b> ${order.status}</p>
-      `;
+
+<h3>طلب جديد</h3>
+
+<p><b>الاسم:</b> ${order.customerName || "-"}</p>
+
+<p><b>الهاتف:</b> ${order.customerPhone || "-"}</p>
+
+<p><b>العنوان:</b> ${order.customerAddress || "-"}</p>
+
+<p><b>الموقع:</b> ${order.location || "-"}</p>
+
+<p><b>الغرف:</b> ${order.rooms || "-"}</p>
+
+<p><b>الحمامات:</b> ${order.bathrooms || "-"}</p>
+
+<p><b>المطبخ:</b> ${order.kitchen || "-"}</p>
+
+<p><b>السلم:</b> ${order.stairs || "-"}</p>
+
+<p><b>السعر:</b> ${order.price || 0} جنيه</p>
+
+<p><b>التاريخ:</b> ${order.visitDate || "-"}</p>
+
+<p><b>الوقت:</b> ${order.visitTime || "-"}</p>
+
+<p><b>الحالة:</b> ${order.status || "new"}</p>
+
+`;
 
       ordersContainer.appendChild(card);
 
