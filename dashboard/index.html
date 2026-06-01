@@ -4,6 +4,31 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
   <title>Dashboard</title>
+  <style>
+.statCard{
+  background:#fff;
+  color:#111;
+  padding:20px;
+  border-radius:16px;
+  text-align:center;
+  font-weight:bold;
+  box-shadow:0 8px 20px rgba(0,0,0,0.1);
+  font-size:18px;
+}
+
+.statCard::before{
+  content:"";
+  display:block;
+  font-size:12px;
+  color:#666;
+  margin-bottom:5px;
+}
+
+#newOrders::before{content:"جديدة";}
+#acceptedOrders::before{content:"مقبولة";}
+#doneOrders::before{content:"منفذة";}
+#canceledOrders::before{content:"ملغية";}
+  </style>
 </head>
 <body>
 
@@ -54,6 +79,19 @@
 <button id="saveSettingsBtn">حفظ الإعدادات</button>
 
 <p id="settingsStatus"></p>
+  <div id="statsContainer" style="
+  display:grid;
+  grid-template-columns:repeat(2,1fr);
+  gap:10px;
+  margin-bottom:15px;
+">
+
+  <div class="statCard" id="newOrders">0</div>
+  <div class="statCard" id="acceptedOrders">0</div>
+  <div class="statCard" id="doneOrders">0</div>
+  <div class="statCard" id="canceledOrders">0</div>
+
+  </div>
 <h2>الطلبات</h2>
 
 <div id="ordersContainer"></div>
