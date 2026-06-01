@@ -192,34 +192,58 @@ async function loadOrders(providerId) {
       card.style.padding = "10px";
       card.style.margin = "10px 0";
 
-      card.innerHTML = `
+card.innerHTML = `
+<div style="
+  background:#fff;
+  border-radius:18px;
+  padding:16px;
+  box-shadow:0 10px 25px rgba(0,0,0,0.08);
+">
 
-<h3>طلب جديد</h3>
+  <div style="
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:10px;
+  ">
+    <h3 style="margin:0;color:#4f46e5;">طلب جديد</h3>
 
-<p><b>الاسم:</b> ${order.customerName || "-"}</p>
+    <span style="
+      padding:6px 12px;
+      border-radius:20px;
+      background:${
+        order.status === "new"
+          ? "#f59e0b"
+          : order.status === "done"
+          ? "#22c55e"
+          : "#ef4444"
+      };
+      color:#fff;
+      font-size:12px;
+    ">
+      ${order.status || "new"}
+    </span>
+  </div>
 
-<p><b>الهاتف:</b> ${order.customerPhone || "-"}</p>
+  <p><b>الاسم:</b> ${order.customerName || "-"}</p>
+  <p><b>الهاتف:</b> ${order.customerPhone || "-"}</p>
+  <p><b>العنوان:</b> ${order.customerAddress || "-"}</p>
 
-<p><b>العنوان:</b> ${order.customerAddress || "-"}</p>
+  <hr style="margin:10px 0;border:0;border-top:1px solid #eee;">
 
-<p><b>الموقع:</b> ${order.location || "-"}</p>
+  <p><b>الغرف:</b> ${order.rooms || "-"}</p>
+  <p><b>الحمامات:</b> ${order.bathrooms || "-"}</p>
+  <p><b>المطبخ:</b> ${order.kitchen || "-"}</p>
+  <p><b>السلم:</b> ${order.stairs || "-"}</p>
 
-<p><b>الغرف:</b> ${order.rooms || "-"}</p>
+  <p><b>التاريخ:</b> ${order.visitDate || "-"}</p>
+  <p><b>الوقت:</b> ${order.visitTime || "-"}</p>
 
-<p><b>الحمامات:</b> ${order.bathrooms || "-"}</p>
+  <p style="font-size:18px;font-weight:bold;color:#4f46e5;">
+    السعر: ${order.price || 0} جنيه
+  </p>
 
-<p><b>المطبخ:</b> ${order.kitchen || "-"}</p>
-
-<p><b>السلم:</b> ${order.stairs || "-"}</p>
-
-<p><b>السعر:</b> ${order.price || 0} جنيه</p>
-
-<p><b>التاريخ:</b> ${order.visitDate || "-"}</p>
-
-<p><b>الوقت:</b> ${order.visitTime || "-"}</p>
-
-<p><b>الحالة:</b> ${order.status || "new"}</p>
-
+</div>
 `;
 
       ordersContainer.appendChild(card);
