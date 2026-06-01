@@ -200,12 +200,12 @@ stats = {
 if (order.status === "accepted") stats.accepted++;
 if (order.status === "done") stats.done++;
 if (order.status === "canceled") stats.canceled++;
-document.getElementById("newOrders").innerText = stats.new;
+  const orderId = docSnap.id;
+});
+      document.getElementById("newOrders").innerText = stats.new;
 document.getElementById("acceptedOrders").innerText = stats.accepted;
 document.getElementById("doneOrders").innerText = stats.done;
 document.getElementById("canceledOrders").innerText = stats.canceled;
-  const orderId = docSnap.id;
-
       const card = document.createElement("div");
 
       card.style.border = "1px solid #ddd";
