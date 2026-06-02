@@ -220,7 +220,9 @@ card.innerHTML = `
 ">
 
   <div style="display:flex;justify-content:space-between;align-items:center;">
-    <h3 style="margin:0;color:#4f46e5;">طلب جديد</h3>
+    <h3 style="margin:0;color:#4f46e5;">
+      ${order.customerName || "عميل"}
+    </h3>
 
     <span style="
       padding:6px 12px;
@@ -230,6 +232,8 @@ card.innerHTML = `
           ? "#f59e0b"
           : order.status === "done"
           ? "#22c55e"
+          : order.status === "accepted"
+          ? "#3b82f6"
           : "#ef4444"
       };
       color:#fff;
@@ -239,16 +243,57 @@ card.innerHTML = `
     </span>
   </div>
 
-  <p><b>الاسم:</b> ${order.customerName || "-"}</p>
+  <hr>
+
   <p><b>الهاتف:</b> ${order.customerPhone || "-"}</p>
+
   <p><b>العنوان:</b> ${order.customerAddress || "-"}</p>
+
+  <p><b>الموقع:</b> ${order.location || "-"}</p>
+
+  <hr>
+
+  <p><b>الغرف:</b> ${order.rooms || "-"}</p>
+
+  <p><b>الحمامات:</b> ${order.bathrooms || "-"}</p>
+
+  <p><b>المطبخ:</b> ${order.kitchen || "-"}</p>
+
+  <p><b>السلم:</b> ${order.stairs || "-"}</p>
+
+  <hr>
+
+  <p><b>تاريخ الزيارة:</b> ${order.visitDate || "-"}</p>
+
+  <p><b>وقت الزيارة:</b> ${order.visitTime || "-"}</p>
+
+  <hr>
 
   <p><b>السعر:</b> ${order.price || 0} جنيه</p>
 
-  <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+  <a
+    href="https://wa.me/${(order.customerPhone || "").replace(/\\D/g,'')}"
+    target="_blank"
+    style="
+      display:block;
+      background:#25D366;
+      color:#fff;
+      text-align:center;
+      padding:10px;
+      border-radius:10px;
+      text-decoration:none;
+      margin:10px 0;
+    "
+  >
+    تواصل واتساب
+  </a>
+
+  <div style="display:flex;gap:8px;flex-wrap:wrap;">
 
     <button class="acceptBtn">قبول</button>
+
     <button class="doneBtn">تم التنفيذ</button>
+
     <button class="cancelBtn">إلغاء</button>
 
   </div>
