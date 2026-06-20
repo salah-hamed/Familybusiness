@@ -213,64 +213,68 @@ document.getElementById("canceledOrders").innerText = stats.canceled;
 
 card.innerHTML = `
 <div style="
-  background:#fff;
+  background:#ffffff;
   border-radius:18px;
-  padding:16px;
-  box-shadow:0 10px 25px rgba(0,0,0,0.08);
+  padding:18px;
+  box-shadow:0 8px 20px rgba(0,0,0,0.08);
+  margin-bottom:15px;
+  font-family:Arial;
 ">
 
+  <!-- HEADER -->
   <div style="display:flex;justify-content:space-between;align-items:center;">
-    <h3 style="margin:0;color:#4f46e5;">
+    <h3 style="margin:0;color:#111;">
       ${order.customerName || "عميل"}
     </h3>
 
     <span style="
       padding:6px 12px;
       border-radius:20px;
+      color:#fff;
+      font-size:12px;
       background:${
         order.status === "new"
           ? "#f59e0b"
-          : order.status === "done"
-          ? "#22c55e"
           : order.status === "accepted"
           ? "#3b82f6"
+          : order.status === "done"
+          ? "#22c55e"
           : "#ef4444"
       };
-      color:#fff;
-      font-size:12px;
     ">
       ${order.status || "new"}
     </span>
   </div>
 
-  <hr>
+  <hr style="margin:12px 0;">
 
-  <p><b>الهاتف:</b> ${order.customerPhone || "-"}</p>
+  <!-- CUSTOMER INFO -->
+  <p><b>📞 الهاتف:</b> ${order.customerPhone || "-"}</p>
+  <p><b>📍 العنوان:</b> ${order.customerAddress || "-"}</p>
+  <p><b>🌍 الموقع:</b> ${order.location || "-"}</p>
 
-  <p><b>العنوان:</b> ${order.customerAddress || "-"}</p>
+  <hr style="margin:12px 0;">
 
-  <p><b>الموقع:</b> ${order.location || "-"}</p>
+  <!-- SERVICE DETAILS -->
+  <p><b>🚪 الغرف:</b> ${order.rooms || "-"}</p>
+  <p><b>🚿 الحمامات:</b> ${order.bathrooms || "-"}</p>
+  <p><b>🍳 المطبخ:</b> ${order.kitchen || "-"}</p>
+  <p><b>🪜 السلم:</b> ${order.stairs || "-"}</p>
 
-  <hr>
+  <hr style="margin:12px 0;">
 
-  <p><b>الغرف:</b> ${order.rooms || "-"}</p>
+  <!-- TIME -->
+  <p><b>📅 التاريخ:</b> ${order.visitDate || "-"}</p>
+  <p><b>⏰ الوقت:</b> ${order.visitTime || "-"}</p>
 
-  <p><b>الحمامات:</b> ${order.bathrooms || "-"}</p>
+  <hr style="margin:12px 0;">
 
-  <p><b>المطبخ:</b> ${order.kitchen || "-"}</p>
+  <!-- PRICE -->
+  <p style="font-size:18px;font-weight:bold;color:#4f46e5;">
+    💰 ${order.price || 0} جنيه
+  </p>
 
-  <p><b>السلم:</b> ${order.stairs || "-"}</p>
-
-  <hr>
-
-  <p><b>تاريخ الزيارة:</b> ${order.visitDate || "-"}</p>
-
-  <p><b>وقت الزيارة:</b> ${order.visitTime || "-"}</p>
-
-  <hr>
-
-  <p><b>السعر:</b> ${order.price || 0} جنيه</p>
-
+  <!-- WHATSAPP -->
   <a
     href="https://wa.me/${(order.customerPhone || "").replace(/\\D/g,'')}"
     target="_blank"
@@ -279,22 +283,30 @@ card.innerHTML = `
       background:#25D366;
       color:#fff;
       text-align:center;
-      padding:10px;
-      border-radius:10px;
+      padding:12px;
+      border-radius:12px;
       text-decoration:none;
       margin:10px 0;
+      font-weight:bold;
     "
   >
-    تواصل واتساب
+    💬 تواصل واتساب
   </a>
 
+  <!-- ACTIONS -->
   <div style="display:flex;gap:8px;flex-wrap:wrap;">
 
-    <button class="acceptBtn">قبول</button>
+    <button class="acceptBtn" style="flex:1;padding:10px;">
+      قبول
+    </button>
 
-    <button class="doneBtn">تم التنفيذ</button>
+    <button class="doneBtn" style="flex:1;padding:10px;">
+      تم التنفيذ
+    </button>
 
-    <button class="cancelBtn">إلغاء</button>
+    <button class="cancelBtn" style="flex:1;padding:10px;">
+      إلغاء
+    </button>
 
   </div>
 
