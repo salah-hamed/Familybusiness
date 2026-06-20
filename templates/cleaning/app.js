@@ -124,6 +124,7 @@ document.getElementById("visitDate").value,
 
 visitTime:
 document.getElementById("visitTime").value,
+      debugTest: "WORKING_APP_JS",
       price: calcPrice(),
       status: "new"
     };
