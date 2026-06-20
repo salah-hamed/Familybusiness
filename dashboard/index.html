@@ -1,101 +1,207 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1.0">
-  <title>Dashboard</title>
-  <style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Dashboard</title>
+
+<style>
+*{
+box-sizing:border-box;
+margin:0;
+padding:0;
+}
+
+body{
+font-family:Arial,sans-serif;
+background:#f5f7fb;
+padding:15px;
+color:#111;
+}
+
+.container{
+max-width:900px;
+margin:auto;
+}
+
+.card{
+background:#fff;
+padding:20px;
+border-radius:20px;
+box-shadow:0 10px 25px rgba(0,0,0,.08);
+margin-bottom:18px;
+}
+
+h1,h2,h3{
+margin-bottom:14px;
+}
+
+input{
+width:100%;
+padding:14px;
+border-radius:14px;
+border:1px solid #ddd;
+margin-bottom:12px;
+font-size:15px;
+}
+
+button{
+padding:14px 18px;
+border:none;
+border-radius:14px;
+cursor:pointer;
+font-weight:bold;
+background:#4f46e5;
+color:#fff;
+}
+
+button:hover{
+opacity:.9;
+}
+
+.topActions{
+display:flex;
+gap:10px;
+flex-wrap:wrap;
+margin-top:15px;
+}
+
+#logoutBtn{
+background:#ef4444;
+}
+
+.statGrid{
+display:grid;
+grid-template-columns:repeat(2,1fr);
+gap:12px;
+}
+
 .statCard{
-  background:#fff;
-  color:#111;
-  padding:20px;
-  border-radius:16px;
-  text-align:center;
-  font-weight:bold;
-  box-shadow:0 8px 20px rgba(0,0,0,0.1);
-  font-size:18px;
+background:#fff;
+padding:20px;
+border-radius:18px;
+text-align:center;
+box-shadow:0 8px 20px rgba(0,0,0,0.08);
+font-size:26px;
+font-weight:bold;
 }
 
-.statCard::before{
-  content:"";
-  display:block;
-  font-size:12px;
-  color:#666;
-  margin-bottom:5px;
+.statLabel{
+display:block;
+font-size:13px;
+margin-bottom:8px;
+color:#666;
 }
 
-#newOrders::before{content:"جديدة";}
-#acceptedOrders::before{content:"مقبولة";}
-#doneOrders::before{content:"منفذة";}
-#canceledOrders::before{content:"ملغية";}
-  </style>
+.sectionTitle{
+margin-bottom:15px;
+color:#4f46e5;
+}
+
+#ordersContainer{
+margin-top:20px;
+}
+
+.statusText{
+margin-top:8px;
+color:#16a34a;
+font-size:14px;
+}
+
+@media(max-width:600px){
+.statGrid{
+grid-template-columns:1fr;
+}
+}
+</style>
 </head>
+
 <body>
 
-  <h1>User Dashboard</h1>
+<div class="container">
 
-  <p id="userName"></p>
-  <p id="userEmail"></p>
-  <p id="projectType"></p>
-  <p id="status"></p>
-<h3>رابط مشروعك</h3>
+<div class="card">
+<h1>لوحة التحكم</h1>
 
-<input id="projectLink" readonly style="width:90%;">
-<br><br>
+<p id="userName"></p>
+<p id="userEmail"></p>
+<p id="projectType"></p>
+<p id="status"></p>
+
+<div class="topActions">
+<button id="logoutBtn">تسجيل خروج</button>
+</div>
+</div>
+
+<div class="card">
+<h3 class="sectionTitle">رابط مشروعك</h3>
+
+<input id="projectLink" readonly>
 
 <button id="copyLinkBtn">نسخ الرابط</button>
-<p id="copyStatus"></p>
-  <button id="logoutBtn">Logout</button>
-<hr>
-<hr>
 
-<h2>إعدادات مشروعك</h2>
-<hr>
+<p id="copyStatus" class="statusText"></p>
+</div>
 
-<h2>تسعير الخدمة</h2>
+<div class="card">
+<h2 class="sectionTitle">إحصائيات الطلبات</h2>
+
+<div class="statGrid">
+<div class="statCard">
+<span class="statLabel">جديدة</span>
+<div id="newOrders">0</div>
+</div>
+
+<div class="statCard">
+<span class="statLabel">مقبولة</span>
+<div id="acceptedOrders">0</div>
+</div>
+
+<div class="statCard">
+<span class="statLabel">منفذة</span>
+<div id="doneOrders">0</div>
+</div>
+
+<div class="statCard">
+<span class="statLabel">ملغية</span>
+<div id="canceledOrders">0</div>
+</div>
+</div>
+</div>
+
+<div class="card">
+<h2 class="sectionTitle">تسعير الخدمة</h2>
 
 <input id="basePrice" placeholder="سعر أساسي">
-
 <input id="roomPrice" placeholder="سعر الغرفة">
-
 <input id="bathroomPrice" placeholder="سعر الحمام">
-
 <input id="kitchenPrice" placeholder="سعر المطبخ">
 <input id="stairsPrice" placeholder="سعر تنظيف السلم">
-<button id="savePricingBtn">
-حفظ الأسعار
-</button>
 
-<p id="pricingStatus"></p>
+<button id="savePricingBtn">حفظ الأسعار</button>
+
+<p id="pricingStatus" class="statusText"></p>
+</div>
+
+<div class="card">
+<h2 class="sectionTitle">إعدادات المشروع</h2>
+
 <input id="businessName" placeholder="اسم النشاط">
-<br><br>
-
 <input id="whatsappNumber" placeholder="رقم واتساب">
-<br><br>
-
 <input id="instapayLink" placeholder="رابط إنستا باي">
-<br><br>
 
 <button id="saveSettingsBtn">حفظ الإعدادات</button>
 
-<p id="settingsStatus"></p>
-  <div id="statsContainer" style="
-  display:grid;
-  grid-template-columns:repeat(2,1fr);
-  gap:10px;
-  margin-bottom:15px;
-">
+<p id="settingsStatus" class="statusText"></p>
+</div>
 
-  <div class="statCard" id="newOrders">0</div>
-  <div class="statCard" id="acceptedOrders">0</div>
-  <div class="statCard" id="doneOrders">0</div>
-  <div class="statCard" id="canceledOrders">0</div>
-
-  </div>
-<h2>الطلبات</h2>
-
+<div class="card">
+<h2 class="sectionTitle">الطلبات</h2>
 <div id="ordersContainer"></div>
-  <script type="module" src="./dashboard.js"></script>
+</div>
 
+</div>
+
+<script type="module" src="./dashboard.js"></script>
 </body>
 </html>
