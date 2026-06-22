@@ -85,7 +85,19 @@ box-shadow:0 8px 20px rgba(0,0,0,0.08);
 font-size:26px;
 font-weight:bold;
 }
+.tabBtn{
+padding:10px 14px;
+border-radius:12px;
+border:none;
+cursor:pointer;
+background:#eee;
+font-weight:bold;
+}
 
+.tabBtn.active{
+background:#4f46e5;
+color:white;
+  }
 .statLabel{
 display:block;
 font-size:13px;
@@ -197,6 +209,22 @@ grid-template-columns:1fr;
 
 <div class="card">
 <h2 class="sectionTitle">الطلبات</h2>
+
+<div id="tabs" style="
+display:flex;
+gap:8px;
+flex-wrap:wrap;
+margin:15px 0;
+">
+
+  <button class="tabBtn active" data-tab="all">الكل</button>
+  <button class="tabBtn" data-tab="new">جديدة</button>
+  <button class="tabBtn" data-tab="accepted">مقبولة</button>
+  <button class="tabBtn" data-tab="done">منفذة</button>
+  <button class="tabBtn" data-tab="canceled">ملغية</button>
+
+</div>
+
 <div id="ordersContainer"></div>
 </div>
 
