@@ -294,49 +294,73 @@ card.innerHTML = `
   </a>
 
   <!-- ACTIONS -->
-  <div style="display:flex;gap:8px;flex-wrap:wrap;">
+  ${
+  order.status === "new"
+    ? `
+<div style="display:flex;gap:8px;flex-wrap:wrap;">
 
-    <button class="acceptBtn" style="flex:1;padding:10px;">
-      قبول
-    </button>
+  <button class="acceptBtn" style="flex:1;padding:10px;">
+    قبول
+  </button>
 
-    <button class="doneBtn" style="flex:1;padding:10px;">
-      تم التنفيذ
-    </button>
+  <button class="cancelBtn" style="flex:1;padding:10px;">
+    إلغاء
+  </button>
 
-    <button class="cancelBtn" style="flex:1;padding:10px;">
-      إلغاء
-    </button>
+</div>
+`
+    : order.status === "accepted"
+    ? `
+<div style="display:flex;gap:8px;flex-wrap:wrap;">
 
-  </div>
+  <button class="doneBtn" style="flex:1;padding:10px;">
+    تم التنفيذ
+  </button>
+
+  <button class="cancelBtn" style="flex:1;padding:10px;">
+    إلغاء
+  </button>
+
+</div>
+`
+    : ""
+}
 
 </div>
 `;
 
       ordersContainer.appendChild(card);
 const acceptBtn = card.querySelector(".acceptBtn");
+const acceptBtn = card.querySelector(".acceptBtn");
 const doneBtn = card.querySelector(".doneBtn");
 const cancelBtn = card.querySelector(".cancelBtn");
-      acceptBtn.onclick = async () => {
-  await updateDoc(doc(db, "orders", orderId), {
-    status: "accepted"
-  });
-  loadOrders(providerId);
-};
 
-doneBtn.onclick = async () => {
-  await updateDoc(doc(db, "orders", orderId), {
-    status: "done"
-  });
-  loadOrders(providerId);
-};
+if (acceptBtn) {
+  acceptBtn.onclick = async () => {
+    await updateDoc(doc(db, "orders", orderId), {
+      status: "accepted"
+    });
+    loadOrders(providerId);
+  };
+}
 
-cancelBtn.onclick = async () => {
-  await updateDoc(doc(db, "orders", orderId), {
-    status: "canceled"
-  });
-  loadOrders(providerId);
-};
+if (doneBtn) {
+  doneBtn.onclick = async () => {
+    await updateDoc(doc(db, "orders", orderId), {
+      status: "done"
+    });
+    loadOrders(providerId);
+  };
+}
+
+if (cancelBtn) {
+  cancelBtn.onclick = async () => {
+    await updateDoc(doc(db, "orders", orderId), {
+      status: "canceled"
+    });
+    loadOrders(providerId);
+  };
+}
     });
 setupTabs();
   } catch (error) {
