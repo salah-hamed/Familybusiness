@@ -338,7 +338,7 @@ cancelBtn.onclick = async () => {
   loadOrders(providerId);
 };
     });
-
+setupTabs();
   } catch (error) {
 
     ordersContainer.innerHTML = error.message;
@@ -346,24 +346,29 @@ cancelBtn.onclick = async () => {
 
   }
 }
-document.querySelectorAll(".tabBtn").forEach((btn) => {
+function setupTabs() {
 
-  btn.addEventListener("click", () => {
+  const buttons = document.querySelectorAll(".tabBtn");
 
-    document.querySelectorAll(".tabBtn").forEach((b) => {
-      b.classList.remove("active");
-    });
+  buttons.forEach((btn) => {
 
-    btn.classList.add("active");
+    btn.onclick = () => {
 
-    const selectedTab = btn.dataset.tab;
+      buttons.forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
 
-    document.querySelectorAll("#ordersContainer > div")
-      .forEach((card) => {
+      const selectedTab = btn.dataset.tab;
+
+      const cards =
+        document.getElementById("ordersContainer").children;
+
+      Array.from(cards).forEach((card) => {
+
+        const cardStatus = card.dataset.status;
 
         if (
           selectedTab === "all" ||
-          card.dataset.status === selectedTab
+          cardStatus === selectedTab
         ) {
           card.style.display = "block";
         } else {
@@ -372,6 +377,10 @@ document.querySelectorAll(".tabBtn").forEach((btn) => {
 
       });
 
+    };
+
   });
+
+}
 
 });
