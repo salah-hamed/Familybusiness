@@ -331,7 +331,6 @@ card.innerHTML = `
 
       ordersContainer.appendChild(card);
 const acceptBtn = card.querySelector(".acceptBtn");
-const acceptBtn = card.querySelector(".acceptBtn");
 const doneBtn = card.querySelector(".doneBtn");
 const cancelBtn = card.querySelector(".cancelBtn");
 
@@ -407,4 +406,3 @@ function setupTabs() {
 
 }
 
-});
