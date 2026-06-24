@@ -206,7 +206,7 @@ document.getElementById("acceptedOrders").innerText = stats.accepted;
 document.getElementById("doneOrders").innerText = stats.done;
 document.getElementById("canceledOrders").innerText = stats.canceled;
       const card = document.createElement("div");
-
+card.dataset.status = order.status || "new";
       card.style.border = "1px solid #ddd";
       card.style.padding = "10px";
       card.style.margin = "10px 0";
@@ -346,3 +346,32 @@ cancelBtn.onclick = async () => {
 
   }
 }
+document.querySelectorAll(".tabBtn").forEach((btn) => {
+
+  btn.addEventListener("click", () => {
+
+    document.querySelectorAll(".tabBtn").forEach((b) => {
+      b.classList.remove("active");
+    });
+
+    btn.classList.add("active");
+
+    const selectedTab = btn.dataset.tab;
+
+    document.querySelectorAll("#ordersContainer > div")
+      .forEach((card) => {
+
+        if (
+          selectedTab === "all" ||
+          card.dataset.status === selectedTab
+        ) {
+          card.style.display = "block";
+        } else {
+          card.style.display = "none";
+        }
+
+      });
+
+  });
+
+});
