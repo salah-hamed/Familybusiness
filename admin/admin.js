@@ -16,7 +16,8 @@ async function loadUsers() {
 
   const snapshot =
     await getDocs(collection(db, "users"));
-
+document.getElementById("usersCount").innerText =
+  `إجمالي المستخدمين: ${snapshot.size}`;
   usersContainer.innerHTML = "";
 
   snapshot.forEach((userDoc) => {
