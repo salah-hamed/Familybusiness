@@ -70,7 +70,10 @@ async function loadUsers() {
   doc(db, "users", data.uid),
   {
     isActive: true,
+
     projectType: selectedProject,
+
+    projects: [selectedProject],
 
     subscriptionStatus: "active",
 
