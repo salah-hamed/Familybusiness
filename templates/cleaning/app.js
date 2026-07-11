@@ -73,7 +73,32 @@ async function init() {
   if (!snap.exists()) return;
 
   const data = snap.data();
+if (!data.isActive) {
 
+  document.querySelector(".app").innerHTML = `
+    <div style="
+      text-align:center;
+      padding:40px;
+      max-width:500px;
+      margin:auto;
+      font-family:Arial;
+    ">
+
+      <h2>🔒 المشروع غير مفعل</h2>
+
+      <p>
+        هذا المشروع غير متاح حالياً.
+      </p>
+
+      <p>
+        يرجى التواصل مع صاحب المشروع.
+      </p>
+
+    </div>
+  `;
+
+  return;
+}
   document.getElementById("businessTitle").innerText =
     data.businessName || "خدمة تنظيف";
 
