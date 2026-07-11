@@ -63,12 +63,16 @@ async function loadUsers() {
             document.getElementById(`project-${data.uid}`).value;
 
           await updateDoc(
-            doc(db, "users", data.uid),
-            {
-              isActive: true,
-              projectType: selectedProject
-            }
-          );
+  doc(db, "users", data.uid),
+  {
+    isActive: true,
+    projectType: selectedProject,
+
+    subscriptionStatus: "active",
+
+    activatedAt: new Date()
+  }
+);
 
           alert("Updated Successfully");
 
