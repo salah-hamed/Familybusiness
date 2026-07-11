@@ -46,9 +46,28 @@ async function loadUsers() {
       <br><br>
 
       <button id="activate-${data.uid}">
-        Activate
-      </button>
+  Activate
+</button>
 
+<button id="deactivate-${data.uid}">
+  Deactivate
+</button>
+document
+  .getElementById(`deactivate-${data.uid}`)
+  .addEventListener("click", async () => {
+
+    await updateDoc(
+      doc(db, "users", data.uid),
+      {
+        isActive: false
+      }
+    );
+
+    alert("User Deactivated");
+
+    loadUsers();
+
+  });
     `;
 
     usersContainer.appendChild(card);
