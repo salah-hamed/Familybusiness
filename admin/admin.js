@@ -83,7 +83,23 @@ async function loadUsers() {
           loadUsers();
 
         });
+document
+  .getElementById(`deactivate-${data.uid}`)
+  .addEventListener("click", async () => {
 
+    await updateDoc(
+      doc(db, "users", data.uid),
+      {
+        isActive: false,
+        subscriptionStatus: "inactive"
+      }
+    );
+
+    alert("User Deactivated");
+
+    loadUsers();
+
+  });
     }, 100);
 
   });
