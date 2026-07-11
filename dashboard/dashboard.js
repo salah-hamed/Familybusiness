@@ -52,7 +52,28 @@ onAuthStateChanged(auth, async (user) => {
     if (!userSnap.exists()) return;
 
     const data = userSnap.data();
+if (!data.isActive) {
 
+  projectLink.style.display = "none";
+  document.getElementById("copyLinkBtn").style.display = "none";
+
+  status.innerHTML = `
+    <div style="
+      background:#fff3cd;
+      color:#856404;
+      padding:15px;
+      border-radius:10px;
+      margin:15px 0;
+      border:1px solid #ffeeba;
+      text-align:center;
+      font-weight:bold;
+    ">
+      ⏳ حسابك في انتظار مراجعة الدفع وتفعيله من الإدارة.
+    </div>
+  `;
+
+  return;
+}
     userName.innerText = "Name: " + data.name;
     userEmail.innerText = "Email: " + data.email;
     projectType.innerText = "Project: " + (data.projectType || "cleaning");
