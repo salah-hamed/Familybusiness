@@ -93,14 +93,23 @@ ${template.description}
 
 <button
 class="manageProjectBtn"
-data-project="${templateId}"
+data-link="${template.dashboard}"
 >
-
 إدارة المشروع
-
 </button>
 </div>
 `;
+
+});
+  document.querySelectorAll(".manageProjectBtn")
+.forEach((btn) => {
+
+  btn.onclick = () => {
+
+    window.location.href =
+      btn.dataset.link;
+
+  };
 
 });
 });
