@@ -106,10 +106,9 @@ data-link="${template.dashboard}"
 
   btn.onclick = () => {
 
-    window.location.href =
-      btn.dataset.link;
+  alert(btn.dataset.link);
 
-  };
+};
 
 });
 });
