@@ -7,14 +7,15 @@ getDocs
 
 const projectsContainer =
 document.getElementById("projectsContainer");
-
+projectsContainer.innerHTML = "بدأ تحميل المشاريع...";
 loadProjects();
 
 async function loadProjects(){
 
 const snapshot =
 await getDocs(collection(db,"templates"));
-
+projectsContainer.innerHTML =
+"تم الاتصال بقاعدة البيانات - عدد المشاريع: " + snapshot.size;
 projectsContainer.innerHTML="";
 
 snapshot.forEach((doc)=>{
