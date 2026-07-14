@@ -49,15 +49,18 @@ async function loadProjects(){
 
             <span class="project-status">
 
-                ✓ جاهز للعمل
+    ${project.comingSoon ? "🚧 قريبًا" : "✅ جاهز للعمل"}
 
-            </span>
+</span>
 
-            <a href="#" class="project-btn">
+<a
+    href="${project.comingSoon ? "#" : "./"}"
+    class="project-btn ${project.comingSoon ? "disabled-btn" : ""}"
+>
 
-                استكشف المشروع
+    ${project.comingSoon ? "قريبًا" : "استكشف المشروع"}
 
-            </a>
+</a>
 
         </div>
 
