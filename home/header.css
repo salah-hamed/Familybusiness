@@ -1,0 +1,95 @@
+/* ==========================
+   HEADER
+========================== */
+
+.site-header{
+
+    position:sticky;
+
+    top:0;
+
+    z-index:1000;
+
+    display:flex;
+
+    justify-content:space-between;
+
+    align-items:center;
+
+    padding:18px 32px;
+
+    background:rgba(255,255,255,.9);
+
+    backdrop-filter:blur(12px);
+
+    border-bottom:1px solid #eef2f7;
+
+}
+
+.logo{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:12px;
+
+    font-weight:700;
+
+}
+
+.logo-icon{
+
+    width:42px;
+
+    height:42px;
+
+    border-radius:12px;
+
+    background:#2563eb;
+
+    color:#fff;
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    font-weight:800;
+
+}
+
+.site-header nav{
+
+    display:flex;
+
+    gap:28px;
+
+}
+
+.site-header nav a{
+
+    text-decoration:none;
+
+    color:#334155;
+
+    font-weight:600;
+
+}
+
+.header-btn{
+
+    background:#2563eb;
+
+    color:#fff;
+
+    text-decoration:none;
+
+    padding:12px 22px;
+
+    border-radius:12px;
+
+    font-weight:700;
+
+}
