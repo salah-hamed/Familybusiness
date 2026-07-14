@@ -1,1 +1,143 @@
+/* ==========================
+   REMOVE OBSTACLES
+========================== */
 
+#remove-obstacles{
+
+    text-align:center;
+
+}
+
+#remove-obstacles > p{
+
+    max-width:700px;
+
+    margin:20px auto 50px;
+
+    color:#64748b;
+
+    font-size:1.1rem;
+
+    line-height:1.9;
+
+}
+
+/* ==========================
+   GRID
+========================== */
+
+.obstacles-grid{
+
+    display:grid;
+
+    grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
+
+    gap:28px;
+
+    margin-top:45px;
+
+}
+
+/* ==========================
+   CARD
+========================== */
+
+.obstacle-card{
+
+    background:#fff;
+
+    border-radius:22px;
+
+    padding:30px;
+
+    text-align:right;
+
+    border:1px solid #eef2f7;
+
+    box-shadow:0 12px 35px rgba(15,23,42,.06);
+
+    transition:.3s;
+
+}
+
+.obstacle-card:hover{
+
+    transform:translateY(-6px);
+
+    box-shadow:0 18px 45px rgba(15,23,42,.10);
+
+}
+
+/* ==========================
+   BEFORE
+========================== */
+
+.obstacle-card h3{
+
+    color:#dc2626;
+
+    font-size:1rem;
+
+    margin-bottom:16px;
+
+}
+
+.obstacle-card p{
+
+    margin:0;
+
+    line-height:1.9;
+
+    color:#334155;
+
+}
+
+/* ==========================
+   DIVIDER
+========================== */
+
+.obstacle-card h4{
+
+    margin:24px 0 16px;
+
+    padding-top:18px;
+
+    border-top:1px solid #e5e7eb;
+
+    color:#2563eb;
+
+    font-size:1rem;
+
+}
+
+/* ==========================
+   END MESSAGE
+========================== */
+
+.obstacles-closing{
+
+    margin-top:70px;
+
+    text-align:center;
+
+}
+
+.obstacles-closing h2{
+
+    color:#0f172a;
+
+    margin-bottom:16px;
+
+}
+
+.obstacles-closing p{
+
+    max-width:650px;
+
+    margin:auto;
+
+    color:#64748b;
+
+    font-size:1.1rem;
+
+}
