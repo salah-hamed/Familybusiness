@@ -1,1 +1,33 @@
+/* ==========================
+   HERO SECTION
+========================== */
 
+#hero{
+
+    position: relative;
+
+    overflow: hidden;
+
+    padding: 80px 20px;
+
+}
+
+.decision-section{
+
+    max-width:900px;
+
+    margin:auto;
+
+    text-align:center;
+
+}
+
+.decision-content{
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:24px;
+
+}
