@@ -148,3 +148,22 @@
     background:#1d4ed8;
 
 }
+.project-icon{
+
+    font-size:3rem;
+
+    margin-bottom:18px;
+
+}
+
+.project-status{
+
+    display:inline-flex;
+
+    align-items:center;
+
+    gap:6px;
+
+    margin-bottom:20px;
+
+}
