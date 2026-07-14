@@ -190,3 +190,50 @@
     margin-top:32px;
 
 }
+/* ==========================
+   TRUST BAR
+========================== */
+
+.trust-points{
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    flex-wrap:wrap;
+
+    gap:12px;
+
+}
+
+.trust-points span{
+
+    display:inline-flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    padding:12px 18px;
+
+    border-radius:999px;
+
+    background:#f8fafc;
+
+    border:1px solid #e2e8f0;
+
+    font-size:.95rem;
+
+    font-weight:600;
+
+    transition:.25s ease;
+
+}
+
+.trust-points span:hover{
+
+    transform:translateY(-2px);
+
+}
