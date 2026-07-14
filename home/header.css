@@ -4,92 +4,158 @@
 
 .site-header{
 
-    position:sticky;
+    position: sticky;
 
-    top:0;
+    top: 0;
 
-    z-index:1000;
+    z-index: 1000;
 
-    display:flex;
+    display: flex;
 
-    justify-content:space-between;
+    justify-content: space-between;
 
-    align-items:center;
+    align-items: center;
 
-    padding:18px 32px;
+    padding: 18px 32px;
 
-    background:rgba(255,255,255,.9);
+    background: rgba(255,255,255,.92);
 
-    backdrop-filter:blur(12px);
+    backdrop-filter: blur(12px);
 
-    border-bottom:1px solid #eef2f7;
+    border-bottom: 1px solid #eef2f7;
+
+    box-shadow: 0 8px 30px rgba(15,23,42,.06);
+
+    transition: .3s;
 
 }
 
 .logo{
 
-    display:flex;
+    display: flex;
 
-    align-items:center;
+    align-items: center;
 
-    gap:12px;
+    gap: 12px;
 
-    font-weight:700;
+    font-weight: 700;
+
+    text-decoration: none;
 
 }
 
 .logo-icon{
 
-    width:42px;
+    width: 44px;
 
-    height:42px;
+    height: 44px;
 
-    border-radius:12px;
+    border-radius: 14px;
 
-    background:#2563eb;
+    background: #2563eb;
 
-    color:#fff;
+    color: #fff;
 
-    display:flex;
+    display: flex;
 
-    justify-content:center;
+    justify-content: center;
 
-    align-items:center;
+    align-items: center;
 
-    font-weight:800;
+    font-weight: 800;
+
+    font-size: 18px;
+
+    box-shadow: 0 10px 25px rgba(37,99,235,.25);
+
+    transition: .3s;
+
+}
+
+.logo:hover .logo-icon{
+
+    transform: rotate(-6deg) scale(1.05);
+
+}
+
+.logo-text{
+
+    display: flex;
+
+    flex-direction: column;
+
+}
+
+.logo-title{
+
+    color: #0f172a;
+
+    font-size: 18px;
+
+    font-weight: 800;
+
+}
+
+.logo-subtitle{
+
+    color: #64748b;
+
+    font-size: 12px;
+
+    margin-top: 2px;
 
 }
 
 .site-header nav{
 
-    display:flex;
+    display: flex;
 
-    gap:28px;
+    gap: 28px;
 
 }
 
 .site-header nav a{
 
-    text-decoration:none;
+    text-decoration: none;
 
-    color:#334155;
+    color: #334155;
 
-    font-weight:600;
+    font-weight: 600;
+
+    transition: .25s;
+
+}
+
+.site-header nav a:hover{
+
+    color: #2563eb;
 
 }
 
 .header-btn{
 
-    background:#2563eb;
+    background: #2563eb;
 
-    color:#fff;
+    color: #fff;
 
-    text-decoration:none;
+    text-decoration: none;
 
-    padding:12px 22px;
+    padding: 12px 22px;
 
-    border-radius:12px;
+    border-radius: 12px;
 
-    font-weight:700;
+    font-weight: 700;
+
+    box-shadow: 0 12px 24px rgba(37,99,235,.22);
+
+    transition: .3s;
+
+}
+
+.header-btn:hover{
+
+    transform: translateY(-2px);
+
+    box-shadow: 0 16px 32px rgba(37,99,235,.28);
 
 }
