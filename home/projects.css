@@ -1,1 +1,45 @@
+/* ==========================
+   PROJECTS
+========================== */
 
+.projects-section{
+
+    padding:90px 20px;
+
+}
+
+.section-title{
+
+    text-align:center;
+
+    max-width:700px;
+
+    margin:auto auto 60px;
+
+}
+
+.section-title h2{
+
+    font-size:2rem;
+
+    margin-bottom:18px;
+
+}
+
+.section-title p{
+
+    line-height:1.8;
+
+    color:#64748b;
+
+}
+
+.projects-grid{
+
+    display:grid;
+
+    grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
+
+    gap:28px;
+
+}
