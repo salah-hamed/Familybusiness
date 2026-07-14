@@ -157,3 +157,36 @@
     background:#eff6ff;
 
 }
+/* ==========================
+   HERO SPACING
+========================== */
+
+.decision-content h1{
+
+    margin-bottom:18px;
+
+}
+
+.decision-content h2{
+
+    margin-bottom:14px;
+
+}
+
+.decision-content p{
+
+    margin-bottom:22px;
+
+}
+
+.decision-buttons{
+
+    margin-top:10px;
+
+}
+
+.trust-points{
+
+    margin-top:32px;
+
+}
