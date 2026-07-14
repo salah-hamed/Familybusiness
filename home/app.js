@@ -7,39 +7,39 @@ getDocs
 
 const projectsContainer =
 document.getElementById("projectsContainer");
-projectsContainer.innerHTML = "بدأ تحميل المشاريع...";
-loadProjects();
-
-async function loadProjects(){
-
-const snapshot =
-await getDocs(collection(db,"templates"));
-projectsContainer.innerHTML =
-"تم الاتصال بقاعدة البيانات - عدد المشاريع: " + snapshot.size;
-projectsContainer.innerHTML="";
-
-snapshot.forEach((doc)=>{
-
-const project=doc.data();
-
-if(!project.active) return;
-
 projectsContainer.innerHTML += `
 
 <div class="project-card">
 
-<h3>
+    <div class="project-icon">
 
-${project.icon}
-${project.title}
+        ${project.icon}
 
-</h3>
+    </div>
 
-<p>
+    <h3>
 
-${project.description}
+        ${project.title}
 
-</p>
+    </h3>
+
+    <p>
+
+        ${project.description}
+
+    </p>
+
+    <span class="project-status">
+
+        ✓ جاهز للعمل
+
+    </span>
+
+    <a href="#" class="project-btn">
+
+        شاهد المشروع
+
+    </a>
 
 </div>
 
