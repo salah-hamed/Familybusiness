@@ -237,3 +237,86 @@
     transform:translateY(-2px);
 
 }
+/* ==========================
+   HERO BACKGROUND
+========================== */
+
+body{
+
+    margin:0;
+
+    background:#f8fbff;
+
+    font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+
+    color:#1e293b;
+
+}
+
+#hero{
+
+    position:relative;
+
+    overflow:hidden;
+
+    background:linear-gradient(
+        180deg,
+        #ffffff 0%,
+        #f8fbff 100%
+    );
+
+}
+#hero::before{
+
+    content:"";
+
+    position:absolute;
+
+    width:650px;
+
+    height:650px;
+
+    border-radius:50%;
+
+    background:#dbeafe;
+
+    filter:blur(120px);
+
+    top:-250px;
+
+    left:-250px;
+
+    opacity:.55;
+
+}
+
+#hero::after{
+
+    content:"";
+
+    position:absolute;
+
+    width:450px;
+
+    height:450px;
+
+    border-radius:50%;
+
+    background:#bfdbfe;
+
+    filter:blur(110px);
+
+    bottom:-180px;
+
+    right:-180px;
+
+    opacity:.45;
+
+}
+.decision-content{
+
+    position:relative;
+
+    z-index:2;
+
+   }
