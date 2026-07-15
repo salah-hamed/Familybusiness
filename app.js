@@ -18,7 +18,23 @@ const confirmPasswordInput =
 
     const status =
       document.getElementById("status");
+const nameGroup =
+  document.getElementById("nameGroup");
 
+const confirmPasswordGroup =
+  document.getElementById("confirmPasswordGroup");
+
+const registerBtn =
+  document.getElementById("registerBtn");
+
+const loginBtn =
+  document.getElementById("loginBtn");
+
+const pageTitle =
+  document.querySelector(".auth-card h1");
+
+const switchMode =
+  document.querySelector(".switch-mode");
 
     // Register
     document
