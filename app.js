@@ -24,7 +24,13 @@ const confirmPasswordInput =
     document
       .getElementById("registerBtn")
       .addEventListener("click", async () => {
+if (passwordInput.value !== confirmPasswordInput.value) {
 
+  status.innerText = "❌ كلمتا المرور غير متطابقتين.";
+
+  return;
+
+}
         const result =
           await registerUser(
             nameInput.value,
