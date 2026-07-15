@@ -62,37 +62,64 @@ function updatePage() {
     }
 
 }
-    // Register
-    document
-      .getElementById("registerBtn")
-      .addEventListener("click", async () => {
-if (passwordInput.value !== confirmPasswordInput.value) {
+// Main Button (Register / Login)
 
-  status.innerText = "❌ كلمتا المرور غير متطابقتين.";
+registerBtn.addEventListener("click", async () => {
 
-  return;
+  status.innerText = "";
 
-}
-        const result =
-          await registerUser(
-            nameInput.value,
-            emailInput.value,
-            passwordInput.value
-          );
+  if (currentMode === "register") {
 
-        if(result.success) {
+    if (passwordInput.value !== confirmPasswordInput.value) {
 
-          status.innerText =
-            "Registered Successfully ✅";
+      status.innerText = "❌ كلمتا المرور غير متطابقتين.";
 
-        } else {
+      return;
 
-          status.innerText =
-            result.error;
+    }
 
-        }
+    const result = await registerUser(
 
-      });
+      nameInput.value,
+      emailInput.value,
+      passwordInput.value
+
+    );
+
+    if (result.success) {
+
+      status.innerText = "✅ تم إنشاء الحساب بنجاح.";
+
+      // هنضيف التحويل للخطوة التالية بعد شوية
+
+    } else {
+
+      status.innerText = result.error;
+
+    }
+
+  } else {
+
+    const result = await loginUser(
+
+      emailInput.value,
+      passwordInput.value
+
+    );
+
+    if (result.success) {
+
+      window.location.href = "./dashboard/";
+
+    } else {
+
+      status.innerText = result.error;
+
+    }
+
+  }
+
+});
 
 
     // Login
