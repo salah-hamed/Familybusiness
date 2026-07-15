@@ -85,26 +85,16 @@ if (passwordInput.value !== confirmPasswordInput.value) {
 
     // Login
     document
-      .getElementById("loginBtn")
-      .addEventListener("click", async () => {
+  .getElementById("loginBtn")
+  .addEventListener("click", (event) => {
 
-        const result =
-          await loginUser(
-            emailInput.value,
-            passwordInput.value
-          );
+    event.preventDefault();
 
-       if(result.success) {
+    currentMode = "login";
 
-  window.location.href = "./dashboard/";
+    updatePage();
 
-} else {
-
-  status.innerText = result.error;
-
-}
-
-      });
+});
 
 
     // Logout
