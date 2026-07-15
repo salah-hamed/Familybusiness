@@ -31,7 +31,7 @@ const loginBtn =
   document.getElementById("loginBtn");
 
 const pageTitle =
-  document.querySelector(".auth-card h1");
+  document.getElementById("pageTitle");
 
 const switchMode =
   document.querySelector(".switch-mode");
