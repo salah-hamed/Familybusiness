@@ -80,3 +80,36 @@ body{
     cursor:pointer;
 
 }
+#registerBtn{
+
+    background:#2563eb;
+
+    color:#fff;
+
+}
+
+#registerBtn:hover{
+
+    background:#1d4ed8;
+
+}
+
+#loginBtn{
+
+    background:#f1f5f9;
+
+    color:#334155;
+
+}
+
+#loginBtn:hover{
+
+    background:#e2e8f0;
+
+}
+
+#logoutBtn{
+
+    display:none;
+
+}
