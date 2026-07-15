@@ -109,7 +109,7 @@ registerBtn.addEventListener("click", async () => {
 
     if (result.success) {
 
-      window.location.href = "./dashboard/";
+      window.location.href = "./workspace/";
 
     } else {
 
