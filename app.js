@@ -13,6 +13,8 @@
 
     const passwordInput =
       document.getElementById("password");
+const confirmPasswordInput =
+  document.getElementById("confirmPassword");
 
     const status =
       document.getElementById("status");
