@@ -18,12 +18,15 @@ const subscriptionStatus =
 
 onAuthStateChanged(auth, async (user) => {
 
-  if (!user) {
+if (!user) {
 
-    window.location.href = "../index.html";
-    return;
+  userName.innerText = "يرجى تسجيل الدخول";
 
-  }
+  subscriptionStatus.innerText = "";
+
+  return;
+
+}
 
   try {
 
