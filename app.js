@@ -47,6 +47,8 @@ function updatePage() {
 
         confirmPasswordGroup.style.display = "block";
 
+        registerBtn.innerText = "🚀 امتلك شركتك";
+
     } else {
 
         pageTitle.innerText = "مرحبًا بعودتك";
@@ -54,6 +56,8 @@ function updatePage() {
         nameGroup.style.display = "none";
 
         confirmPasswordGroup.style.display = "none";
+
+        registerBtn.innerText = "🔐 تسجيل الدخول";
 
     }
 
