@@ -43,9 +43,13 @@ function updatePage() {
 
         pageTitle.innerText = "ابدأ بناء شركتك";
 
+        nameGroup.style.display = "block";
+
     } else {
 
         pageTitle.innerText = "مرحبًا بعودتك";
+
+        nameGroup.style.display = "none";
 
     }
 
