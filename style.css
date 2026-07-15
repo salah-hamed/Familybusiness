@@ -33,3 +33,50 @@ body{
     text-align:center;
 
 }
+.auth-card input{
+
+    width:100%;
+
+    padding:15px;
+
+    margin:10px 0;
+
+    border:1px solid #dbe3ee;
+
+    border-radius:12px;
+
+    font-size:16px;
+
+    outline:none;
+
+    transition:.3s;
+
+}
+
+.auth-card input:focus{
+
+    border-color:#2563eb;
+
+    box-shadow:0 0 0 3px rgba(37,99,235,.15);
+
+}
+
+.auth-card button{
+
+    width:100%;
+
+    padding:15px;
+
+    margin-top:12px;
+
+    border:none;
+
+    border-radius:12px;
+
+    font-size:16px;
+
+    font-weight:bold;
+
+    cursor:pointer;
+
+}
