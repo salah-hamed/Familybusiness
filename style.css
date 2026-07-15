@@ -162,3 +162,28 @@ body{
     color:#1e293b;
 
 }
+.switch-mode{
+
+    margin-top:25px;
+
+    font-size:15px;
+
+    color:#64748b;
+
+}
+
+.switch-mode a{
+
+    color:#2563eb;
+
+    text-decoration:none;
+
+    font-weight:bold;
+
+}
+
+.switch-mode a:hover{
+
+    text-decoration:underline;
+
+}
