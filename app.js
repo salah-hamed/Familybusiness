@@ -1,4 +1,3 @@
-<script type="module">
 
     import {
       registerUser,
@@ -99,4 +98,3 @@
 
     });
 
-  </script>
