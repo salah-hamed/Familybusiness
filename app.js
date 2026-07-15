@@ -45,11 +45,15 @@ function updatePage() {
 
         nameGroup.style.display = "block";
 
+        confirmPasswordGroup.style.display = "block";
+
     } else {
 
         pageTitle.innerText = "مرحبًا بعودتك";
 
         nameGroup.style.display = "none";
+
+        confirmPasswordGroup.style.display = "none";
 
     }
 
