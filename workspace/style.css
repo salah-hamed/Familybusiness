@@ -1,1 +1,71 @@
+.container{
 
+    max-width:520px;
+    margin:auto;
+    padding:20px;
+
+}
+
+header{
+
+    margin-bottom:24px;
+
+}
+
+header h1{
+
+    font-size:28px;
+    margin-bottom:8px;
+
+}
+
+header p{
+
+    color:var(--muted);
+
+}
+
+.subscriptionCard{
+
+    background:linear-gradient(
+    135deg,
+    var(--primary),
+    var(--secondary)
+    );
+
+    color:#fff;
+
+    padding:20px;
+
+    border-radius:24px;
+
+    margin-bottom:28px;
+
+}
+
+.subscriptionCard h2{
+
+    margin-bottom:10px;
+
+}
+
+section{
+
+    margin-bottom:32px;
+
+}
+
+section h2{
+
+    margin-bottom:18px;
+
+}
+
+#templatesContainer,
+#projectsContainer{
+
+    display:grid;
+
+    gap:16px;
+
+}
