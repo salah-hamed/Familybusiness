@@ -35,7 +35,21 @@ const pageTitle =
 
 const switchMode =
   document.querySelector(".switch-mode");
+let currentMode = "register";
 
+function updatePage() {
+
+    if (currentMode === "register") {
+
+        pageTitle.innerText = "ابدأ بناء شركتك";
+
+    } else {
+
+        pageTitle.innerText = "مرحبًا بعودتك";
+
+    }
+
+}
     // Register
     document
       .getElementById("registerBtn")
@@ -121,3 +135,4 @@ if (passwordInput.value !== confirmPasswordInput.value) {
 
     });
 
+updatePage();
