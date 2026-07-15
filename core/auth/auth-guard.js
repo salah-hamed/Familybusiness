@@ -1,10 +1,28 @@
 import auth from "../firebase/firebase-auth.js";
-import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
-export function protectPage() {
+import {
+  onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+
+export function protectPage(callback) {
+
   onAuthStateChanged(auth, (user) => {
+
     if (!user) {
+
       window.location.href = "/Familybusiness/";
+
+      return;
+
     }
+
+    if (callback) {
+
+      callback(user);
+
+    }
+
   });
+
 }
