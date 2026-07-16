@@ -58,10 +58,16 @@ projects.forEach(project => {
         <h3>${project.title}</h3>
 
         <button
-          class="projectBtn"
-          data-project="${project.id}">
-          إنشاء المشروع
-        </button>
+  class="projectBtn"
+  data-project="${project.id}">
+
+  ${
+    myProjectIds.includes(project.id)
+      ? "إدارة المشروع"
+      : "إنشاء المشروع"
+  }
+
+</button>
 
       </div>
 
