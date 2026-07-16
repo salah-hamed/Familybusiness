@@ -38,6 +38,9 @@ protectPage(async (user) => {
 
     const data =
     userSnap.data();
+    const myProjects = await loadUserProjects(user.uid);
+
+const myProjectIds = myProjects.map(project => project.projectId);
 templatesContainer.innerHTML = "";
 
 projects.forEach(project => {
