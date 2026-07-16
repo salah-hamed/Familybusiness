@@ -1,9 +1,5 @@
-import auth from "../core/firebase/firebase-auth.js";
 import db from "../core/firebase/firebase-db.js";
-
-import {
-  onAuthStateChanged
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { protectPage } from "../core/auth/auth-guard.js";
 
 import {
   doc,
@@ -11,56 +7,49 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const userName =
-  document.getElementById("userName");
+document.getElementById("userName");
 
 const subscriptionStatus =
-  document.getElementById("subscriptionStatus");
+document.getElementById("subscriptionStatus");
 
-onAuthStateChanged(auth, async (user) => {
-
-if (!user) {
-
-  userName.innerText = "يرجى تسجيل الدخول";
-
-  subscriptionStatus.innerText = "";
-
-  return;
-
-}
+protectPage(async (user) => {
 
   try {
 
     const userRef =
-      doc(db, "users", user.uid);
+    doc(db, "users", user.uid);
 
     const userSnap =
-      await getDoc(userRef);
+    await getDoc(userRef);
 
     if (!userSnap.exists()) {
 
-      userName.innerText = "المستخدم غير موجود";
+      userName.innerText =
+      "المستخدم غير موجود";
 
       return;
 
     }
 
     const data =
-      userSnap.data();
+    userSnap.data();
 
     userName.innerText =
-      `أهلاً ${data.name}`;
+    `أهلاً ${data.name}`;
 
     subscriptionStatus.innerText =
-      data.isActive
-      ? "✅ الاشتراك مفعل"
-      : "⏳ الاشتراك قيد المراجعة";
+    data.isActive
+    ? "✅ الاشتراك مفعل"
+    : "⏳ الاشتراك قيد المراجعة";
 
-  } catch (error) {
+  }
+
+  catch(error){
 
     console.error(error);
 
     userName.innerText =
-      "حدث خطأ أثناء تحميل البيانات";
+    "حدث خطأ أثناء تحميل البيانات";
 
   }
 
