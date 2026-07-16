@@ -6,6 +6,10 @@ import {
   getDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import projects from "../templates/projects.js";
+import {
+  createProject,
+  loadUserProjects
+} from "../templates/engine/project-engine.js";
 const userName =
 document.getElementById("userName");
 
