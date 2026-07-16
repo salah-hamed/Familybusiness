@@ -38,7 +38,7 @@ export async function createProject(ownerId, project) {
 
     primaryColor: project.color,
 
-    priceConfig: {}
+    priceConfig: project.priceConfig || {}
 
   });
 
