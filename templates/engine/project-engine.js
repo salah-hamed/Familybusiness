@@ -3,7 +3,11 @@ import db from "../../core/firebase/firebase-db.js";
 import {
   doc,
   setDoc,
-  serverTimestamp
+  serverTimestamp,
+  collection,
+  getDocs,
+  query,
+  where
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 export async function createProject(ownerId, project) {
@@ -38,4 +42,21 @@ export async function createProject(ownerId, project) {
 
   });
 
+}
+export async function loadUserProjects(ownerId) {
+
+  const q = query(
+    collection(db, "projects"),
+    where("ownerId", "==", ownerId)
+  );
+
+  const snap = await getDocs(q);
+
+  const list = [];
+
+  snap.forEach(doc => {
+    list.push(doc.data());
+  });
+
+  return list;
 }
