@@ -5,13 +5,14 @@ import {
   doc,
   getDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-
+import projects from "../templates/projects.js";
 const userName =
 document.getElementById("userName");
 
 const subscriptionStatus =
 document.getElementById("subscriptionStatus");
-
+const templatesContainer =
+document.getElementById("templatesContainer");
 protectPage(async (user) => {
 
   try {
@@ -33,7 +34,35 @@ protectPage(async (user) => {
 
     const data =
     userSnap.data();
+templatesContainer.innerHTML = "";
 
+projects.forEach(project => {
+
+  templatesContainer.innerHTML += `
+
+    <div class="projectCard">
+
+      <div class="projectIcon">
+        ${project.icon}
+      </div>
+
+      <div class="projectInfo">
+
+        <h3>${project.title}</h3>
+
+        <button
+          class="projectBtn"
+          data-project="${project.id}">
+          إنشاء المشروع
+        </button>
+
+      </div>
+
+    </div>
+
+  `;
+
+});
     userName.innerText =
     `أهلاً ${data.name}`;
 
