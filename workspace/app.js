@@ -45,6 +45,8 @@ templatesContainer.innerHTML = "";
 
 projects.forEach(project => {
 
+  const created = myProjectIds.includes(project.id);
+
   templatesContainer.innerHTML += `
 
     <div class="projectCard">
@@ -58,22 +60,43 @@ projects.forEach(project => {
         <h3>${project.title}</h3>
 
         <button
-  class="projectBtn"
-  data-project="${project.id}">
+          class="projectBtn"
+          data-project="${project.id}">
 
-  ${
-    myProjectIds.includes(project.id)
-      ? "إدارة المشروع"
-      : "إنشاء المشروع"
-  }
+          ${created ? "إدارة المشروع" : "إنشاء المشروع"}
 
-</button>
+        </button>
 
       </div>
 
     </div>
 
   `;
+
+});
+    document.querySelectorAll(".projectBtn").forEach(btn => {
+
+  btn.onclick = async () => {
+
+    const projectId = btn.dataset.project;
+
+    if (btn.innerText.trim() === "إدارة المشروع") {
+
+      window.location.href =
+        `../dashboard/?project=${projectId}`;
+
+      return;
+
+    }
+
+    const project =
+      projects.find(p => p.id === projectId);
+
+    await createProject(user.uid, project);
+
+    btn.innerText = "إدارة المشروع";
+
+  };
 
 });
     userName.innerText =
