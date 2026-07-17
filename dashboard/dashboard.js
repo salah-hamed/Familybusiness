@@ -5,6 +5,7 @@ let stats = {
   canceled: 0
 };
 let currentUser = null;
+let currentProjectId = null;
 let isAuthReady = false;
 import { protectPage } from "../core/auth/auth-guard.js";
 import auth from "../core/firebase/firebase-auth.js";
@@ -26,7 +27,8 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 protectPage();
-
+const projectId =
+  new URLSearchParams(location.search).get("project");
 const userName = document.getElementById("userName");
 const userEmail = document.getElementById("userEmail");
 const projectType = document.getElementById("projectType");
