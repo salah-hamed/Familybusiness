@@ -11,7 +11,7 @@ import { protectPage } from "../core/auth/auth-guard.js";
 import auth from "../core/firebase/firebase-auth.js";
 import db from "../core/firebase/firebase-db.js";
 import { logoutUser } from "../core/auth/auth.js";
-
+import { loadCurrentProject } from "./project.js";
 import {
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
