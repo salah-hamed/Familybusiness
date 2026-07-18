@@ -48,12 +48,12 @@ onAuthStateChanged(auth, async (user) => {
 
   try {
 
-    const userRef = doc(db, "users", user.uid);
-    const userSnap = await getDoc(userRef);
+    const data = await loadCurrentProject();
 
-    if (!userSnap.exists()) return;
-
-    const data = userSnap.data();
+if (!data) {
+  userName.innerText = "لم يتم العثور على المشروع";
+  return;
+}
 if (!data.isActive) {
 
   projectLink.style.display = "none";
