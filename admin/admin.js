@@ -82,7 +82,7 @@ document.getElementById("usersCount").innerText =
     activatedAt: new Date()
   }
 );
-
+await updateUserProjects(data.uid, true);
           alert("Updated Successfully");
 
           loadUsers();
@@ -99,7 +99,7 @@ document
         subscriptionStatus: "inactive"
       }
     );
-
+await updateUserProjects(data.uid, false);
     alert("User Deactivated");
 
     loadUsers();
