@@ -1,10 +1,11 @@
 import db from "../core/firebase/firebase-db.js";
-
 import {
   collection,
   getDocs,
   doc,
-  updateDoc
+  updateDoc,
+  query,
+  where
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const usersContainer =
@@ -107,5 +108,24 @@ document
     }, 100);
 
   });
+
+}
+async function updateUserProjects(userId, active) {
+
+  const q = query(
+    collection(db, "projects"),
+    where("ownerId", "==", userId)
+  );
+
+  const snapshot = await getDocs(q);
+
+  for (const projectDoc of snapshot.docs) {
+
+    await updateDoc(projectDoc.ref, {
+      isActive: active,
+      status: active ? "active" : "inactive"
+    });
+
+  }
 
 }
