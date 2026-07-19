@@ -1,15 +1,33 @@
 import auth from "../core/firebase/firebase-auth.js";
-import { getProject } from "../core/projects/project-service.js";
+import db from "../core/firebase/firebase-db.js";
+
+import {
+  doc,
+  getDoc
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 export async function loadCurrentProject() {
 
-  const projectId =
-    new URLSearchParams(location.search).get("project");
-
   const user = auth.currentUser;
 
-  if (!user || !projectId) return null;
+  if (!user) return null;
 
-  return await getProject(user.uid, projectId);
+  const userRef = doc(db, "users", user.uid);
+  const userSnap = await getDoc(userRef);
+
+  if (!userSnap.exists()) return null;
+
+  const projectId =
+    userSnap.data().projectType || "cleaning";
+
+  const projectRef =
+    doc(db, "projects", `${user.uid}_${projectId}`);
+
+  const projectSnap =
+    await getDoc(projectRef);
+
+  if (!projectSnap.exists()) return null;
+
+  return projectSnap.data();
 
 }
