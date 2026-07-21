@@ -49,6 +49,8 @@ onAuthStateChanged(auth, async (user) => {
   try {
 
     const data = await loadCurrentProject();
+    currentProjectId =
+`${currentUser.uid}_${data.projectId}`;
 
 if (!data) {
   userName.innerText = "لم يتم العثور على المشروع";
@@ -76,12 +78,13 @@ if (!data.isActive) {
 
   return;
 }
-    userName.innerText = "Name: " + data.name;
-    userEmail.innerText = "Email: " + data.email;
+    userName.innerText = data.businessName || "";
+userEmail.innerText = "";
     projectType.innerText = "Project: " + (data.projectType || "cleaning");
     status.innerText = "Active: " + data.isActive;
 
-    const projectSlug = data.projectType || "cleaning";
+const projectSlug =
+data.template;
     projectLink.value =
       `${window.location.origin}/Familybusiness/templates/${projectSlug}/?user=${user.uid}`;
 
@@ -131,7 +134,7 @@ document.getElementById("saveSettingsBtn").addEventListener("click", async () =>
     if (!isAuthReady || !currentUser) return;
 
     await updateDoc(
-      doc(db, "users", currentUser.uid),
+  doc(db, "projects", currentProjectId),
       {
         businessName: businessName.value,
         whatsappNumber: whatsappNumber.value,
@@ -161,7 +164,7 @@ document.getElementById("savePricingBtn").addEventListener("click", async () => 
     if (!isAuthReady || !currentUser) return;
 
     await updateDoc(
-      doc(db, "users", currentUser.uid),
+  doc(db, "projects", currentProjectId),
       {
         priceConfig: {
   base: Number(document.getElementById("basePrice").value),
