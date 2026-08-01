@@ -62,17 +62,17 @@ document.getElementById("getLocationBtn").onclick = () => {
 
 async function init() {
 
-  const providerId =
-    new URLSearchParams(location.search).get("user");
+const projectId =
+new URLSearchParams(location.search).get("project");
 
-  if (!providerId) return;
+if (!projectId) return;
 
   const snap =
-    await getDoc(doc(db, "users", providerId));
+await getDoc(doc(db, "projects", projectId));
 
-  if (!snap.exists()) return;
+if (!snap.exists()) return;
 
-  const data = snap.data();
+const data = snap.data();
 if (!data.isActive) {
 
   document.querySelector(".app").innerHTML = `
@@ -131,7 +131,7 @@ if (!data.isActive) {
   document.getElementById("submitOrder").onclick = async () => {
 
     const order = {
-      providerId,
+      providerId: projectId,
       templateType: "cleaning",
 
       customerName: document.getElementById("customerName").value,
