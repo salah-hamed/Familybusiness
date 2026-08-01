@@ -83,11 +83,11 @@ userEmail.innerText = "";
     projectType.innerText = "Project: " + (data.projectType || "cleaning");
     status.innerText = "Active: " + data.isActive;
 
-const projectSlug =
-data.template;
-    projectLink.value =
-      `${window.location.origin}/Familybusiness/templates/${projectSlug}/?user=${user.uid}`;
+const projectSlug = data.template;
 
+projectLink.value =
+`${window.location.origin}/Familybusiness/templates/${projectSlug}/?project=${currentProjectId}`;
+    
     businessName.value = data.businessName || "";
     whatsappNumber.value = data.whatsappNumber || "";
     instapayLink.value = data.instapayLink || "";
