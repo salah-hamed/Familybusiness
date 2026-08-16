@@ -1,4 +1,3 @@
-import auth from "../core/firebase/firebase-auth.js";
 import db from "../core/firebase/firebase-db.js";
 
 import {
@@ -8,20 +7,13 @@ import {
 
 export async function loadCurrentProject() {
 
-  const user = auth.currentUser;
-
-  if (!user) return null;
-
-  const userRef = doc(db, "users", user.uid);
-  const userSnap = await getDoc(userRef);
-
-  if (!userSnap.exists()) return null;
-
   const projectId =
-    userSnap.data().projectType || "cleaning";
+    new URLSearchParams(location.search).get("project");
+
+  if (!projectId) return null;
 
   const projectRef =
-    doc(db, "projects", `${user.uid}_${projectId}`);
+    doc(db, "projects", projectId);
 
   const projectSnap =
     await getDoc(projectRef);
