@@ -59,14 +59,15 @@ onAuthStateChanged(auth, async (user) => {
 
   try {
 
-    const data = await loadCurrentProject();
-    currentProjectId =
-`${currentUser.uid}_${data.projectId}`;
+ const data = await loadCurrentProject();
 
 if (!data) {
   userName.innerText = "لم يتم العثور على المشروع";
   return;
 }
+
+currentProjectId =
+`${currentUser.uid}_${data.projectId}`;
 if (!data.isActive) {
 
   projectLink.style.display = "none";
