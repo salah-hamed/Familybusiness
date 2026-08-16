@@ -7,6 +7,17 @@ let stats = {
 let currentUser = null;
 let currentProjectId = null;
 let isAuthReady = false;
+function normalizeArabicNumbers(value) {
+
+  return String(value)
+    .replace(/[٠-٩]/g, digit =>
+      String(digit.charCodeAt(0) - 1632)
+    )
+    .replace(/[۰-۹]/g, digit =>
+      String(digit.charCodeAt(0) - 1776)
+    );
+
+}
 import { protectPage } from "../core/auth/auth-guard.js";
 import auth from "../core/firebase/firebase-auth.js";
 import db from "../core/firebase/firebase-db.js";
@@ -167,12 +178,28 @@ document.getElementById("savePricingBtn").addEventListener("click", async () => 
   doc(db, "projects", currentProjectId),
       {
         priceConfig: {
-  base: Number(document.getElementById("basePrice").value),
-  room: Number(document.getElementById("roomPrice").value),
-  bathroom: Number(document.getElementById("bathroomPrice").value),
-  kitchen: Number(document.getElementById("kitchenPrice").value),
-  stairs: Number(document.getElementById("stairsPrice").value)
-  }
+
+  base: Number(normalizeArabicNumbers(
+    document.getElementById("basePrice").value
+  )),
+
+  room: Number(normalizeArabicNumbers(
+    document.getElementById("roomPrice").value
+  )),
+
+  bathroom: Number(normalizeArabicNumbers(
+    document.getElementById("bathroomPrice").value
+  )),
+
+  kitchen: Number(normalizeArabicNumbers(
+    document.getElementById("kitchenPrice").value
+  )),
+
+  stairs: Number(normalizeArabicNumbers(
+    document.getElementById("stairsPrice").value
+  ))
+
+}
       }
     );
 
