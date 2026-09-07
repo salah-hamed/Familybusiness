@@ -1,3 +1,8 @@
+import db from "../core/firebase/firebase-db.js";
+import {
+  doc,
+  getDoc
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   getProjectByDocId
 } from "../core/projects/project-service.js";
@@ -27,6 +32,27 @@ export async function loadCurrentProject(ownerId) {
     return {
       success: false,
       reason: "access-denied"
+    };
+  }
+
+  const userSnap = await getDoc(doc(db, "users", ownerId));
+
+  if (!userSnap.exists()) {
+    return {
+      success: false,
+      reason: "subscription-inactive"
+    };
+  }
+
+  const userData = userSnap.data();
+
+  if (
+    userData.isActive !== true ||
+    userData.subscriptionStatus !== "active"
+  ) {
+    return {
+      success: false,
+      reason: "subscription-inactive"
     };
   }
 
