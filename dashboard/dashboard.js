@@ -6,6 +6,7 @@ let stats = {
 };
 let currentUser = null;
 let currentProjectId = null;
+let currentProjectOwnerId = null;
 let isAuthReady = false;
 function normalizeArabicNumbers(value) {
 
@@ -63,6 +64,7 @@ onAuthStateChanged(auth, async (user) => {
 
 if (!result.success) {
   currentProjectId = null;
+  currentProjectOwnerId = null;
   userName.innerText =
     result.reason === "access-denied"
       ? "غير مسموح لك بإدارة هذا المشروع"
@@ -78,6 +80,7 @@ if (!result.success) {
 
 const data = result.project;
 currentProjectId = result.projectDocId;
+currentProjectOwnerId = data.ownerId;
 if (!data.isActive) {
 
   projectLink.style.display = "none";
@@ -153,7 +156,12 @@ document.getElementById("saveSettingsBtn").addEventListener("click", async () =>
 
   try {
 
-    if (!isAuthReady || !currentUser || !currentProjectId) return;
+    if (
+      !isAuthReady ||
+      !currentUser ||
+      !currentProjectId ||
+      currentProjectOwnerId !== currentUser.uid
+    ) return;
 
     await updateDoc(
   doc(db, "projects", currentProjectId),
@@ -183,7 +191,12 @@ document.getElementById("savePricingBtn").addEventListener("click", async () => 
 
   try {
 
-    if (!isAuthReady || !currentUser || !currentProjectId) return;
+    if (
+      !isAuthReady ||
+      !currentUser ||
+      !currentProjectId ||
+      currentProjectOwnerId !== currentUser.uid
+    ) return;
 
     await updateDoc(
   doc(db, "projects", currentProjectId),
@@ -227,6 +240,32 @@ document.getElementById("savePricingBtn").addEventListener("click", async () => 
   }
 
 });
+
+async function updateOrderStatus(orderId, projectId, nextStatus) {
+
+  if (
+    !isAuthReady ||
+    !currentUser ||
+    !currentProjectId ||
+    currentProjectOwnerId !== currentUser.uid ||
+    projectId !== currentProjectId
+  ) return false;
+
+  const orderRef = doc(db, "orders", orderId);
+  const orderSnap = await getDoc(orderRef);
+
+  if (!orderSnap.exists()) return false;
+
+  const order = orderSnap.data();
+
+  if (order.projectId !== currentProjectId) return false;
+
+  await updateDoc(orderRef, {
+    status: nextStatus
+  });
+
+  return true;
+}
 
 
 async function loadOrders(projectId) {
@@ -400,28 +439,22 @@ const cancelBtn = card.querySelector(".cancelBtn");
 
 if (acceptBtn) {
   acceptBtn.onclick = async () => {
-    await updateDoc(doc(db, "orders", orderId), {
-      status: "accepted"
-    });
-    loadOrders(projectId);
+    const updated = await updateOrderStatus(orderId, projectId, "accepted");
+    if (updated) loadOrders(projectId);
   };
 }
 
 if (doneBtn) {
   doneBtn.onclick = async () => {
-    await updateDoc(doc(db, "orders", orderId), {
-      status: "done"
-    });
-    loadOrders(projectId);
+    const updated = await updateOrderStatus(orderId, projectId, "done");
+    if (updated) loadOrders(projectId);
   };
 }
 
 if (cancelBtn) {
   cancelBtn.onclick = async () => {
-    await updateDoc(doc(db, "orders", orderId), {
-      status: "canceled"
-    });
-    loadOrders(projectId);
+    const updated = await updateOrderStatus(orderId, projectId, "canceled");
+    if (updated) loadOrders(projectId);
   };
 }
     });
