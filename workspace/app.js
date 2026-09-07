@@ -10,6 +10,9 @@ import {
   createProject,
   loadUserProjects
 } from "../templates/engine/project-engine.js";
+import {
+  getProjectDocId
+} from "../core/projects/project-service.js";
 const userName =
 document.getElementById("userName");
 
@@ -45,7 +48,12 @@ templatesContainer.innerHTML = "";
 
 projects.forEach(project => {
 
+  const existingProject =
+    myProjects.find(item => item.projectId === project.id);
   const created = myProjectIds.includes(project.id);
+  const projectDocId =
+    existingProject?.projectDocId ||
+    getProjectDocId(user.uid, project.id);
 
   templatesContainer.innerHTML += `
 
@@ -61,7 +69,8 @@ projects.forEach(project => {
 
         <button
           class="projectBtn"
-          data-project="${project.id}">
+          data-template-id="${project.id}"
+          data-project-doc-id="${projectDocId}">
 
           ${created ? "إدارة المشروع" : "إنشاء المشروع"}
 
@@ -78,22 +87,24 @@ projects.forEach(project => {
 
   btn.onclick = async () => {
 
-    const projectId = btn.dataset.project;
+    const templateId = btn.dataset.templateId;
+    let projectDocId = btn.dataset.projectDocId;
 
     if (btn.innerText.trim() === "إدارة المشروع") {
 
       window.location.href =
-        `../dashboard/?project=${projectId}`;
+        `../dashboard/?project=${encodeURIComponent(projectDocId)}`;
 
       return;
 
     }
 
     const project =
-      projects.find(p => p.id === projectId);
+      projects.find(p => p.id === templateId);
 
-    await createProject(user.uid, project);
+    projectDocId = await createProject(user.uid, project);
 
+    btn.dataset.projectDocId = projectDocId;
     btn.innerText = "إدارة المشروع";
 
   };
