@@ -1,4 +1,6 @@
 import db from "../core/firebase/firebase-db.js";
+import { protectAdmin } from "../core/auth/admin-guard.js";
+
 import {
   collection,
   getDocs,
@@ -9,12 +11,31 @@ import {
 const usersContainer =
   document.getElementById("usersContainer");
 
-loadUsers();
+const usersCount =
+  document.getElementById("usersCount");
+
+protectAdmin(async (session) => {
+
+  if (!session.authorized) {
+    usersCount.innerText = "غير مصرح بالدخول";
+    usersContainer.innerHTML = `
+      <div style="padding:20px;text-align:center;">
+        <h3>⛔ غير مسموح لك بالدخول إلى لوحة الإدارة</h3>
+        <p>هذه الصفحة متاحة لحسابات الإدارة فقط.</p>
+      </div>
+    `;
+    return;
+  }
+
+  await loadUsers();
+
+});
 
 async function loadUsers() {
 
   const snapshot =
     await getDocs(collection(db, "users"));
+
 document.getElementById("usersCount").innerText =
   `إجمالي المستخدمين: ${snapshot.size}`;
   usersContainer.innerHTML = "";
