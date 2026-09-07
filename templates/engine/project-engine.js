@@ -5,6 +5,7 @@ import {
 
 import {
   doc,
+  getDoc,
   setDoc,
   serverTimestamp,
   collection,
@@ -14,6 +15,21 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 export async function createProject(ownerId, project) {
+
+  const userSnap = await getDoc(doc(db, "users", ownerId));
+
+  if (!userSnap.exists()) {
+    throw new Error("USER_NOT_FOUND");
+  }
+
+  const userData = userSnap.data();
+
+  if (
+    userData.isActive !== true ||
+    userData.subscriptionStatus !== "active"
+  ) {
+    throw new Error("SUBSCRIPTION_NOT_ACTIVE");
+  }
 
   const projectDocId = getProjectDocId(ownerId, project.id);
 
