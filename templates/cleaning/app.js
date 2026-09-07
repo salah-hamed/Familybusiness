@@ -73,7 +73,20 @@ await getDoc(doc(db, "projects", projectId));
 if (!snap.exists()) return;
 
 const data = snap.data();
-if (!data.isActive) {
+
+const ownerSnap = data.ownerId
+  ? await getDoc(doc(db, "users", data.ownerId))
+  : null;
+
+const ownerData = ownerSnap?.exists()
+  ? ownerSnap.data()
+  : null;
+
+const subscriptionActive =
+  ownerData?.isActive === true &&
+  ownerData?.subscriptionStatus === "active";
+
+if (!data.isActive || !subscriptionActive) {
 
   document.querySelector(".app").innerHTML = `
     <div style="
@@ -84,7 +97,7 @@ if (!data.isActive) {
       font-family:Arial;
     ">
 
-      <h2>🔒 المشروع غير مفعل</h2>
+      <h2>🔒 المشروع غير متاح</h2>
 
       <p>
         هذا المشروع غير متاح حالياً.
