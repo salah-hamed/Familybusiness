@@ -1,0 +1,144 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userPath(uid) {
+      return /databases/$(database)/documents/users/$(uid);
+    }
+
+    function projectPath(projectId) {
+      return /databases/$(database)/documents/projects/$(projectId);
+    }
+
+    function userExists(uid) {
+      return exists(userPath(uid));
+    }
+
+    function userData(uid) {
+      return get(userPath(uid)).data;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && userExists(request.auth.uid)
+        && userData(request.auth.uid).role == "admin";
+    }
+
+    function subscriptionActive(uid) {
+      return userExists(uid)
+        && userData(uid).isActive == true
+        && userData(uid).subscriptionStatus == "active";
+    }
+
+    function projectExists(projectId) {
+      return exists(projectPath(projectId));
+    }
+
+    function projectData(projectId) {
+      return get(projectPath(projectId)).data;
+    }
+
+    function ownsProject(projectId) {
+      return signedIn()
+        && projectExists(projectId)
+        && projectData(projectId).ownerId == request.auth.uid;
+    }
+
+    function projectAvailable(projectId) {
+      return projectExists(projectId)
+        && projectData(projectId).isActive == true
+        && projectData(projectId).status == "active"
+        && subscriptionActive(projectData(projectId).ownerId);
+    }
+
+    match /users/{uid} {
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.uid == uid
+        && request.resource.data.isActive == false
+        && request.resource.data.subscriptionStatus == "pending"
+        && !("role" in request.resource.data);
+
+      allow get: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow list: if isAdmin();
+
+      allow update: if isAdmin()
+        || (
+          signedIn()
+          && request.auth.uid == uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name"])
+        );
+
+      allow delete: if isAdmin();
+    }
+
+    match /projects/{projectId} {
+      allow get: if isAdmin()
+        || (signedIn() && resource.data.ownerId == request.auth.uid)
+        || (
+          resource.data.isActive == true
+          && resource.data.status == "active"
+          && subscriptionActive(resource.data.ownerId)
+        );
+
+      allow list: if isAdmin()
+        || (signedIn() && resource.data.ownerId == request.auth.uid);
+
+      allow create: if signedIn()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.projectId is string
+        && projectId == request.auth.uid + "_" + request.resource.data.projectId
+        && subscriptionActive(request.auth.uid);
+
+      allow update: if isAdmin()
+        || (
+          signedIn()
+          && resource.data.ownerId == request.auth.uid
+          && request.resource.data.ownerId == resource.data.ownerId
+          && request.resource.data.projectId == resource.data.projectId
+          && request.resource.data.template == resource.data.template
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            "businessName",
+            "whatsappNumber",
+            "instapayLink",
+            "logo",
+            "coverImage",
+            "primaryColor",
+            "priceConfig"
+          ])
+        );
+
+      allow delete: if isAdmin()
+        || (signedIn() && resource.data.ownerId == request.auth.uid);
+    }
+
+    match /orders/{orderId} {
+      allow create: if request.resource.data.projectId is string
+        && request.resource.data.providerId == request.resource.data.projectId
+        && request.resource.data.status == "new"
+        && projectAvailable(request.resource.data.projectId);
+
+      allow read: if isAdmin() || ownsProject(resource.data.projectId);
+
+      allow update: if (
+          isAdmin()
+          || ownsProject(resource.data.projectId)
+        )
+        && request.resource.data.projectId == resource.data.projectId
+        && request.resource.data.providerId == resource.data.providerId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status"])
+        && request.resource.data.status in ["new", "accepted", "done", "canceled"];
+
+      allow delete: if isAdmin() || ownsProject(resource.data.projectId);
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
