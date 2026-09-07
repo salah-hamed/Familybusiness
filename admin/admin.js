@@ -3,9 +3,7 @@ import {
   collection,
   getDocs,
   doc,
-  updateDoc,
-  query,
-  where
+  updateDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const usersContainer =
@@ -82,7 +80,6 @@ document.getElementById("usersCount").innerText =
     activatedAt: new Date()
   }
 );
-await updateUserProjects(data.uid, true);
           alert("Updated Successfully");
 
           loadUsers();
@@ -99,7 +96,6 @@ document
         subscriptionStatus: "inactive"
       }
     );
-await updateUserProjects(data.uid, false);
     alert("User Deactivated");
 
     loadUsers();
@@ -108,24 +104,5 @@ await updateUserProjects(data.uid, false);
     }, 100);
 
   });
-
-}
-async function updateUserProjects(userId, active) {
-
-  const q = query(
-    collection(db, "projects"),
-    where("ownerId", "==", userId)
-  );
-
-  const snapshot = await getDocs(q);
-
-  for (const projectDoc of snapshot.docs) {
-
-    await updateDoc(projectDoc.ref, {
-      isActive: active,
-      status: active ? "active" : "inactive"
-    });
-
-  }
 
 }
