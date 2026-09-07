@@ -122,7 +122,7 @@ projectLink.value =
   document.getElementById("stairsPrice").value = data.priceConfig.stairs || "";
     }
 
-    await loadOrders(user.uid);
+    await loadOrders(currentProjectId);
 
   } catch (error) {
     console.log(error);
@@ -229,7 +229,7 @@ document.getElementById("savePricingBtn").addEventListener("click", async () => 
 });
 
 
-async function loadOrders(providerId) {
+async function loadOrders(projectId) {
 
   const ordersContainer =
     document.getElementById("ordersContainer");
@@ -240,7 +240,7 @@ async function loadOrders(providerId) {
 
     const q = query(
       collection(db, "orders"),
-      where("providerId", "==", providerId)
+      where("projectId", "==", projectId)
     );
 
     const snapshot = await getDocs(q);
@@ -403,7 +403,7 @@ if (acceptBtn) {
     await updateDoc(doc(db, "orders", orderId), {
       status: "accepted"
     });
-    loadOrders(providerId);
+    loadOrders(projectId);
   };
 }
 
@@ -412,7 +412,7 @@ if (doneBtn) {
     await updateDoc(doc(db, "orders", orderId), {
       status: "done"
     });
-    loadOrders(providerId);
+    loadOrders(projectId);
   };
 }
 
@@ -421,7 +421,7 @@ if (cancelBtn) {
     await updateDoc(doc(db, "orders", orderId), {
       status: "canceled"
     });
-    loadOrders(providerId);
+    loadOrders(projectId);
   };
 }
     });

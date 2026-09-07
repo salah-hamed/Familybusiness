@@ -131,6 +131,7 @@ if (!data.isActive) {
   document.getElementById("submitOrder").onclick = async () => {
 
     const order = {
+      projectId,
       providerId: projectId,
       templateType: "cleaning",
 
