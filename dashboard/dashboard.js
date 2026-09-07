@@ -59,15 +59,25 @@ onAuthStateChanged(auth, async (user) => {
 
   try {
 
- const data = await loadCurrentProject();
+ const result = await loadCurrentProject(user.uid);
 
-if (!data) {
-  userName.innerText = "لم يتم العثور على المشروع";
+if (!result.success) {
+  currentProjectId = null;
+  userName.innerText =
+    result.reason === "access-denied"
+      ? "غير مسموح لك بإدارة هذا المشروع"
+      : "لم يتم العثور على المشروع";
+  status.innerText =
+    result.reason === "access-denied"
+      ? "تم رفض الوصول إلى المشروع."
+      : "تحقق من رابط المشروع وحاول مرة أخرى.";
+  projectLink.style.display = "none";
+  document.getElementById("copyLinkBtn").style.display = "none";
   return;
 }
 
-currentProjectId =
-`${currentUser.uid}_${data.projectId}`;
+const data = result.project;
+currentProjectId = result.projectDocId;
 if (!data.isActive) {
 
   projectLink.style.display = "none";
@@ -143,7 +153,7 @@ document.getElementById("saveSettingsBtn").addEventListener("click", async () =>
 
   try {
 
-    if (!isAuthReady || !currentUser) return;
+    if (!isAuthReady || !currentUser || !currentProjectId) return;
 
     await updateDoc(
   doc(db, "projects", currentProjectId),
@@ -173,7 +183,7 @@ document.getElementById("savePricingBtn").addEventListener("click", async () => 
 
   try {
 
-    if (!isAuthReady || !currentUser) return;
+    if (!isAuthReady || !currentUser || !currentProjectId) return;
 
     await updateDoc(
   doc(db, "projects", currentProjectId),

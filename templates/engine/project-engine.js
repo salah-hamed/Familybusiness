@@ -1,4 +1,7 @@
 import db from "../../core/firebase/firebase-db.js";
+import {
+  getProjectDocId
+} from "../../core/projects/project-service.js";
 
 import {
   doc,
@@ -12,7 +15,7 @@ import {
 
 export async function createProject(ownerId, project) {
 
-  const projectDocId = `${ownerId}_${project.id}`;
+  const projectDocId = getProjectDocId(ownerId, project.id);
 
   await setDoc(doc(db, "projects", projectDocId), {
 
@@ -43,6 +46,8 @@ isActive: true,
 
   });
 
+  return projectDocId;
+
 }
 export async function loadUserProjects(ownerId) {
 
@@ -55,8 +60,11 @@ export async function loadUserProjects(ownerId) {
 
   const list = [];
 
-  snap.forEach(doc => {
-    list.push(doc.data());
+  snap.forEach(projectDoc => {
+    list.push({
+      projectDocId: projectDoc.id,
+      ...projectDoc.data()
+    });
   });
 
   return list;

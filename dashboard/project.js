@@ -1,25 +1,39 @@
-import db from "../core/firebase/firebase-db.js";
-
 import {
-  doc,
-  getDoc
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  getProjectByDocId
+} from "../core/projects/project-service.js";
 
-export async function loadCurrentProject() {
+export async function loadCurrentProject(ownerId) {
 
-  const projectId =
+  const projectDocId =
     new URLSearchParams(location.search).get("project");
 
-  if (!projectId) return null;
+  if (!projectDocId) {
+    return {
+      success: false,
+      reason: "not-found"
+    };
+  }
 
-  const projectRef =
-    doc(db, "projects", projectId);
+  const project = await getProjectByDocId(projectDocId);
 
-  const projectSnap =
-    await getDoc(projectRef);
+  if (!project) {
+    return {
+      success: false,
+      reason: "not-found"
+    };
+  }
 
-  if (!projectSnap.exists()) return null;
+  if (project.ownerId !== ownerId) {
+    return {
+      success: false,
+      reason: "access-denied"
+    };
+  }
 
-  return projectSnap.data();
+  return {
+    success: true,
+    projectDocId,
+    project
+  };
 
 }

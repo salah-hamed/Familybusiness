@@ -6,31 +6,36 @@ import {
   updateDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-export function getProjectDocId(ownerId, projectId) {
-  return `${ownerId}_${projectId}`;
+export function getProjectDocId(ownerId, templateId) {
+  return `${ownerId}_${templateId}`;
 }
 
-export async function getProject(ownerId, projectId) {
+export async function getProjectByDocId(projectDocId) {
 
-  const ref = doc(
-    db,
-    "projects",
-    getProjectDocId(ownerId, projectId)
-  );
-
+  const ref = doc(db, "projects", projectDocId);
   const snap = await getDoc(ref);
 
   if (!snap.exists()) return null;
 
-  return snap.data();
+  return {
+    projectDocId: snap.id,
+    ...snap.data()
+  };
 }
 
-export async function updateProject(ownerId, projectId, data) {
+export async function getProject(ownerId, templateId) {
+
+  return getProjectByDocId(
+    getProjectDocId(ownerId, templateId)
+  );
+}
+
+export async function updateProject(ownerId, templateId, data) {
 
   const ref = doc(
     db,
     "projects",
-    getProjectDocId(ownerId, projectId)
+    getProjectDocId(ownerId, templateId)
   );
 
   await updateDoc(ref, data);
