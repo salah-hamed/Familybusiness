@@ -40,6 +40,30 @@ function calcPrice() {
   return price;
 }
 
+function showProjectUnavailable() {
+  document.querySelector(".app").innerHTML = `
+    <div style="
+      text-align:center;
+      padding:40px;
+      max-width:500px;
+      margin:auto;
+      font-family:Arial;
+    ">
+
+      <h2>🔒 المشروع غير متاح</h2>
+
+      <p>
+        هذا المشروع غير متاح حالياً.
+      </p>
+
+      <p>
+        يرجى التواصل مع صاحب المشروع.
+      </p>
+
+    </div>
+  `;
+}
+
 /* ======================
    Events
 ====================== */
@@ -62,56 +86,32 @@ document.getElementById("getLocationBtn").onclick = () => {
 
 async function init() {
 
-const projectId =
-new URLSearchParams(location.search).get("project");
+  const projectId =
+    new URLSearchParams(location.search).get("project");
 
-if (!projectId) return;
+  if (!projectId) return;
 
-  const snap =
-await getDoc(doc(db, "projects", projectId));
+  let snap;
 
-if (!snap.exists()) return;
+  try {
+    snap = await getDoc(doc(db, "projects", projectId));
+  } catch (error) {
+    showProjectUnavailable();
+    return;
+  }
 
-const data = snap.data();
+  if (!snap.exists()) {
+    showProjectUnavailable();
+    return;
+  }
 
-const ownerSnap = data.ownerId
-  ? await getDoc(doc(db, "users", data.ownerId))
-  : null;
+  const data = snap.data();
 
-const ownerData = ownerSnap?.exists()
-  ? ownerSnap.data()
-  : null;
+  if (!data.isActive || data.status !== "active") {
+    showProjectUnavailable();
+    return;
+  }
 
-const subscriptionActive =
-  ownerData?.isActive === true &&
-  ownerData?.subscriptionStatus === "active";
-
-if (!data.isActive || !subscriptionActive) {
-
-  document.querySelector(".app").innerHTML = `
-    <div style="
-      text-align:center;
-      padding:40px;
-      max-width:500px;
-      margin:auto;
-      font-family:Arial;
-    ">
-
-      <h2>🔒 المشروع غير متاح</h2>
-
-      <p>
-        هذا المشروع غير متاح حالياً.
-      </p>
-
-      <p>
-        يرجى التواصل مع صاحب المشروع.
-      </p>
-
-    </div>
-  `;
-
-  return;
-}
   document.getElementById("businessTitle").innerText =
     data.businessName || "خدمة تنظيف";
 
@@ -158,11 +158,11 @@ if (!data.isActive || !subscriptionActive) {
       bathrooms: bathrooms.value,
       kitchen: kitchen.value,
       stairs: stairs.value,
-visitDate:
-document.getElementById("visitDate").value,
+      visitDate:
+        document.getElementById("visitDate").value,
 
-visitTime:
-document.getElementById("visitTime").value,
+      visitTime:
+        document.getElementById("visitTime").value,
       debugTest: "WORKING_APP_JS",
       price: calcPrice(),
       status: "new"
