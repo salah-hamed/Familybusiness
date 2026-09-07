@@ -41,6 +41,9 @@ protectPage(async (user) => {
 
     const data =
     userSnap.data();
+    const subscriptionActive =
+      data.isActive === true &&
+      data.subscriptionStatus === "active";
     const myProjects = await loadUserProjects(user.uid);
 
 const myProjectIds = myProjects.map(project => project.projectId);
@@ -70,9 +73,14 @@ projects.forEach(project => {
         <button
           class="projectBtn"
           data-template-id="${project.id}"
-          data-project-doc-id="${projectDocId}">
+          data-project-doc-id="${projectDocId}"
+          ${subscriptionActive ? "" : "disabled"}>
 
-          ${created ? "إدارة المشروع" : "إنشاء المشروع"}
+          ${
+            subscriptionActive
+              ? (created ? "إدارة المشروع" : "إنشاء المشروع")
+              : "الاشتراك غير مفعل"
+          }
 
         </button>
 
@@ -86,6 +94,8 @@ projects.forEach(project => {
     document.querySelectorAll(".projectBtn").forEach(btn => {
 
   btn.onclick = async () => {
+
+    if (!subscriptionActive) return;
 
     const templateId = btn.dataset.templateId;
     let projectDocId = btn.dataset.projectDocId;
@@ -102,7 +112,15 @@ projects.forEach(project => {
     const project =
       projects.find(p => p.id === templateId);
 
-    projectDocId = await createProject(user.uid, project);
+    try {
+      projectDocId = await createProject(user.uid, project);
+    } catch (error) {
+      subscriptionStatus.innerText =
+        error.message === "SUBSCRIPTION_NOT_ACTIVE"
+          ? "⏳ يجب تفعيل الاشتراك أولاً"
+          : "حدث خطأ أثناء إنشاء المشروع";
+      return;
+    }
 
     btn.dataset.projectDocId = projectDocId;
     btn.innerText = "إدارة المشروع";
@@ -114,9 +132,9 @@ projects.forEach(project => {
     `أهلاً ${data.name}`;
 
     subscriptionStatus.innerText =
-    data.isActive
+    subscriptionActive
     ? "✅ الاشتراك مفعل"
-    : "⏳ الاشتراك قيد المراجعة";
+    : "⏳ الاشتراك قيد المراجعة أو غير مفعل";
 
   }
 

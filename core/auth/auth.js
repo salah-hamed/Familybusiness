@@ -36,6 +36,7 @@ export async function registerUser(name, email, password) {
       email: email,
       projectType: "",
       isActive: false,
+      subscriptionStatus: "pending",
       createdAt: new Date()
 
     });
