@@ -137,6 +137,43 @@ service cloud.firestore {
       allow delete: if isAdmin() || ownsProject(resource.data.projectId);
     }
 
+    match /carwashSubscriptions/{subscriptionId} {
+      allow get: if isAdmin()
+        || ownsProject(resource.data.projectId)
+        || (
+          resource.data.projectId is string
+          && projectAvailable(resource.data.projectId)
+        );
+
+      allow list: if isAdmin() || ownsProject(resource.data.projectId);
+
+      allow create: if isAdmin()
+        || (
+          signedIn()
+          && request.resource.data.projectId is string
+          && ownsProject(request.resource.data.projectId)
+          && request.resource.data.status == "active"
+          && request.resource.data.totalWashes is number
+          && request.resource.data.remainingWashes is number
+        );
+
+      allow update: if isAdmin()
+        || (
+          ownsProject(resource.data.projectId)
+          && request.resource.data.projectId == resource.data.projectId
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            "status",
+            "totalWashes",
+            "remainingWashes",
+            "startsAt",
+            "expiresAt",
+            "updatedAt"
+          ])
+        );
+
+      allow delete: if isAdmin() || ownsProject(resource.data.projectId);
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

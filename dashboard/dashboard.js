@@ -5,11 +5,12 @@ import { logoutUser } from "../core/auth/auth.js";
 import { loadCurrentProject } from "./project.js";
 import { getDashboardTemplate, getTemplateKey } from "./template-config.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { collection, query, where, getDocs, doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { collection, query, where, getDocs, doc, getDoc, updateDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 let stats = { new: 0, accepted: 0, done: 0, canceled: 0 };
 let currentUser = null, currentProjectId = null, currentProjectOwnerId = null, currentTemplateKey = "cleaning";
 let isAuthReady = false, activeTab = "all", searchTerm = "";
+let currentDashboardConfig = null;
 
 const $ = id => document.getElementById(id);
 const userName = $("userName"), userEmail = $("userEmail"), projectType = $("projectType"), status = $("status");
@@ -22,23 +23,66 @@ function scrollToSection(id) { $(id)?.scrollIntoView({behavior:"smooth",block:"s
 
 function configureDashboard(project) {
   currentTemplateKey = getTemplateKey(project);
-  const config = getDashboardTemplate(project);
-  projectType.innerText = `المشروع: ${config.label}`;
+  currentDashboardConfig = getDashboardTemplate(project);
+  projectType.innerText = `المشروع: ${currentDashboardConfig.label}`;
   const todayLabel = $("todayOrders")?.closest("article")?.querySelector(".statLabel");
-  if (todayLabel) todayLabel.innerText = config.todayLabel;
+  if (todayLabel) todayLabel.innerText = currentDashboardConfig.todayLabel;
 
-  const allowedIds = new Set(config.pricing.map(([id]) => id));
+  const allowedIds = new Set(currentDashboardConfig.pricing.map(([id]) => id));
   ["basePrice","roomPrice","bathroomPrice","kitchenPrice","stairsPrice"].forEach(id => {
     const input = $(id); if (!input) return;
     const label = input.closest("label");
     if (label) label.style.display = allowedIds.has(id) ? "" : "none";
   });
-  config.pricing.forEach(([id,label]) => { const input=$(id); const span=input?.closest("label")?.querySelector("span"); if(span) span.innerText=label; });
+  currentDashboardConfig.pricing.forEach(([id,label]) => { const input=$(id); const span=input?.closest("label")?.querySelector("span"); if(span) span.innerText=label; });
 
   if (currentTemplateKey === "carwash") {
     const theme = $("creativeTheme")?.querySelector('option[value="cleanPro"]');
     if (theme) theme.textContent = "غسيل سيارات احترافي — صورة في إطار";
-    if ($("creativeHeadline")) $("creativeHeadline").value = config.marketing.headline;
+    if ($("creativeHeadline")) $("creativeHeadline").value = currentDashboardConfig.marketing.headline;
+    ensureSubscriptionPanel();
+  }
+}
+
+function ensureSubscriptionPanel() {
+  if ($("carwashSubscriptionsPanel")) return;
+  const ordersSection = $("ordersSection");
+  if (!ordersSection) return;
+  const panel = document.createElement("section");
+  panel.id = "carwashSubscriptionsPanel";
+  panel.className = "card";
+  panel.innerHTML = `
+    <div class="sectionHeading"><div><span class="eyebrow">الاشتراكات الشهرية</span><h2>عملاء الاشتراك</h2></div></div>
+    <div class="statGrid" style="margin-bottom:12px">
+      <article class="statCard accentAccepted"><span class="statIcon">🔁</span><div><span class="statLabel">اشتراكات نشطة</span><strong id="activeCarwashSubscriptions">0</strong></div></article>
+      <article class="statCard accentDone"><span class="statIcon">💦</span><div><span class="statLabel">إجمالي الغسلات المتبقية</span><strong id="remainingSubscriptionWashes">0</strong></div></article>
+    </div>
+    <div id="subscriptionsList" class="ordersList"><div class="emptyState">سيظهر هنا ملخص الاشتراكات النشطة.</div></div>`;
+  ordersSection.parentNode.insertBefore(panel, ordersSection);
+}
+
+async function loadSubscriptions(projectId) {
+  if (currentTemplateKey !== "carwash" || !$("subscriptionsList")) return;
+  const box = $("subscriptionsList");
+  try {
+    const snap = await getDocs(query(collection(db,"carwashSubscriptions"),where("projectId","==",projectId)));
+    let active = 0, remaining = 0;
+    box.innerHTML = "";
+    snap.forEach(ds => {
+      const sub = ds.data();
+      if (sub.status === "active") { active++; remaining += Number(sub.remainingWashes || 0); }
+      if (sub.status !== "active") return;
+      const expires = sub.expiresAt?.toDate ? sub.expiresAt.toDate().toLocaleDateString("ar-EG") : "-";
+      const row = document.createElement("article");
+      row.className = "orderCard";
+      row.innerHTML = `<div class="orderTop"><div><h3>اشتراك نشط</h3><span class="muted">ينتهي: ${escapeHTML(expires)}</span></div><span class="orderStatus status-accepted">${Number(sub.remainingWashes||0)} / ${Number(sub.totalWashes||0)} غسلات</span></div>`;
+      box.appendChild(row);
+    });
+    $("activeCarwashSubscriptions").innerText = active;
+    $("remainingSubscriptionWashes").innerText = remaining;
+    if (active === 0) box.innerHTML = '<div class="emptyState">لا توجد اشتراكات نشطة بعد.</div>';
+  } catch (e) {
+    box.innerHTML = `<div class="emptyState">${escapeHTML(e.message)}</div>`;
   }
 }
 
@@ -53,8 +97,10 @@ onAuthStateChanged(auth, async user => {
     userName.innerText=data.businessName||"مشروعك"; userEmail.innerText=""; status.innerText="● نشط"; configureDashboard(data);
     projectLink.value=`${window.location.origin}/Familybusiness/templates/${data.template}/?project=${currentProjectId}`;
     businessName.value=data.businessName||""; whatsappNumber.value=data.whatsappNumber||""; instapayLink.value=data.instapayLink||"";
-    const pc=data.priceConfig||{}; $("basePrice").value=pc.base??""; $("roomPrice").value=pc.room??""; $("bathroomPrice").value=pc.bathroom??""; $("kitchenPrice").value=pc.kitchen??""; $("stairsPrice").value=pc.stairs??"";
+    const pc=data.priceConfig||{};
+    if (currentDashboardConfig) currentDashboardConfig.pricing.forEach(([id,,key]) => { if ($(id)) $(id).value = pc[key] ?? ""; });
     await loadOrders(currentProjectId);
+    await loadSubscriptions(currentProjectId);
   } catch(error){ console.log(error); }
 });
 
@@ -66,17 +112,67 @@ document.querySelectorAll(".navItem[data-target]").forEach(item=>item.addEventLi
 
 $("saveSettingsBtn").addEventListener("click",async()=>{try{if(!isAuthReady||!currentUser||!currentProjectId||currentProjectOwnerId!==currentUser.uid)return;await updateDoc(doc(db,"projects",currentProjectId),{businessName:businessName.value.trim(),whatsappNumber:whatsappNumber.value.trim(),instapayLink:instapayLink.value.trim()});userName.innerText=businessName.value.trim()||"مشروعك";$("settingsStatus").innerText="تم حفظ الإعدادات ✅";}catch(e){$("settingsStatus").innerText=e.message;}});
 
-$("savePricingBtn").addEventListener("click",async()=>{try{if(!isAuthReady||!currentUser||!currentProjectId||currentProjectOwnerId!==currentUser.uid)return;let priceConfig;if(currentTemplateKey==="carwash"){priceConfig={base:Number(normalizeArabicNumbers($("basePrice").value))};}else{priceConfig={base:Number(normalizeArabicNumbers($("basePrice").value)),room:Number(normalizeArabicNumbers($("roomPrice").value)),bathroom:Number(normalizeArabicNumbers($("bathroomPrice").value)),kitchen:Number(normalizeArabicNumbers($("kitchenPrice").value)),stairs:Number(normalizeArabicNumbers($("stairsPrice").value))};}await updateDoc(doc(db,"projects",currentProjectId),{priceConfig});$("pricingStatus").innerText="تم حفظ الأسعار ✅";}catch(e){$("pricingStatus").innerText=e.message;}});
+$("savePricingBtn").addEventListener("click",async()=>{try{
+  if(!isAuthReady||!currentUser||!currentProjectId||currentProjectOwnerId!==currentUser.uid||!currentDashboardConfig)return;
+  const priceConfig = {};
+  currentDashboardConfig.pricing.forEach(([id,,key]) => { priceConfig[key] = Number(normalizeArabicNumbers($(id)?.value || 0)); });
+  if (currentTemplateKey === "carwash") priceConfig.monthlyWashes = Math.max(1, Math.round(priceConfig.monthlyWashes || 1));
+  await updateDoc(doc(db,"projects",currentProjectId),{priceConfig});
+  $("pricingStatus").innerText="تم حفظ الأسعار ✅";
+}catch(e){$("pricingStatus").innerText=e.message;}});
 
-async function updateOrderStatus(orderId,projectId,nextStatus){if(!isAuthReady||!currentUser||!currentProjectId||currentProjectOwnerId!==currentUser.uid||projectId!==currentProjectId)return false;const ref=doc(db,"orders",orderId),snap=await getDoc(ref);if(!snap.exists()||snap.data().projectId!==currentProjectId)return false;await updateDoc(ref,{status:nextStatus});return true;}
+async function activateMonthlySubscription(order) {
+  if (currentTemplateKey !== "carwash" || order.planType !== "monthly_new" || !order.subscriptionKey) return;
+  const totalWashes = Math.max(1, Number(order.packageWashes || 1));
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + 30);
+  await setDoc(doc(db,"carwashSubscriptions",order.subscriptionKey),{
+    projectId: currentProjectId,
+    status: "active",
+    totalWashes,
+    remainingWashes: totalWashes,
+    startsAt: serverTimestamp(),
+    expiresAt,
+    updatedAt: serverTimestamp()
+  },{merge:true});
+}
+
+async function consumeSubscriptionWash(order) {
+  if (currentTemplateKey !== "carwash" || !["monthly_new","subscription_use"].includes(order.planType) || !order.subscriptionKey) return;
+  const ref = doc(db,"carwashSubscriptions",order.subscriptionKey);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return;
+  const data = snap.data();
+  const remaining = Math.max(0, Number(data.remainingWashes || 0) - 1);
+  await updateDoc(ref,{remainingWashes:remaining,status:remaining > 0 ? "active" : "completed",updatedAt:serverTimestamp()});
+}
+
+async function updateOrderStatus(orderId,projectId,nextStatus){
+  if(!isAuthReady||!currentUser||!currentProjectId||currentProjectOwnerId!==currentUser.uid||projectId!==currentProjectId)return false;
+  const ref=doc(db,"orders",orderId),snap=await getDoc(ref);
+  if(!snap.exists()||snap.data().projectId!==currentProjectId)return false;
+  const order=snap.data();
+  if(nextStatus==="accepted"&&order.planType==="monthly_new") await activateMonthlySubscription(order);
+  await updateDoc(ref,{status:nextStatus});
+  if(nextStatus==="done") await consumeSubscriptionWash(order);
+  await loadSubscriptions(projectId);
+  return true;
+}
+
 function refreshOrderVisibility(){document.querySelectorAll("#ordersContainer .orderCard").forEach(card=>{const okTab=activeTab==="all"||card.dataset.status===activeTab,okSearch=!searchTerm||(card.dataset.search||"").includes(searchTerm);card.classList.toggle("hiddenByFilter",!(okTab&&okSearch));});}
 function setupTabs(){document.querySelectorAll(".tabBtn").forEach(btn=>btn.onclick=()=>{document.querySelectorAll(".tabBtn").forEach(b=>b.classList.remove("active"));btn.classList.add("active");activeTab=btn.dataset.tab;refreshOrderVisibility();});}
 ordersSearch.addEventListener("input",()=>{searchTerm=ordersSearch.value.trim().toLowerCase();refreshOrderVisibility();});
 
+function carwashPlanLabel(order) {
+  if (order.planType === "monthly_new") return `⭐ اشتراك شهري — ${Number(order.packageWashes||0)} غسلات`;
+  if (order.planType === "subscription_use") return "🔁 غسلة من اشتراك قائم";
+  return "💦 غسلة واحدة";
+}
+
 function orderDetails(order){
   if(currentTemplateKey==="carwash"){
     const carModel=escapeHTML(order.carModel||order.carType||"-"); const color=escapeHTML(order.carColor||"-"); const plate=escapeHTML(order.plateNumber||order.carPlate||"-"); const notes=escapeHTML(order.notes||"-");
-    return `<div class="orderInfo"><b>🚗 السيارة</b>${carModel}</div><div class="orderInfo"><b>🎨 اللون / اللوحة</b>${color} — ${plate}</div><div class="orderInfo"><b>📍 عنوان الركنة</b>${escapeHTML(order.customerAddress||order.parkingAddress||"-")}</div><div class="orderInfo"><b>📝 ملاحظات</b>${notes}</div>`;
+    return `<div class="orderInfo"><b>⭐ نوع الحجز</b>${carwashPlanLabel(order)}</div><div class="orderInfo"><b>🚗 السيارة</b>${carModel}</div><div class="orderInfo"><b>🎨 اللون / اللوحة</b>${color} — ${plate}</div><div class="orderInfo"><b>📍 عنوان الركنة</b>${escapeHTML(order.customerAddress||order.parkingAddress||"-")}</div><div class="orderInfo"><b>📝 ملاحظات</b>${notes}</div>`;
   }
   return `<div class="orderInfo"><b>📍 العنوان</b>${escapeHTML(order.customerAddress||"-")}</div><div class="orderInfo"><b>🏠 تفاصيل المكان</b>${escapeHTML(order.rooms||"-")} غرف / ${escapeHTML(order.bathrooms||"-")} حمام</div><div class="orderInfo"><b>✨ إضافات</b>مطبخ: ${escapeHTML(order.kitchen||"-")} / سلم: ${escapeHTML(order.stairs||"-")}</div>`;
 }

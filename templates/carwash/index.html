@@ -7,19 +7,33 @@
   <title>غسيل السيارات المتنقل</title>
   <link rel="stylesheet" href="/Familybusiness/core/ui/theme.css">
   <link rel="stylesheet" href="./style.css">
+  <style>
+    .planSection{margin-bottom:14px}.planLead{background:linear-gradient(135deg,#0f766e,#115e59);color:#fff;border:0;position:relative;overflow:hidden}.planLead:after{content:"";position:absolute;width:180px;height:180px;border-radius:50%;background:rgba(255,255,255,.08);left:-60px;top:-70px}.planLead .sectionTitle,.planLead .sectionHeading p{color:#fff}.planLead .sectionHeading p{opacity:.86}.plans{display:grid;gap:10px}.planCard{width:100%;text-align:right;border:1px solid var(--border);background:#fff;border-radius:18px;padding:15px;cursor:pointer;font:inherit;color:var(--text);position:relative}.planCard strong{display:block;font-size:16px;margin-bottom:4px}.planCard small{color:var(--muted);line-height:1.6}.planCard.active{border:2px solid #34d399;background:#ecfdf5;box-shadow:0 8px 20px rgba(16,185,129,.12)}.planCard.featured{padding:19px;border-color:#6ee7b7;background:rgba(255,255,255,.98)}.recommended{position:absolute;left:12px;top:12px;background:#f59e0b;color:#fff;border-radius:999px;padding:5px 9px;font-size:10px;font-weight:900}.planPrice{display:flex;align-items:end;gap:5px;margin-top:9px;color:#0f766e}.planPrice b{font-size:26px}.planPrice span{font-size:12px}.monthlyBenefits{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:12px}.monthlyBenefits span{background:#d1fae5;color:#065f46;padding:8px 5px;border-radius:10px;text-align:center;font-size:10px;font-weight:800}.secondaryPlans{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:10px}.subscriberState{display:none;margin-top:10px;padding:11px;border-radius:13px;background:#ecfdf5;color:#065f46;font-size:12px;font-weight:800}.subscriberState.show{display:block}.planSummary{margin-top:10px;padding:12px;border-radius:14px;background:#f0fdfa;color:#115e59;font-size:12px;line-height:1.7}.priceHeader .priorityBadge{display:inline-flex;background:#d1fae5;color:#065f46;border-radius:999px;padding:5px 8px;font-size:10px;font-weight:900;margin-top:5px}@media(max-width:480px){.secondaryPlans{grid-template-columns:1fr}.monthlyBenefits{grid-template-columns:1fr 1fr 1fr}}
+  </style>
 </head>
 <body>
 <div class="mobileShell"><main class="app">
-  <header class="topBar"><div class="brandBlock"><span class="brandIcon">🚗</span><div><p class="eyebrow">غسيل خارجي في مكان سيارتك</p><h1 id="businessTitle">غسيل السيارات</h1><p class="subtitle">احجز غسيل سيارتك في أقل من دقيقة</p></div></div></header>
+  <header class="topBar"><div class="brandBlock"><span class="brandIcon">🚗</span><div><p class="eyebrow">غسيل خارجي في مكان سيارتك</p><h1 id="businessTitle">غسيل السيارات</h1><p class="subtitle">اشتراك شهري مريح أو غسلة عند الحاجة</p></div></div></header>
 
-  <section class="heroCard"><div class="heroBadge">💦 غسيل خارجي</div><h2>سيارتك أنظف بدون ما تتحرك من مكانك</h2><p>حدد سيارتك ومكان الركنة والموعد، وسيصل مقدم الخدمة إليك.</p><div class="trustRow"><span>⚡ حجز سريع</span><span>📍 عند موقعك</span><span>💰 سعر واضح</span></div></section>
+  <section class="heroCard"><div class="heroBadge">⭐ الاشتراك الشهري هو الاختيار الأفضل</div><h2>خلي سيارتك نظيفة طول الشهر</h2><p>اشترك مرة وحدد أول موعد، وبعدها استخدم رصيد غسلاتك الشهرية بسهولة من نفس الصفحة.</p><div class="trustRow"><span>🔁 غسلات شهرية</span><span>📍 عند موقعك</span><span>💰 وفر أكثر</span></div></section>
 
-  <section class="card" id="customerSection"><div class="sectionHeading"><span class="sectionIcon">👤</span><div><h3 class="sectionTitle">بيانات العميل</h3><p>بيانات التواصل معك لتأكيد الحجز.</p></div></div>
+  <section class="card planSection planLead" id="planSection"><div class="sectionHeading"><span class="sectionIcon">⭐</span><div><h3 class="sectionTitle">اختر طريقة الغسيل</h3><p>صممنا الصفحة بحيث يكون الاشتراك الشهري هو الاختيار الأساسي.</p></div></div>
+    <div class="plans">
+      <button class="planCard featured active" type="button" data-plan="monthly"><span class="recommended">الأكثر توفيرًا</span><strong>🔁 الاشتراك الشهري</strong><small>باقة شهر كامل تشمل عددًا محددًا من الغسلات الخارجية.</small><div class="planPrice"><b id="monthlyPlanPrice">0</b><span>جنيه / شهر</span></div><div class="monthlyBenefits"><span id="monthlyWashesLabel">4 غسلات</span><span>حجز مرن</span><span>أولوية للعميل</span></div></button>
+      <div class="secondaryPlans">
+        <button class="planCard" type="button" data-plan="subscriber"><strong>✅ أنا مشترك بالفعل</strong><small>استخدم غسلة من رصيد اشتراكك الحالي.</small></button>
+        <button class="planCard" type="button" data-plan="single"><strong>💦 غسلة واحدة</strong><small>غسيل خارجي مرة واحدة بدون اشتراك.</small><div class="planPrice"><b id="singlePlanPrice">0</b><span>جنيه</span></div></button>
+      </div>
+    </div>
+    <div id="subscriberState" class="subscriberState"></div>
+  </section>
+
+  <section class="card" id="customerSection"><div class="sectionHeading"><span class="sectionIcon">👤</span><div><h3 class="sectionTitle">بيانات العميل</h3><p>بيانات التواصل معك لتأكيد الحجز والاشتراك.</p></div></div>
     <label for="customerName">الاسم الكامل</label><input id="customerName" autocomplete="name" placeholder="مثال: محمد أحمد">
     <label for="customerPhone">رقم الهاتف</label><input id="customerPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="01xxxxxxxxx">
   </section>
 
-  <section class="card" id="carSection"><div class="sectionHeading"><span class="sectionIcon">🚘</span><div><h3 class="sectionTitle">بيانات السيارة</h3><p>ساعد مقدم الخدمة على التعرف على سيارتك بسهولة.</p></div></div>
+  <section class="card" id="carSection"><div class="sectionHeading"><span class="sectionIcon">🚘</span><div><h3 class="sectionTitle">بيانات السيارة</h3><p>نستخدم الهاتف ورقم اللوحة للتعرف على اشتراكك بأمان.</p></div></div>
     <div class="fieldGrid"><div class="fieldGroup"><label for="carModel">نوع / موديل السيارة</label><input id="carModel" placeholder="مثال: Kia Cerato"></div><div class="fieldGroup"><label for="carColor">لون السيارة</label><input id="carColor" placeholder="مثال: أبيض"></div><div class="fieldGroup full"><label for="plateNumber">رقم اللوحة</label><input id="plateNumber" placeholder="مثال: أ ب ج 1234"></div></div>
   </section>
 
@@ -30,12 +44,12 @@
     <label for="notes">ملاحظات اختيارية</label><textarea id="notes" rows="3" placeholder="مثال: السيارة في الجراج أمام البوابة الثانية"></textarea>
   </section>
 
-  <section class="priceCard" id="bookingSection"><div class="priceHeader"><div><p>غسيل خارجي للسيارة</p><small>السعر المحدد من مقدم الخدمة</small></div><span>💳</span></div><div class="priceBox" id="priceBox">0 جنيه</div><button id="submitOrder" class="primaryBookBtn" type="button">تأكيد الحجز</button><div id="status" class="bookingStatus" aria-live="polite"></div></section>
+  <section class="priceCard" id="bookingSection"><div class="priceHeader"><div><p id="selectedPlanTitle">الاشتراك الشهري</p><small id="selectedPlanHint">ابدأ اشتراكك واحجز أول غسلة</small><div id="priorityBadge" class="priorityBadge">⭐ الخيار الأساسي</div></div><span>💳</span></div><div class="priceBox" id="priceBox">0 جنيه</div><div id="planSummary" class="planSummary"></div><button id="submitOrder" class="primaryBookBtn" type="button">اشترك واحجز أول غسلة</button><div id="status" class="bookingStatus" aria-live="polite"></div></section>
 
   <section class="card contactCard" id="supportSection"><div class="sectionHeading compact"><span class="sectionIcon">💬</span><div><h3 class="sectionTitle">تحتاج مساعدة؟</h3><p>تواصل مع مقدم الخدمة أو استخدم وسيلة الدفع المتاحة.</p></div></div><div class="actionGrid"><a id="whatsappBtn" class="actionBtn whatsapp" target="_blank" rel="noopener">💬 واتساب</a><a id="paymentBtn" class="actionBtn payment" target="_blank" rel="noopener">💸 InstaPay</a></div></section>
 
   <section class="ctaBox"><span class="ctaMini">Family Business</span><h3>ابدأ مشروعك الخاص الآن</h3><p>امتلك مشروعًا رقميًا جاهزًا وابدأ استقبال طلبات عملائك.</p><a class="ctaLink" href="https://salah-hamed.github.io/Familybusiness/">استكشف المشاريع المتاحة</a></section><div class="bottomSpace"></div>
 </main>
-<button class="floatingBtn" id="floatingOrderBtn" type="button"><span>احجز الآن</span><span>←</span></button>
-<nav class="bottomNav"><button class="navItem active" type="button" data-target="customerSection"><span>🏠</span><small>الرئيسية</small></button><button class="navItem" type="button" data-target="bookingSection"><span>🧾</span><small>الحجز</small></button><button class="navItem" type="button" data-target="supportSection"><span>💬</span><small>الدعم</small></button></nav>
+<button class="floatingBtn" id="floatingOrderBtn" type="button"><span>اشترك الآن</span><span>←</span></button>
+<nav class="bottomNav"><button class="navItem active" type="button" data-target="planSection"><span>⭐</span><small>الباقات</small></button><button class="navItem" type="button" data-target="bookingSection"><span>🧾</span><small>الحجز</small></button><button class="navItem" type="button" data-target="supportSection"><span>💬</span><small>الدعم</small></button></nav>
 </div><script type="module" src="./app.js"></script></body></html>
