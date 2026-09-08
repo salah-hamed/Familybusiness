@@ -1,232 +1,211 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Dashboard</title>
-
-<style>
-*{
-box-sizing:border-box;
-margin:0;
-padding:0;
-}
-
-body{
-font-family:Arial,sans-serif;
-background:#f5f7fb;
-padding:15px;
-color:#111;
-}
-
-.container{
-max-width:900px;
-margin:auto;
-}
-
-.card{
-background:#fff;
-padding:20px;
-border-radius:20px;
-box-shadow:0 10px 25px rgba(0,0,0,.08);
-margin-bottom:18px;
-}
-
-h1,h2,h3{
-margin-bottom:14px;
-}
-
-input{
-width:100%;
-padding:14px;
-border-radius:14px;
-border:1px solid #ddd;
-margin-bottom:12px;
-font-size:15px;
-}
-
-button{
-padding:14px 18px;
-border:none;
-border-radius:14px;
-cursor:pointer;
-font-weight:bold;
-background:#4f46e5;
-color:#fff;
-}
-
-button:hover{
-opacity:.9;
-}
-
-.topActions{
-display:flex;
-gap:10px;
-flex-wrap:wrap;
-margin-top:15px;
-}
-
-#logoutBtn{
-background:#ef4444;
-}
-
-.statGrid{
-display:grid;
-grid-template-columns:repeat(2,1fr);
-gap:12px;
-}
-
-.statCard{
-background:#fff;
-padding:20px;
-border-radius:18px;
-text-align:center;
-box-shadow:0 8px 20px rgba(0,0,0,0.08);
-font-size:26px;
-font-weight:bold;
-}
-.tabBtn{
-padding:10px 14px;
-border-radius:12px;
-border:none;
-cursor:pointer;
-background:#eee;
-font-weight:bold;
-}
-
-.tabBtn.active{
-background:#4f46e5;
-color:white;
-  }
-.statLabel{
-display:block;
-font-size:13px;
-margin-bottom:8px;
-color:#666;
-}
-
-.sectionTitle{
-margin-bottom:15px;
-color:#4f46e5;
-}
-
-#ordersContainer{
-margin-top:20px;
-}
-
-.statusText{
-margin-top:8px;
-color:#16a34a;
-font-size:14px;
-}
-
-@media(max-width:600px){
-.statGrid{
-grid-template-columns:1fr;
-}
-}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+  <meta name="theme-color" content="#4f46e5">
+  <title>لوحة التحكم | Family Business</title>
+  <link rel="stylesheet" href="./dashboard.css">
 </head>
-
 <body>
 
-<div class="container">
+<div class="dashboardShell">
 
-<div class="card">
-<h1>لوحة التحكم</h1>
+  <header class="dashboardHeader" id="homeSection">
+    <div>
+      <span class="eyebrow">لوحة إدارة مشروعك</span>
+      <h1 id="userName">مشروعك</h1>
+      <div class="projectMeta">
+        <span id="projectType"></span>
+        <span id="status" class="statusPill"></span>
+      </div>
+      <p id="userEmail" class="muted"></p>
+    </div>
 
-<p id="userName"></p>
-<p id="userEmail"></p>
-<p id="projectType"></p>
-<p id="status"></p>
+    <button id="logoutBtn" class="iconBtn dangerBtn" type="button">تسجيل الخروج</button>
+  </header>
 
-<div class="topActions">
-<button id="logoutBtn">تسجيل خروج</button>
-</div>
-</div>
+  <main class="dashboardMain">
 
-<div class="card">
-<h3 class="sectionTitle">رابط مشروعك</h3>
+    <section class="card quickCard">
+      <div class="sectionHeading compactHeading">
+        <div>
+          <span class="eyebrow">رابط العميل</span>
+          <h2>شارك مشروعك وابدأ استقبال الطلبات</h2>
+        </div>
+      </div>
 
-<input id="projectLink" readonly>
+      <div class="projectLinkBox">
+        <input id="projectLink" readonly aria-label="رابط المشروع">
+      </div>
 
-<button id="copyLinkBtn">نسخ الرابط</button>
+      <div class="quickActions">
+        <button id="openProjectBtn" class="primaryBtn" type="button">فتح واجهة العميل</button>
+        <button id="copyLinkBtn" class="secondaryBtn" type="button">نسخ الرابط</button>
+        <button id="shareProjectBtn" class="secondaryBtn" type="button">مشاركة المشروع</button>
+      </div>
 
-<p id="copyStatus" class="statusText"></p>
-</div>
+      <p id="copyStatus" class="statusText"></p>
+    </section>
 
-<div class="card">
-<h2 class="sectionTitle">إحصائيات الطلبات</h2>
+    <section class="statsSection">
+      <div class="sectionHeading">
+        <div>
+          <span class="eyebrow">نظرة سريعة</span>
+          <h2>أداء الطلبات</h2>
+        </div>
+      </div>
 
-<div class="statGrid">
-<div class="statCard">
-<span class="statLabel">جديدة</span>
-<div id="newOrders">0</div>
-</div>
+      <div class="statGrid">
+        <article class="statCard accentNew">
+          <span class="statIcon">🆕</span>
+          <div>
+            <span class="statLabel">طلبات جديدة</span>
+            <strong id="newOrders">0</strong>
+          </div>
+        </article>
 
-<div class="statCard">
-<span class="statLabel">مقبولة</span>
-<div id="acceptedOrders">0</div>
-</div>
+        <article class="statCard accentAccepted">
+          <span class="statIcon">✅</span>
+          <div>
+            <span class="statLabel">مقبولة</span>
+            <strong id="acceptedOrders">0</strong>
+          </div>
+        </article>
 
-<div class="statCard">
-<span class="statLabel">منفذة</span>
-<div id="doneOrders">0</div>
-</div>
+        <article class="statCard accentDone">
+          <span class="statIcon">✨</span>
+          <div>
+            <span class="statLabel">منفذة</span>
+            <strong id="doneOrders">0</strong>
+          </div>
+        </article>
 
-<div class="statCard">
-<span class="statLabel">ملغية</span>
-<div id="canceledOrders">0</div>
-</div>
-</div>
-</div>
+        <article class="statCard accentCanceled">
+          <span class="statIcon">⛔</span>
+          <div>
+            <span class="statLabel">ملغية</span>
+            <strong id="canceledOrders">0</strong>
+          </div>
+        </article>
 
-<div class="card">
-<h2 class="sectionTitle">تسعير الخدمة</h2>
+        <article class="statCard wideStat">
+          <span class="statIcon">📅</span>
+          <div>
+            <span class="statLabel">طلبات اليوم</span>
+            <strong id="todayOrders">0</strong>
+          </div>
+        </article>
 
-<input id="basePrice" placeholder="سعر أساسي">
-<input id="roomPrice" placeholder="سعر الغرفة">
-<input id="bathroomPrice" placeholder="سعر الحمام">
-<input id="kitchenPrice" placeholder="سعر المطبخ">
-<input id="stairsPrice" placeholder="سعر تنظيف السلم">
+        <article class="statCard wideStat revenueStat">
+          <span class="statIcon">💰</span>
+          <div>
+            <span class="statLabel">قيمة الطلبات المنفذة</span>
+            <strong><span id="doneRevenue">0</span> جنيه</strong>
+          </div>
+        </article>
+      </div>
+    </section>
 
-<button id="savePricingBtn">حفظ الأسعار</button>
+    <section class="card" id="ordersSection">
+      <div class="sectionHeading">
+        <div>
+          <span class="eyebrow">إدارة التشغيل</span>
+          <h2>الطلبات</h2>
+        </div>
+      </div>
 
-<p id="pricingStatus" class="statusText"></p>
-</div>
+      <div class="searchBox">
+        <span>🔎</span>
+        <input id="ordersSearch" type="search" placeholder="ابحث باسم العميل أو رقم الهاتف">
+      </div>
 
-<div class="card">
-<h2 class="sectionTitle">إعدادات المشروع</h2>
+      <div id="tabs" class="tabsScroller">
+        <button class="tabBtn active" data-tab="all" type="button">الكل</button>
+        <button class="tabBtn" data-tab="new" type="button">جديدة</button>
+        <button class="tabBtn" data-tab="accepted" type="button">مقبولة</button>
+        <button class="tabBtn" data-tab="done" type="button">منفذة</button>
+        <button class="tabBtn" data-tab="canceled" type="button">ملغية</button>
+      </div>
 
-<input id="businessName" placeholder="اسم النشاط">
-<input id="whatsappNumber" placeholder="رقم واتساب">
-<input id="instapayLink" placeholder="رابط إنستا باي">
+      <div id="ordersContainer" class="ordersList"></div>
+    </section>
 
-<button id="saveSettingsBtn">حفظ الإعدادات</button>
+    <section class="card" id="settingsSection">
+      <div class="sectionHeading">
+        <div>
+          <span class="eyebrow">تخصيص المشروع</span>
+          <h2>إعدادات المشروع</h2>
+        </div>
+      </div>
 
-<p id="settingsStatus" class="statusText"></p>
-</div>
+      <div class="formGrid">
+        <label class="fieldGroup">
+          <span>اسم النشاط</span>
+          <input id="businessName" placeholder="اسم نشاطك">
+        </label>
 
-<div class="card">
-<h2 class="sectionTitle">الطلبات</h2>
+        <label class="fieldGroup">
+          <span>رقم واتساب</span>
+          <input id="whatsappNumber" inputmode="tel" placeholder="رقم واتساب">
+        </label>
 
-<div id="tabs" style="
-display:flex;
-gap:8px;
-flex-wrap:wrap;
-margin:15px 0;
-">
+        <label class="fieldGroup fullField">
+          <span>رابط InstaPay</span>
+          <input id="instapayLink" placeholder="رابط الدفع">
+        </label>
+      </div>
 
-  <button class="tabBtn active" data-tab="all">الكل</button>
-  <button class="tabBtn" data-tab="new">جديدة</button>
-  <button class="tabBtn" data-tab="accepted">مقبولة</button>
-  <button class="tabBtn" data-tab="done">منفذة</button>
-  <button class="tabBtn" data-tab="canceled">ملغية</button>
+      <button id="saveSettingsBtn" class="primaryBtn fullBtn" type="button">حفظ إعدادات المشروع</button>
+      <p id="settingsStatus" class="statusText"></p>
+    </section>
 
-</div>
+    <section class="card" id="pricingSection">
+      <div class="sectionHeading">
+        <div>
+          <span class="eyebrow">تحكم كامل</span>
+          <h2>تسعير الخدمة</h2>
+        </div>
+      </div>
 
-<div id="ordersContainer"></div>
-</div>
+      <div class="formGrid pricingGrid">
+        <label class="fieldGroup">
+          <span>السعر الأساسي</span>
+          <input id="basePrice" inputmode="decimal" placeholder="0">
+        </label>
+
+        <label class="fieldGroup">
+          <span>سعر الغرفة</span>
+          <input id="roomPrice" inputmode="decimal" placeholder="0">
+        </label>
+
+        <label class="fieldGroup">
+          <span>سعر الحمام</span>
+          <input id="bathroomPrice" inputmode="decimal" placeholder="0">
+        </label>
+
+        <label class="fieldGroup">
+          <span>سعر المطبخ</span>
+          <input id="kitchenPrice" inputmode="decimal" placeholder="0">
+        </label>
+
+        <label class="fieldGroup fullField">
+          <span>سعر تنظيف السلم</span>
+          <input id="stairsPrice" inputmode="decimal" placeholder="0">
+        </label>
+      </div>
+
+      <button id="savePricingBtn" class="primaryBtn fullBtn" type="button">حفظ الأسعار</button>
+      <p id="pricingStatus" class="statusText"></p>
+    </section>
+
+  </main>
+
+  <nav class="bottomNav" aria-label="تنقل لوحة التحكم">
+    <button class="navItem active" data-target="homeSection" type="button"><span>🏠</span><small>الرئيسية</small></button>
+    <button class="navItem" data-target="ordersSection" type="button"><span>📦</span><small>الطلبات</small></button>
+    <button class="navItem" data-target="settingsSection" type="button"><span>⚙️</span><small>الإعدادات</small></button>
+  </nav>
 
 </div>
 
