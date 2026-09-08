@@ -13,38 +13,63 @@ const businessNameInput = document.getElementById("businessName");
 let uploadedImage = null;
 
 const themes = {
+  cleanPro: {
+    start: "#f7fbf8",
+    end: "#e8f5ee",
+    accent: "#1f9d55",
+    accent2: "#0f766e",
+    text: "#0f2942",
+    soft: "#ffffff",
+    muted: "#526575",
+    frame: "#ffffff",
+    border: "#dcebe2"
+  },
   clean: {
     start: "#4f46e5",
     end: "#7c3aed",
     accent: "#fbbf24",
+    accent2: "#ffffff",
     text: "#ffffff",
-    soft: "rgba(255,255,255,.16)"
+    soft: "rgba(255,255,255,.16)",
+    muted: "rgba(255,255,255,.82)",
+    frame: "#ffffff",
+    border: "rgba(255,255,255,.35)"
   },
   bold: {
     start: "#111827",
     end: "#4338ca",
     accent: "#22c55e",
+    accent2: "#a7f3d0",
     text: "#ffffff",
-    soft: "rgba(255,255,255,.13)"
+    soft: "rgba(255,255,255,.13)",
+    muted: "rgba(255,255,255,.8)",
+    frame: "#ffffff",
+    border: "rgba(255,255,255,.28)"
   },
   soft: {
     start: "#eef2ff",
     end: "#ddd6fe",
     accent: "#4f46e5",
+    accent2: "#7c3aed",
     text: "#111827",
-    soft: "rgba(255,255,255,.55)"
+    soft: "rgba(255,255,255,.72)",
+    muted: "#5b6474",
+    frame: "#ffffff",
+    border: "#d9d6f5"
   }
 };
 
 function getBusinessName() {
-  return businessNameInput?.value?.trim() || document.getElementById("userName")?.innerText?.trim() || "مشروعي";
+  return businessNameInput?.value?.trim() ||
+    document.getElementById("userName")?.innerText?.trim() ||
+    "مزود الخدمة";
 }
 
 function getProjectLink() {
   return projectLinkInput?.value?.trim() || "";
 }
 
-function roundRect(x, y, width, height, radius, fillStyle) {
+function roundRect(x, y, width, height, radius, fillStyle, strokeStyle = null, lineWidth = 0) {
   const r = Math.min(radius, width / 2, height / 2);
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -55,25 +80,11 @@ function roundRect(x, y, width, height, radius, fillStyle) {
   ctx.closePath();
   ctx.fillStyle = fillStyle;
   ctx.fill();
-}
-
-function drawCoverImage(image, width, height) {
-  const imageRatio = image.width / image.height;
-  const canvasRatio = width / height;
-  let sx = 0;
-  let sy = 0;
-  let sw = image.width;
-  let sh = image.height;
-
-  if (imageRatio > canvasRatio) {
-    sw = image.height * canvasRatio;
-    sx = (image.width - sw) / 2;
-  } else {
-    sh = image.width / canvasRatio;
-    sy = (image.height - sh) / 2;
+  if (strokeStyle && lineWidth) {
+    ctx.strokeStyle = strokeStyle;
+    ctx.lineWidth = lineWidth;
+    ctx.stroke();
   }
-
-  ctx.drawImage(image, sx, sy, sw, sh, 0, 0, width, height);
 }
 
 function wrapRTLText(text, x, y, maxWidth, lineHeight, maxLines = 4) {
@@ -100,6 +111,81 @@ function wrapRTLText(text, x, y, maxWidth, lineHeight, maxLines = 4) {
   return y + Math.min(lines.length, maxLines) * lineHeight;
 }
 
+function drawImageCoverInRect(image, x, y, width, height, radius) {
+  const imageRatio = image.width / image.height;
+  const boxRatio = width / height;
+  let sx = 0;
+  let sy = 0;
+  let sw = image.width;
+  let sh = image.height;
+
+  if (imageRatio > boxRatio) {
+    sw = image.height * boxRatio;
+    sx = (image.width - sw) / 2;
+  } else {
+    sh = image.width / boxRatio;
+    sy = (image.height - sh) / 2;
+  }
+
+  ctx.save();
+  ctx.beginPath();
+  const r = Math.min(radius, width / 2, height / 2);
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + width, y, x + width, y + height, r);
+  ctx.arcTo(x + width, y + height, x, y + height, r);
+  ctx.arcTo(x, y + height, x, y, r);
+  ctx.arcTo(x, y, x + width, y, r);
+  ctx.closePath();
+  ctx.clip();
+  ctx.drawImage(image, sx, sy, sw, sh, x, y, width, height);
+  ctx.restore();
+}
+
+function drawFramedImage(image, x, y, width, height, theme, story) {
+  const framePad = story ? 20 : 16;
+  const radius = story ? 52 : 42;
+
+  ctx.save();
+  ctx.shadowColor = "rgba(15,23,42,.20)";
+  ctx.shadowBlur = story ? 36 : 28;
+  ctx.shadowOffsetY = story ? 18 : 12;
+  roundRect(x - framePad, y - framePad, width + framePad * 2, height + framePad * 2, radius, theme.frame, theme.border, 3);
+  ctx.restore();
+
+  drawImageCoverInRect(image, x, y, width, height, radius - framePad);
+}
+
+function drawDecor(theme, width, height, story) {
+  ctx.save();
+  ctx.globalAlpha = themeSelect.value === "cleanPro" ? .85 : .16;
+  ctx.fillStyle = themeSelect.value === "cleanPro" ? "#d7efdf" : theme.soft;
+  ctx.beginPath();
+  ctx.arc(width * .08, height * .14, story ? 220 : 150, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(width * .94, height * .76, story ? 330 : 220, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawCleanProBenefits(width, y, story, theme) {
+  const items = ["تنظيف شامل", "مواعيد مرنة", "جودة موثوقة"];
+  const cardWidth = story ? 260 : 250;
+  const gap = story ? 22 : 18;
+  const total = items.length * cardWidth + (items.length - 1) * gap;
+  let startX = (width - total) / 2;
+
+  ctx.textAlign = "center";
+  items.forEach((item, index) => {
+    const x = startX + index * (cardWidth + gap);
+    roundRect(x, y, cardWidth, story ? 94 : 82, 28, "rgba(255,255,255,.9)", theme.border, 2);
+    ctx.fillStyle = theme.text;
+    ctx.font = `700 ${story ? 26 : 23}px Tahoma, Arial, sans-serif`;
+    ctx.fillText(item, x + cardWidth / 2, y + (story ? 58 : 51));
+  });
+});
+}
+
 function drawCreative() {
   if (!canvas || !ctx) return;
 
@@ -109,93 +195,94 @@ function drawCreative() {
   canvas.width = width;
   canvas.height = height;
 
-  const theme = themes[themeSelect.value] || themes.clean;
+  const theme = themes[themeSelect.value] || themes.cleanPro;
   const gradient = ctx.createLinearGradient(0, 0, width, height);
   gradient.addColorStop(0, theme.start);
   gradient.addColorStop(1, theme.end);
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, width, height);
+  drawDecor(theme, width, height, story);
 
-  if (uploadedImage) {
-    ctx.save();
-    drawCoverImage(uploadedImage, width, height);
-    ctx.fillStyle = themeSelect.value === "soft" ? "rgba(238,242,255,.82)" : "rgba(17,24,39,.56)";
-    ctx.fillRect(0, 0, width, height);
-    ctx.restore();
-  } else {
-    ctx.fillStyle = theme.soft;
-    ctx.beginPath();
-    ctx.arc(width * .13, height * .15, story ? 220 : 165, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(width * .88, height * .74, story ? 300 : 205, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  const pad = story ? 90 : 76;
+  const pad = story ? 82 : 68;
   ctx.direction = "rtl";
   ctx.textAlign = "right";
   ctx.textBaseline = "alphabetic";
 
-  roundRect(pad, story ? 120 : 70, width - pad * 2, story ? 120 : 95, 28, theme.soft);
+  const providerY = story ? 94 : 58;
+  roundRect(pad, providerY, width - pad * 2, story ? 128 : 104, 30, theme.soft, theme.border, 2);
   ctx.fillStyle = theme.text;
-  ctx.font = `700 ${story ? 42 : 34}px Tahoma, Arial, sans-serif`;
-  ctx.fillText(getBusinessName(), width - pad - 36, story ? 198 : 132);
+  ctx.font = `900 ${story ? 47 : 38}px Tahoma, Arial, sans-serif`;
+  ctx.fillText(getBusinessName(), width - pad - 34, providerY + (story ? 77 : 64));
+  ctx.fillStyle = theme.muted;
+  ctx.font = `600 ${story ? 25 : 20}px Tahoma, Arial, sans-serif`;
+  ctx.fillText("خدمات تنظيف منزلي", width - pad - 34, providerY + (story ? 109 : 90));
 
-  const contentTop = story ? 500 : 300;
+  let headlineY = story ? 330 : 235;
   ctx.fillStyle = theme.text;
-  ctx.font = `900 ${story ? 82 : 68}px Tahoma, Arial, sans-serif`;
+  ctx.font = `900 ${story ? 75 : 61}px Tahoma, Arial, sans-serif`;
   const headlineBottom = wrapRTLText(
     headlineInput.value.trim() || "تنظيف بيتك أسهل من أي وقت",
     width - pad,
-    contentTop,
+    headlineY,
     width - pad * 2,
-    story ? 112 : 88,
-    story ? 5 : 4
+    story ? 96 : 76,
+    story ? 3 : 2
   );
 
   const offer = offerInput.value.trim();
-  let nextY = headlineBottom + (story ? 55 : 35);
-
+  let nextY = headlineBottom + (story ? 26 : 18);
   if (offer) {
-    ctx.font = `800 ${story ? 44 : 34}px Tahoma, Arial, sans-serif`;
+    ctx.font = `800 ${story ? 38 : 30}px Tahoma, Arial, sans-serif`;
     const offerWidth = Math.min(ctx.measureText(offer).width + 70, width - pad * 2);
     const offerX = width - pad - offerWidth;
-    roundRect(offerX, nextY - (story ? 54 : 43), offerWidth, story ? 78 : 62, 22, theme.accent);
-    ctx.fillStyle = themeSelect.value === "soft" ? "#ffffff" : "#111827";
-    ctx.fillText(offer, width - pad - 30, nextY);
-    nextY += story ? 130 : 95;
+    roundRect(offerX, nextY - (story ? 45 : 37), offerWidth, story ? 68 : 56, 20, theme.accent);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(offer, width - pad - 28, nextY);
+    nextY += story ? 88 : 70;
   }
 
-  ctx.fillStyle = theme.text;
-  ctx.globalAlpha = .9;
-  ctx.font = `500 ${story ? 40 : 30}px Tahoma, Arial, sans-serif`;
-  wrapRTLText("حدد تفاصيل الخدمة والموعد واعرف السعر قبل تأكيد الحجز.", width - pad, nextY, width - pad * 2, story ? 62 : 48, 3);
-  ctx.globalAlpha = 1;
+  ctx.fillStyle = theme.muted;
+  ctx.font = `600 ${story ? 31 : 25}px Tahoma, Arial, sans-serif`;
+  wrapRTLText("راحة أكبر، وقت أكثر لك ولعائلتك، وحجز سهل في أقل من دقيقة.", width - pad, nextY, width - pad * 2, story ? 48 : 39, 2);
+
+  const imageX = story ? 150 : 250;
+  const imageW = story ? 780 : 580;
+  const imageH = story ? 610 : 390;
+  const imageY = story ? 680 : 470;
+
+  if (uploadedImage) {
+    drawFramedImage(uploadedImage, imageX, imageY, imageW, imageH, theme, story);
+  } else {
+    ctx.save();
+    ctx.shadowColor = "rgba(15,23,42,.12)";
+    ctx.shadowBlur = 28;
+    ctx.shadowOffsetY = 12;
+    roundRect(imageX, imageY, imageW, imageH, story ? 48 : 38, "rgba(255,255,255,.9)", theme.border, 3);
+    ctx.restore();
+    ctx.textAlign = "center";
+    ctx.fillStyle = theme.muted;
+    ctx.font = `700 ${story ? 31 : 25}px Tahoma, Arial, sans-serif`;
+    ctx.fillText("ارفع صورة لتظهر هنا داخل إطار احترافي", width / 2, imageY + imageH / 2);
+  }
+
+  if (themeSelect.value === "cleanPro") {
+    drawCleanProBenefits(width, imageY + imageH + (story ? 62 : 36), story, theme);
+  }
 
   const ctaText = ctaInput.value.trim() || "احجز الآن";
-  const ctaY = height - (story ? 380 : 255);
-  roundRect(pad, ctaY, width - pad * 2, story ? 125 : 100, 28, theme.accent);
-  ctx.fillStyle = themeSelect.value === "soft" ? "#ffffff" : "#111827";
+  const ctaY = height - (story ? 285 : 145);
+  const ctaW = story ? 700 : 620;
+  const ctaH = story ? 120 : 88;
+  const ctaX = (width - ctaW) / 2;
+  roundRect(ctaX, ctaY, ctaW, ctaH, 999, theme.accent);
+  ctx.fillStyle = "#ffffff";
   ctx.textAlign = "center";
-  ctx.font = `900 ${story ? 48 : 40}px Tahoma, Arial, sans-serif`;
-  ctx.fillText(ctaText, width / 2, ctaY + (story ? 80 : 66));
+  ctx.font = `900 ${story ? 45 : 36}px Tahoma, Arial, sans-serif`;
+  ctx.fillText(ctaText, width / 2, ctaY + (story ? 76 : 57));
 
-  const link = getProjectLink();
-  ctx.fillStyle = theme.text;
-  ctx.globalAlpha = .78;
-  ctx.textAlign = "center";
-  ctx.font = `500 ${story ? 27 : 22}px Arial, sans-serif`;
-  const displayLink = link.length > 74 ? `${link.slice(0, 71)}...` : link;
-  if (displayLink) ctx.fillText(displayLink, width / 2, ctaY + (story ? 185 : 145));
-  ctx.globalAlpha = 1;
-
-  ctx.textAlign = "right";
-  ctx.fillStyle = theme.text;
-  ctx.globalAlpha = .72;
-  ctx.font = `700 ${story ? 25 : 20}px Tahoma, Arial, sans-serif`;
-  ctx.fillText("احجز خدمتك أونلاين بسهولة", width - pad, height - (story ? 95 : 65));
-  ctx.globalAlpha = 1;
+  ctx.fillStyle = theme.muted;
+  ctx.font = `700 ${story ? 23 : 18}px Tahoma, Arial, sans-serif`;
+  ctx.fillText("اضغط على رابط الحجز المرفق مع الإعلان", width / 2, ctaY + ctaH + (story ? 48 : 35));
 
   statusBox.innerText = "تم تحديث التصميم ✅";
 }
@@ -255,15 +342,20 @@ document.getElementById("shareCreativeBtn")?.addEventListener("click", async () 
   if (!blob) return;
 
   const file = new File([blob], "family-business-ad.png", { type: "image/png" });
+  const projectLink = getProjectLink();
+  const baseText = document.getElementById("marketingMessage")?.value || "احجز خدمتك الآن";
+  const shareText = projectLink && !baseText.includes(projectLink)
+    ? `${baseText}\n${projectLink}`
+    : baseText;
 
   if (navigator.share && navigator.canShare?.({ files: [file] })) {
     try {
       await navigator.share({
         title: getBusinessName(),
-        text: document.getElementById("marketingMessage")?.value || "احجز خدمتك الآن",
+        text: shareText,
         files: [file]
       });
-      statusBox.innerText = "تم فتح المشاركة ✅";
+      statusBox.innerText = "تم فتح المشاركة مع رابط الحجز ✅";
       return;
     } catch (error) {
       if (error.name === "AbortError") return;
@@ -278,7 +370,7 @@ document.getElementById("shareCreativeBtn")?.addEventListener("click", async () 
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
-  statusBox.innerText = "جهازك لا يدعم مشاركة الصور مباشرة؛ تم حفظ الصورة بدلًا من ذلك";
+  statusBox.innerText = "تم حفظ الصورة. شاركها مع رسالة التسويق التي تحتوي على رابط الحجز.";
 });
 
 setTimeout(drawCreative, 1100);
