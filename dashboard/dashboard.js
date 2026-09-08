@@ -52,12 +52,12 @@ function ensureSubscriptionPanel() {
   panel.id = "carwashSubscriptionsPanel";
   panel.className = "card";
   panel.innerHTML = `
-    <div class="sectionHeading"><div><span class="eyebrow">الاشتراكات الشهرية</span><h2>عملاء الاشتراك</h2></div></div>
+    <div class="sectionHeading"><div><span class="eyebrow">تشغيل غسيل السيارات</span><h2>الاشتراكات والغسلات</h2></div></div>
     <div class="statGrid" style="margin-bottom:12px">
       <article class="statCard accentAccepted"><span class="statIcon">🔁</span><div><span class="statLabel">اشتراكات نشطة</span><strong id="activeCarwashSubscriptions">0</strong></div></article>
       <article class="statCard accentDone"><span class="statIcon">💦</span><div><span class="statLabel">إجمالي الغسلات المتبقية</span><strong id="remainingSubscriptionWashes">0</strong></div></article>
     </div>
-    <div id="subscriptionsList" class="ordersList"><div class="emptyState">سيظهر هنا ملخص الاشتراكات النشطة.</div></div>`;
+    <div id="subscriptionsList" class="ordersList"><div class="emptyState">سيظهر هنا جدول عملاء الاشتراك.</div></div>`;
   ordersSection.parentNode.insertBefore(panel, ordersSection);
 }
 
@@ -70,9 +70,11 @@ async function loadSubscriptions(projectId) {
     box.innerHTML = "";
     snap.forEach(ds => {
       const sub = ds.data();
-      if (sub.status === "active") { active++; remaining += Number(sub.remainingWashes || 0); }
-      if (sub.status !== "active") return;
-      const expires = sub.expiresAt?.toDate ? sub.expiresAt.toDate().toLocaleDateString("ar-EG") : "-";
+      const expiresDate = sub.expiresAt?.toDate ? sub.expiresAt.toDate() : null;
+      const operational = sub.status === "active" && Number(sub.remainingWashes||0) > 0 && (!expiresDate || expiresDate >= new Date());
+      if (operational) { active++; remaining += Number(sub.remainingWashes || 0); }
+      if (!operational) return;
+      const expires = expiresDate ? expiresDate.toLocaleDateString("ar-EG") : "-";
       const row = document.createElement("article");
       row.className = "orderCard";
       row.innerHTML = `<div class="orderTop"><div><h3>اشتراك نشط</h3><span class="muted">ينتهي: ${escapeHTML(expires)}</span></div><span class="orderStatus status-accepted">${Number(sub.remainingWashes||0)} / ${Number(sub.totalWashes||0)} غسلات</span></div>`;
@@ -124,27 +126,49 @@ $("savePricingBtn").addEventListener("click",async()=>{try{
 async function activateMonthlySubscription(order) {
   if (currentTemplateKey !== "carwash" || order.planType !== "monthly_new" || !order.subscriptionKey) return;
   const totalWashes = Math.max(1, Number(order.packageWashes || 1));
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + 30);
-  await setDoc(doc(db,"carwashSubscriptions",order.subscriptionKey),{
+  const intervalDays = Math.max(1, Math.floor(30 / totalWashes));
+  const startsAt = new Date();
+  const expiresAt = new Date(startsAt); expiresAt.setDate(expiresAt.getDate() + 30);
+  const firstWashDate = order.firstWashDate ? new Date(`${order.firstWashDate}T12:00:00`) : new Date(startsAt);
+  const subRef = doc(db,"carwashSubscriptions",order.subscriptionKey);
+  const oldSnap = await getDoc(subRef);
+  const oldCycle = oldSnap.exists() ? Number(oldSnap.data().cycleNumber || 0) : 0;
+
+  await setDoc(subRef,{
     projectId: currentProjectId,
     status: "active",
     totalWashes,
     remainingWashes: totalWashes,
     startsAt: serverTimestamp(),
     expiresAt,
+    nextWashDate: firstWashDate,
+    preferredTime: order.preferredTime || order.visitTime || "",
+    intervalDays,
+    cycleNumber: oldCycle + 1,
+    lastWashAt: null,
     updatedAt: serverTimestamp()
   },{merge:true});
-}
 
-async function consumeSubscriptionWash(order) {
-  if (currentTemplateKey !== "carwash" || !["monthly_new","subscription_use"].includes(order.planType) || !order.subscriptionKey) return;
-  const ref = doc(db,"carwashSubscriptions",order.subscriptionKey);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) return;
-  const data = snap.data();
-  const remaining = Math.max(0, Number(data.remainingWashes || 0) - 1);
-  await updateDoc(ref,{remainingWashes:remaining,status:remaining > 0 ? "active" : "completed",updatedAt:serverTimestamp()});
+  await setDoc(doc(db,"carwashCustomers",order.subscriptionKey),{
+    projectId: currentProjectId,
+    customerName: order.customerName || "",
+    customerPhone: order.customerPhone || "",
+    carModel: order.carModel || "",
+    carColor: order.carColor || "",
+    plateNumber: order.plateNumber || "",
+    customerAddress: order.customerAddress || "",
+    location: order.location || "",
+    notes: order.notes || "",
+    preferredTime: order.preferredTime || order.visitTime || "",
+    updatedAt: serverTimestamp()
+  },{merge:true});
+
+  await setDoc(doc(db,"carwashSubscriptionRequests",order.subscriptionKey),{
+    projectId: currentProjectId,
+    status: "active",
+    requestType: order.renewal ? "renewal" : "new",
+    updatedAt: serverTimestamp()
+  },{merge:true});
 }
 
 async function updateOrderStatus(orderId,projectId,nextStatus){
@@ -154,7 +178,9 @@ async function updateOrderStatus(orderId,projectId,nextStatus){
   const order=snap.data();
   if(nextStatus==="accepted"&&order.planType==="monthly_new") await activateMonthlySubscription(order);
   await updateDoc(ref,{status:nextStatus});
-  if(nextStatus==="done") await consumeSubscriptionWash(order);
+  if(currentTemplateKey==="carwash"&&order.planType==="monthly_new"&&order.subscriptionKey&&nextStatus==="canceled"){
+    await setDoc(doc(db,"carwashSubscriptionRequests",order.subscriptionKey),{projectId:currentProjectId,status:"canceled",updatedAt:serverTimestamp()},{merge:true});
+  }
   await loadSubscriptions(projectId);
   return true;
 }
@@ -164,19 +190,17 @@ function setupTabs(){document.querySelectorAll(".tabBtn").forEach(btn=>btn.oncli
 ordersSearch.addEventListener("input",()=>{searchTerm=ordersSearch.value.trim().toLowerCase();refreshOrderVisibility();});
 
 function carwashPlanLabel(order) {
-  if (order.planType === "monthly_new") return `⭐ اشتراك شهري — ${Number(order.packageWashes||0)} غسلات`;
-  if (order.planType === "subscription_use") return "🔁 غسلة من اشتراك قائم";
-  return "💦 غسلة واحدة";
+  return order.renewal ? `🔁 تجديد اشتراك — ${Number(order.packageWashes||0)} غسلات` : `⭐ اشتراك شهري — ${Number(order.packageWashes||0)} غسلات`;
 }
 
 function orderDetails(order){
   if(currentTemplateKey==="carwash"){
     const carModel=escapeHTML(order.carModel||order.carType||"-"); const color=escapeHTML(order.carColor||"-"); const plate=escapeHTML(order.plateNumber||order.carPlate||"-"); const notes=escapeHTML(order.notes||"-");
-    return `<div class="orderInfo"><b>⭐ نوع الحجز</b>${carwashPlanLabel(order)}</div><div class="orderInfo"><b>🚗 السيارة</b>${carModel}</div><div class="orderInfo"><b>🎨 اللون / اللوحة</b>${color} — ${plate}</div><div class="orderInfo"><b>📍 عنوان الركنة</b>${escapeHTML(order.customerAddress||order.parkingAddress||"-")}</div><div class="orderInfo"><b>📝 ملاحظات</b>${notes}</div>`;
+    return `<div class="orderInfo"><b>⭐ نوع الطلب</b>${carwashPlanLabel(order)}</div><div class="orderInfo"><b>🚗 السيارة</b>${carModel}</div><div class="orderInfo"><b>🎨 اللون / اللوحة</b>${color} — ${plate}</div><div class="orderInfo"><b>📍 عنوان الركنة</b>${escapeHTML(order.customerAddress||order.parkingAddress||"-")}</div><div class="orderInfo"><b>🗓️ أول غسلة</b>${escapeHTML(order.firstWashDate||order.visitDate||"-")} — ${escapeHTML(order.preferredTime||order.visitTime||"-")}</div><div class="orderInfo"><b>📝 ملاحظات</b>${notes}</div>`;
   }
   return `<div class="orderInfo"><b>📍 العنوان</b>${escapeHTML(order.customerAddress||"-")}</div><div class="orderInfo"><b>🏠 تفاصيل المكان</b>${escapeHTML(order.rooms||"-")} غرف / ${escapeHTML(order.bathrooms||"-")} حمام</div><div class="orderInfo"><b>✨ إضافات</b>مطبخ: ${escapeHTML(order.kitchen||"-")} / سلم: ${escapeHTML(order.stairs||"-")}</div>`;
 }
 
 async function loadOrders(projectId){const box=$("ordersContainer");box.innerHTML='<div class="emptyState">جاري تحميل الطلبات...</div>';try{const snapshot=await getDocs(query(collection(db,"orders"),where("projectId","==",projectId)));stats={new:0,accepted:0,done:0,canceled:0};let doneRevenue=0,todayOrders=0;const today=new Date().toISOString().split("T")[0];box.innerHTML="";
-snapshot.forEach(ds=>{const order=ds.data(),s=order.status||"new";if(s in stats)stats[s]++;if(s==="done")doneRevenue+=Number(order.price||0);if(order.visitDate===today)todayOrders++;const id=ds.id,name=escapeHTML(order.customerName||"عميل"),phone=escapeHTML(order.customerPhone||"-"),date=escapeHTML(order.visitDate||"-"),time=escapeHTML(order.visitTime||"-"),maps=typeof order.location==="string"&&order.location.startsWith("http")?order.location:"",wa=cleanPhone(order.customerPhone);const label={new:"جديد",accepted:"مقبول",done:"تم التنفيذ",canceled:"ملغي"}[s]||s;const card=document.createElement("article");card.className="orderCard";card.dataset.status=s;card.dataset.search=`${order.customerName||""} ${order.customerPhone||""} ${order.carModel||""} ${order.plateNumber||""}`.toLowerCase();card.innerHTML=`<div class="orderTop"><div><h3>${name}</h3><span class="muted">${phone}</span></div><span class="orderStatus status-${s}">${label}</span></div><div class="orderGrid"><div class="orderInfo"><b>📅 الموعد</b>${date} — ${time}</div>${orderDetails(order)}</div><div class="orderPrice">💰 ${Number(order.price||0)} جنيه</div><div class="orderActions">${wa?`<a class="orderAction whatsapp" href="https://wa.me/${wa}" target="_blank" rel="noopener">💬 واتساب</a>`:""}${maps?`<a class="orderAction maps" href="${escapeHTML(maps)}" target="_blank" rel="noopener">🗺️ فتح الموقع</a>`:""}${s==="new"?'<button class="orderAction accept acceptBtn" type="button">قبول الطلب</button>':""}${s==="accepted"?'<button class="orderAction done doneBtn" type="button">تم التنفيذ</button>':""}${["new","accepted"].includes(s)?'<button class="orderAction cancel cancelBtn" type="button">إلغاء</button>':""}</div>`;box.appendChild(card);card.querySelector(".acceptBtn")?.addEventListener("click",async()=>{if(await updateOrderStatus(id,projectId,"accepted"))loadOrders(projectId);});card.querySelector(".doneBtn")?.addEventListener("click",async()=>{if(await updateOrderStatus(id,projectId,"done"))loadOrders(projectId);});card.querySelector(".cancelBtn")?.addEventListener("click",async()=>{if(await updateOrderStatus(id,projectId,"canceled"))loadOrders(projectId);});});
+snapshot.forEach(ds=>{const order=ds.data(),s=order.status||"new";if(s in stats)stats[s]++;if(s==="done")doneRevenue+=Number(order.price||0);if((order.visitDate||order.firstWashDate)===today)todayOrders++;const id=ds.id,name=escapeHTML(order.customerName||"عميل"),phone=escapeHTML(order.customerPhone||"-"),date=escapeHTML(order.visitDate||order.firstWashDate||"-"),time=escapeHTML(order.visitTime||order.preferredTime||"-"),maps=typeof order.location==="string"&&order.location.startsWith("http")?order.location:"",wa=cleanPhone(order.customerPhone);const label={new:"جديد",accepted:"مقبول",done:"تم التنفيذ",canceled:"ملغي"}[s]||s;const card=document.createElement("article");card.className="orderCard";card.dataset.status=s;card.dataset.search=`${order.customerName||""} ${order.customerPhone||""} ${order.carModel||""} ${order.plateNumber||""}`.toLowerCase();card.innerHTML=`<div class="orderTop"><div><h3>${name}</h3><span class="muted">${phone}</span></div><span class="orderStatus status-${s}">${label}</span></div><div class="orderGrid"><div class="orderInfo"><b>📅 الموعد</b>${date} — ${time}</div>${orderDetails(order)}</div><div class="orderPrice">💰 ${Number(order.price||0)} جنيه</div><div class="orderActions">${wa?`<a class="orderAction whatsapp" href="https://wa.me/${wa}" target="_blank" rel="noopener">💬 واتساب</a>`:""}${maps?`<a class="orderAction maps" href="${escapeHTML(maps)}" target="_blank" rel="noopener">🗺️ فتح الموقع</a>`:""}${s==="new"?'<button class="orderAction accept acceptBtn" type="button">قبول الطلب</button>':""}${s==="accepted"?'<button class="orderAction done doneBtn" type="button">إغلاق الطلب</button>':""}${["new","accepted"].includes(s)?'<button class="orderAction cancel cancelBtn" type="button">إلغاء</button>':""}</div>`;box.appendChild(card);card.querySelector(".acceptBtn")?.addEventListener("click",async()=>{if(await updateOrderStatus(id,projectId,"accepted"))loadOrders(projectId);});card.querySelector(".doneBtn")?.addEventListener("click",async()=>{if(await updateOrderStatus(id,projectId,"done"))loadOrders(projectId);});card.querySelector(".cancelBtn")?.addEventListener("click",async()=>{if(await updateOrderStatus(id,projectId,"canceled"))loadOrders(projectId);});});
 $("newOrders").innerText=stats.new;$("acceptedOrders").innerText=stats.accepted;$("doneOrders").innerText=stats.done;$("canceledOrders").innerText=stats.canceled;$("todayOrders").innerText=todayOrders;$("doneRevenue").innerText=doneRevenue;if(snapshot.empty)box.innerHTML='<div class="emptyState">لا توجد طلبات بعد. شارك رابط مشروعك لاستقبال أول طلب ✨</div>';setupTabs();refreshOrderVisibility();}catch(e){box.innerHTML=`<div class="emptyState">${escapeHTML(e.message)}</div>`;console.log(e);}}
