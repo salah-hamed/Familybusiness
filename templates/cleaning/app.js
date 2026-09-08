@@ -75,6 +75,39 @@ function scrollToSection(id) {
   });
 }
 
+function normalizeEgyptWhatsapp(number) {
+  let clean = String(number || "").replace(/\D/g, "");
+
+  if (clean.startsWith("0020")) clean = clean.slice(2);
+  if (clean.startsWith("+20")) clean = clean.slice(1);
+  if (clean.startsWith("20")) return clean;
+  if (clean.startsWith("0")) clean = clean.slice(1);
+
+  return `20${clean}`;
+}
+
+function validateBooking() {
+  const name = document.getElementById("customerName").value.trim();
+  const phone = document.getElementById("customerPhone").value.trim();
+  const address = document.getElementById("customerAddress").value.trim();
+  const visitDate = document.getElementById("visitDate").value;
+  const visitTime = document.getElementById("visitTime").value;
+
+  if (!name || !phone || !address) {
+    return "من فضلك أكمل الاسم ورقم الهاتف والعنوان.";
+  }
+
+  if (!/^01\d{9}$/.test(phone.replace(/\s/g, ""))) {
+    return "من فضلك أدخل رقم موبايل مصري صحيح مكوّن من 11 رقمًا.";
+  }
+
+  if (!visitDate || !visitTime) {
+    return "من فضلك اختر تاريخ ووقت الزيارة.";
+  }
+
+  return null;
+}
+
 /* ======================
    Events
 ====================== */
@@ -99,7 +132,7 @@ locationButton.onclick = () => {
       const lat = pos.coords.latitude;
       const lng = pos.coords.longitude;
 
-      locationInput.value = `${lat}, ${lng}`;
+      locationInput.value = `https://www.google.com/maps?q=${lat},${lng}`;
       locationButtonText.innerText = "تم تحديد الموقع ✅";
       locationButton.disabled = false;
     },
@@ -184,10 +217,8 @@ async function init() {
   calcPrice();
 
   if (data.whatsappNumber) {
-    const clean = data.whatsappNumber.replace(/\D/g, "");
-    whatsappBtn.href = clean.startsWith("20")
-      ? `https://wa.me/${clean}`
-      : `https://wa.me/20${clean}`;
+    whatsappBtn.href =
+      `https://wa.me/${normalizeEgyptWhatsapp(data.whatsappNumber)}`;
   } else {
     whatsappBtn.style.display = "none";
   }
@@ -200,6 +231,13 @@ async function init() {
 
   submitOrderBtn.onclick = async () => {
 
+    const validationError = validateBooking();
+
+    if (validationError) {
+      bookingStatus.innerText = validationError;
+      return;
+    }
+
     bookingStatus.innerText = "جاري إرسال الطلب...";
     submitOrderBtn.disabled = true;
 
@@ -208,9 +246,9 @@ async function init() {
       providerId: projectId,
       templateType: "cleaning",
 
-      customerName: document.getElementById("customerName").value,
-      customerPhone: document.getElementById("customerPhone").value,
-      customerAddress: document.getElementById("customerAddress").value,
+      customerName: document.getElementById("customerName").value.trim(),
+      customerPhone: document.getElementById("customerPhone").value.trim(),
+      customerAddress: document.getElementById("customerAddress").value.trim(),
 
       location: locationInput.value,
 
