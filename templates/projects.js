@@ -1,5 +1,4 @@
 export default [
-
 {
     id: "cleaning",
     title: "تنظيف المنازل",
@@ -8,7 +7,6 @@ export default [
     folder: "cleaning",
     active: true
 },
-
 {
     id: "laundry",
     title: "غسيل وكي الملابس",
@@ -17,16 +15,14 @@ export default [
     folder: "laundry",
     active: false
 },
-
 {
     id: "carwash",
     title: "غسيل السيارات",
     icon: "🚗",
-    color: "#22C55E",
+    color: "#0F766E",
     folder: "carwash",
-    active: false
+    active: true
 },
-
 {
     id: "hall",
     title: "حجز قاعات الأفراح",
@@ -35,7 +31,6 @@ export default [
     folder: "hall",
     active: false
 },
-
 {
     id: "maintenance",
     title: "صيانة المنازل",
@@ -44,7 +39,6 @@ export default [
     folder: "maintenance",
     active: false
 },
-
 {
     id: "salon",
     title: "كوافير منزلي",
@@ -53,7 +47,6 @@ export default [
     folder: "salon",
     active: false
 },
-
 {
     id: "dress",
     title: "تأجير الفساتين",
@@ -62,7 +55,6 @@ export default [
     folder: "dress",
     active: false
 },
-
 {
     id: "tanks",
     title: "تنظيف خزانات المياه",
@@ -71,7 +63,6 @@ export default [
     folder: "tanks",
     active: false
 },
-
 {
     id: "pest",
     title: "مكافحة الحشرات",
@@ -80,7 +71,6 @@ export default [
     folder: "pest",
     active: false
 },
-
 {
     id: "moving",
     title: "نقل الأثاث",
@@ -89,5 +79,4 @@ export default [
     folder: "moving",
     active: false
 }
-
 ];
