@@ -11,6 +11,13 @@ const bathrooms = document.getElementById("bathrooms");
 const kitchen = document.getElementById("kitchen");
 const stairs = document.getElementById("stairs");
 const priceBox = document.getElementById("priceBox");
+const locationInput = document.getElementById("location");
+const locationButton = document.getElementById("getLocationBtn");
+const locationButtonText = document.getElementById("locationBtnText");
+const submitOrderBtn = document.getElementById("submitOrder");
+const bookingStatus = document.getElementById("status");
+const whatsappBtn = document.getElementById("whatsappBtn");
+const paymentBtn = document.getElementById("paymentBtn");
 
 let priceConfig = {
   base: 100,
@@ -44,24 +51,28 @@ function showProjectUnavailable() {
   document.querySelector(".app").innerHTML = `
     <div style="
       text-align:center;
-      padding:40px;
+      padding:40px 20px;
       max-width:500px;
-      margin:auto;
-      font-family:Arial;
+      margin:40px auto;
+      font-family:Tahoma,Arial,sans-serif;
+      background:#fff;
+      border-radius:22px;
+      box-shadow:0 10px 30px rgba(0,0,0,.08);
     ">
-
-      <h2>🔒 المشروع غير متاح</h2>
-
-      <p>
-        هذا المشروع غير متاح حالياً.
+      <div style="font-size:44px;margin-bottom:12px;">🔒</div>
+      <h2>المشروع غير متاح</h2>
+      <p style="color:#667085;line-height:1.7;">
+        هذا المشروع غير متاح حاليًا. يرجى التواصل مع صاحب المشروع.
       </p>
-
-      <p>
-        يرجى التواصل مع صاحب المشروع.
-      </p>
-
     </div>
   `;
+}
+
+function scrollToSection(id) {
+  document.getElementById(id)?.scrollIntoView({
+    behavior: "smooth",
+    block: "start"
+  });
 }
 
 /* ======================
@@ -73,12 +84,53 @@ bathrooms.onchange = calcPrice;
 kitchen.onchange = calcPrice;
 stairs.onchange = calcPrice;
 
-document.getElementById("getLocationBtn").onclick = () => {
-  navigator.geolocation.getCurrentPosition((pos) => {
-    document.getElementById("location").value =
-      `${pos.coords.latitude}, ${pos.coords.longitude}`;
-  });
+locationButton.onclick = () => {
+
+  if (!navigator.geolocation) {
+    locationButtonText.innerText = "الموقع غير مدعوم على هذا الجهاز";
+    return;
+  }
+
+  locationButton.disabled = true;
+  locationButtonText.innerText = "جاري تحديد الموقع...";
+
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+
+      locationInput.value = `${lat}, ${lng}`;
+      locationButtonText.innerText = "تم تحديد الموقع ✅";
+      locationButton.disabled = false;
+    },
+    () => {
+      locationButtonText.innerText = "تعذر تحديد الموقع — حاول مرة أخرى";
+      locationButton.disabled = false;
+    },
+    {
+      enableHighAccuracy: true,
+      timeout: 10000
+    }
+  );
 };
+
+document.getElementById("floatingOrderBtn").onclick = () => {
+  scrollToSection("bookingSection");
+};
+
+document.querySelectorAll(".navItem[data-target]").forEach((item) => {
+  item.onclick = () => {
+    document.querySelectorAll(".navItem").forEach((nav) => {
+      nav.classList.remove("active");
+    });
+
+    item.classList.add("active");
+    scrollToSection(item.dataset.target);
+  };
+});
+
+const visitDateInput = document.getElementById("visitDate");
+visitDateInput.min = new Date().toISOString().split("T")[0];
 
 /* ======================
    INIT
@@ -89,7 +141,10 @@ async function init() {
   const projectId =
     new URLSearchParams(location.search).get("project");
 
-  if (!projectId) return;
+  if (!projectId) {
+    showProjectUnavailable();
+    return;
+  }
 
   let snap;
 
@@ -115,7 +170,6 @@ async function init() {
   document.getElementById("businessTitle").innerText =
     data.businessName || "خدمة تنظيف";
 
-  /* 🔥 مهم: تحميل الأسعار من الداشبورد */
   if (data.priceConfig) {
 
     priceConfig = {
@@ -127,21 +181,27 @@ async function init() {
     };
   }
 
-  /* 🔥 تشغيل السعر بعد التحميل */
   calcPrice();
 
   if (data.whatsappNumber) {
     const clean = data.whatsappNumber.replace(/\D/g, "");
-    document.getElementById("whatsappBtn").href =
-      `https://wa.me/20${clean}`;
+    whatsappBtn.href = clean.startsWith("20")
+      ? `https://wa.me/${clean}`
+      : `https://wa.me/20${clean}`;
+  } else {
+    whatsappBtn.style.display = "none";
   }
 
   if (data.instapayLink) {
-    document.getElementById("paymentBtn").href =
-      data.instapayLink;
+    paymentBtn.href = data.instapayLink;
+  } else {
+    paymentBtn.style.display = "none";
   }
 
-  document.getElementById("submitOrder").onclick = async () => {
+  submitOrderBtn.onclick = async () => {
+
+    bookingStatus.innerText = "جاري إرسال الطلب...";
+    submitOrderBtn.disabled = true;
 
     const order = {
       projectId,
@@ -152,31 +212,32 @@ async function init() {
       customerPhone: document.getElementById("customerPhone").value,
       customerAddress: document.getElementById("customerAddress").value,
 
-      location: document.getElementById("location").value,
+      location: locationInput.value,
 
       rooms: rooms.value,
       bathrooms: bathrooms.value,
       kitchen: kitchen.value,
       stairs: stairs.value,
-      visitDate:
-        document.getElementById("visitDate").value,
-
-      visitTime:
-        document.getElementById("visitTime").value,
-      debugTest: "WORKING_APP_JS",
+      visitDate: document.getElementById("visitDate").value,
+      visitTime: document.getElementById("visitTime").value,
       price: calcPrice(),
       status: "new"
     };
 
     const res = await createOrder(order);
 
-    document.getElementById("status").innerText =
+    bookingStatus.innerText =
       res.success
         ? "تم استلام الطلب بنجاح 🎉"
         : res.error;
+
+    submitOrderBtn.disabled = false;
+
+    if (res.success) {
+      submitOrderBtn.innerText = "تم إرسال الطلب ✅";
+    }
   };
 
-  /* 🔥 إعادة حساب أول ما الصفحة تفتح */
   calcPrice();
 }
 
