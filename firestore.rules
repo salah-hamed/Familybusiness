@@ -15,6 +15,10 @@ service cloud.firestore {
       return /databases/$(database)/documents/projects/$(projectId);
     }
 
+    function carwashSubscriptionPath(subscriptionId) {
+      return /databases/$(database)/documents/carwashSubscriptions/$(subscriptionId);
+    }
+
     function userExists(uid) {
       return exists(userPath(uid));
     }
@@ -54,6 +58,14 @@ service cloud.firestore {
         && projectData(projectId).isActive == true
         && projectData(projectId).status == "active"
         && subscriptionActive(projectData(projectId).ownerId);
+    }
+
+    function carwashSubscriptionExists(subscriptionId) {
+      return exists(carwashSubscriptionPath(subscriptionId));
+    }
+
+    function carwashSubscriptionData(subscriptionId) {
+      return get(carwashSubscriptionPath(subscriptionId)).data;
     }
 
     match /users/{uid} {
@@ -167,8 +179,111 @@ service cloud.firestore {
             "remainingWashes",
             "startsAt",
             "expiresAt",
+            "nextWashDate",
+            "preferredTime",
+            "intervalDays",
+            "cycleNumber",
+            "lastWashAt",
             "updatedAt"
           ])
+        );
+
+      allow delete: if isAdmin() || ownsProject(resource.data.projectId);
+
+      match /washes/{washId} {
+        allow get, list: if isAdmin()
+          || (
+            carwashSubscriptionExists(subscriptionId)
+            && ownsProject(carwashSubscriptionData(subscriptionId).projectId)
+          )
+          || (
+            carwashSubscriptionExists(subscriptionId)
+            && projectAvailable(carwashSubscriptionData(subscriptionId).projectId)
+          );
+
+        allow create: if isAdmin()
+          || (
+            carwashSubscriptionExists(subscriptionId)
+            && ownsProject(carwashSubscriptionData(subscriptionId).projectId)
+            && request.resource.data.projectId == carwashSubscriptionData(subscriptionId).projectId
+          );
+
+        allow update, delete: if isAdmin()
+          || (
+            carwashSubscriptionExists(subscriptionId)
+            && ownsProject(carwashSubscriptionData(subscriptionId).projectId)
+          );
+      }
+    }
+
+    match /carwashCustomers/{subscriptionId} {
+      allow get, list: if isAdmin() || ownsProject(resource.data.projectId);
+
+      allow create: if isAdmin()
+        || (
+          signedIn()
+          && request.resource.data.projectId is string
+          && ownsProject(request.resource.data.projectId)
+        );
+
+      allow update: if isAdmin()
+        || (
+          ownsProject(resource.data.projectId)
+          && request.resource.data.projectId == resource.data.projectId
+        );
+
+      allow delete: if isAdmin() || ownsProject(resource.data.projectId);
+    }
+
+    match /carwashSubscriptionRequests/{subscriptionId} {
+      allow get: if isAdmin()
+        || ownsProject(resource.data.projectId)
+        || (
+          resource.data.projectId is string
+          && projectAvailable(resource.data.projectId)
+        );
+
+      allow list: if isAdmin() || ownsProject(resource.data.projectId);
+
+      allow create: if isAdmin()
+        || (
+          signedIn()
+          && request.resource.data.projectId is string
+          && ownsProject(request.resource.data.projectId)
+        )
+        || (
+          request.resource.data.projectId is string
+          && request.resource.data.status == "pending"
+          && projectAvailable(request.resource.data.projectId)
+        );
+
+      allow update: if isAdmin()
+        || (
+          ownsProject(resource.data.projectId)
+          && request.resource.data.projectId == resource.data.projectId
+        )
+        || (
+          request.resource.data.projectId == resource.data.projectId
+          && request.resource.data.status == "pending"
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            "status",
+            "orderId",
+            "requestType",
+            "updatedAt"
+          ])
+          && resource.data.status in ["canceled", "renewable", "active"]
+          && projectAvailable(resource.data.projectId)
+          && (
+            resource.data.status != "active"
+            || (
+              carwashSubscriptionExists(subscriptionId)
+              && (
+                carwashSubscriptionData(subscriptionId).status != "active"
+                || carwashSubscriptionData(subscriptionId).remainingWashes <= 0
+                || carwashSubscriptionData(subscriptionId).expiresAt <= request.time
+              )
+            )
+          )
         );
 
       allow delete: if isAdmin() || ownsProject(resource.data.projectId);
