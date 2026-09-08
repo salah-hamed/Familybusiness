@@ -1,229 +1,201 @@
 <!DOCTYPE html>
-<html lang="ar">
+<html lang="ar" dir="rtl">
 <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#4F46E5">
+  <title>خدمة تنظيف المنازل</title>
   <link rel="stylesheet" href="/Familybusiness/core/ui/theme.css">
-
+  <link rel="stylesheet" href="./style.css">
 </head>
 
 <body>
 
 <div class="mobileShell">
+  <main class="app">
 
-<div class="app">
+    <header class="topBar">
+      <div class="brandBlock">
+        <span class="brandIcon" aria-hidden="true">🧹</span>
+        <div>
+          <p class="eyebrow">خدمة منزلية سهلة وسريعة</p>
+          <h1 id="businessTitle">خدمة تنظيف</h1>
+          <p class="subtitle">احجز خدمتك في أقل من دقيقة</p>
+        </div>
+      </div>
+    </header>
 
-  <div class="topBar">
+    <section class="heroCard">
+      <div class="heroBadge">✨ حجز مباشر</div>
+      <h2>بيت أنظف بدون مكالمات طويلة</h2>
+      <p>اختار تفاصيل الخدمة والموعد وشوف التكلفة المتوقعة قبل تأكيد الحجز.</p>
 
-    <div>
-      <h1 id="businessTitle">خدمة تنظيف</h1>
+      <div class="trustRow" aria-label="مميزات الخدمة">
+        <span>⚡ حجز سريع</span>
+        <span>📍 تحديد الموقع</span>
+        <span>💰 سعر واضح</span>
+      </div>
+    </section>
 
-      <p class="subtitle">
-        احجز خدمتك في أقل من دقيقة
-      </p>
-    </div>
+    <section class="card" id="customerSection">
+      <div class="sectionHeading">
+        <span class="sectionIcon">👤</span>
+        <div>
+          <h3 class="sectionTitle">بيانات العميل</h3>
+          <p>اكتب بيانات التواصل ومكان تنفيذ الخدمة.</p>
+        </div>
+      </div>
 
-  </div>
+      <label for="customerName">الاسم الكامل</label>
+      <input id="customerName" autocomplete="name" placeholder="مثال: محمد أحمد">
 
+      <label for="customerPhone">رقم الهاتف</label>
+      <input id="customerPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="01xxxxxxxxx">
 
-  <div class="heroCard">
+      <label for="customerAddress">العنوان</label>
+      <input id="customerAddress" autocomplete="street-address" placeholder="المنطقة، الشارع، رقم العقار">
 
-    <h2>✨ تنظيف احترافي لمنزلك</h2>
+      <button class="locationBtn" id="getLocationBtn" type="button">
+        <span>📍</span>
+        <span id="locationBtnText">تحديد موقعي الحالي</span>
+      </button>
 
-    <p>
-      فريق متخصص يصل إليك بسرعة وجودة عالية
-    </p>
+      <input id="location" readonly placeholder="سيظهر الموقع هنا بعد تحديده">
+      <p class="helperText">الموقع يساعد مقدم الخدمة على الوصول إليك بسهولة.</p>
+    </section>
 
-  </div>
+    <section class="card" id="serviceSection">
+      <div class="sectionHeading">
+        <span class="sectionIcon">🧽</span>
+        <div>
+          <h3 class="sectionTitle">تفاصيل الخدمة</h3>
+          <p>حدد احتياجك علشان نحسب السعر المتوقع.</p>
+        </div>
+      </div>
 
+      <div class="fieldGrid">
+        <div class="fieldGroup">
+          <label for="rooms">عدد الغرف</label>
+          <select id="rooms">
+            <option value="1">غرفة واحدة</option>
+            <option value="2">غرفتان</option>
+            <option value="3">3 غرف</option>
+          </select>
+        </div>
 
-  <div class="card">
+        <div class="fieldGroup">
+          <label for="bathrooms">عدد الحمامات</label>
+          <select id="bathrooms">
+            <option value="1">حمام واحد</option>
+            <option value="2">حمامان</option>
+          </select>
+        </div>
 
-    <h3 class="sectionTitle">
-      بيانات العميل
-    </h3>
+        <div class="fieldGroup">
+          <label for="kitchen">المطبخ</label>
+          <select id="kitchen">
+            <option value="yes">يشمل المطبخ</option>
+            <option value="no">بدون مطبخ</option>
+          </select>
+        </div>
 
-    <input
-      id="customerName"
-      placeholder="الاسم الكامل"
-    >
+        <div class="fieldGroup">
+          <label for="stairs">تنظيف السلم</label>
+          <select id="stairs">
+            <option value="no">لا</option>
+            <option value="yes">نعم</option>
+          </select>
+        </div>
+      </div>
 
-    <input
-      id="customerPhone"
-      placeholder="رقم الهاتف"
-    >
+      <div class="scheduleGrid">
+        <div class="fieldGroup">
+          <label for="visitDate">📅 تاريخ الزيارة</label>
+          <input type="date" id="visitDate">
+        </div>
 
-    <input
-      id="customerAddress"
-      placeholder="العنوان"
-    >
+        <div class="fieldGroup">
+          <label for="visitTime">⏰ وقت الزيارة</label>
+          <input type="time" id="visitTime">
+        </div>
+      </div>
+    </section>
 
-    <button
-      class="locationBtn"
-      id="getLocationBtn"
-    >
-      📍 تحديد موقعي الحالي
+    <section class="priceCard" id="bookingSection">
+      <div class="priceHeader">
+        <div>
+          <p>التكلفة المتوقعة</p>
+          <small>حسب التفاصيل التي اخترتها</small>
+        </div>
+        <span>💳</span>
+      </div>
+
+      <div class="priceBox" id="priceBox">0 جنيه</div>
+
+      <button id="submitOrder" class="primaryBookBtn" type="button">
+        تأكيد الحجز
+      </button>
+
+      <div id="status" class="bookingStatus" aria-live="polite"></div>
+    </section>
+
+    <section class="card contactCard" id="supportSection">
+      <div class="sectionHeading compact">
+        <span class="sectionIcon">💬</span>
+        <div>
+          <h3 class="sectionTitle">تحتاج مساعدة؟</h3>
+          <p>تواصل أو استخدم وسيلة الدفع المتاحة.</p>
+        </div>
+      </div>
+
+      <div class="actionGrid">
+        <a id="whatsappBtn" class="actionBtn whatsapp" target="_blank" rel="noopener">
+          💬 واتساب
+        </a>
+
+        <a id="paymentBtn" class="actionBtn payment" target="_blank" rel="noopener">
+          💸 InstaPay
+        </a>
+      </div>
+    </section>
+
+    <section class="ctaBox">
+      <span class="ctaMini">Family Business</span>
+      <h3>ابدأ مشروعك الخاص الآن</h3>
+      <p>اختر مشروعًا رقميًا جاهزًا وابدأ استقبال طلبات عملائك من رابطك الخاص.</p>
+      <a class="ctaLink" href="https://salah-hamed.github.io/Familybusiness/">
+        استكشف المشاريع المتاحة
+      </a>
+    </section>
+
+    <div class="bottomSpace"></div>
+
+  </main>
+
+  <button class="floatingBtn" id="floatingOrderBtn" type="button">
+    <span>احجز الآن</span>
+    <span>←</span>
+  </button>
+
+  <nav class="bottomNav" aria-label="التنقل السريع">
+    <button class="navItem active" type="button" data-target="customerSection">
+      <span>🏠</span>
+      <small>الرئيسية</small>
     </button>
 
-    <input
-      id="location"
-      placeholder="الموقع الحالي"
-    >
-
-  </div>
-
-
-  <div class="card">
-
-    <h3 class="sectionTitle">
-      تفاصيل الخدمة
-    </h3>
-
-    <label>عدد الغرف</label>
-
-    <select id="rooms">
-      <option value="1">غرفة</option>
-      <option value="2">غرفتين</option>
-      <option value="3">3 غرف</option>
-    </select>
-
-
-    <label>عدد الحمامات</label>
-
-    <select id="bathrooms">
-      <option value="1">حمام</option>
-      <option value="2">حمامين</option>
-    </select>
-
-
-    <label>المطبخ</label>
-
-    <select id="kitchen">
-      <option value="yes">يوجد مطبخ</option>
-      <option value="no">بدون مطبخ</option>
-    </select>
-
-
-    <label>تنظيف السلم</label>
-
-    <select id="stairs">
-      <option value="no">لا</option>
-      <option value="yes">نعم</option>
-    </select>
-
-
-    <label>تاريخ الزيارة</label>
-
-    <input
-      type="date"
-      id="visitDate"
-    >
-
-
-    <label>وقت الزيارة</label>
-
-    <input
-      type="time"
-      id="visitTime"
-    >
-
-  </div>
-
-
-  <div class="priceCard">
-
-    <p>التكلفة المتوقعة</p>
-
-    <div
-      class="priceBox"
-      id="priceBox"
-    >
-      0 جنيه
-    </div>
-
-    <button id="submitOrder">
-      احجز الآن
+    <button class="navItem" type="button" data-target="bookingSection">
+      <span>🧾</span>
+      <small>الحجز</small>
     </button>
 
-    <div id="status"></div>
-
-  </div>
-
-
-  <div class="card">
-
-    <a
-      id="whatsappBtn"
-      class="actionBtn whatsapp"
-      target="_blank"
-    >
-      تواصل عبر واتساب
-    </a>
-
-    <a
-      id="paymentBtn"
-      class="actionBtn payment"
-      target="_blank"
-    >
-      الدفع عبر InstaPay
-    </a>
-
-  </div>
-
-
-  <!-- CTA SECTION -->
-
-  <div class="ctaBox">
-
-    <h3>
-      ابدأ مشروعك الخاص الآن
-    </h3>
-
-    <p>
-      امتلك مشروعًا رقميًا جاهزًا وابدأ البيع فورًا
-    </p>
-
-    <a
-      class="ctaLink"
-      href="https://salah-hamed.github.io/Familybusiness/"
-    >
-      استكشف المشاريع المتاحة
-    </a>
-
-  </div>
-
-
-  <div class="bottomSpace"></div>
-
-</div>
-<!-- FLOATING BOOK BUTTON -->
-
-<button class="floatingBtn" id="floatingOrderBtn">
-  احجز الآن
-</button>
-
-
-<!-- BOTTOM NAVIGATION -->
-
-<div class="bottomNav">
-
-  <div class="navItem active">
-    🏠
-    <span>الرئيسية</span>
-  </div>
-
-  <div class="navItem">
-    📦
-    <span>الطلبات</span>
-  </div>
-
-  <div class="navItem">
-    💬
-    <span>الدعم</span>
-  </div>
-
+    <button class="navItem" type="button" data-target="supportSection">
+      <span>💬</span>
+      <small>الدعم</small>
+    </button>
+  </nav>
 </div>
 
-  </div>
 <script type="module" src="./app.js"></script>
 
 </body>
-  </html>
+</html>

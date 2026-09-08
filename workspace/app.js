@@ -57,10 +57,12 @@ projects.forEach(project => {
   const projectDocId =
     existingProject?.projectDocId ||
     getProjectDocId(user.uid, project.id);
+  const available = project.active === true;
+  const disabled = !subscriptionActive || !available;
 
   templatesContainer.innerHTML += `
 
-    <div class="projectCard">
+    <div class="projectCard ${available ? "" : "comingSoon"}">
 
       <div class="projectIcon">
         ${project.icon}
@@ -70,16 +72,21 @@ projects.forEach(project => {
 
         <h3>${project.title}</h3>
 
+        ${available ? "" : '<div class="comingSoonBadge">قريبًا</div>'}
+
         <button
           class="projectBtn"
           data-template-id="${project.id}"
           data-project-doc-id="${projectDocId}"
-          ${subscriptionActive ? "" : "disabled"}>
+          data-available="${available}"
+          ${disabled ? "disabled" : ""}>
 
           ${
-            subscriptionActive
-              ? (created ? "إدارة المشروع" : "إنشاء المشروع")
-              : "الاشتراك غير مفعل"
+            !available
+              ? "قريبًا"
+              : subscriptionActive
+                ? (created ? "إدارة المشروع" : "إنشاء المشروع")
+                : "الاشتراك غير مفعل"
           }
 
         </button>
@@ -95,7 +102,7 @@ projects.forEach(project => {
 
   btn.onclick = async () => {
 
-    if (!subscriptionActive) return;
+    if (!subscriptionActive || btn.dataset.available !== "true") return;
 
     const templateId = btn.dataset.templateId;
     let projectDocId = btn.dataset.projectDocId;
@@ -110,7 +117,9 @@ projects.forEach(project => {
     }
 
     const project =
-      projects.find(p => p.id === templateId);
+      projects.find(p => p.id === templateId && p.active === true);
+
+    if (!project) return;
 
     try {
       projectDocId = await createProject(user.uid, project);

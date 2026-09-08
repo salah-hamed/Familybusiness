@@ -15,7 +15,7 @@ export default [
     icon: "👕",
     color: "#0EA5E9",
     folder: "laundry",
-    active: true
+    active: false
 },
 
 {
@@ -24,7 +24,7 @@ export default [
     icon: "🚗",
     color: "#22C55E",
     folder: "carwash",
-    active: true
+    active: false
 },
 
 {
@@ -33,7 +33,7 @@ export default [
     icon: "💍",
     color: "#EC4899",
     folder: "hall",
-    active: true
+    active: false
 },
 
 {
@@ -42,7 +42,7 @@ export default [
     icon: "🔧",
     color: "#F97316",
     folder: "maintenance",
-    active: true
+    active: false
 },
 
 {
@@ -51,7 +51,7 @@ export default [
     icon: "💇",
     color: "#8B5CF6",
     folder: "salon",
-    active: true
+    active: false
 },
 
 {
@@ -60,7 +60,7 @@ export default [
     icon: "👗",
     color: "#E11D48",
     folder: "dress",
-    active: true
+    active: false
 },
 
 {
@@ -69,7 +69,7 @@ export default [
     icon: "🚰",
     color: "#06B6D4",
     folder: "tanks",
-    active: true
+    active: false
 },
 
 {
@@ -78,7 +78,7 @@ export default [
     icon: "🐜",
     color: "#84CC16",
     folder: "pest",
-    active: true
+    active: false
 },
 
 {
@@ -87,7 +87,7 @@ export default [
     icon: "📦",
     color: "#F59E0B",
     folder: "moving",
-    active: true
+    active: false
 }
 
 ];
