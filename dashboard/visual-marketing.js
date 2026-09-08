@@ -13,56 +13,14 @@ const businessNameInput = document.getElementById("businessName");
 let uploadedImage = null;
 
 const themes = {
-  cleanPro: {
-    start: "#f7fbf8",
-    end: "#e8f5ee",
-    accent: "#1f9d55",
-    accent2: "#0f766e",
-    text: "#0f2942",
-    soft: "#ffffff",
-    muted: "#526575",
-    frame: "#ffffff",
-    border: "#dcebe2"
-  },
-  clean: {
-    start: "#4f46e5",
-    end: "#7c3aed",
-    accent: "#fbbf24",
-    accent2: "#ffffff",
-    text: "#ffffff",
-    soft: "rgba(255,255,255,.16)",
-    muted: "rgba(255,255,255,.82)",
-    frame: "#ffffff",
-    border: "rgba(255,255,255,.35)"
-  },
-  bold: {
-    start: "#111827",
-    end: "#4338ca",
-    accent: "#22c55e",
-    accent2: "#a7f3d0",
-    text: "#ffffff",
-    soft: "rgba(255,255,255,.13)",
-    muted: "rgba(255,255,255,.8)",
-    frame: "#ffffff",
-    border: "rgba(255,255,255,.28)"
-  },
-  soft: {
-    start: "#eef2ff",
-    end: "#ddd6fe",
-    accent: "#4f46e5",
-    accent2: "#7c3aed",
-    text: "#111827",
-    soft: "rgba(255,255,255,.72)",
-    muted: "#5b6474",
-    frame: "#ffffff",
-    border: "#d9d6f5"
-  }
+  cleanPro: { start: "#f7fbf8", end: "#e8f5ee", accent: "#1f9d55", accent2: "#0f766e", text: "#0f2942", soft: "#ffffff", muted: "#526575", frame: "#ffffff", border: "#dcebe2" },
+  clean: { start: "#4f46e5", end: "#7c3aed", accent: "#fbbf24", accent2: "#ffffff", text: "#ffffff", soft: "rgba(255,255,255,.16)", muted: "rgba(255,255,255,.82)", frame: "#ffffff", border: "rgba(255,255,255,.35)" },
+  bold: { start: "#111827", end: "#4338ca", accent: "#22c55e", accent2: "#a7f3d0", text: "#ffffff", soft: "rgba(255,255,255,.13)", muted: "rgba(255,255,255,.8)", frame: "#ffffff", border: "rgba(255,255,255,.28)" },
+  soft: { start: "#eef2ff", end: "#ddd6fe", accent: "#4f46e5", accent2: "#7c3aed", text: "#111827", soft: "rgba(255,255,255,.72)", muted: "#5b6474", frame: "#ffffff", border: "#d9d6f5" }
 };
 
 function getBusinessName() {
-  return businessNameInput?.value?.trim() ||
-    document.getElementById("userName")?.innerText?.trim() ||
-    "مزود الخدمة";
+  return businessNameInput?.value?.trim() || document.getElementById("userName")?.innerText?.trim() || "مزود الخدمة";
 }
 
 function getProjectLink() {
@@ -91,7 +49,6 @@ function wrapRTLText(text, x, y, maxWidth, lineHeight, maxLines = 4) {
   const words = String(text || "").split(/\s+/).filter(Boolean);
   const lines = [];
   let line = "";
-
   words.forEach((word) => {
     const test = line ? `${line} ${word}` : word;
     if (ctx.measureText(test).width > maxWidth && line) {
@@ -101,24 +58,15 @@ function wrapRTLText(text, x, y, maxWidth, lineHeight, maxLines = 4) {
       line = test;
     }
   });
-
   if (line) lines.push(line);
-
-  lines.slice(0, maxLines).forEach((currentLine, index) => {
-    ctx.fillText(currentLine, x, y + index * lineHeight);
-  });
-
+  lines.slice(0, maxLines).forEach((currentLine, index) => ctx.fillText(currentLine, x, y + index * lineHeight));
   return y + Math.min(lines.length, maxLines) * lineHeight;
 }
 
 function drawImageCoverInRect(image, x, y, width, height, radius) {
   const imageRatio = image.width / image.height;
   const boxRatio = width / height;
-  let sx = 0;
-  let sy = 0;
-  let sw = image.width;
-  let sh = image.height;
-
+  let sx = 0, sy = 0, sw = image.width, sh = image.height;
   if (imageRatio > boxRatio) {
     sw = image.height * boxRatio;
     sx = (image.width - sw) / 2;
@@ -126,7 +74,6 @@ function drawImageCoverInRect(image, x, y, width, height, radius) {
     sh = image.width / boxRatio;
     sy = (image.height - sh) / 2;
   }
-
   ctx.save();
   ctx.beginPath();
   const r = Math.min(radius, width / 2, height / 2);
@@ -144,14 +91,12 @@ function drawImageCoverInRect(image, x, y, width, height, radius) {
 function drawFramedImage(image, x, y, width, height, theme, story) {
   const framePad = story ? 20 : 16;
   const radius = story ? 52 : 42;
-
   ctx.save();
   ctx.shadowColor = "rgba(15,23,42,.20)";
   ctx.shadowBlur = story ? 36 : 28;
   ctx.shadowOffsetY = story ? 18 : 12;
   roundRect(x - framePad, y - framePad, width + framePad * 2, height + framePad * 2, radius, theme.frame, theme.border, 3);
   ctx.restore();
-
   drawImageCoverInRect(image, x, y, width, height, radius - framePad);
 }
 
@@ -173,8 +118,7 @@ function drawCleanProBenefits(width, y, story, theme) {
   const cardWidth = story ? 260 : 250;
   const gap = story ? 22 : 18;
   const total = items.length * cardWidth + (items.length - 1) * gap;
-  let startX = (width - total) / 2;
-
+  const startX = (width - total) / 2;
   ctx.textAlign = "center";
   items.forEach((item, index) => {
     const x = startX + index * (cardWidth + gap);
@@ -183,12 +127,10 @@ function drawCleanProBenefits(width, y, story, theme) {
     ctx.font = `700 ${story ? 26 : 23}px Tahoma, Arial, sans-serif`;
     ctx.fillText(item, x + cardWidth / 2, y + (story ? 58 : 51));
   });
-});
 }
 
 function drawCreative() {
   if (!canvas || !ctx) return;
-
   const story = formatSelect.value === "story";
   const width = 1080;
   const height = story ? 1920 : 1080;
@@ -217,17 +159,10 @@ function drawCreative() {
   ctx.font = `600 ${story ? 25 : 20}px Tahoma, Arial, sans-serif`;
   ctx.fillText("خدمات تنظيف منزلي", width - pad - 34, providerY + (story ? 109 : 90));
 
-  let headlineY = story ? 330 : 235;
+  const headlineY = story ? 330 : 235;
   ctx.fillStyle = theme.text;
   ctx.font = `900 ${story ? 75 : 61}px Tahoma, Arial, sans-serif`;
-  const headlineBottom = wrapRTLText(
-    headlineInput.value.trim() || "تنظيف بيتك أسهل من أي وقت",
-    width - pad,
-    headlineY,
-    width - pad * 2,
-    story ? 96 : 76,
-    story ? 3 : 2
-  );
+  const headlineBottom = wrapRTLText(headlineInput.value.trim() || "تنظيف بيتك أسهل من أي وقت", width - pad, headlineY, width - pad * 2, story ? 96 : 76, story ? 3 : 2);
 
   const offer = offerInput.value.trim();
   let nextY = headlineBottom + (story ? 26 : 18);
@@ -298,7 +233,6 @@ imageInput?.addEventListener("change", () => {
     drawCreative();
     return;
   }
-
   const reader = new FileReader();
   reader.onload = () => {
     const image = new Image();
@@ -311,14 +245,10 @@ imageInput?.addEventListener("change", () => {
   reader.readAsDataURL(file);
 });
 
-[formatSelect, themeSelect, headlineInput, offerInput, ctaInput].forEach((element) => {
-  element?.addEventListener("change", drawCreative);
-});
-
+[formatSelect, themeSelect, headlineInput, offerInput, ctaInput].forEach((element) => element?.addEventListener("change", drawCreative));
 headlineInput?.addEventListener("input", drawCreative);
 offerInput?.addEventListener("input", drawCreative);
 ctaInput?.addEventListener("input", drawCreative);
-
 document.getElementById("renderCreativeBtn")?.addEventListener("click", drawCreative);
 
 document.getElementById("saveCreativeBtn")?.addEventListener("click", async () => {
@@ -340,21 +270,14 @@ document.getElementById("shareCreativeBtn")?.addEventListener("click", async () 
   drawCreative();
   const blob = await canvasBlob();
   if (!blob) return;
-
   const file = new File([blob], "family-business-ad.png", { type: "image/png" });
   const projectLink = getProjectLink();
   const baseText = document.getElementById("marketingMessage")?.value || "احجز خدمتك الآن";
-  const shareText = projectLink && !baseText.includes(projectLink)
-    ? `${baseText}\n${projectLink}`
-    : baseText;
+  const shareText = projectLink && !baseText.includes(projectLink) ? `${baseText}\n${projectLink}` : baseText;
 
   if (navigator.share && navigator.canShare?.({ files: [file] })) {
     try {
-      await navigator.share({
-        title: getBusinessName(),
-        text: shareText,
-        files: [file]
-      });
+      await navigator.share({ title: getBusinessName(), text: shareText, files: [file] });
       statusBox.innerText = "تم فتح المشاركة مع رابط الحجز ✅";
       return;
     } catch (error) {
