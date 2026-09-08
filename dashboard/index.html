@@ -8,54 +8,20 @@
   <link rel="stylesheet" href="./dashboard.css">
 </head>
 <body>
-
 <div class="dashboardShell">
-
   <header class="dashboardHeader" id="homeSection">
-    <div>
-      <span class="eyebrow">لوحة إدارة مشروعك</span>
-      <h1 id="userName">مشروعك</h1>
-      <div class="projectMeta">
-        <span id="projectType"></span>
-        <span id="status" class="statusPill"></span>
-      </div>
-      <p id="userEmail" class="muted"></p>
-    </div>
-
+    <div><span class="eyebrow">لوحة إدارة مشروعك</span><h1 id="userName">مشروعك</h1><div class="projectMeta"><span id="projectType"></span><span id="status" class="statusPill"></span></div><p id="userEmail" class="muted"></p></div>
     <button id="logoutBtn" class="iconBtn dangerBtn" type="button">تسجيل الخروج</button>
   </header>
-
   <main class="dashboardMain">
-
     <section class="card quickCard">
-      <div class="sectionHeading compactHeading">
-        <div>
-          <span class="eyebrow">رابط العميل</span>
-          <h2>شارك مشروعك وابدأ استقبال الطلبات</h2>
-        </div>
-      </div>
-
-      <div class="projectLinkBox">
-        <input id="projectLink" readonly aria-label="رابط المشروع">
-      </div>
-
-      <div class="quickActions">
-        <button id="openProjectBtn" class="primaryBtn" type="button">فتح واجهة العميل</button>
-        <button id="copyLinkBtn" class="secondaryBtn" type="button">نسخ الرابط</button>
-        <button id="shareProjectBtn" class="secondaryBtn" type="button">مشاركة المشروع</button>
-      </div>
-
+      <div class="sectionHeading compactHeading"><div><span class="eyebrow">رابط العميل</span><h2>شارك مشروعك وابدأ استقبال الطلبات</h2></div></div>
+      <div class="projectLinkBox"><input id="projectLink" readonly aria-label="رابط المشروع"></div>
+      <div class="quickActions"><button id="openProjectBtn" class="primaryBtn" type="button">فتح واجهة العميل</button><button id="copyLinkBtn" class="secondaryBtn" type="button">نسخ الرابط</button><button id="shareProjectBtn" class="secondaryBtn" type="button">مشاركة المشروع</button></div>
       <p id="copyStatus" class="statusText"></p>
     </section>
-
     <section class="statsSection">
-      <div class="sectionHeading">
-        <div>
-          <span class="eyebrow">نظرة سريعة</span>
-          <h2>أداء الطلبات</h2>
-        </div>
-      </div>
-
+      <div class="sectionHeading"><div><span class="eyebrow">نظرة سريعة</span><h2>أداء الطلبات</h2></div></div>
       <div class="statGrid">
         <article class="statCard accentNew"><span class="statIcon">🆕</span><div><span class="statLabel">طلبات جديدة</span><strong id="newOrders">0</strong></div></article>
         <article class="statCard accentAccepted"><span class="statIcon">✅</span><div><span class="statLabel">مقبولة</span><strong id="acceptedOrders">0</strong></div></article>
@@ -65,100 +31,37 @@
         <article class="statCard wideStat revenueStat"><span class="statIcon">💰</span><div><span class="statLabel">قيمة الطلبات المنفذة</span><strong><span id="doneRevenue">0</span> جنيه</strong></div></article>
       </div>
     </section>
-
     <section class="card marketingCard" id="marketingSection">
-      <div class="sectionHeading">
-        <div>
-          <span class="eyebrow">Quick Marketing Center</span>
-          <h2>سوّق لمشروعك في ثواني</h2>
-        </div>
-        <span class="marketingBadge">📣 جاهز للمشاركة</span>
-      </div>
-
+      <div class="sectionHeading"><div><span class="eyebrow">Quick Marketing Center</span><h2>سوّق لمشروعك في ثواني</h2></div><span class="marketingBadge">📣 جاهز للمشاركة</span></div>
       <p class="marketingIntro">اختر نوع الرسالة، عدّلها لو حبيت، وبعدها شاركها مباشرة مع رابط مشروعك.</p>
-
-      <div class="marketingGrid">
-        <label class="fieldGroup">
-          <span>نوع الرسالة</span>
-          <select id="marketingTone" class="marketingSelect">
-            <option value="short">رسالة قصيرة</option>
-            <option value="offer">رسالة عرض وتسويق</option>
-            <option value="personal">رسالة شخصية</option>
-          </select>
-        </label>
-
-        <button id="refreshMarketingTextBtn" class="secondaryBtn marketingRefresh" type="button">تحديث النص</button>
+      <div class="marketingGrid"><label class="fieldGroup"><span>نوع الرسالة</span><select id="marketingTone" class="marketingSelect"><option value="short">رسالة قصيرة</option><option value="offer">رسالة عرض وتسويق</option><option value="personal">رسالة شخصية</option></select></label><button id="refreshMarketingTextBtn" class="secondaryBtn marketingRefresh" type="button">تحديث النص</button></div>
+      <label class="fieldGroup marketingMessageGroup"><span>الرسالة الجاهزة</span><textarea id="marketingMessage" rows="7" placeholder="سيتم تجهيز الرسالة تلقائيًا"></textarea></label>
+      <div class="marketingActions"><button id="whatsappMarketingBtn" class="marketingAction whatsappMarketing" type="button">💬 شارك على واتساب</button><button id="nativeMarketingShareBtn" class="marketingAction primaryMarketing" type="button">📤 مشاركة من الموبايل</button><button id="copyMarketingTextBtn" class="marketingAction" type="button">📋 نسخ الرسالة</button><button id="copyMarketingLinkBtn" class="marketingAction" type="button">🔗 نسخ الرابط فقط</button></div>
+      <div class="visualMarketingBox">
+        <div class="visualHeading"><div><span class="eyebrow">Visual Marketing Creator</span><h3>أنشئ صورة إعلان جاهزة</h3></div><span class="visualBadge">NEW</span></div>
+        <div class="visualControls">
+          <label class="fieldGroup"><span>المقاس</span><select id="creativeFormat" class="marketingSelect"><option value="square">بوست مربع 1080×1080</option><option value="story">ستوري 1080×1920</option></select></label>
+          <label class="fieldGroup"><span>ستايل التصميم</span><select id="creativeTheme" class="marketingSelect"><option value="clean">نظيف واحترافي</option><option value="bold">عرض قوي</option><option value="soft">هادئ وأنيق</option></select></label>
+          <label class="fieldGroup fullField"><span>العنوان الرئيسي</span><input id="creativeHeadline" value="تنظيف بيتك أسهل من أي وقت"></label>
+          <label class="fieldGroup"><span>عرض اختياري</span><input id="creativeOffer" placeholder="مثال: خصم 20% لأول طلب"></label>
+          <label class="fieldGroup"><span>زر الدعوة</span><input id="creativeCta" value="احجز الآن"></label>
+          <label class="fieldGroup fullField uploadField"><span>صورة خلفية اختيارية</span><input id="creativeImage" type="file" accept="image/*"></label>
+        </div>
+        <div class="creativePreviewWrap"><canvas id="marketingCanvas" width="1080" height="1080" aria-label="معاينة الإعلان"></canvas></div>
+        <div class="creativeActions"><button id="renderCreativeBtn" class="secondaryBtn" type="button">🎨 تحديث التصميم</button><button id="shareCreativeBtn" class="primaryBtn" type="button">📤 مشاركة الصورة</button><button id="saveCreativeBtn" class="secondaryBtn" type="button">💾 حفظ الصورة</button></div>
+        <p id="creativeStatus" class="statusText"></p>
       </div>
-
-      <label class="fieldGroup marketingMessageGroup">
-        <span>الرسالة الجاهزة</span>
-        <textarea id="marketingMessage" rows="7" placeholder="سيتم تجهيز الرسالة تلقائيًا"></textarea>
-      </label>
-
-      <div class="marketingActions">
-        <button id="whatsappMarketingBtn" class="marketingAction whatsappMarketing" type="button">💬 شارك على واتساب</button>
-        <button id="nativeMarketingShareBtn" class="marketingAction primaryMarketing" type="button">📤 مشاركة من الموبايل</button>
-        <button id="copyMarketingTextBtn" class="marketingAction" type="button">📋 نسخ الرسالة</button>
-        <button id="copyMarketingLinkBtn" class="marketingAction" type="button">🔗 نسخ الرابط فقط</button>
-      </div>
-
-      <div class="marketingTips">
-        <strong>فكرة سريعة:</strong>
-        <span>شارك الرابط في حالات واتساب، جروبات المنطقة، والعملاء السابقين بدل نشر بوست عام فقط.</span>
-      </div>
-
+      <div class="marketingTips"><strong>فكرة سريعة:</strong><span>استخدم البوست المربع للجروبات وفيسبوك، والستوري لحالات واتساب وإنستجرام.</span></div>
       <p id="marketingStatus" class="statusText"></p>
     </section>
-
-    <section class="card" id="ordersSection">
-      <div class="sectionHeading"><div><span class="eyebrow">إدارة التشغيل</span><h2>الطلبات</h2></div></div>
-      <div class="searchBox"><span>🔎</span><input id="ordersSearch" type="search" placeholder="ابحث باسم العميل أو رقم الهاتف"></div>
-      <div id="tabs" class="tabsScroller">
-        <button class="tabBtn active" data-tab="all" type="button">الكل</button>
-        <button class="tabBtn" data-tab="new" type="button">جديدة</button>
-        <button class="tabBtn" data-tab="accepted" type="button">مقبولة</button>
-        <button class="tabBtn" data-tab="done" type="button">منفذة</button>
-        <button class="tabBtn" data-tab="canceled" type="button">ملغية</button>
-      </div>
-      <div id="ordersContainer" class="ordersList"></div>
-    </section>
-
-    <section class="card" id="settingsSection">
-      <div class="sectionHeading"><div><span class="eyebrow">تخصيص المشروع</span><h2>إعدادات المشروع</h2></div></div>
-      <div class="formGrid">
-        <label class="fieldGroup"><span>اسم النشاط</span><input id="businessName" placeholder="اسم نشاطك"></label>
-        <label class="fieldGroup"><span>رقم واتساب</span><input id="whatsappNumber" inputmode="tel" placeholder="رقم واتساب"></label>
-        <label class="fieldGroup fullField"><span>رابط InstaPay</span><input id="instapayLink" placeholder="رابط الدفع"></label>
-      </div>
-      <button id="saveSettingsBtn" class="primaryBtn fullBtn" type="button">حفظ إعدادات المشروع</button>
-      <p id="settingsStatus" class="statusText"></p>
-    </section>
-
-    <section class="card" id="pricingSection">
-      <div class="sectionHeading"><div><span class="eyebrow">تحكم كامل</span><h2>تسعير الخدمة</h2></div></div>
-      <div class="formGrid pricingGrid">
-        <label class="fieldGroup"><span>السعر الأساسي</span><input id="basePrice" inputmode="decimal" placeholder="0"></label>
-        <label class="fieldGroup"><span>سعر الغرفة</span><input id="roomPrice" inputmode="decimal" placeholder="0"></label>
-        <label class="fieldGroup"><span>سعر الحمام</span><input id="bathroomPrice" inputmode="decimal" placeholder="0"></label>
-        <label class="fieldGroup"><span>سعر المطبخ</span><input id="kitchenPrice" inputmode="decimal" placeholder="0"></label>
-        <label class="fieldGroup fullField"><span>سعر تنظيف السلم</span><input id="stairsPrice" inputmode="decimal" placeholder="0"></label>
-      </div>
-      <button id="savePricingBtn" class="primaryBtn fullBtn" type="button">حفظ الأسعار</button>
-      <p id="pricingStatus" class="statusText"></p>
-    </section>
-
+    <section class="card" id="ordersSection"><div class="sectionHeading"><div><span class="eyebrow">إدارة التشغيل</span><h2>الطلبات</h2></div></div><div class="searchBox"><span>🔎</span><input id="ordersSearch" type="search" placeholder="ابحث باسم العميل أو رقم الهاتف"></div><div id="tabs" class="tabsScroller"><button class="tabBtn active" data-tab="all" type="button">الكل</button><button class="tabBtn" data-tab="new" type="button">جديدة</button><button class="tabBtn" data-tab="accepted" type="button">مقبولة</button><button class="tabBtn" data-tab="done" type="button">منفذة</button><button class="tabBtn" data-tab="canceled" type="button">ملغية</button></div><div id="ordersContainer" class="ordersList"></div></section>
+    <section class="card" id="settingsSection"><div class="sectionHeading"><div><span class="eyebrow">تخصيص المشروع</span><h2>إعدادات المشروع</h2></div></div><div class="formGrid"><label class="fieldGroup"><span>اسم النشاط</span><input id="businessName" placeholder="اسم نشاطك"></label><label class="fieldGroup"><span>رقم واتساب</span><input id="whatsappNumber" inputmode="tel" placeholder="رقم واتساب"></label><label class="fieldGroup fullField"><span>رابط InstaPay</span><input id="instapayLink" placeholder="رابط الدفع"></label></div><button id="saveSettingsBtn" class="primaryBtn fullBtn" type="button">حفظ إعدادات المشروع</button><p id="settingsStatus" class="statusText"></p></section>
+    <section class="card" id="pricingSection"><div class="sectionHeading"><div><span class="eyebrow">تحكم كامل</span><h2>تسعير الخدمة</h2></div></div><div class="formGrid pricingGrid"><label class="fieldGroup"><span>السعر الأساسي</span><input id="basePrice" inputmode="decimal" placeholder="0"></label><label class="fieldGroup"><span>سعر الغرفة</span><input id="roomPrice" inputmode="decimal" placeholder="0"></label><label class="fieldGroup"><span>سعر الحمام</span><input id="bathroomPrice" inputmode="decimal" placeholder="0"></label><label class="fieldGroup"><span>سعر المطبخ</span><input id="kitchenPrice" inputmode="decimal" placeholder="0"></label><label class="fieldGroup fullField"><span>سعر تنظيف السلم</span><input id="stairsPrice" inputmode="decimal" placeholder="0"></label></div><button id="savePricingBtn" class="primaryBtn fullBtn" type="button">حفظ الأسعار</button><p id="pricingStatus" class="statusText"></p></section>
   </main>
-
-  <nav class="bottomNav" aria-label="تنقل لوحة التحكم">
-    <button class="navItem active" data-target="homeSection" type="button"><span>🏠</span><small>الرئيسية</small></button>
-    <button class="navItem" data-target="ordersSection" type="button"><span>📦</span><small>الطلبات</small></button>
-    <button class="navItem" data-target="marketingSection" type="button"><span>📣</span><small>التسويق</small></button>
-    <button class="navItem" data-target="settingsSection" type="button"><span>⚙️</span><small>الإعدادات</small></button>
-  </nav>
-
+  <nav class="bottomNav" aria-label="تنقل لوحة التحكم"><button class="navItem active" data-target="homeSection" type="button"><span>🏠</span><small>الرئيسية</small></button><button class="navItem" data-target="ordersSection" type="button"><span>📦</span><small>الطلبات</small></button><button class="navItem" data-target="marketingSection" type="button"><span>📣</span><small>التسويق</small></button><button class="navItem" data-target="settingsSection" type="button"><span>⚙️</span><small>الإعدادات</small></button></nav>
 </div>
-
 <script type="module" src="./dashboard.js"></script>
 <script type="module" src="./marketing.js"></script>
+<script type="module" src="./visual-marketing.js"></script>
 </body>
 </html>
