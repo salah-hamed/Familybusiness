@@ -8,10 +8,9 @@ export const dashboardTemplates = {
     label: "غسيل السيارات", todayLabel: "سيارات اليوم",
     pricing: [
       ["basePrice","سعر الاشتراك الشهري","monthly"],
-      ["roomPrice","عدد الغسلات في الشهر","monthlyWashes"],
-      ["bathroomPrice","سعر الغسلة الواحدة","single"]
+      ["roomPrice","عدد الغسلات في الشهر","monthlyWashes"]
     ],
-    marketing: { serviceLabel:"اشتراك غسيل سيارات خارجي", headline:"خلي سيارتك نظيفة طول الشهر", description:"اشتراك شهري لغسيل سيارتك خارجيًا في مكانها مع مواعيد مرنة وحجز سهل.", benefits:["اشتراك شهري","غسلات متعددة","في مكان سيارتك"] }
+    marketing: { serviceLabel:"اشتراك غسيل سيارات خارجي", headline:"خلي سيارتك نظيفة طول الشهر", description:"اشتراك شهري لغسيل سيارتك خارجيًا في مكانها مع متابعة رصيد الغسلات وتجديد سهل كل شهر.", benefits:["اشتراك شهري","غسلات متعددة","في مكان سيارتك"] }
   }
 };
 export function getTemplateKey(project={}){return project.template||project.projectType||"cleaning";}
@@ -19,3 +18,4 @@ export function getDashboardTemplate(project={}){return dashboardTemplates[getTe
 export function templateFromProjectLink(link=""){const match=String(link).match(/\/templates\/([^/?#]+)/);return match?.[1]||"cleaning";}
 
 import("./carwash-visual.js");
+import("./carwash-subscriptions.js");
