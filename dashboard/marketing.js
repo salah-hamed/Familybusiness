@@ -85,4 +85,12 @@ document.getElementById("nativeMarketingShareBtn")?.addEventListener("click", as
   window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener");
 });
 
-setTimeout(refreshMessage, 900);
+let attempts = 0;
+const projectReadyTimer = setInterval(() => {
+  attempts++;
+
+  if (getProjectLink() || attempts >= 20) {
+    clearInterval(projectReadyTimer);
+    refreshMessage();
+  }
+}, 500);
