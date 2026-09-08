@@ -6,8 +6,12 @@ export const dashboardTemplates = {
   },
   carwash: {
     label: "غسيل السيارات", todayLabel: "سيارات اليوم",
-    pricing: [["basePrice","سعر الغسلة الخارجية","base"]],
-    marketing: { serviceLabel:"غسيل سيارات خارجي", headline:"سيارتك نظيفة من غير ما تتحرك من مكانك", description:"غسيل خارجي لسيارتك في مكانها، بموعد تختاره وحجز سهل في أقل من دقيقة.", benefits:["غسيل خارجي","في مكان سيارتك","مواعيد مرنة"] }
+    pricing: [
+      ["basePrice","سعر الاشتراك الشهري","monthly"],
+      ["roomPrice","عدد الغسلات في الشهر","monthlyWashes"],
+      ["bathroomPrice","سعر الغسلة الواحدة","single"]
+    ],
+    marketing: { serviceLabel:"اشتراك غسيل سيارات خارجي", headline:"خلي سيارتك نظيفة طول الشهر", description:"اشتراك شهري لغسيل سيارتك خارجيًا في مكانها مع مواعيد مرنة وحجز سهل.", benefits:["اشتراك شهري","غسلات متعددة","في مكان سيارتك"] }
   }
 };
 export function getTemplateKey(project={}){return project.template||project.projectType||"cleaning";}
