@@ -1,5 +1,6 @@
 import auth from "../core/firebase/firebase-auth.js";
 import db from "../core/firebase/firebase-db.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   collection,
   doc,
@@ -14,14 +15,32 @@ import {
 
 const projectId = new URLSearchParams(location.search).get("project") || "";
 let rendering = false;
+let refreshTimer = null;
+
+function scheduleRender(delay = 0) {
+  if (!projectId.endsWith("_carwash")) return;
+  clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(() => renderSubscriptions(), delay);
+}
 
 if (projectId.endsWith("_carwash")) {
   const observer = new MutationObserver(() => {
     const list = document.getElementById("subscriptionsList");
-    if (list && !rendering && !list.querySelector("[data-subscription-id]")) renderSubscriptions();
+    if (list && !rendering && !list.querySelector("[data-subscription-id]")) scheduleRender(0);
   });
   observer.observe(document.body, { childList: true, subtree: true });
-  setTimeout(renderSubscriptions, 800);
+
+  onAuthStateChanged(auth, user => {
+    if (!user) return;
+    // Dashboard creates the Car Wash panel after auth/project loading.
+    // Retry a few times so the operations renderer becomes the final owner
+    // of subscriptionsList even on slow mobile/network loads.
+    scheduleRender(0);
+    setTimeout(() => scheduleRender(0), 500);
+    setTimeout(() => scheduleRender(0), 1200);
+  });
+
+  setTimeout(() => scheduleRender(0), 800);
 }
 
 function esc(value){return String(value??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
