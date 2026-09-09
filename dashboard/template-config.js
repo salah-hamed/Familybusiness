@@ -16,6 +16,23 @@ export const dashboardTemplates = {
       benefits: ["تنظيف شامل", "مواعيد مرنة", "جودة موثوقة"]
     }
   },
+  laundry: {
+    label: "غسيل وكي الملابس",
+    todayLabel: "استلامات اليوم",
+    pricing: [
+      ["basePrice", "سعر القميص", "shirt"],
+      ["roomPrice", "سعر البنطلون", "trousers"],
+      ["bathroomPrice", "سعر التيشيرت", "tshirt"],
+      ["kitchenPrice", "سعر الفستان / العباية", "dress"],
+      ["stairsPrice", "سعر البدلة", "suit"]
+    ],
+    marketing: {
+      serviceLabel: "غسيل وكي مع استلام وتوصيل",
+      headline: "ملابسك نظيفة ومكوية من غير مشاوير",
+      description: "اختار القطع وحدد موعد الاستلام، وخدمة الغسيل والكي توصلك لحد البيت.",
+      benefits: ["تسعير واضح بالقطعة", "استلام من المنزل", "توصيل بعد التجهيز"]
+    }
+  },
   carwash: {
     label: "غسيل السيارات",
     todayLabel: "سيارات اليوم",
