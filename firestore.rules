@@ -150,7 +150,8 @@ service cloud.firestore {
     }
 
     match /carwashSubscriptions/{subscriptionId} {
-      allow get: if isAdmin()
+      allow get: if !exists(/databases/$(database)/documents/carwashSubscriptions/$(subscriptionId))
+        || isAdmin()
         || ownsProject(resource.data.projectId)
         || (
           resource.data.projectId is string
