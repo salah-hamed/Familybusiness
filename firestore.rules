@@ -68,6 +68,20 @@ service cloud.firestore {
       return get(carwashSubscriptionPath(subscriptionId)).data;
     }
 
+    function validCarwashOrder(projectId) {
+      return request.resource.data.templateType == "carwash"
+        && request.resource.data.serviceType == "external_car_wash"
+        && request.resource.data.planType == "monthly_new"
+        && request.resource.data.subscriptionKey is string
+        && request.resource.data.renewal is bool
+        && request.resource.data.packageWashes is number
+        && request.resource.data.price is number
+        && ("monthly" in projectData(projectId).priceConfig)
+        && ("monthlyWashes" in projectData(projectId).priceConfig)
+        && request.resource.data.price == projectData(projectId).priceConfig.monthly
+        && request.resource.data.packageWashes == projectData(projectId).priceConfig.monthlyWashes;
+    }
+
     match /users/{uid} {
       allow create: if signedIn()
         && request.auth.uid == uid
@@ -133,7 +147,12 @@ service cloud.firestore {
       allow create: if request.resource.data.projectId is string
         && request.resource.data.providerId == request.resource.data.projectId
         && request.resource.data.status == "new"
-        && projectAvailable(request.resource.data.projectId);
+        && projectAvailable(request.resource.data.projectId)
+        && (
+          !("templateType" in request.resource.data)
+          || request.resource.data.templateType != "carwash"
+          || validCarwashOrder(request.resource.data.projectId)
+        );
 
       allow read: if isAdmin() || ownsProject(resource.data.projectId);
 
@@ -168,6 +187,8 @@ service cloud.firestore {
           && request.resource.data.status == "active"
           && request.resource.data.totalWashes is number
           && request.resource.data.remainingWashes is number
+          && request.resource.data.totalWashes > 0
+          && request.resource.data.remainingWashes == request.resource.data.totalWashes
         );
 
       allow update: if isAdmin()
@@ -187,6 +208,11 @@ service cloud.firestore {
             "lastWashAt",
             "updatedAt"
           ])
+          && request.resource.data.remainingWashes is number
+          && request.resource.data.remainingWashes >= 0
+          && request.resource.data.totalWashes is number
+          && request.resource.data.totalWashes > 0
+          && request.resource.data.remainingWashes <= request.resource.data.totalWashes
         );
 
       allow delete: if isAdmin() || ownsProject(resource.data.projectId);
@@ -207,6 +233,8 @@ service cloud.firestore {
             carwashSubscriptionExists(subscriptionId)
             && ownsProject(carwashSubscriptionData(subscriptionId).projectId)
             && request.resource.data.projectId == carwashSubscriptionData(subscriptionId).projectId
+            && request.resource.data.sequence is number
+            && request.resource.data.sequence > 0
           );
 
         allow update, delete: if isAdmin()
@@ -256,6 +284,16 @@ service cloud.firestore {
         || (
           request.resource.data.projectId is string
           && request.resource.data.status == "pending"
+          && request.resource.data.orderId is string
+          && request.resource.data.requestType in ["new", "renewal"]
+          && request.resource.data.keys().hasOnly([
+            "projectId",
+            "status",
+            "orderId",
+            "requestType",
+            "updatedAt",
+            "createdAt"
+          ])
           && projectAvailable(request.resource.data.projectId)
         );
 
@@ -273,6 +311,8 @@ service cloud.firestore {
             "requestType",
             "updatedAt"
           ])
+          && request.resource.data.orderId is string
+          && request.resource.data.requestType in ["new", "renewal"]
           && resource.data.status in ["canceled", "renewable", "active"]
           && projectAvailable(resource.data.projectId)
           && (
