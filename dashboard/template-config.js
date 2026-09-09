@@ -48,5 +48,6 @@ export function templateFromProjectLink(link = "") { const match=String(link).ma
 import("./carwash-theme.js");
 import("./carwash-visual.js");
 import("./carwash-subscriptions.js");
+import("./laundry-theme.js");
 import("./laundry-pricing.js");
 import("./laundry-operations.js");
