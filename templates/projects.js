@@ -13,7 +13,7 @@ export default [
     icon: "👕",
     color: "#0EA5E9",
     folder: "laundry",
-    active: false
+    active: true
 },
 {
     id: "carwash",
