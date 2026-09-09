@@ -17,20 +17,16 @@ export const dashboardTemplates = {
     }
   },
   laundry: {
-    label: "غسيل وكي الملابس",
+    label: "غسيل ومكواة الملابس",
     todayLabel: "استلامات اليوم",
     pricing: [
-      ["basePrice", "سعر القميص", "shirt"],
-      ["roomPrice", "سعر البنطلون", "trousers"],
-      ["bathroomPrice", "سعر التيشيرت", "tshirt"],
-      ["kitchenPrice", "سعر الفستان / العباية", "dress"],
-      ["stairsPrice", "سعر البدلة", "suit"]
+      ["basePrice", "تسعير الغسيل والمكواة", "shirtWash"]
     ],
     marketing: {
-      serviceLabel: "غسيل وكي مع استلام وتوصيل",
-      headline: "ملابسك نظيفة ومكوية من غير مشاوير",
-      description: "اختار القطع وحدد موعد الاستلام، وخدمة الغسيل والكي توصلك لحد البيت.",
-      benefits: ["تسعير واضح بالقطعة", "استلام من المنزل", "توصيل بعد التجهيز"]
+      serviceLabel: "غسيل ومكواة بالقطعة مع استلام وتوصيل",
+      headline: "غسيل أو مكواة أو الاتنين — لحد باب البيت",
+      description: "اختار القطع والخدمة المناسبة لكل قطعة وحدد موعد الاستلام، وإحنا نهتم بالباقي.",
+      benefits: ["غسيل ومكواة بأسعار منفصلة", "استلام من المنزل", "غسيل كوتشي"]
     }
   },
   carwash: {
@@ -65,3 +61,4 @@ export function templateFromProjectLink(link = "") {
 import("./carwash-theme.js");
 import("./carwash-visual.js");
 import("./carwash-subscriptions.js");
+import("./laundry-pricing.js");
