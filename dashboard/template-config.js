@@ -19,9 +19,7 @@ export const dashboardTemplates = {
   laundry: {
     label: "غسيل ومكواة الملابس",
     todayLabel: "استلامات اليوم",
-    pricing: [
-      ["basePrice", "تسعير الغسيل والمكواة", "shirtWash"]
-    ],
+    pricing: [["basePrice", "تسعير الغسيل والمكواة", "shirtWash"]],
     marketing: {
       serviceLabel: "غسيل ومكواة بالقطعة مع استلام وتوصيل",
       headline: "غسيل أو مكواة أو الاتنين — لحد باب البيت",
@@ -44,21 +42,11 @@ export const dashboardTemplates = {
     }
   }
 };
-
-export function getTemplateKey(project = {}) {
-  return project.template || project.projectType || "cleaning";
-}
-
-export function getDashboardTemplate(project = {}) {
-  return dashboardTemplates[getTemplateKey(project)] || dashboardTemplates.cleaning;
-}
-
-export function templateFromProjectLink(link = "") {
-  const match = String(link).match(/\/templates\/([^/?#]+)/);
-  return match?.[1] || "cleaning";
-}
-
+export function getTemplateKey(project = {}) { return project.template || project.projectType || "cleaning"; }
+export function getDashboardTemplate(project = {}) { return dashboardTemplates[getTemplateKey(project)] || dashboardTemplates.cleaning; }
+export function templateFromProjectLink(link = "") { const match=String(link).match(/\/templates\/([^/?#]+)/); return match?.[1] || "cleaning"; }
 import("./carwash-theme.js");
 import("./carwash-visual.js");
 import("./carwash-subscriptions.js");
 import("./laundry-pricing.js");
+import("./laundry-operations.js");
