@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0ea5e9">
+  <title>غسيل وكي الملابس</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <main class="app">
+    <header class="hero">
+      <div class="heroIcon">👕</div>
+      <div><span class="eyebrow">استلام وتوصيل من المنزل</span><h1 id="businessTitle">غسيل وكي الملابس</h1><p>اختار القطع، حدد موعد الاستلام، وسيتم استلامها وتوصيلها بعد التجهيز.</p></div>
+    </header>
+
+    <section class="card" id="itemsSection">
+      <div class="sectionTitle"><span>1</span><div><h2>اختار الملابس</h2><p>السعر للقطعة شامل الغسيل والكي.</p></div></div>
+      <div id="itemsList" class="itemsGrid"></div>
+      <div class="totalBox"><span>إجمالي الطلب</span><strong id="priceBox">0 جنيه</strong><small id="piecesCount">0 قطعة</small></div>
+    </section>
+
+    <section class="card" id="bookingSection">
+      <div class="sectionTitle"><span>2</span><div><h2>بيانات الاستلام</h2><p>هنحفظ بياناتك على الجهاز لتكون الطلبات القادمة أسرع.</p></div></div>
+      <div class="formGrid">
+        <label><span>الاسم</span><input id="customerName" autocomplete="name" placeholder="اسم العميل"></label>
+        <label><span>رقم الموبايل</span><input id="customerPhone" inputmode="tel" autocomplete="tel" placeholder="01xxxxxxxxx"></label>
+        <label class="full"><span>العنوان</span><textarea id="customerAddress" rows="2" placeholder="المنطقة، الشارع، رقم العقار"></textarea></label>
+        <label><span>تاريخ الاستلام</span><input id="pickupDate" type="date"></label>
+        <label><span>وقت الاستلام</span><input id="pickupTime" type="time"></label>
+        <label class="full"><span>ملاحظات</span><textarea id="notes" rows="2" placeholder="أي ملاحظات خاصة بالطلب (اختياري)"></textarea></label>
+      </div>
+      <button id="getLocationBtn" class="secondaryBtn" type="button">📍 <span id="locationBtnText">تحديد الموقع</span></button>
+      <input id="location" type="hidden">
+      <button id="submitOrder" class="primaryBtn" type="button">إرسال طلب الاستلام</button>
+      <div id="status" class="statusText" aria-live="polite"></div>
+    </section>
+
+    <section class="contactRow">
+      <a id="whatsappBtn" class="contactBtn" target="_blank" rel="noopener">واتساب</a>
+      <a id="paymentBtn" class="contactBtn" target="_blank" rel="noopener">InstaPay</a>
+    </section>
+
+    <footer>خدمة مدعومة بواسطة Family Business</footer>
+  </main>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
