@@ -246,7 +246,13 @@ service cloud.firestore {
     }
 
     match /carwashCustomers/{subscriptionId} {
-      allow get, list: if isAdmin() || ownsProject(resource.data.projectId);
+      allow get: if isAdmin()
+        || (
+          carwashSubscriptionExists(subscriptionId)
+          && ownsProject(carwashSubscriptionData(subscriptionId).projectId)
+        );
+
+      allow list: if isAdmin() || ownsProject(resource.data.projectId);
 
       allow create: if isAdmin()
         || (
