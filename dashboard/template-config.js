@@ -50,3 +50,4 @@ import("./carwash-visual.js");
 import("./carwash-subscriptions.js");
 import("./laundry-pricing.js");
 import("./laundry-operations.js");
+import("./laundry-theme.js");
