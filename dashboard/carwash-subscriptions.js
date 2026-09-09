@@ -17,6 +17,28 @@ const projectId = new URLSearchParams(location.search).get("project") || "";
 let rendering = false;
 let refreshTimer = null;
 
+function ensureOperationsList() {
+  const panel = document.getElementById("carwashSubscriptionsPanel");
+  if (!panel) return null;
+
+  let list = document.getElementById("carwashOperationsList");
+  if (!list) {
+    list = document.createElement("div");
+    list.id = "carwashOperationsList";
+    list.className = "ordersList";
+
+    const legacyList = document.getElementById("subscriptionsList");
+    if (legacyList) {
+      legacyList.style.display = "none";
+      legacyList.insertAdjacentElement("afterend", list);
+    } else {
+      panel.appendChild(list);
+    }
+  }
+
+  return list;
+}
+
 function scheduleRender(delay = 0) {
   if (!projectId.endsWith("_carwash")) return;
   clearTimeout(refreshTimer);
@@ -25,16 +47,13 @@ function scheduleRender(delay = 0) {
 
 if (projectId.endsWith("_carwash")) {
   const observer = new MutationObserver(() => {
-    const list = document.getElementById("subscriptionsList");
-    if (list && !rendering && !list.querySelector("[data-subscription-id]")) scheduleRender(0);
+    const panel = document.getElementById("carwashSubscriptionsPanel");
+    if (panel && !rendering) scheduleRender(0);
   });
   observer.observe(document.body, { childList: true, subtree: true });
 
   onAuthStateChanged(auth, user => {
     if (!user) return;
-    // Dashboard creates the Car Wash panel after auth/project loading.
-    // Retry a few times so the operations renderer becomes the final owner
-    // of subscriptionsList even on slow mobile/network loads.
     scheduleRender(0);
     setTimeout(() => scheduleRender(0), 500);
     setTimeout(() => scheduleRender(0), 1200);
@@ -60,7 +79,7 @@ function ensureOperationalStats(){
 }
 
 async function renderSubscriptions() {
-  const list = document.getElementById("subscriptionsList");
+  const list = ensureOperationsList();
   if (!list || rendering || !auth.currentUser) return;
   rendering = true;
   ensureOperationalStats();
