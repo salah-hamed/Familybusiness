@@ -97,12 +97,12 @@ service cloud.firestore {
     && item.unitPrice is number
     && item.subtotal is number
     && (
-      (washOnly == true && item.service == "wash" && item.unitPrice == washPrice)
+      (washOnly == true && item["service"] == "wash" && item.unitPrice == washPrice)
       ||
       (washOnly == false && (
-       (item.service == "wash" && item.unitPrice == washPrice)
-       || (item.service == "iron" && item.unitPrice == ironPrice)
-       || (item.service == "wash_iron" && item.unitPrice == washPrice + ironPrice)
+       (item["service"] == "wash" && item.unitPrice == washPrice)
+       || (item["service"] == "iron" && item.unitPrice == ironPrice)
+       || (item["service"] == "wash_iron" && item.unitPrice == washPrice + ironPrice)
       ))
     )
     && item.subtotal == item.quantity * item.unitPrice;
