@@ -5,13 +5,13 @@ import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase
 const $ = id => document.getElementById(id);
 let currentProjectId = "";
 let priceConfig = {
-  shirtWash: 12, shirtIron: 8,
-  trousersWash: 15, trousersIron: 10,
-  tshirtWash: 10, tshirtIron: 7,
-  dressWash: 22, dressIron: 13,
-  galabeyaWash: 22, galabeyaIron: 13,
-  suitWash: 40, suitIron: 20,
-  shoesWash: 35
+  shirtWash: 0, shirtIron: 0,
+  trousersWash: 0, trousersIron: 0,
+  tshirtWash: 0, tshirtIron: 0,
+  dressWash: 0, dressIron: 0,
+  galabeyaWash: 0, galabeyaIron: 0,
+  suitWash: 0, suitIron: 0,
+  shoesWash: 0
 };
 
 const itemDefinitions = [
@@ -29,11 +29,18 @@ const services = Object.fromEntries(itemDefinitions.map(item => [item.key, item.
 
 function storageKey(){ return `familybusiness:laundry:${currentProjectId}:customer`; }
 function normalizeEgyptWhatsapp(number){let clean=String(number||"").replace(/\D/g,"");if(clean.startsWith("0020"))clean=clean.slice(2);if(clean.startsWith("20"))return clean;if(clean.startsWith("0"))clean=clean.slice(1);return `20${clean}`;}
-function unavailable(){document.querySelector(".app").innerHTML='<section class="card" style="text-align:center"><h2>🔒 المشروع غير متاح</h2><p>يرجى التواصل مع صاحب المشروع.</p></section>';}
+function unavailable(message="يرجى التواصل مع صاحب المشروع."){document.querySelector(".app").innerHTML=`<section class="card" style="text-align:center"><h2>🔒 المشروع غير متاح</h2><p>${message}</p></section>`;}
 function today(){const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().split("T")[0];}
 function readSaved(){try{return JSON.parse(localStorage.getItem(storageKey())||"null");}catch{return null;}}
 function saveCustomer(){localStorage.setItem(storageKey(),JSON.stringify({customerName:$("customerName").value.trim(),customerPhone:$("customerPhone").value.trim(),customerAddress:$("customerAddress").value.trim(),location:$("location").value}));}
 function fillSaved(){const p=readSaved();if(!p)return;["customerName","customerPhone","customerAddress","location"].forEach(id=>{if(p[id])$(id).value=p[id];});}
+
+function hasConfiguredPricing(config = {}){
+  return [
+    "shirtWash","shirtIron","trousersWash","trousersIron","tshirtWash","tshirtIron",
+    "dressWash","dressIron","galabeyaWash","galabeyaIron","suitWash","suitIron","shoesWash"
+  ].every(key => Object.prototype.hasOwnProperty.call(config,key) && Number.isFinite(Number(config[key])) && Number(config[key]) >= 0);
+}
 
 function servicePrice(item, service){
   const wash = Number(priceConfig[item.washKey] || 0);
@@ -124,15 +131,16 @@ async function init(){
   if(!snap.exists()){unavailable();return;}
   const data=snap.data();
   if(data.template!=="laundry"||data.isActive!==true||data.status!=="active"){unavailable();return;}
+  if(!hasConfiguredPricing(data.priceConfig||{})){unavailable("مقدم الخدمة لم يجهز أسعار الغسيل والمكواة بعد. يرجى المحاولة لاحقًا.");return;}
   $("businessTitle").innerText=data.businessName||"غسيل ومكواة الملابس";
-  priceConfig={...priceConfig,...(data.priceConfig||{})};
+  priceConfig={...priceConfig,...data.priceConfig};
   renderItems();fillSaved();
   if(data.whatsappNumber)$("whatsappBtn").href=`https://wa.me/${normalizeEgyptWhatsapp(data.whatsappNumber)}`;else $("whatsappBtn").style.display="none";
   if(data.instapayLink)$("paymentBtn").href=data.instapayLink;else $("paymentBtn").style.display="none";
   $("submitOrder").onclick=async()=>{
     const error=validate();if(error){$("status").innerText=error;return;}
     const {pieces,price}=totals();
-    const items=itemDefinitions.filter(item=>quantities[item.key]>0).map(item=>({
+    const items=itemDefinitions.map(item=>({
       key:item.key,
       label:item.label,
       service:services[item.key],
