@@ -30,12 +30,47 @@ service cloud.firestore {
     && request.resource.data.kitchen in ["yes","no"]
     && request.resource.data.stairs in ["yes","no"]
     && request.resource.data.price is number
-    && request.resource.data.price
-      == projectData(projectId).priceConfig.base
-       + request.resource.data.rooms * projectData(projectId).priceConfig.room
-       + request.resource.data.bathrooms * projectData(projectId).priceConfig.bathroom
-       + (request.resource.data.kitchen == "yes" ? projectData(projectId).priceConfig.kitchen : 0)
-       + (request.resource.data.stairs == "yes" ? projectData(projectId).priceConfig.stairs : 0);
+    && (
+      (
+       request.resource.data.kitchen == "no"
+       && request.resource.data.stairs == "no"
+       && request.resource.data.price
+        == projectData(projectId).priceConfig.base
+         + request.resource.data.rooms * projectData(projectId).priceConfig.room
+         + request.resource.data.bathrooms * projectData(projectId).priceConfig.bathroom
+      )
+      ||
+      (
+       request.resource.data.kitchen == "yes"
+       && request.resource.data.stairs == "no"
+       && request.resource.data.price
+        == projectData(projectId).priceConfig.base
+         + request.resource.data.rooms * projectData(projectId).priceConfig.room
+         + request.resource.data.bathrooms * projectData(projectId).priceConfig.bathroom
+         + projectData(projectId).priceConfig.kitchen
+      )
+      ||
+      (
+       request.resource.data.kitchen == "no"
+       && request.resource.data.stairs == "yes"
+       && request.resource.data.price
+        == projectData(projectId).priceConfig.base
+         + request.resource.data.rooms * projectData(projectId).priceConfig.room
+         + request.resource.data.bathrooms * projectData(projectId).priceConfig.bathroom
+         + projectData(projectId).priceConfig.stairs
+      )
+      ||
+      (
+       request.resource.data.kitchen == "yes"
+       && request.resource.data.stairs == "yes"
+       && request.resource.data.price
+        == projectData(projectId).priceConfig.base
+         + request.resource.data.rooms * projectData(projectId).priceConfig.room
+         + request.resource.data.bathrooms * projectData(projectId).priceConfig.bathroom
+         + projectData(projectId).priceConfig.kitchen
+         + projectData(projectId).priceConfig.stairs
+      )
+    );
   }
 
   function validCarwashOrder(projectId){
