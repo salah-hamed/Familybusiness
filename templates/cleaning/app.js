@@ -20,11 +20,11 @@ const whatsappBtn = document.getElementById("whatsappBtn");
 const paymentBtn = document.getElementById("paymentBtn");
 
 let priceConfig = {
-  base: 100,
-  room: 40,
-  bathroom: 20,
-  kitchen: 30,
-  stairs: 25
+  base: 0,
+  room: 0,
+  bathroom: 0,
+  kitchen: 0,
+  stairs: 0
 };
 
 function calcPrice() {
@@ -47,7 +47,7 @@ function calcPrice() {
   return price;
 }
 
-function showProjectUnavailable() {
+function showProjectUnavailable(message = "هذا المشروع غير متاح حاليًا. يرجى التواصل مع صاحب المشروع.") {
   document.querySelector(".app").innerHTML = `
     <div style="
       text-align:center;
@@ -61,11 +61,17 @@ function showProjectUnavailable() {
     ">
       <div style="font-size:44px;margin-bottom:12px;">🔒</div>
       <h2>المشروع غير متاح</h2>
-      <p style="color:#667085;line-height:1.7;">
-        هذا المشروع غير متاح حاليًا. يرجى التواصل مع صاحب المشروع.
-      </p>
+      <p style="color:#667085;line-height:1.7;">${message}</p>
     </div>
   `;
+}
+
+function hasConfiguredPricing(config = {}) {
+  return ["base", "room", "bathroom", "kitchen", "stairs"].every(key =>
+    Object.prototype.hasOwnProperty.call(config, key) &&
+    Number.isFinite(Number(config[key])) &&
+    Number(config[key]) >= 0
+  );
 }
 
 function scrollToSection(id) {
@@ -107,10 +113,6 @@ function validateBooking() {
 
   return null;
 }
-
-/* ======================
-   Events
-====================== */
 
 rooms.onchange = calcPrice;
 bathrooms.onchange = calcPrice;
@@ -165,10 +167,6 @@ document.querySelectorAll(".navItem[data-target]").forEach((item) => {
 const visitDateInput = document.getElementById("visitDate");
 visitDateInput.min = new Date().toISOString().split("T")[0];
 
-/* ======================
-   INIT
-====================== */
-
 async function init() {
 
   const projectId =
@@ -195,24 +193,26 @@ async function init() {
 
   const data = snap.data();
 
-  if (!data.isActive || data.status !== "active") {
+  if (data.template !== "cleaning" || !data.isActive || data.status !== "active") {
     showProjectUnavailable();
+    return;
+  }
+
+  if (!hasConfiguredPricing(data.priceConfig || {})) {
+    showProjectUnavailable("مقدم الخدمة لم يجهز أسعار المشروع بعد. يرجى المحاولة لاحقًا.");
     return;
   }
 
   document.getElementById("businessTitle").innerText =
     data.businessName || "خدمة تنظيف";
 
-  if (data.priceConfig) {
-
-    priceConfig = {
-      base: Number(data.priceConfig.base ?? priceConfig.base),
-      room: Number(data.priceConfig.room ?? priceConfig.room),
-      bathroom: Number(data.priceConfig.bathroom ?? priceConfig.bathroom),
-      kitchen: Number(data.priceConfig.kitchen ?? priceConfig.kitchen),
-      stairs: Number(data.priceConfig.stairs ?? priceConfig.stairs)
-    };
-  }
+  priceConfig = {
+    base: Number(data.priceConfig.base),
+    room: Number(data.priceConfig.room),
+    bathroom: Number(data.priceConfig.bathroom),
+    kitchen: Number(data.priceConfig.kitchen),
+    stairs: Number(data.priceConfig.stairs)
+  };
 
   calcPrice();
 
@@ -252,8 +252,8 @@ async function init() {
 
       location: locationInput.value,
 
-      rooms: rooms.value,
-      bathrooms: bathrooms.value,
+      rooms: Number(rooms.value),
+      bathrooms: Number(bathrooms.value),
       kitchen: kitchen.value,
       stairs: stairs.value,
       visitDate: document.getElementById("visitDate").value,
