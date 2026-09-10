@@ -5,6 +5,7 @@ const params = new URLSearchParams(location.search);
 const projectDocId = params.get("project") || "";
 const isLaundry = projectDocId.endsWith("_laundry");
 const escapeHTML = value => String(value ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\"/g,"&quot;").replace(/'/g,"&#039;");
+const trustedItemLabels = {shirt:"قميص",trousers:"بنطلون",tshirt:"تيشيرت",dress:"فستان / عباية",galabeya:"جلابية",suit:"بدلة",shoes:"غسيل كوتشي"};
 
 const stageMeta = {
   accepted: ["تم قبول الطلب", "📥"],
@@ -21,7 +22,7 @@ function serviceLabel(service){
 function itemsHTML(order){
   const items = Array.isArray(order.items) ? order.items.filter(item => Number(item.quantity || 0) > 0) : [];
   if (!items.length) return "";
-  return `<div class="orderInfo laundryItems"><b>👕 تفاصيل القطع</b>${items.map(item=>`<div>${escapeHTML(item.label)} × ${Number(item.quantity||0)} — ${escapeHTML(serviceLabel(item.service))} — ${Number(item.subtotal||0)} جنيه</div>`).join("")}</div>`;
+  return `<div class="orderInfo laundryItems"><b>👕 تفاصيل القطع</b>${items.map(item=>`<div>${escapeHTML(trustedItemLabels[item.key]||item.key||"قطعة")} × ${Number(item.quantity||0)} — ${escapeHTML(serviceLabel(item.service))} — ${Number(item.subtotal||0)} جنيه</div>`).join("")}</div>`;
 }
 
 async function setStage(orderId, nextStage){
