@@ -15,7 +15,96 @@ service cloud.firestore {
   function projectAvailable(projectId){ return projectExists(projectId) && projectData(projectId).isActive == true && projectData(projectId).status == "active" && subscriptionActive(projectData(projectId).ownerId); }
   function carwashSubscriptionExists(subscriptionId){ return exists(carwashSubscriptionPath(subscriptionId)); }
   function carwashSubscriptionData(subscriptionId){ return get(carwashSubscriptionPath(subscriptionId)).data; }
-  function validCarwashOrder(projectId){ return request.resource.data.templateType == "carwash" && request.resource.data.serviceType == "external_car_wash" && request.resource.data.planType == "monthly_new" && request.resource.data.subscriptionKey is string && request.resource.data.renewal is bool && request.resource.data.packageWashes is number && request.resource.data.price is number && ("monthly" in projectData(projectId).priceConfig) && ("monthlyWashes" in projectData(projectId).priceConfig) && request.resource.data.price == projectData(projectId).priceConfig.monthly && request.resource.data.packageWashes == projectData(projectId).priceConfig.monthlyWashes; }
+
+  function validOrderTemplate(projectId){
+   return request.resource.data.templateType is string
+    && projectData(projectId).template == request.resource.data.templateType;
+  }
+
+  function validCleaningOrder(projectId){
+   return request.resource.data.templateType == "cleaning"
+    && request.resource.data.rooms is number
+    && request.resource.data.rooms >= 0
+    && request.resource.data.bathrooms is number
+    && request.resource.data.bathrooms >= 0
+    && request.resource.data.kitchen in ["yes","no"]
+    && request.resource.data.stairs in ["yes","no"]
+    && request.resource.data.price is number
+    && request.resource.data.price
+      == projectData(projectId).priceConfig.base
+       + request.resource.data.rooms * projectData(projectId).priceConfig.room
+       + request.resource.data.bathrooms * projectData(projectId).priceConfig.bathroom
+       + (request.resource.data.kitchen == "yes" ? projectData(projectId).priceConfig.kitchen : 0)
+       + (request.resource.data.stairs == "yes" ? projectData(projectId).priceConfig.stairs : 0);
+  }
+
+  function validCarwashOrder(projectId){
+   return request.resource.data.templateType == "carwash"
+    && request.resource.data.serviceType == "external_car_wash"
+    && request.resource.data.planType == "monthly_new"
+    && request.resource.data.subscriptionKey is string
+    && request.resource.data.renewal is bool
+    && request.resource.data.packageWashes is number
+    && request.resource.data.price is number
+    && ("monthly" in projectData(projectId).priceConfig)
+    && ("monthlyWashes" in projectData(projectId).priceConfig)
+    && projectData(projectId).priceConfig.monthly >= 0
+    && projectData(projectId).priceConfig.monthlyWashes > 0
+    && request.resource.data.price == projectData(projectId).priceConfig.monthly
+    && request.resource.data.packageWashes == projectData(projectId).priceConfig.monthlyWashes;
+  }
+
+  function validLaundryItem(item, expectedKey, washPrice, ironPrice, washOnly){
+   return item.key == expectedKey
+    && item.quantity is number
+    && item.quantity >= 0
+    && item.quantity <= 100
+    && item.unitPrice is number
+    && item.subtotal is number
+    && (
+      (washOnly == true && item.service == "wash" && item.unitPrice == washPrice)
+      ||
+      (washOnly == false && (
+       (item.service == "wash" && item.unitPrice == washPrice)
+       || (item.service == "iron" && item.unitPrice == ironPrice)
+       || (item.service == "wash_iron" && item.unitPrice == washPrice + ironPrice)
+      ))
+    )
+    && item.subtotal == item.quantity * item.unitPrice;
+  }
+
+  function validLaundryOrder(projectId){
+   return request.resource.data.templateType == "laundry"
+    && request.resource.data.serviceType == "laundry_per_piece"
+    && request.resource.data.items is list
+    && request.resource.data.items.size() == 7
+    && request.resource.data.totalPieces is number
+    && request.resource.data.totalPieces > 0
+    && request.resource.data.price is number
+    && validLaundryItem(request.resource.data.items[0],"shirt",projectData(projectId).priceConfig.shirtWash,projectData(projectId).priceConfig.shirtIron,false)
+    && validLaundryItem(request.resource.data.items[1],"trousers",projectData(projectId).priceConfig.trousersWash,projectData(projectId).priceConfig.trousersIron,false)
+    && validLaundryItem(request.resource.data.items[2],"tshirt",projectData(projectId).priceConfig.tshirtWash,projectData(projectId).priceConfig.tshirtIron,false)
+    && validLaundryItem(request.resource.data.items[3],"dress",projectData(projectId).priceConfig.dressWash,projectData(projectId).priceConfig.dressIron,false)
+    && validLaundryItem(request.resource.data.items[4],"galabeya",projectData(projectId).priceConfig.galabeyaWash,projectData(projectId).priceConfig.galabeyaIron,false)
+    && validLaundryItem(request.resource.data.items[5],"suit",projectData(projectId).priceConfig.suitWash,projectData(projectId).priceConfig.suitIron,false)
+    && validLaundryItem(request.resource.data.items[6],"shoes",projectData(projectId).priceConfig.shoesWash,0,true)
+    && request.resource.data.totalPieces
+      == request.resource.data.items[0].quantity
+       + request.resource.data.items[1].quantity
+       + request.resource.data.items[2].quantity
+       + request.resource.data.items[3].quantity
+       + request.resource.data.items[4].quantity
+       + request.resource.data.items[5].quantity
+       + request.resource.data.items[6].quantity
+    && request.resource.data.price
+      == request.resource.data.items[0].subtotal
+       + request.resource.data.items[1].subtotal
+       + request.resource.data.items[2].subtotal
+       + request.resource.data.items[3].subtotal
+       + request.resource.data.items[4].subtotal
+       + request.resource.data.items[5].subtotal
+       + request.resource.data.items[6].subtotal;
+  }
 
   match /users/{uid} {
    allow create: if signedIn() && request.auth.uid == uid && request.resource.data.uid == uid && request.resource.data.isActive == false && request.resource.data.subscriptionStatus == "pending" && !("role" in request.resource.data);
@@ -34,7 +123,16 @@ service cloud.firestore {
   }
 
   match /orders/{orderId} {
-   allow create: if request.resource.data.projectId is string && request.resource.data.providerId == request.resource.data.projectId && request.resource.data.status == "new" && projectAvailable(request.resource.data.projectId) && (!("templateType" in request.resource.data) || request.resource.data.templateType != "carwash" || validCarwashOrder(request.resource.data.projectId));
+   allow create: if request.resource.data.projectId is string
+    && request.resource.data.providerId == request.resource.data.projectId
+    && request.resource.data.status == "new"
+    && projectAvailable(request.resource.data.projectId)
+    && validOrderTemplate(request.resource.data.projectId)
+    && (
+     (request.resource.data.templateType == "cleaning" && validCleaningOrder(request.resource.data.projectId))
+     || (request.resource.data.templateType == "carwash" && validCarwashOrder(request.resource.data.projectId))
+     || (request.resource.data.templateType == "laundry" && validLaundryOrder(request.resource.data.projectId))
+    );
    allow read: if isAdmin() || ownsProject(resource.data.projectId);
    allow update: if (isAdmin() || ownsProject(resource.data.projectId)) && request.resource.data.projectId == resource.data.projectId && request.resource.data.providerId == resource.data.providerId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status","laundryStage"]) && request.resource.data.status in ["new","accepted","done","canceled"] && (!("laundryStage" in request.resource.data) || (resource.data.templateType == "laundry" && request.resource.data.laundryStage in ["accepted","picked_up","processing","ready_delivery","delivered"]));
    allow delete: if isAdmin() || ownsProject(resource.data.projectId);
