@@ -4,7 +4,8 @@ import { collection, query, where, getDocs, doc, getDoc, updateDoc } from "https
 const params = new URLSearchParams(location.search);
 const projectDocId = params.get("project") || "";
 const isLaundry = projectDocId.endsWith("_laundry");
-const escapeHTML = value => String(value ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;");
+const escapeHTML = value => String(value ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\"/g,"&quot;").replace(/'/g,"&#039;");
+const trustedItemLabels = {shirt:"قميص",trousers:"بنطلون",tshirt:"تيشيرت",dress:"فستان / عباية",galabeya:"جلابية",suit:"بدلة",shoes:"غسيل كوتشي"};
 
 const stageMeta = {
   accepted: ["تم قبول الطلب", "📥"],
@@ -19,9 +20,9 @@ function serviceLabel(service){
 }
 
 function itemsHTML(order){
-  const items = Array.isArray(order.items) ? order.items : [];
+  const items = Array.isArray(order.items) ? order.items.filter(item => Number(item.quantity || 0) > 0) : [];
   if (!items.length) return "";
-  return `<div class="orderInfo laundryItems"><b>👕 تفاصيل القطع</b>${items.map(item=>`<div>${escapeHTML(item.label)} × ${Number(item.quantity||0)} — ${escapeHTML(serviceLabel(item.service))} — ${Number(item.subtotal||0)} جنيه</div>`).join("")}</div>`;
+  return `<div class="orderInfo laundryItems"><b>👕 تفاصيل القطع</b>${items.map(item=>`<div>${escapeHTML(trustedItemLabels[item.key]||item.key||"قطعة")} × ${Number(item.quantity||0)} — ${escapeHTML(serviceLabel(item.service))} — ${Number(item.subtotal||0)} جنيه</div>`).join("")}</div>`;
 }
 
 async function setStage(orderId, nextStage){
@@ -50,14 +51,15 @@ async function decorateLaundryOrders(){
   if(!container) return;
   try {
     const snap = await getDocs(query(collection(db,"orders"),where("projectId","==",projectDocId)));
-    const orders = new Map(); snap.forEach(ds=>orders.set(ds.id,{id:ds.id,...ds.data()}));
+    const orders = new Map();
+    snap.forEach(ds=>orders.set(ds.id,{id:ds.id,...ds.data()}));
+
     const cards = [...container.querySelectorAll(".orderCard")];
-    cards.forEach((card,index)=>{
-      const matching = [...orders.values()].find(o=>{
-        const text=(card.dataset.search||"");
-        return text.includes(String(o.customerPhone||"").toLowerCase()) && text.includes(String(o.customerName||"").toLowerCase());
-      }) || [...orders.values()][index];
-      if(!matching) return;
+    cards.forEach(card=>{
+      const orderId = card.dataset.orderId || "";
+      const matching = orders.get(orderId);
+      if(!matching || matching.templateType !== "laundry") return;
+
       card.querySelectorAll(".laundryExtra,.laundryStageBox,.laundryStageBtn").forEach(el=>el.remove());
       const grid=card.querySelector(".orderGrid");
       if(grid){
