@@ -13,6 +13,10 @@ export async function createOrder(orderData) {
     });
     return { success: true, orderId: ref.id };
   } catch (error) {
-    return { success: false, error: error.message || "تعذر إرسال الطلب." };
+    return {
+      success: false,
+      error: error.message || "تعذر إرسال الطلب.",
+      code: error.code || "unknown"
+    };
   }
 }
