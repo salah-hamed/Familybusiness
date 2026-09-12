@@ -42,6 +42,47 @@ function hasConfiguredPricing(config = {}){
   ].every(key => Object.prototype.hasOwnProperty.call(config,key) && Number.isFinite(Number(config[key])) && Number(config[key]) >= 0);
 }
 
+function showOrderDiagnostics(order, result){
+  let panel = $("laundryDiagnosticPanel");
+  if(!panel){
+    panel = document.createElement("section");
+    panel.id = "laundryDiagnosticPanel";
+    panel.style.cssText = "margin:16px 0;padding:14px;border:1px solid #f59e0b;border-radius:14px;background:#fffbeb;color:#78350f;text-align:right;direction:ltr;overflow:auto";
+    const statusBox = $("status");
+    statusBox?.insertAdjacentElement("afterend", panel);
+  }
+
+  const diagnostic = {
+    firestoreError: result?.error || "unknown",
+    firestoreCode: result?.code || "unknown",
+    projectId: order.projectId,
+    providerId: order.providerId,
+    templateType: order.templateType,
+    serviceType: order.serviceType,
+    status: order.status,
+    totalPieces: order.totalPieces,
+    price: order.price,
+    priceConfig: Object.fromEntries(Object.entries(priceConfig).map(([key,value]) => [key, { value, type: typeof value }])),
+    items: order.items.map(item => ({
+      key: item.key,
+      service: item.service,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      subtotal: item.subtotal,
+      quantityType: typeof item.quantity,
+      unitPriceType: typeof item.unitPrice,
+      subtotalType: typeof item.subtotal
+    }))
+  };
+
+  panel.innerHTML = "<strong style=\"direction:rtl;display:block;margin-bottom:8px\">تشخيص طلب Laundry — صوّر هذا الجزء وأرسله لي</strong>";
+  const pre = document.createElement("pre");
+  pre.style.cssText = "white-space:pre-wrap;word-break:break-word;font-size:12px;margin:0;text-align:left";
+  pre.textContent = JSON.stringify(diagnostic, null, 2);
+  panel.appendChild(pre);
+  panel.scrollIntoView({behavior:"smooth",block:"start"});
+}
+
 function servicePrice(item, service){
   const wash = Number(priceConfig[item.washKey] || 0);
   const iron = item.ironKey ? Number(priceConfig[item.ironKey] || 0) : 0;
@@ -151,8 +192,9 @@ async function init(){
     }));
     const order={projectId:currentProjectId,providerId:currentProjectId,templateType:"laundry",serviceType:"laundry_per_piece",customerName:$("customerName").value.trim(),customerPhone:$("customerPhone").value.trim(),customerAddress:$("customerAddress").value.trim(),location:$("location").value,pickupDate:$("pickupDate").value,pickupTime:$("pickupTime").value,visitDate:$("pickupDate").value,visitTime:$("pickupTime").value,notes:$("notes").value.trim(),items,totalPieces:pieces,price,status:"new"};
     $("submitOrder").disabled=true;$("status").innerText="جاري إرسال الطلب...";
+    $("laundryDiagnosticPanel")?.remove();
     const result=await createOrder(order);$("submitOrder").disabled=false;
-    if(result.success){saveCustomer();$("status").innerText="تم إرسال طلب الاستلام بنجاح 🎉";$("submitOrder").innerText="تم إرسال الطلب ✅";}else $("status").innerText=result.error;
+    if(result.success){saveCustomer();$("status").innerText="تم إرسال طلب الاستلام بنجاح 🎉";$("submitOrder").innerText="تم إرسال الطلب ✅";}else{$("status").innerText=result.error;showOrderDiagnostics(order,result);}
   };
 }
 init();
