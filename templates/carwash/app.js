@@ -63,13 +63,22 @@ function scrollToSection(id) {
   $(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-function unavailable() {
+function unavailable(message = "هذا المشروع غير متاح حاليًا. يرجى التواصل مع صاحب المشروع.") {
   document.querySelector(".app").innerHTML = `
     <div style="text-align:center;padding:40px 20px;max-width:500px;margin:40px auto;background:#fff;border-radius:22px">
       <div style="font-size:44px">🔒</div>
       <h2>المشروع غير متاح</h2>
-      <p>هذا المشروع غير متاح حاليًا. يرجى التواصل مع صاحب المشروع.</p>
+      <p>${message}</p>
     </div>`;
+}
+
+function hasConfiguredPricing(config = {}) {
+  return Object.prototype.hasOwnProperty.call(config, "monthly")
+    && Object.prototype.hasOwnProperty.call(config, "monthlyWashes")
+    && Number.isFinite(Number(config.monthly))
+    && Number(config.monthly) >= 0
+    && Number.isFinite(Number(config.monthlyWashes))
+    && Number(config.monthlyWashes) > 0;
 }
 
 function toDate(value) {
@@ -507,11 +516,16 @@ async function init() {
     return;
   }
 
+  if (!hasConfiguredPricing(data.priceConfig || {})) {
+    unavailable("مقدم الخدمة لم يجهز سعر الاشتراك وعدد الغسلات بعد. يرجى المحاولة لاحقًا.");
+    return;
+  }
+
   $("businessTitle").innerText = data.businessName || "غسيل السيارات";
 
   pricing = {
-    monthly: Number(data.priceConfig?.monthly ?? data.priceConfig?.base ?? 0),
-    monthlyWashes: Math.max(1, Number(data.priceConfig?.monthlyWashes ?? 4))
+    monthly: Number(data.priceConfig.monthly),
+    monthlyWashes: Math.max(1, Number(data.priceConfig.monthlyWashes))
   };
 
   $("monthlyPlanPrice").innerText = pricing.monthly;
