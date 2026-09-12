@@ -22,6 +22,7 @@ service cloud.firestore {
   }
 
   function validCleaningOrder(projectId){
+   let config = projectData(projectId).priceConfig;
    return request.resource.data.templateType == "cleaning"
     && request.resource.data.rooms is number
     && request.resource.data.rooms >= 0
@@ -35,45 +36,46 @@ service cloud.firestore {
        request.resource.data.kitchen == "no"
        && request.resource.data.stairs == "no"
        && request.resource.data.price
-        == projectData(projectId).priceConfig.base
-         + request.resource.data.rooms * projectData(projectId).priceConfig.room
-         + request.resource.data.bathrooms * projectData(projectId).priceConfig.bathroom
+        == config.base
+         + request.resource.data.rooms * config.room
+         + request.resource.data.bathrooms * config.bathroom
       )
       ||
       (
        request.resource.data.kitchen == "yes"
        && request.resource.data.stairs == "no"
        && request.resource.data.price
-        == projectData(projectId).priceConfig.base
-         + request.resource.data.rooms * projectData(projectId).priceConfig.room
-         + request.resource.data.bathrooms * projectData(projectId).priceConfig.bathroom
-         + projectData(projectId).priceConfig.kitchen
+        == config.base
+         + request.resource.data.rooms * config.room
+         + request.resource.data.bathrooms * config.bathroom
+         + config.kitchen
       )
       ||
       (
        request.resource.data.kitchen == "no"
        && request.resource.data.stairs == "yes"
        && request.resource.data.price
-        == projectData(projectId).priceConfig.base
-         + request.resource.data.rooms * projectData(projectId).priceConfig.room
-         + request.resource.data.bathrooms * projectData(projectId).priceConfig.bathroom
-         + projectData(projectId).priceConfig.stairs
+        == config.base
+         + request.resource.data.rooms * config.room
+         + request.resource.data.bathrooms * config.bathroom
+         + config.stairs
       )
       ||
       (
        request.resource.data.kitchen == "yes"
        && request.resource.data.stairs == "yes"
        && request.resource.data.price
-        == projectData(projectId).priceConfig.base
-         + request.resource.data.rooms * projectData(projectId).priceConfig.room
-         + request.resource.data.bathrooms * projectData(projectId).priceConfig.bathroom
-         + projectData(projectId).priceConfig.kitchen
-         + projectData(projectId).priceConfig.stairs
+        == config.base
+         + request.resource.data.rooms * config.room
+         + request.resource.data.bathrooms * config.bathroom
+         + config.kitchen
+         + config.stairs
       )
     );
   }
 
   function validCarwashOrder(projectId){
+   let config = projectData(projectId).priceConfig;
    return request.resource.data.templateType == "carwash"
     && request.resource.data.serviceType == "external_car_wash"
     && request.resource.data.planType == "monthly_new"
@@ -81,12 +83,12 @@ service cloud.firestore {
     && request.resource.data.renewal is bool
     && request.resource.data.packageWashes is number
     && request.resource.data.price is number
-    && ("monthly" in projectData(projectId).priceConfig)
-    && ("monthlyWashes" in projectData(projectId).priceConfig)
-    && projectData(projectId).priceConfig.monthly >= 0
-    && projectData(projectId).priceConfig.monthlyWashes > 0
-    && request.resource.data.price == projectData(projectId).priceConfig.monthly
-    && request.resource.data.packageWashes == projectData(projectId).priceConfig.monthlyWashes;
+    && ("monthly" in config)
+    && ("monthlyWashes" in config)
+    && config.monthly >= 0
+    && config.monthlyWashes > 0
+    && request.resource.data.price == config.monthly
+    && request.resource.data.packageWashes == config.monthlyWashes;
   }
 
   function validLaundryItem(item, expectedKey, washPrice, ironPrice, washOnly){
@@ -109,6 +111,7 @@ service cloud.firestore {
   }
 
   function validLaundryOrder(projectId){
+   let config = projectData(projectId).priceConfig;
    return request.resource.data.templateType == "laundry"
     && request.resource.data.serviceType == "laundry_per_piece"
     && request.resource.data.items is list
@@ -116,13 +119,13 @@ service cloud.firestore {
     && request.resource.data.totalPieces is number
     && request.resource.data.totalPieces > 0
     && request.resource.data.price is number
-    && validLaundryItem(request.resource.data.items[0],"shirt",projectData(projectId).priceConfig.shirtWash,projectData(projectId).priceConfig.shirtIron,false)
-    && validLaundryItem(request.resource.data.items[1],"trousers",projectData(projectId).priceConfig.trousersWash,projectData(projectId).priceConfig.trousersIron,false)
-    && validLaundryItem(request.resource.data.items[2],"tshirt",projectData(projectId).priceConfig.tshirtWash,projectData(projectId).priceConfig.tshirtIron,false)
-    && validLaundryItem(request.resource.data.items[3],"dress",projectData(projectId).priceConfig.dressWash,projectData(projectId).priceConfig.dressIron,false)
-    && validLaundryItem(request.resource.data.items[4],"galabeya",projectData(projectId).priceConfig.galabeyaWash,projectData(projectId).priceConfig.galabeyaIron,false)
-    && validLaundryItem(request.resource.data.items[5],"suit",projectData(projectId).priceConfig.suitWash,projectData(projectId).priceConfig.suitIron,false)
-    && validLaundryItem(request.resource.data.items[6],"shoes",projectData(projectId).priceConfig.shoesWash,0,true)
+    && validLaundryItem(request.resource.data.items[0],"shirt",config.shirtWash,config.shirtIron,false)
+    && validLaundryItem(request.resource.data.items[1],"trousers",config.trousersWash,config.trousersIron,false)
+    && validLaundryItem(request.resource.data.items[2],"tshirt",config.tshirtWash,config.tshirtIron,false)
+    && validLaundryItem(request.resource.data.items[3],"dress",config.dressWash,config.dressIron,false)
+    && validLaundryItem(request.resource.data.items[4],"galabeya",config.galabeyaWash,config.galabeyaIron,false)
+    && validLaundryItem(request.resource.data.items[5],"suit",config.suitWash,config.suitIron,false)
+    && validLaundryItem(request.resource.data.items[6],"shoes",config.shoesWash,0,true)
     && request.resource.data.totalPieces
       == request.resource.data.items[0].quantity
        + request.resource.data.items[1].quantity
