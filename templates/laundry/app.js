@@ -1,4 +1,4 @@
-import { createOrder } from "./orders.js";
+import { createOrder, createLaundryRuleDiagnostic } from "./orders.js";
 import db from "../../core/firebase/firebase-db.js";
 import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
@@ -26,6 +26,8 @@ const itemDefinitions = [
 
 const quantities = Object.fromEntries(itemDefinitions.map(item => [item.key, 0]));
 const services = Object.fromEntries(itemDefinitions.map(item => [item.key, item.washOnly ? "wash" : "wash_iron"]));
+const diagnosticMode = new URLSearchParams(location.search).get("diagnostic") === "1";
+const diagnosticTests = ["shape","shirt","trousers","tshirt","dress","galabeya","suit","shoes","totals","full"];
 
 function storageKey(){ return `familybusiness:laundry:${currentProjectId}:customer`; }
 function normalizeEgyptWhatsapp(number){let clean=String(number||"").replace(/\D/g,"");if(clean.startsWith("0020"))clean=clean.slice(2);if(clean.startsWith("20"))return clean;if(clean.startsWith("0"))clean=clean.slice(1);return `20${clean}`;}
@@ -48,10 +50,8 @@ function showOrderDiagnostics(order, result){
     panel = document.createElement("section");
     panel.id = "laundryDiagnosticPanel";
     panel.style.cssText = "margin:16px 0;padding:14px;border:1px solid #f59e0b;border-radius:14px;background:#fffbeb;color:#78350f;text-align:right;direction:ltr;overflow:auto";
-    const statusBox = $("status");
-    statusBox?.insertAdjacentElement("afterend", panel);
+    $("status")?.insertAdjacentElement("afterend", panel);
   }
-
   const diagnostic = {
     firestoreError: result?.error || "unknown",
     firestoreCode: result?.code || "unknown",
@@ -63,24 +63,36 @@ function showOrderDiagnostics(order, result){
     totalPieces: order.totalPieces,
     price: order.price,
     priceConfig: Object.fromEntries(Object.entries(priceConfig).map(([key,value]) => [key, { value, type: typeof value }])),
-    items: order.items.map(item => ({
-      key: item.key,
-      service: item.service,
-      quantity: item.quantity,
-      unitPrice: item.unitPrice,
-      subtotal: item.subtotal,
-      quantityType: typeof item.quantity,
-      unitPriceType: typeof item.unitPrice,
-      subtotalType: typeof item.subtotal
-    }))
+    items: order.items.map(item => ({key:item.key,service:item.service,quantity:item.quantity,unitPrice:item.unitPrice,subtotal:item.subtotal,quantityType:typeof item.quantity,unitPriceType:typeof item.unitPrice,subtotalType:typeof item.subtotal}))
   };
-
   panel.innerHTML = "<strong style=\"direction:rtl;display:block;margin-bottom:8px\">تشخيص طلب Laundry — صوّر هذا الجزء وأرسله لي</strong>";
   const pre = document.createElement("pre");
   pre.style.cssText = "white-space:pre-wrap;word-break:break-word;font-size:12px;margin:0;text-align:left";
   pre.textContent = JSON.stringify(diagnostic, null, 2);
   panel.appendChild(pre);
+}
+
+function showRuleMatrix(results){
+  let panel = $("laundryRuleMatrixPanel");
+  if(!panel){
+    panel = document.createElement("section");
+    panel.id = "laundryRuleMatrixPanel";
+    panel.style.cssText = "margin:16px 0;padding:14px;border:1px solid #2563eb;border-radius:14px;background:#eff6ff;color:#1e3a8a;text-align:right;direction:rtl;overflow:auto";
+    const anchor = $("laundryDiagnosticPanel") || $("status");
+    anchor?.insertAdjacentElement("afterend", panel);
+  }
+  const lines = results.map(result => `${result.success ? "✅" : "❌"} ${result.test}${result.success ? "" : ` — ${result.code}`}`);
+  panel.innerHTML = `<strong style="display:block;margin-bottom:8px">Laundry Rules Matrix — صوّر هذا الجزء وأرسله لي</strong><pre style="white-space:pre-wrap;word-break:break-word;font-size:13px;margin:0;direction:ltr;text-align:left">${lines.join("\n")}</pre>`;
   panel.scrollIntoView({behavior:"smooth",block:"start"});
+}
+
+async function runLaundryRuleMatrix(order){
+  const results = [];
+  for(const test of diagnosticTests){
+    const result = await createLaundryRuleDiagnostic(order, test);
+    results.push({test, success: result.success, code: result.code || "ok"});
+  }
+  showRuleMatrix(results);
 }
 
 function servicePrice(item, service){
@@ -91,29 +103,17 @@ function servicePrice(item, service){
   return wash + iron;
 }
 
-function serviceLabel(service){
-  if(service === "wash") return "غسيل";
-  if(service === "iron") return "مكواة";
-  return "غسيل + مكواة";
-}
+function serviceLabel(service){if(service === "wash") return "غسيل";if(service === "iron") return "مكواة";return "غسيل + مكواة";}
 
 function totals(){
   let pieces=0,price=0;
-  itemDefinitions.forEach(item=>{
-    pieces += quantities[item.key];
-    price += quantities[item.key] * servicePrice(item, services[item.key]);
-  });
+  itemDefinitions.forEach(item=>{pieces += quantities[item.key];price += quantities[item.key] * servicePrice(item, services[item.key]);});
   $("piecesCount").innerText=`${pieces} قطعة`;
   $("priceBox").innerText=`${price} جنيه`;
   return {pieces,price};
 }
 
-function updateItemPrice(item){
-  const el = $(`price-${item.key}`);
-  if(!el) return;
-  const price = servicePrice(item, services[item.key]);
-  el.innerText = `${price} جنيه / قطعة — ${serviceLabel(services[item.key])}`;
-}
+function updateItemPrice(item){const el=$(`price-${item.key}`);if(!el)return;const price=servicePrice(item,services[item.key]);el.innerText=`${price} جنيه / قطعة — ${serviceLabel(services[item.key])}`;}
 
 function renderItems(){
   const box=$("itemsList");
@@ -121,42 +121,12 @@ function renderItems(){
   itemDefinitions.forEach(item=>{
     const row=document.createElement("div");
     row.className="itemRow";
-    const serviceControl = item.washOnly
-      ? '<span class="serviceFixed">غسيل فقط</span>'
-      : `<select class="serviceSelect" data-service-key="${item.key}" aria-label="نوع الخدمة لـ ${item.label}">
-          <option value="wash">غسيل فقط</option>
-          <option value="iron">مكواة فقط</option>
-          <option value="wash_iron" selected>غسيل + مكواة</option>
-        </select>`;
-    row.innerHTML=`
-      <div class="itemDetails">
-        <span class="itemName">${item.icon} ${item.label}</span>
-        ${serviceControl}
-        <span class="itemPrice" id="price-${item.key}"></span>
-      </div>
-      <div class="counter">
-        <button type="button" data-key="${item.key}" data-step="-1">−</button>
-        <strong id="qty-${item.key}">${quantities[item.key]}</strong>
-        <button type="button" data-key="${item.key}" data-step="1">+</button>
-      </div>`;
-    box.appendChild(row);
-    updateItemPrice(item);
+    const serviceControl=item.washOnly?'<span class="serviceFixed">غسيل فقط</span>':`<select class="serviceSelect" data-service-key="${item.key}" aria-label="نوع الخدمة لـ ${item.label}"><option value="wash">غسيل فقط</option><option value="iron">مكواة فقط</option><option value="wash_iron" selected>غسيل + مكواة</option></select>`;
+    row.innerHTML=`<div class="itemDetails"><span class="itemName">${item.icon} ${item.label}</span>${serviceControl}<span class="itemPrice" id="price-${item.key}"></span></div><div class="counter"><button type="button" data-key="${item.key}" data-step="-1">−</button><strong id="qty-${item.key}">${quantities[item.key]}</strong><button type="button" data-key="${item.key}" data-step="1">+</button></div>`;
+    box.appendChild(row);updateItemPrice(item);
   });
-
-  box.querySelectorAll("button[data-key]").forEach(btn=>btn.onclick=()=>{
-    const key=btn.dataset.key;
-    quantities[key]=Math.max(0,quantities[key]+Number(btn.dataset.step));
-    $(`qty-${key}`).innerText=quantities[key];
-    totals();
-  });
-
-  box.querySelectorAll("select[data-service-key]").forEach(select=>select.onchange=()=>{
-    const key=select.dataset.serviceKey;
-    services[key]=select.value;
-    const item=itemDefinitions.find(def=>def.key===key);
-    updateItemPrice(item);
-    totals();
-  });
+  box.querySelectorAll("button[data-key]").forEach(btn=>btn.onclick=()=>{const key=btn.dataset.key;quantities[key]=Math.max(0,quantities[key]+Number(btn.dataset.step));$(`qty-${key}`).innerText=quantities[key];totals();});
+  box.querySelectorAll("select[data-service-key]").forEach(select=>select.onchange=()=>{const key=select.dataset.serviceKey;services[key]=select.value;updateItemPrice(itemDefinitions.find(def=>def.key===key));totals();});
   totals();
 }
 
@@ -181,20 +151,14 @@ async function init(){
   $("submitOrder").onclick=async()=>{
     const error=validate();if(error){$("status").innerText=error;return;}
     const {pieces,price}=totals();
-    const items=itemDefinitions.map(item=>({
-      key:item.key,
-      label:item.label,
-      service:services[item.key],
-      serviceLabel:serviceLabel(services[item.key]),
-      quantity:quantities[item.key],
-      unitPrice:servicePrice(item,services[item.key]),
-      subtotal:quantities[item.key]*servicePrice(item,services[item.key])
-    }));
+    const items=itemDefinitions.map(item=>({key:item.key,label:item.label,service:services[item.key],serviceLabel:serviceLabel(services[item.key]),quantity:quantities[item.key],unitPrice:servicePrice(item,services[item.key]),subtotal:quantities[item.key]*servicePrice(item,services[item.key])}));
     const order={projectId:currentProjectId,providerId:currentProjectId,templateType:"laundry",serviceType:"laundry_per_piece",customerName:$("customerName").value.trim(),customerPhone:$("customerPhone").value.trim(),customerAddress:$("customerAddress").value.trim(),location:$("location").value,pickupDate:$("pickupDate").value,pickupTime:$("pickupTime").value,visitDate:$("pickupDate").value,visitTime:$("pickupTime").value,notes:$("notes").value.trim(),items,totalPieces:pieces,price,status:"new"};
     $("submitOrder").disabled=true;$("status").innerText="جاري إرسال الطلب...";
-    $("laundryDiagnosticPanel")?.remove();
-    const result=await createOrder(order);$("submitOrder").disabled=false;
+    $("laundryDiagnosticPanel")?.remove();$("laundryRuleMatrixPanel")?.remove();
+    const result=await createOrder(order);
     if(result.success){saveCustomer();$("status").innerText="تم إرسال طلب الاستلام بنجاح 🎉";$("submitOrder").innerText="تم إرسال الطلب ✅";}else{$("status").innerText=result.error;showOrderDiagnostics(order,result);}
+    if(diagnosticMode){$("status").innerText += " — جاري تشغيل تشخيص القواعد...";await runLaundryRuleMatrix(order);}
+    $("submitOrder").disabled=false;
   };
 }
 init();
