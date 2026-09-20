@@ -20,20 +20,3 @@ export async function createOrder(orderData) {
     };
   }
 }
-
-export async function createLaundryRuleDiagnostic(orderData, diagnosticTest) {
-  try {
-    const ref = await addDoc(collection(db, "laundryDiagnostics"), {
-      ...orderData,
-      diagnosticTest,
-      createdAt: serverTimestamp()
-    });
-    return { success: true, diagnosticId: ref.id };
-  } catch (error) {
-    return {
-      success: false,
-      error: error.message || "Diagnostic write failed.",
-      code: error.code || "unknown"
-    };
-  }
-}

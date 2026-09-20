@@ -112,36 +112,75 @@ service cloud.firestore {
 
   function validLaundryOrder(projectId){
    let config = projectData(projectId).priceConfig;
+   let items = request.resource.data.items;
+
    return request.resource.data.templateType == "laundry"
     && request.resource.data.serviceType == "laundry_per_piece"
-    && request.resource.data.items is list
-    && request.resource.data.items.size() == 7
+    && items is list
+    && items.size() == 7
     && request.resource.data.totalPieces is number
     && request.resource.data.totalPieces > 0
     && request.resource.data.price is number
-    && validLaundryItem(request.resource.data.items[0],"shirt",config.shirtWash,config.shirtIron,false)
-    && validLaundryItem(request.resource.data.items[1],"trousers",config.trousersWash,config.trousersIron,false)
-    && validLaundryItem(request.resource.data.items[2],"tshirt",config.tshirtWash,config.tshirtIron,false)
-    && validLaundryItem(request.resource.data.items[3],"dress",config.dressWash,config.dressIron,false)
-    && validLaundryItem(request.resource.data.items[4],"galabeya",config.galabeyaWash,config.galabeyaIron,false)
-    && validLaundryItem(request.resource.data.items[5],"suit",config.suitWash,config.suitIron,false)
-    && validLaundryItem(request.resource.data.items[6],"shoes",config.shoesWash,0,true)
+
+    && items[0].key == "shirt"
+    && (
+      (items[0].quantity == 0 && items[0].subtotal == 0)
+      || (items[0].quantity > 0 && validLaundryItem(items[0],"shirt",config.shirtWash,config.shirtIron,false))
+    )
+
+    && items[1].key == "trousers"
+    && (
+      (items[1].quantity == 0 && items[1].subtotal == 0)
+      || (items[1].quantity > 0 && validLaundryItem(items[1],"trousers",config.trousersWash,config.trousersIron,false))
+    )
+
+    && items[2].key == "tshirt"
+    && (
+      (items[2].quantity == 0 && items[2].subtotal == 0)
+      || (items[2].quantity > 0 && validLaundryItem(items[2],"tshirt",config.tshirtWash,config.tshirtIron,false))
+    )
+
+    && items[3].key == "dress"
+    && (
+      (items[3].quantity == 0 && items[3].subtotal == 0)
+      || (items[3].quantity > 0 && validLaundryItem(items[3],"dress",config.dressWash,config.dressIron,false))
+    )
+
+    && items[4].key == "galabeya"
+    && (
+      (items[4].quantity == 0 && items[4].subtotal == 0)
+      || (items[4].quantity > 0 && validLaundryItem(items[4],"galabeya",config.galabeyaWash,config.galabeyaIron,false))
+    )
+
+    && items[5].key == "suit"
+    && (
+      (items[5].quantity == 0 && items[5].subtotal == 0)
+      || (items[5].quantity > 0 && validLaundryItem(items[5],"suit",config.suitWash,config.suitIron,false))
+    )
+
+    && items[6].key == "shoes"
+    && (
+      (items[6].quantity == 0 && items[6].subtotal == 0)
+      || (items[6].quantity > 0 && validLaundryItem(items[6],"shoes",config.shoesWash,0,true))
+    )
+
     && request.resource.data.totalPieces
-      == request.resource.data.items[0].quantity
-       + request.resource.data.items[1].quantity
-       + request.resource.data.items[2].quantity
-       + request.resource.data.items[3].quantity
-       + request.resource.data.items[4].quantity
-       + request.resource.data.items[5].quantity
-       + request.resource.data.items[6].quantity
+      == items[0].quantity
+       + items[1].quantity
+       + items[2].quantity
+       + items[3].quantity
+       + items[4].quantity
+       + items[5].quantity
+       + items[6].quantity
+
     && request.resource.data.price
-      == request.resource.data.items[0].subtotal
-       + request.resource.data.items[1].subtotal
-       + request.resource.data.items[2].subtotal
-       + request.resource.data.items[3].subtotal
-       + request.resource.data.items[4].subtotal
-       + request.resource.data.items[5].subtotal
-       + request.resource.data.items[6].subtotal;
+      == items[0].subtotal
+       + items[1].subtotal
+       + items[2].subtotal
+       + items[3].subtotal
+       + items[4].subtotal
+       + items[5].subtotal
+       + items[6].subtotal;
   }
 
   match /users/{uid} {
