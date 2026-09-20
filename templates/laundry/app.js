@@ -1,4 +1,4 @@
-import { createOrder, createLaundryRuleDiagnostic } from "./orders.js";
+import { createOrder } from "./orders.js";
 import db from "../../core/firebase/firebase-db.js";
 import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
@@ -26,8 +26,6 @@ const itemDefinitions = [
 
 const quantities = Object.fromEntries(itemDefinitions.map(item => [item.key, 0]));
 const services = Object.fromEntries(itemDefinitions.map(item => [item.key, item.washOnly ? "wash" : "wash_iron"]));
-const diagnosticMode = new URLSearchParams(location.search).get("diagnostic") === "1";
-const diagnosticTests = ["shape","shirt","trousers","tshirt","dress","galabeya","suit","shoes","totals","full"];
 
 function storageKey(){ return `familybusiness:laundry:${currentProjectId}:customer`; }
 function normalizeEgyptWhatsapp(number){let clean=String(number||"").replace(/\D/g,"");if(clean.startsWith("0020"))clean=clean.slice(2);if(clean.startsWith("20"))return clean;if(clean.startsWith("0"))clean=clean.slice(1);return `20${clean}`;}
@@ -42,57 +40,6 @@ function hasConfiguredPricing(config = {}){
     "shirtWash","shirtIron","trousersWash","trousersIron","tshirtWash","tshirtIron",
     "dressWash","dressIron","galabeyaWash","galabeyaIron","suitWash","suitIron","shoesWash"
   ].every(key => Object.prototype.hasOwnProperty.call(config,key) && Number.isFinite(Number(config[key])) && Number(config[key]) >= 0);
-}
-
-function showOrderDiagnostics(order, result){
-  let panel = $("laundryDiagnosticPanel");
-  if(!panel){
-    panel = document.createElement("section");
-    panel.id = "laundryDiagnosticPanel";
-    panel.style.cssText = "margin:16px 0;padding:14px;border:1px solid #f59e0b;border-radius:14px;background:#fffbeb;color:#78350f;text-align:right;direction:ltr;overflow:auto";
-    $("status")?.insertAdjacentElement("afterend", panel);
-  }
-  const diagnostic = {
-    firestoreError: result?.error || "unknown",
-    firestoreCode: result?.code || "unknown",
-    projectId: order.projectId,
-    providerId: order.providerId,
-    templateType: order.templateType,
-    serviceType: order.serviceType,
-    status: order.status,
-    totalPieces: order.totalPieces,
-    price: order.price,
-    priceConfig: Object.fromEntries(Object.entries(priceConfig).map(([key,value]) => [key, { value, type: typeof value }])),
-    items: order.items.map(item => ({key:item.key,service:item.service,quantity:item.quantity,unitPrice:item.unitPrice,subtotal:item.subtotal,quantityType:typeof item.quantity,unitPriceType:typeof item.unitPrice,subtotalType:typeof item.subtotal}))
-  };
-  panel.innerHTML = "<strong style=\"direction:rtl;display:block;margin-bottom:8px\">تشخيص طلب Laundry — صوّر هذا الجزء وأرسله لي</strong>";
-  const pre = document.createElement("pre");
-  pre.style.cssText = "white-space:pre-wrap;word-break:break-word;font-size:12px;margin:0;text-align:left";
-  pre.textContent = JSON.stringify(diagnostic, null, 2);
-  panel.appendChild(pre);
-}
-
-function showRuleMatrix(results){
-  let panel = $("laundryRuleMatrixPanel");
-  if(!panel){
-    panel = document.createElement("section");
-    panel.id = "laundryRuleMatrixPanel";
-    panel.style.cssText = "margin:16px 0;padding:14px;border:1px solid #2563eb;border-radius:14px;background:#eff6ff;color:#1e3a8a;text-align:right;direction:rtl;overflow:auto";
-    const anchor = $("laundryDiagnosticPanel") || $("status");
-    anchor?.insertAdjacentElement("afterend", panel);
-  }
-  const lines = results.map(result => `${result.success ? "✅" : "❌"} ${result.test}${result.success ? "" : ` — ${result.code}`}`);
-  panel.innerHTML = `<strong style="display:block;margin-bottom:8px">Laundry Rules Matrix — صوّر هذا الجزء وأرسله لي</strong><pre style="white-space:pre-wrap;word-break:break-word;font-size:13px;margin:0;direction:ltr;text-align:left">${lines.join("\n")}</pre>`;
-  panel.scrollIntoView({behavior:"smooth",block:"start"});
-}
-
-async function runLaundryRuleMatrix(order){
-  const results = [];
-  for(const test of diagnosticTests){
-    const result = await createLaundryRuleDiagnostic(order, test);
-    results.push({test, success: result.success, code: result.code || "ok"});
-  }
-  showRuleMatrix(results);
 }
 
 function servicePrice(item, service){
@@ -154,10 +101,8 @@ async function init(){
     const items=itemDefinitions.map(item=>({key:item.key,label:item.label,service:services[item.key],serviceLabel:serviceLabel(services[item.key]),quantity:quantities[item.key],unitPrice:servicePrice(item,services[item.key]),subtotal:quantities[item.key]*servicePrice(item,services[item.key])}));
     const order={projectId:currentProjectId,providerId:currentProjectId,templateType:"laundry",serviceType:"laundry_per_piece",customerName:$("customerName").value.trim(),customerPhone:$("customerPhone").value.trim(),customerAddress:$("customerAddress").value.trim(),location:$("location").value,pickupDate:$("pickupDate").value,pickupTime:$("pickupTime").value,visitDate:$("pickupDate").value,visitTime:$("pickupTime").value,notes:$("notes").value.trim(),items,totalPieces:pieces,price,status:"new"};
     $("submitOrder").disabled=true;$("status").innerText="جاري إرسال الطلب...";
-    $("laundryDiagnosticPanel")?.remove();$("laundryRuleMatrixPanel")?.remove();
     const result=await createOrder(order);
-    if(result.success){saveCustomer();$("status").innerText="تم إرسال طلب الاستلام بنجاح 🎉";$("submitOrder").innerText="تم إرسال الطلب ✅";}else{$("status").innerText=result.error;showOrderDiagnostics(order,result);}
-    if(diagnosticMode){$("status").innerText += " — جاري تشغيل تشخيص القواعد...";await runLaundryRuleMatrix(order);}
+    if(result.success){saveCustomer();$("status").innerText="تم إرسال طلب الاستلام بنجاح 🎉";$("submitOrder").innerText="تم إرسال الطلب ✅";}else{$("status").innerText=result.error;}
     $("submitOrder").disabled=false;
   };
 }
