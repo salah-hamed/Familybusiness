@@ -69,10 +69,13 @@ async function activateOrRenewUser(uid) {
     let referrerSnap = null;
     let referralRef = null;
     let referralSnap = null;
+    const referrerId = /^[A-Za-z0-9_-]{1,128}$/.test(String(data.referredByUserId || ""))
+      ? String(data.referredByUserId)
+      : "";
 
-    if (!initialAlreadyPaid && data.referredByUserId && data.referredByUserId !== uid) {
-      referrerRef = doc(db, "users", data.referredByUserId);
-      referralRef = doc(db, "referrals", `${data.referredByUserId}_${uid}`);
+    if (!initialAlreadyPaid && referrerId && referrerId !== uid) {
+      referrerRef = doc(db, "users", referrerId);
+      referralRef = doc(db, "referrals", `${referrerId}_${uid}`);
 
       referrerSnap = await transaction.get(referrerRef);
       referralSnap = await transaction.get(referralRef);
@@ -119,11 +122,11 @@ async function activateOrRenewUser(uid) {
       referralRef &&
       !referralSnap?.exists()
     ) {
-      const referralId = `${data.referredByUserId}_${uid}`;
+      const referralId = `${referrerId}_${uid}`;
       const ledgerRef = doc(db, "commissionLedger", `referral_${referralId}`);
 
       transaction.set(referralRef, {
-        referrerUserId: data.referredByUserId,
+        referrerUserId: referrerId,
         referredUserId: uid,
         status: "qualified",
         commissionAmount: REFERRAL_CONFIG.qualifiedReferralReward,
@@ -133,7 +136,7 @@ async function activateOrRenewUser(uid) {
       });
 
       transaction.set(ledgerRef, {
-        userId: data.referredByUserId,
+        userId: referrerId,
         sourceType: "referral",
         sourceId: referralId,
         referredUserId: uid,
