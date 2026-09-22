@@ -35,6 +35,7 @@ const pageTitle =
 
 const switchMode =
   document.querySelector(".switch-mode");
+const referralUserId = new URLSearchParams(window.location.search).get("ref") || "";
 let currentMode = "register";
 
 function updatePage() {
@@ -82,15 +83,16 @@ registerBtn.addEventListener("click", async () => {
 
       nameInput.value,
       emailInput.value,
-      passwordInput.value
+      passwordInput.value,
+      referralUserId
 
     );
 
     if (result.success) {
 
-      status.innerText = "✅ تم إنشاء الحساب بنجاح.";
-
-      // هنضيف التحويل للخطوة التالية بعد شوية
+      status.innerText = referralUserId
+        ? "✅ تم إنشاء الحساب وربط الإحالة بنجاح. في انتظار تفعيل الاشتراك."
+        : "✅ تم إنشاء الحساب بنجاح. في انتظار تفعيل الاشتراك.";
 
     } else {
 
