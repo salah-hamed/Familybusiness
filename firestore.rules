@@ -261,7 +261,7 @@ service cloud.firestore {
      || (request.resource.data.templateType == "carwash" && validCarwashOrder(request.resource.data.projectId))
      || (request.resource.data.templateType == "laundry" && validLaundryOrder(request.resource.data.projectId))
     );
-   allow read: if isAdmin() || ownsProject(resource.data.projectId);
+   allow read: if isAdmin() || ownsProject(resource.data.projectId) || isProjectOperator(resource.data.projectId);
    allow update: if (
     (
       (isAdmin() || ownsProject(resource.data.projectId))
@@ -302,6 +302,10 @@ service cloud.firestore {
           && workerData(request.resource.data.assignedWorkerId).isActive == true
           && workerData(request.resource.data.assignedWorkerId).role
             == request.resource.data.assignedWorkerRole
+          && workerData(request.resource.data.assignedWorkerId).name
+            == request.resource.data.assignedWorkerName
+          && workerData(request.resource.data.assignedWorkerId).whatsapp
+            == request.resource.data.assignedWorkerWhatsapp
         )
       )
     )
