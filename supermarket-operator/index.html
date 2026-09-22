@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#14532d">
+  <title>لوحة السوبرماركت | Family Business</title>
+  <link rel="stylesheet" href="./style.css">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
+</head>
+<body>
+<main class="shell">
+  <header class="topbar">
+    <div>
+      <span class="eyebrow">Family Business</span>
+      <h1>🛒 لوحة تشغيل السوبرماركت</h1>
+      <p id="pageStatus">سجل دخولك بحساب المسؤول المتفق عليه.</p>
+    </div>
+    <button id="logoutBtn" class="ghost hidden">تسجيل الخروج</button>
+  </header>
+
+  <section id="authPanel" class="card">
+    <h2>دخول مسؤول السوبرماركت</h2>
+    <p class="muted">استخدم نفس الإيميل الذي أضافه صاحب المشروع.</p>
+    <div class="formGrid">
+      <label>الإيميل<input id="authEmail" type="email"></label>
+      <label>كلمة المرور<input id="authPassword" type="password"></label>
+    </div>
+    <div class="actions">
+      <button id="loginBtn" class="primary">تسجيل الدخول</button>
+      <button id="registerBtn" class="secondary">إنشاء حساب المسؤول</button>
+    </div>
+    <p id="authMessage" class="message"></p>
+  </section>
+
+  <section id="verifyPanel" class="card hidden">
+    <h2>فعّل الإيميل أولًا</h2>
+    <p class="muted">أرسلنا رابط التفعيل إلى إيميلك. بعد التفعيل ارجع هنا واضغط تحقق.</p>
+    <div class="actions">
+      <button id="resendVerifyBtn" class="secondary">إعادة إرسال التفعيل</button>
+      <button id="checkVerifyBtn" class="primary">تحققت من الإيميل</button>
+    </div>
+    <p id="verifyMessage" class="message"></p>
+  </section>
+
+  <section id="agreementPanel" class="card hidden">
+    <span class="eyebrow">اتفاق التشغيل</span>
+    <h2>تأكيد العمولة</h2>
+    <p id="agreementText" class="agreementAmount">—</p>
+    <p class="muted">الموافقة تتم مرة واحدة. أي تعديل لاحق سيحتاج موافقتك من جديد، وتظل العمولة القديمة سارية حتى تقبل الجديدة.</p>
+    <div class="actions">
+      <button id="acceptAgreementBtn" class="primary">قبول العمولة</button>
+      <button id="rejectAgreementBtn" class="danger">رفض</button>
+    </div>
+    <p id="agreementMessage" class="message"></p>
+  </section>
+
+  <section id="operationsPanel" class="hidden">
+    <div class="statGrid">
+      <article><span>طلبات جديدة</span><strong id="statNew">0</strong></article>
+      <article><span>قيد التنفيذ</span><strong id="statActive">0</strong></article>
+      <article><span>تم التوصيل</span><strong id="statDelivered">0</strong></article>
+      <article><span>العمولة الحالية</span><strong id="statCommission">—</strong></article>
+    </div>
+
+    <nav class="tabs">
+      <button data-target="ordersSection">الطلبات</button>
+      <button data-target="catalogSection">المنتجات</button>
+      <button data-target="ridersSection">المندوبون</button>
+      <button data-target="settingsSection">الإعدادات</button>
+    </nav>
+
+    <section id="ordersSection" class="card">
+      <div class="sectionHead">
+        <div><span class="eyebrow">التشغيل</span><h2>الطلبات</h2></div>
+        <button id="refreshOrdersBtn" class="secondary">تحديث</button>
+      </div>
+      <div id="ordersList" class="stack"></div>
+    </section>
+
+    <section id="catalogSection" class="card">
+      <div class="sectionHead"><div><span class="eyebrow">Catalog</span><h2>المنتجات والأسعار</h2></div></div>
+
+      <div class="subcard">
+        <h3>إضافة سريعة</h3>
+        <div class="formGrid three">
+          <label>اسم المنتج<input id="productName"></label>
+          <label>التصنيف<input id="productCategory" placeholder="مثال: ألبان"></label>
+          <label>السعر<input id="productPrice" type="number" min="0" step="0.25"></label>
+          <label>الباركود<input id="productBarcode" inputmode="numeric"></label>
+          <label>الحجم<input id="productSize" placeholder="1 لتر"></label>
+          <label>رابط صورة اختياري<input id="productImage"></label>
+        </div>
+        <div class="actions">
+          <button id="addProductBtn" class="primary">إضافة المنتج</button>
+          <button id="scanBarcodeBtn" class="secondary">📷 مسح باركود</button>
+        </div>
+        <video id="barcodeVideo" class="barcodeVideo hidden" playsinline></video>
+        <p id="productMessage" class="message"></p>
+      </div>
+
+      <div class="subcard">
+        <div class="sectionHead"><h3>مكتبة جاهزة</h3><span class="muted">اختار المنتج واكتب السعر فقط</span></div>
+        <div id="masterCatalog" class="catalogGrid"></div>
+      </div>
+
+      <div class="subcard">
+        <h3>استيراد Excel / CSV</h3>
+        <p class="muted">الأعمدة المدعومة: name أو اسم المنتج، price أو السعر، category أو التصنيف، barcode أو الباركود.</p>
+        <input id="importFile" type="file" accept=".csv,.xlsx,.xls">
+        <button id="importBtn" class="secondary">استيراد المنتجات</button>
+        <p id="importMessage" class="message"></p>
+      </div>
+
+      <div class="subcard">
+        <h3>منتجات السوبرماركت</h3>
+        <div id="productsList" class="stack"></div>
+      </div>
+    </section>
+
+    <section id="ridersSection" class="card">
+      <div class="sectionHead"><div><span class="eyebrow">التوصيل</span><h2>المندوبون</h2></div></div>
+      <div class="inlineForm">
+        <input id="riderName" placeholder="اسم المندوب">
+        <input id="riderPhone" inputmode="tel" placeholder="رقم الموبايل / واتساب">
+        <button id="addRiderBtn" class="primary">إضافة مندوب</button>
+      </div>
+      <p id="riderMessage" class="message"></p>
+      <div id="ridersList" class="stack"></div>
+    </section>
+
+    <section id="settingsSection" class="card">
+      <div class="sectionHead"><div><span class="eyebrow">إعدادات المتجر</span><h2 id="storeTitle">السوبرماركت</h2></div></div>
+      <div class="formGrid">
+        <label>اسم السوبرماركت<input id="settingsName"></label>
+        <label>رقم الهاتف<input id="settingsPhone"></label>
+        <label>واتساب<input id="settingsWhatsapp"></label>
+        <label>العنوان<input id="settingsAddress"></label>
+        <label>اللوكيشن<input id="settingsLocation"></label>
+        <label>مصاريف التوصيل<input id="settingsDeliveryFee" type="number" min="0" step="0.5"></label>
+      </div>
+      <label class="check"><input id="acceptingOrders" type="checkbox"> استقبال طلبات جديدة</label>
+      <button id="saveSettingsBtn" class="primary">حفظ الإعدادات</button>
+      <p id="settingsMessage" class="message"></p>
+    </section>
+  </section>
+</main>
+<script type="module" src="./app.js"></script>
+</body>
+</html>
