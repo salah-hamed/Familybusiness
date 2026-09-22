@@ -866,6 +866,10 @@ service cloud.firestore {
       && request.resource.data.authUid == resource.data.authUid
       && request.resource.data.status == resource.data.status
       && request.resource.data.isActive == resource.data.isActive
+      && (
+        resource.data.authUid == ""
+        || request.resource.data.email == resource.data.email
+      )
       && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name","contactName","phone","whatsapp","email","agreementStatus","updatedAt"])
       && (
         request.resource.data.agreementStatus == resource.data.agreementStatus
