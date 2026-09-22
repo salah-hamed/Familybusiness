@@ -29,7 +29,7 @@ const projects = [
     version: 1,
     sortOrder: 1,
     isFeatured: true,
-    creationEnabled: false
+    creationEnabled: true
   },
   {
     id: "cleaning",
