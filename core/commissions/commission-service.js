@@ -82,12 +82,14 @@ export async function proposeCommission({
       unit: "per_completed_order",
       currentAmount: currentAccepted,
       pendingAmount: proposedAmount,
-      status: "pending",
+      status: currentAccepted == null ? "pending" : "accepted",
+      pendingStatus: "pending",
       proposedAt: serverTimestamp(),
       proposedBy: ownerId,
       acceptedAt: existing?.acceptedAt || null,
       acceptedBy: existing?.acceptedBy || "",
       rejectedAt: null,
+      lastDecision: existing?.lastDecision || "",
       updatedAt: serverTimestamp(),
       version: Number(existing?.version || 0) + 1
     };
@@ -100,7 +102,7 @@ export async function proposeCommission({
     }
 
     transaction.update(operatorRef, {
-      agreementStatus: "pending",
+      agreementStatus: currentAccepted == null ? "pending" : "accepted",
       updatedAt: serverTimestamp()
     });
   });
@@ -139,7 +141,7 @@ export async function acceptPendingCommission({
       throw new Error("OPERATOR_NOT_AUTHORIZED");
     }
 
-    if (agreement.status !== "pending" || agreement.pendingAmount == null) {
+    if (agreement.pendingStatus !== "pending" || agreement.pendingAmount == null) {
       throw new Error("NO_PENDING_COMMISSION");
     }
 
@@ -147,6 +149,8 @@ export async function acceptPendingCommission({
       currentAmount: agreement.pendingAmount,
       pendingAmount: null,
       status: "accepted",
+      pendingStatus: "none",
+      lastDecision: "accepted",
       acceptedAt: serverTimestamp(),
       acceptedBy: operatorAuthUid,
       rejectedAt: null,
@@ -193,7 +197,7 @@ export async function rejectPendingCommission({
       throw new Error("OPERATOR_NOT_AUTHORIZED");
     }
 
-    if (agreement.status !== "pending") {
+    if (agreement.pendingStatus !== "pending") {
       throw new Error("NO_PENDING_COMMISSION");
     }
 
@@ -202,6 +206,8 @@ export async function rejectPendingCommission({
     transaction.update(agreementRef, {
       pendingAmount: null,
       status: hasAcceptedRate ? "accepted" : "rejected",
+      pendingStatus: "none",
+      lastDecision: "rejected",
       rejectedAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
