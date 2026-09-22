@@ -14,6 +14,7 @@ import {
   getProjectDocId
 } from "../core/projects/project-service.js";
 import { REFERRAL_CONFIG, formatEgp } from "../core/config/platform-config.js";
+import { isSubscriptionActive, subscriptionExpiryDate } from "../core/subscriptions/subscription-service.js";
 const userName =
 document.getElementById("userName");
 
@@ -45,9 +46,7 @@ protectPage(async (user) => {
 
     const data =
     userSnap.data();
-    const subscriptionActive =
-      data.isActive === true &&
-      data.subscriptionStatus === "active";
+    const subscriptionActive = isSubscriptionActive(data);
     const myProjects = await loadUserProjects(user.uid);
 
     if (referralLink) {
@@ -168,7 +167,7 @@ getDiscoverableProjects().forEach(project => {
     userName.innerText =
     `أهلاً ${data.name}`;
 
-    const expiry = data.subscriptionExpiresAt?.toDate?.();
+    const expiry = subscriptionExpiryDate(data);
     subscriptionStatus.innerText = subscriptionActive
       ? `✅ الاشتراك مفعل${expiry ? ` حتى ${expiry.toLocaleDateString("ar-EG")}` : ""}`
       : "⏳ الاشتراك قيد المراجعة أو غير مفعل";
