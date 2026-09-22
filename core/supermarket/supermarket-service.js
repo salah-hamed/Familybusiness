@@ -76,7 +76,9 @@ export async function createOrResumeSupermarketSetup({
     });
   }
 
-  await setDoc(doc(db, "supermarkets", projectId), {
+  const supermarketRef = doc(db, "supermarkets", projectId);
+  const supermarketSnap = await getDoc(supermarketRef);
+  const supermarketPayload = {
     supermarketId: projectId,
     projectId,
     ownerId,
@@ -91,9 +93,14 @@ export async function createOrResumeSupermarketSetup({
     deliveryFee: numberOrZero(deliveryFee),
     currency: "EGP",
     isAcceptingOrders: true,
-    createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()
-  }, { merge: true });
+  };
+
+  if (!supermarketSnap.exists()) {
+    supermarketPayload.createdAt = serverTimestamp();
+  }
+
+  await setDoc(supermarketRef, supermarketPayload, { merge: true });
 
   await proposeCommission({
     projectDocId: projectId,
