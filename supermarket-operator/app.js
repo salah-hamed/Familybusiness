@@ -35,6 +35,14 @@ function setVisible(id,visible){$(id).classList.toggle("hidden",!visible);}
 
 async function refreshAccount(){
   if(!currentUser)return;
+  if(!projectId){
+    $("pageStatus").innerText="رابط السوبرماركت غير مكتمل.";
+    setVisible("authPanel",false);
+    setVisible("verifyPanel",false);
+    setVisible("agreementPanel",false);
+    setVisible("operationsPanel",false);
+    return;
+  }
   await reload(currentUser);
   currentUser=auth.currentUser;
 
@@ -93,7 +101,7 @@ onAuthStateChanged(auth,user=>{
 $("registerBtn").onclick=async()=>{
   $("authMessage").innerText="جاري إنشاء الحساب...";
   try{
-    const cred=await createUserWithEmailAndPassword(auth,$("authEmail").value.trim(),$("authPassword").value);
+    const cred=await createUserWithEmailAndPassword(auth,$("authEmail").value.trim().toLowerCase(),$("authPassword").value);
     await sendEmailVerification(cred.user);
     $("authMessage").innerText="تم إنشاء الحساب. افتح رسالة التفعيل في الإيميل ثم ارجع هنا ✅";
   }catch(e){$("authMessage").innerText=e.message;}
@@ -101,7 +109,7 @@ $("registerBtn").onclick=async()=>{
 $("loginBtn").onclick=async()=>{
   $("authMessage").innerText="جاري تسجيل الدخول...";
   try{
-    await signInWithEmailAndPassword(auth,$("authEmail").value.trim(),$("authPassword").value);
+    await signInWithEmailAndPassword(auth,$("authEmail").value.trim().toLowerCase(),$("authPassword").value);
     $("authMessage").innerText="";
   }catch(e){$("authMessage").innerText=e.message;}
 };
