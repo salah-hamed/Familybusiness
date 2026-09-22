@@ -184,7 +184,7 @@ service cloud.firestore {
   }
 
   match /users/{uid} {
-   allow create: if signedIn() && request.auth.uid == uid && request.resource.data.uid == uid && request.resource.data.isActive == false && request.resource.data.subscriptionStatus == "pending" && !("role" in request.resource.data);
+   allow create: if signedIn() && request.auth.uid == uid && request.resource.data.uid == uid && request.resource.data.isActive == false && request.resource.data.subscriptionStatus == "pending" && request.resource.data.initialActivationPaid == false && request.resource.data.billingCycle == "initial" && request.resource.data.referralQualified == false && request.resource.data.referredByUserId is string && request.resource.data.referredByUserId != request.auth.uid && !("role" in request.resource.data);
    allow get: if isAdmin() || (signedIn() && request.auth.uid == uid);
    allow list: if isAdmin();
    allow update: if isAdmin() || (signedIn() && request.auth.uid == uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name"]));
@@ -247,13 +247,19 @@ service cloud.firestore {
   match /referrals/{referralId} {
    allow get, list: if isAdmin()
     || (signedIn() && resource.data.referrerUserId == request.auth.uid);
-   allow create, update, delete: if isAdmin();
+   allow create: if isAdmin();
+   allow update: if isAdmin()
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status","paidAt"]);
+   allow delete: if false;
   }
 
   match /commissionLedger/{entryId} {
    allow get, list: if isAdmin()
     || (signedIn() && resource.data.userId == request.auth.uid);
-   allow create, update, delete: if isAdmin();
+   allow create: if isAdmin();
+   allow update: if isAdmin()
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status","paidAt"]);
+   allow delete: if false;
   }
 
   match /{document=**} { allow read, write: if false; }
