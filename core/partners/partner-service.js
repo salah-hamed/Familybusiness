@@ -90,7 +90,7 @@ export async function createOperator({
 
     transaction.update(projectRef, {
       operatorId,
-      partnerSetupStatus: "agreement_required"
+      partnerSetupStatus: "partner_linked"
     });
   });
 
