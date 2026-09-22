@@ -274,6 +274,7 @@ service cloud.firestore {
     && request.resource.data.total is number
     && request.resource.data.total == request.resource.data.subtotal + request.resource.data.deliveryFee
     && request.resource.data.price == request.resource.data.total
+    && request.resource.data.pricingLocked == false
     && request.resource.data.commissionEligible == false
     && request.resource.data.commissionLocked == false
     && request.resource.data.commissionAmount == 0;
@@ -415,7 +416,43 @@ service cloud.firestore {
       )
       && (
         (
-          request.resource.data.status != "delivered"
+          resource.data.status == "new"
+          && request.resource.data.status == "accepted"
+          && request.resource.data.items is list
+          && request.resource.data.items.size() > 0
+          && request.resource.data.items.size() <= 50
+          && request.resource.data.subtotal is number
+          && request.resource.data.subtotal >= 0
+          && request.resource.data.deliveryFee is number
+          && request.resource.data.deliveryFee == supermarketData(resource.data.projectId).deliveryFee
+          && request.resource.data.total is number
+          && request.resource.data.total
+            == request.resource.data.subtotal + request.resource.data.deliveryFee
+          && request.resource.data.price == request.resource.data.total
+          && request.resource.data.pricingLocked == true
+          && request.resource.data.pricingLockedBy == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            "items",
+            "subtotal",
+            "deliveryFee",
+            "total",
+            "price",
+            "pricingLocked",
+            "pricingLockedAt",
+            "pricingLockedBy",
+            "status",
+            "statusUpdatedAt",
+            "statusUpdatedBy"
+          ])
+        )
+        ||
+        (
+          request.resource.data.status != "accepted"
+          && request.resource.data.status != "delivered"
+          && (
+            request.resource.data.status == "canceled"
+            || resource.data.pricingLocked == true
+          )
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             "status",
             "statusUpdatedAt",
@@ -426,6 +463,7 @@ service cloud.firestore {
         (
           request.resource.data.status == "delivered"
           && resource.data.status == "out_for_delivery"
+          && resource.data.pricingLocked == true
           && resource.data.assignedWorkerId is string
           && resource.data.assignedWorkerId.size() > 0
           && commissionAgreementExists(resource.data.projectId)
