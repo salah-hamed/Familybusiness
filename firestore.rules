@@ -212,7 +212,7 @@ service cloud.firestore {
       || (
         resource.data.operatingModel == "partner_operated"
         && request.resource.data.operatorId == projectId
-        && request.resource.data.partnerSetupStatus in ["agreement_required","active"]
+        && request.resource.data.partnerSetupStatus in ["partner_linked","active"]
       )
     )
    );
