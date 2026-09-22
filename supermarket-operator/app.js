@@ -323,7 +323,7 @@ async function loadOrders(){
   $("statDelivered").innerText=orders.filter(o=>o.status==="delivered").length;
 
   $("ordersList").innerHTML=orders.length?orders.map(o=>{
-    const items=(o.items||[]).map(i=>`${i.quantity} × ${escapeHTML(i.name)}`).join("<br>");
+    const items=(o.items||[]).map(i=>`${Number(i.quantity||0)} × ${escapeHTML(i.name)}`).join("<br>");
     const next=allowedNextSupermarketStatuses(o.status);
     const canCancel=next.includes("canceled");
     const riderSelect=o.status==="ready"?`<select class="riderSelect"><option value="">اختر المندوب</option>${activeRiderOptions()}</select><button class="primary assignRider">تعيين وإرسال واتساب</button>`:"";
