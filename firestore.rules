@@ -35,6 +35,20 @@ service cloud.firestore {
     && operatorData(projectData(projectId).operatorId).agreementStatus == "accepted"
     && operatorData(projectData(projectId).operatorId).isActive == true;
   }
+  function validWorkerRoleForProject(projectId, role){
+   return (
+      projectData(projectId).template == "supermarket"
+      && role == "rider"
+    )
+    || (
+      projectData(projectId).template == "cleaning"
+      && role == "cleaner"
+    )
+    || (
+      projectData(projectId).template == "laundry"
+      && role in ["pickup_agent","delivery_agent"]
+    );
+  }
 
   function validOrderTemplate(projectId){
    return request.resource.data.templateType is string
@@ -334,6 +348,7 @@ service cloud.firestore {
     && request.resource.data.templateId is string
     && request.resource.data.name is string
     && request.resource.data.role in ["rider","cleaner","pickup_agent","delivery_agent"]
+    && validWorkerRoleForProject(request.resource.data.projectId, request.resource.data.role)
     && request.resource.data.phone is string
     && request.resource.data.whatsapp is string
     && request.resource.data.whatsapp.size() > 0
@@ -374,6 +389,7 @@ service cloud.firestore {
     && request.resource.data.createdAt == resource.data.createdAt
     && request.resource.data.name is string
     && request.resource.data.role in ["rider","cleaner","pickup_agent","delivery_agent"]
+    && validWorkerRoleForProject(resource.data.projectId, request.resource.data.role)
     && request.resource.data.phone is string
     && request.resource.data.whatsapp is string
     && request.resource.data.whatsapp.size() > 0
