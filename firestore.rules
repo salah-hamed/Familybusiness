@@ -8,7 +8,7 @@ service cloud.firestore {
   function userExists(uid){ return exists(userPath(uid)); }
   function userData(uid){ return get(userPath(uid)).data; }
   function isAdmin(){ return signedIn() && userExists(request.auth.uid) && userData(request.auth.uid).role == "admin"; }
-  function subscriptionActive(uid){ return userExists(uid) && userData(uid).isActive == true && userData(uid).subscriptionStatus == "active"; }
+  function subscriptionActive(uid){ return userExists(uid) && userData(uid).isActive == true && userData(uid).subscriptionStatus == "active" && (!("subscriptionExpiresAt" in userData(uid)) || userData(uid).subscriptionExpiresAt > request.time); }
   function projectExists(projectId){ return exists(projectPath(projectId)); }
   function projectData(projectId){ return get(projectPath(projectId)).data; }
   function ownsProject(projectId){ return signedIn() && projectExists(projectId) && projectData(projectId).ownerId == request.auth.uid; }
@@ -184,7 +184,7 @@ service cloud.firestore {
   }
 
   match /users/{uid} {
-   allow create: if signedIn() && request.auth.uid == uid && request.resource.data.uid == uid && request.resource.data.isActive == false && request.resource.data.subscriptionStatus == "pending" && !("role" in request.resource.data);
+   allow create: if signedIn() && request.auth.uid == uid && request.resource.data.uid == uid && request.resource.data.isActive == false && request.resource.data.subscriptionStatus == "pending" && request.resource.data.initialActivationPaid == false && request.resource.data.billingCycle == "initial" && request.resource.data.referralQualified == false && request.resource.data.referredByUserId is string && request.resource.data.referredByUserId != request.auth.uid && !("role" in request.resource.data);
    allow get: if isAdmin() || (signedIn() && request.auth.uid == uid);
    allow list: if isAdmin();
    allow update: if isAdmin() || (signedIn() && request.auth.uid == uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name"]));
@@ -243,6 +243,25 @@ service cloud.firestore {
    allow update: if isAdmin() || (ownsProject(resource.data.projectId) && request.resource.data.projectId == resource.data.projectId) || (request.resource.data.projectId == resource.data.projectId && request.resource.data.status == "pending" && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status","orderId","requestType","updatedAt"]) && request.resource.data.orderId is string && request.resource.data.requestType in ["new","renewal"] && resource.data.status in ["canceled","renewable","active"] && projectAvailable(resource.data.projectId) && (resource.data.status != "active" || (carwashSubscriptionExists(subscriptionId) && (carwashSubscriptionData(subscriptionId).status != "active" || carwashSubscriptionData(subscriptionId).remainingWashes <= 0 || carwashSubscriptionData(subscriptionId).expiresAt <= request.time))));
    allow delete: if isAdmin() || ownsProject(resource.data.projectId);
   }
+
+  match /referrals/{referralId} {
+   allow get, list: if isAdmin()
+    || (signedIn() && resource.data.referrerUserId == request.auth.uid);
+   allow create: if isAdmin();
+   allow update: if isAdmin()
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status","paidAt"]);
+   allow delete: if false;
+  }
+
+  match /commissionLedger/{entryId} {
+   allow get, list: if isAdmin()
+    || (signedIn() && resource.data.userId == request.auth.uid);
+   allow create: if isAdmin();
+   allow update: if isAdmin()
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status","paidAt"]);
+   allow delete: if false;
+  }
+
   match /{document=**} { allow read, write: if false; }
  }
 }

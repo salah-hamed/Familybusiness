@@ -13,6 +13,8 @@ import {
 import {
   getProjectDocId
 } from "../core/projects/project-service.js";
+import { REFERRAL_CONFIG, formatEgp } from "../core/config/platform-config.js";
+import { isSubscriptionActive, subscriptionExpiryDate } from "../core/subscriptions/subscription-service.js";
 const userName =
 document.getElementById("userName");
 
@@ -20,6 +22,9 @@ const subscriptionStatus =
 document.getElementById("subscriptionStatus");
 const templatesContainer =
 document.getElementById("templatesContainer");
+const referralLink = document.getElementById("referralLink");
+const copyReferralBtn = document.getElementById("copyReferralBtn");
+const referralStatus = document.getElementById("referralStatus");
 protectPage(async (user) => {
 
   try {
@@ -41,10 +46,29 @@ protectPage(async (user) => {
 
     const data =
     userSnap.data();
-    const subscriptionActive =
-      data.isActive === true &&
-      data.subscriptionStatus === "active";
+    const subscriptionActive = isSubscriptionActive(data);
     const myProjects = await loadUserProjects(user.uid);
+
+    if (referralLink) {
+      const referralUrl = new URL("../", window.location.href);
+      referralUrl.search = "";
+      referralUrl.hash = "";
+      referralUrl.searchParams.set("ref", user.uid);
+      referralLink.value = referralUrl.toString();
+    }
+
+    if (copyReferralBtn) {
+      copyReferralBtn.onclick = async () => {
+        try {
+          await navigator.clipboard.writeText(referralLink.value);
+          referralStatus.innerText = `تم نسخ الرابط — عمولة الإحالة المؤهلة ${formatEgp(REFERRAL_CONFIG.qualifiedReferralReward)}`;
+        } catch {
+          referralLink.select();
+          document.execCommand("copy");
+          referralStatus.innerText = "تم نسخ رابط الإحالة";
+        }
+      };
+    }
 
 const myProjectIds = myProjects.map(project => project.projectId);
 templatesContainer.innerHTML = "";
@@ -143,10 +167,10 @@ getDiscoverableProjects().forEach(project => {
     userName.innerText =
     `أهلاً ${data.name}`;
 
-    subscriptionStatus.innerText =
-    subscriptionActive
-    ? "✅ الاشتراك مفعل"
-    : "⏳ الاشتراك قيد المراجعة أو غير مفعل";
+    const expiry = subscriptionExpiryDate(data);
+    subscriptionStatus.innerText = subscriptionActive
+      ? `✅ الاشتراك مفعل${expiry ? ` حتى ${expiry.toLocaleDateString("ar-EG")}` : ""}`
+      : "⏳ الاشتراك قيد المراجعة أو غير مفعل";
 
   }
 

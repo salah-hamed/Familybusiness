@@ -1,9 +1,11 @@
 import { getDiscoverableProjects } from "../templates/projects.js";
+import { PLATFORM_BILLING, formatEgp } from "../core/config/platform-config.js";
 
 const projectsContainer =
 document.getElementById("projectsContainer");
 
 loadProjects();
+loadPricing();
 
 function loadProjects(){
 
@@ -59,4 +61,18 @@ function loadProjects(){
 
     });
 
+}
+
+
+function loadPricing(){
+    const initialPrice = document.getElementById("initialActivationPrice");
+    const renewalPrice = document.getElementById("monthlyRenewalPrice");
+
+    if (initialPrice) {
+        initialPrice.innerText = formatEgp(PLATFORM_BILLING.initialActivationFee);
+    }
+
+    if (renewalPrice) {
+        renewalPrice.innerText = formatEgp(PLATFORM_BILLING.monthlyRenewalFee);
+    }
 }
