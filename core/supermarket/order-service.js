@@ -113,6 +113,7 @@ export async function createSupermarketOrder({
     deliveryFee,
     total,
     price: total,
+    pricingLocked: false,
     commissionEligible: false,
     commissionLocked: false,
     commissionAmount: 0,
@@ -125,6 +126,80 @@ export async function createSupermarketOrder({
     deliveryFee,
     total
   };
+}
+
+export async function acceptSupermarketOrder({
+  projectId,
+  orderId,
+  actorUid
+}) {
+  const orderRef = doc(db, "orders", orderId);
+  const [orderSnap, supermarketSnap, productsSnap] = await Promise.all([
+    getDoc(orderRef),
+    getDoc(doc(db, "supermarkets", projectId)),
+    getDocs(collection(db, "supermarkets", projectId, "products"))
+  ]);
+
+  if (!orderSnap.exists()) throw new Error("ORDER_NOT_FOUND");
+  if (!supermarketSnap.exists()) throw new Error("SUPERMARKET_NOT_FOUND");
+
+  const order = orderSnap.data();
+
+  if (
+    order.projectId !== projectId ||
+    order.templateType !== "supermarket" ||
+    order.status !== "new"
+  ) {
+    throw new Error("ORDER_NOT_ACCEPTABLE");
+  }
+
+  const catalog = new Map(
+    productsSnap.docs
+      .map(item => ({ productId: item.id, ...item.data() }))
+      .filter(item => item.isActive === true && item.inStock === true)
+      .map(item => [item.productId, item])
+  );
+
+  const items = (order.items || []).map(line => {
+    const product = catalog.get(line.productId);
+    const quantity = Math.max(0, Math.min(99, Math.floor(Number(line.quantity || 0))));
+
+    if (!product || quantity <= 0) {
+      throw new Error("ORDER_PRODUCT_UNAVAILABLE");
+    }
+
+    const unitPrice = money(product.price);
+
+    return {
+      productId: product.productId,
+      name: product.name,
+      quantity,
+      unitPrice,
+      subtotal: money(quantity * unitPrice)
+    };
+  });
+
+  if (!items.length) throw new Error("EMPTY_CART");
+
+  const subtotal = money(items.reduce((sum, item) => sum + item.subtotal, 0));
+  const deliveryFee = money(supermarketSnap.data().deliveryFee || 0);
+  const total = money(subtotal + deliveryFee);
+
+  await updateDoc(orderRef, {
+    items,
+    subtotal,
+    deliveryFee,
+    total,
+    price: total,
+    pricingLocked: true,
+    pricingLockedAt: serverTimestamp(),
+    pricingLockedBy: actorUid,
+    status: "accepted",
+    statusUpdatedAt: serverTimestamp(),
+    statusUpdatedBy: actorUid
+  });
+
+  return { subtotal, deliveryFee, total };
 }
 
 export async function listSupermarketOrders(projectId) {
@@ -161,6 +236,10 @@ export async function changeSupermarketOrderStatus({
 
   if (!allowedNextSupermarketStatuses(order.status).includes(nextStatus)) {
     throw new Error("INVALID_STATUS_TRANSITION");
+  }
+
+  if (nextStatus === "accepted") {
+    throw new Error("USE_ACCEPT_SUPERMARKET_ORDER");
   }
 
   if (nextStatus !== "delivered") {
