@@ -8,7 +8,7 @@ service cloud.firestore {
   function userExists(uid){ return exists(userPath(uid)); }
   function userData(uid){ return get(userPath(uid)).data; }
   function isAdmin(){ return signedIn() && userExists(request.auth.uid) && userData(request.auth.uid).role == "admin"; }
-  function subscriptionActive(uid){ return userExists(uid) && userData(uid).isActive == true && userData(uid).subscriptionStatus == "active"; }
+  function subscriptionActive(uid){ return userExists(uid) && userData(uid).isActive == true && userData(uid).subscriptionStatus == "active" && (!("subscriptionExpiresAt" in userData(uid)) || userData(uid).subscriptionExpiresAt > request.time); }
   function projectExists(projectId){ return exists(projectPath(projectId)); }
   function projectData(projectId){ return get(projectPath(projectId)).data; }
   function ownsProject(projectId){ return signedIn() && projectExists(projectId) && projectData(projectId).ownerId == request.auth.uid; }
