@@ -31,6 +31,7 @@ service cloud.firestore {
     && projectExists(projectId)
     && projectData(projectId).operatingModel == "partner_operated"
     && projectData(projectId).operatorId is string
+    && projectData(projectId).operatorId.size() > 0
     && operatorExists(projectData(projectId).operatorId)
     && operatorData(projectData(projectId).operatorId).authUid == request.auth.uid
     && operatorData(projectData(projectId).operatorId).status == "active"
