@@ -35,7 +35,7 @@ async function init(){
     if(!storeSnap.exists()){showClosed("السوبرماركت لسه ماكملش الإعداد.");return;}
 
     store={supermarketId:storeSnap.id,...storeSnap.data()};
-    if(store.isAcceptingOrders!==true){showClosed("السوبرماركت موقف استقبال الطلبات مؤقتًا.");}
+    if(store.isAcceptingOrders!==true){showClosed("السوبرماركت موقف استقبال الطلبات مؤقتًا.");return;}
 
     products=productsSnap.docs.map(d=>({productId:d.id,...d.data()})).filter(p=>p.isActive===true&&p.inStock===true);
     $("storeName").innerText=store.name||"السوبرماركت";
