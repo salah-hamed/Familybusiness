@@ -81,6 +81,7 @@ export async function proposeCommission({
       currency: "EGP",
       unit: "per_completed_order",
       currentAmount: currentAccepted,
+      acceptedVersion: Number(existing?.acceptedVersion || 0),
       pendingAmount: proposedAmount,
       status: currentAccepted == null ? "pending" : "accepted",
       pendingStatus: "pending",
@@ -147,6 +148,7 @@ export async function acceptPendingCommission({
 
     transaction.update(agreementRef, {
       currentAmount: agreement.pendingAmount,
+      acceptedVersion: Number(agreement.version || 1),
       pendingAmount: null,
       status: "accepted",
       pendingStatus: "none",
