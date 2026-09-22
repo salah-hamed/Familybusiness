@@ -21,6 +21,16 @@ export const WORKER_ROLES = Object.freeze({
 
 const ALLOWED_ROLES = new Set(Object.values(WORKER_ROLES));
 
+const TEMPLATE_WORKER_ROLES = Object.freeze({
+  supermarket: new Set([WORKER_ROLES.RIDER]),
+  cleaning: new Set([WORKER_ROLES.CLEANER]),
+  laundry: new Set([WORKER_ROLES.PICKUP_AGENT, WORKER_ROLES.DELIVERY_AGENT])
+});
+
+function roleAllowedForTemplate(templateId, role) {
+  return TEMPLATE_WORKER_ROLES[templateId]?.has(role) === true;
+}
+
 function normalizeText(value) {
   return String(value || "").trim();
 }
@@ -96,7 +106,10 @@ export async function createWorker({
     throw new Error("WORKER_NAME_REQUIRED");
   }
 
-  if (!ALLOWED_ROLES.has(normalizedRole)) {
+  if (
+    !ALLOWED_ROLES.has(normalizedRole) ||
+    !roleAllowedForTemplate(project.template, normalizedRole)
+  ) {
     throw new Error("INVALID_WORKER_ROLE");
   }
 
@@ -176,7 +189,12 @@ export async function updateWorker({
 
   if ("role" in updates) {
     const role = normalizeText(updates.role);
-    if (!ALLOWED_ROLES.has(role)) throw new Error("INVALID_WORKER_ROLE");
+    if (
+      !ALLOWED_ROLES.has(role) ||
+      !roleAllowedForTemplate(worker.templateId, role)
+    ) {
+      throw new Error("INVALID_WORKER_ROLE");
+    }
     next.role = role;
   }
 
