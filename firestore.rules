@@ -9,6 +9,7 @@ service cloud.firestore {
   function commissionAgreementPath(agreementId){ return /databases/$(database)/documents/commissionAgreements/$(agreementId); }
   function workerPath(workerId){ return /databases/$(database)/documents/workers/$(workerId); }
   function orderPath(orderId){ return /databases/$(database)/documents/orders/$(orderId); }
+  function supermarketPath(projectId){ return /databases/$(database)/documents/supermarkets/$(projectId); }
   function userExists(uid){ return exists(userPath(uid)); }
   function userData(uid){ return get(userPath(uid)).data; }
   function isAdmin(){ return signedIn() && userExists(request.auth.uid) && userData(request.auth.uid).role == "admin"; }
@@ -26,6 +27,10 @@ service cloud.firestore {
   function workerData(workerId){ return get(workerPath(workerId)).data; }
   function orderExists(orderId){ return exists(orderPath(orderId)); }
   function orderData(orderId){ return get(orderPath(orderId)).data; }
+  function commissionAgreementExists(agreementId){ return exists(commissionAgreementPath(agreementId)); }
+  function commissionAgreementData(agreementId){ return get(commissionAgreementPath(agreementId)).data; }
+  function supermarketExists(projectId){ return exists(supermarketPath(projectId)); }
+  function supermarketData(projectId){ return get(supermarketPath(projectId)).data; }
   function isProjectOperator(projectId){
    return signedIn()
     && projectExists(projectId)
@@ -52,6 +57,31 @@ service cloud.firestore {
       && role in ["pickup_agent","delivery_agent"]
     );
   }
+  function supermarketPartnerReady(projectId){
+   return projectAvailable(projectId)
+    && projectData(projectId).template == "supermarket"
+    && projectData(projectId).operatingModel == "partner_operated"
+    && projectData(projectId).operatorId is string
+    && projectData(projectId).operatorId.size() > 0
+    && operatorExists(projectData(projectId).operatorId)
+    && operatorData(projectData(projectId).operatorId).status == "active"
+    && operatorData(projectData(projectId).operatorId).agreementStatus == "accepted"
+    && operatorData(projectData(projectId).operatorId).isActive == true
+    && commissionAgreementExists(projectId)
+    && commissionAgreementData(projectId).status == "accepted"
+    && commissionAgreementData(projectId).currentAmount is number
+    && commissionAgreementData(projectId).currentAmount >= 0;
+  }
+
+  function validSupermarketTransition(fromStatus, toStatus){
+   return (fromStatus == "new" && toStatus in ["accepted","canceled"])
+    || (fromStatus == "accepted" && toStatus in ["preparing","canceled"])
+    || (fromStatus == "preparing" && toStatus in ["ready","canceled"])
+    || (fromStatus == "ready" && toStatus in ["assigned","canceled"])
+    || (fromStatus == "assigned" && toStatus in ["out_for_delivery","canceled"])
+    || (fromStatus == "out_for_delivery" && toStatus in ["delivered","canceled"]);
+  }
+
 
   function validOrderTemplate(projectId){
    return request.resource.data.templateType is string
@@ -219,6 +249,35 @@ service cloud.firestore {
        + items[5].subtotal
        + items[6].subtotal;
   }
+  function validSupermarketOrder(projectId){
+   return request.resource.data.templateType == "supermarket"
+    && request.resource.data.serviceType == "supermarket_delivery"
+    && supermarketPartnerReady(projectId)
+    && supermarketExists(projectId)
+    && supermarketData(projectId).isAcceptingOrders == true
+    && request.resource.data.customerName is string
+    && request.resource.data.customerName.size() > 0
+    && request.resource.data.customerPhone is string
+    && request.resource.data.customerPhone.size() > 0
+    && request.resource.data.customerAddress is string
+    && request.resource.data.customerAddress.size() > 0
+    && request.resource.data.location is string
+    && request.resource.data.notes is string
+    && request.resource.data.items is list
+    && request.resource.data.items.size() > 0
+    && request.resource.data.items.size() <= 50
+    && request.resource.data.subtotal is number
+    && request.resource.data.subtotal >= 0
+    && request.resource.data.deliveryFee is number
+    && request.resource.data.deliveryFee == supermarketData(projectId).deliveryFee
+    && request.resource.data.total is number
+    && request.resource.data.total == request.resource.data.subtotal + request.resource.data.deliveryFee
+    && request.resource.data.price == request.resource.data.total
+    && request.resource.data.commissionEligible == false
+    && request.resource.data.commissionLocked == false
+    && request.resource.data.commissionAmount == 0;
+  }
+
 
   match /users/{uid} {
    allow create: if signedIn() && request.auth.uid == uid && request.resource.data.uid == uid && request.resource.data.isActive == false && request.resource.data.subscriptionStatus == "pending" && request.resource.data.initialActivationPaid == false && request.resource.data.billingCycle == "initial" && request.resource.data.referralQualified == false && request.resource.data.referredByUserId is string && request.resource.data.referredByUserId != request.auth.uid && !("role" in request.resource.data);
@@ -341,6 +400,128 @@ service cloud.firestore {
    allow create: if isAdmin() || (signedIn() && request.resource.data.projectId is string && ownsProject(request.resource.data.projectId)) || (request.resource.data.projectId is string && request.resource.data.status == "pending" && request.resource.data.orderId is string && request.resource.data.requestType in ["new","renewal"] && request.resource.data.keys().hasOnly(["projectId","status","orderId","requestType","updatedAt","createdAt"]) && projectAvailable(request.resource.data.projectId));
    allow update: if isAdmin() || (ownsProject(resource.data.projectId) && request.resource.data.projectId == resource.data.projectId) || (request.resource.data.projectId == resource.data.projectId && request.resource.data.status == "pending" && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status","orderId","requestType","updatedAt"]) && request.resource.data.orderId is string && request.resource.data.requestType in ["new","renewal"] && resource.data.status in ["canceled","renewable","active"] && projectAvailable(resource.data.projectId) && (resource.data.status != "active" || (carwashSubscriptionExists(subscriptionId) && (carwashSubscriptionData(subscriptionId).status != "active" || carwashSubscriptionData(subscriptionId).remainingWashes <= 0 || carwashSubscriptionData(subscriptionId).expiresAt <= request.time))));
    allow delete: if isAdmin() || ownsProject(resource.data.projectId);
+  }
+
+  match /supermarkets/{supermarketId} {
+   allow get: if isAdmin()
+    || ownsProject(supermarketId)
+    || isProjectOperator(supermarketId)
+    || supermarketPartnerReady(supermarketId);
+
+   allow list: if isAdmin()
+    || ownsProject(resource.data.projectId)
+    || isProjectOperator(resource.data.projectId);
+
+   allow create: if signedIn()
+    && request.resource.data.supermarketId == supermarketId
+    && request.resource.data.projectId == supermarketId
+    && request.resource.data.ownerId == request.auth.uid
+    && request.resource.data.operatorId == supermarketId
+    && request.resource.data.currency == "EGP"
+    && request.resource.data.deliveryFee is number
+    && request.resource.data.deliveryFee >= 0
+    && request.resource.data.isAcceptingOrders is bool
+    && projectExists(supermarketId)
+    && projectData(supermarketId).ownerId == request.auth.uid
+    && projectData(supermarketId).template == "supermarket"
+    && projectData(supermarketId).operatingModel == "partner_operated"
+    && projectData(supermarketId).operatorId == supermarketId
+    && operatorExists(supermarketId)
+    && operatorData(supermarketId).ownerId == request.auth.uid;
+
+   allow update: if (
+      isAdmin()
+      || ownsProject(resource.data.projectId)
+      || isProjectOperator(resource.data.projectId)
+    )
+    && request.resource.data.supermarketId == resource.data.supermarketId
+    && request.resource.data.projectId == resource.data.projectId
+    && request.resource.data.ownerId == resource.data.ownerId
+    && request.resource.data.operatorId == resource.data.operatorId
+    && request.resource.data.currency == resource.data.currency
+    && request.resource.data.deliveryFee is number
+    && request.resource.data.deliveryFee >= 0
+    && request.resource.data.isAcceptingOrders is bool
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+      "name",
+      "contactName",
+      "phone",
+      "whatsapp",
+      "email",
+      "address",
+      "location",
+      "deliveryFee",
+      "isAcceptingOrders",
+      "updatedAt"
+    ]);
+
+   allow delete: if isAdmin();
+
+   match /products/{productId} {
+    allow get, list: if isAdmin()
+     || ownsProject(supermarketId)
+     || isProjectOperator(supermarketId)
+     || supermarketPartnerReady(supermarketId);
+
+    allow create: if (
+       isAdmin()
+       || ownsProject(supermarketId)
+       || isProjectOperator(supermarketId)
+      )
+      && request.resource.data.productId == productId
+      && request.resource.data.projectId == supermarketId
+      && request.resource.data.name is string
+      && request.resource.data.name.size() > 0
+      && request.resource.data.category is string
+      && request.resource.data.price is number
+      && request.resource.data.price >= 0
+      && request.resource.data.inStock is bool
+      && request.resource.data.isActive is bool
+      && request.resource.data.barcode is string
+      && request.resource.data.image is string
+      && request.resource.data.size is string
+      && request.resource.data.source is string
+      && request.resource.data.masterId is string
+      && request.resource.data.createdBy is string
+      && request.resource.data.updatedBy is string;
+
+    allow update: if (
+       isAdmin()
+       || ownsProject(supermarketId)
+       || isProjectOperator(supermarketId)
+      )
+      && request.resource.data.productId == resource.data.productId
+      && request.resource.data.projectId == resource.data.projectId
+      && request.resource.data.createdBy == resource.data.createdBy
+      && request.resource.data.createdAt == resource.data.createdAt
+      && request.resource.data.name is string
+      && request.resource.data.name.size() > 0
+      && request.resource.data.category is string
+      && request.resource.data.price is number
+      && request.resource.data.price >= 0
+      && request.resource.data.inStock is bool
+      && request.resource.data.isActive is bool
+      && request.resource.data.barcode is string
+      && request.resource.data.image is string
+      && request.resource.data.size is string
+      && request.resource.data.source is string
+      && request.resource.data.masterId is string
+      && request.resource.data.updatedBy is string
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        "name",
+        "category",
+        "size",
+        "barcode",
+        "image",
+        "price",
+        "inStock",
+        "isActive",
+        "updatedBy",
+        "updatedAt"
+      ]);
+
+    allow delete: if isAdmin();
+   }
   }
 
   match /workers/{workerId} {
@@ -470,7 +651,17 @@ service cloud.firestore {
   }
 
   match /operators/{operatorId} {
-   allow get, list: if isAdmin()
+   allow get: if isAdmin()
+    || (signedIn() && resource.data.ownerId == request.auth.uid)
+    || (signedIn() && resource.data.authUid == request.auth.uid)
+    || (
+      signedIn()
+      && resource.data.authUid == ""
+      && request.auth.token.email_verified == true
+      && request.auth.token.email == resource.data.email
+    );
+
+   allow list: if isAdmin()
     || (signedIn() && resource.data.ownerId == request.auth.uid)
     || (signedIn() && resource.data.authUid == request.auth.uid);
 
