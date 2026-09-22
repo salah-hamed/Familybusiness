@@ -243,6 +243,19 @@ service cloud.firestore {
    allow update: if isAdmin() || (ownsProject(resource.data.projectId) && request.resource.data.projectId == resource.data.projectId) || (request.resource.data.projectId == resource.data.projectId && request.resource.data.status == "pending" && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status","orderId","requestType","updatedAt"]) && request.resource.data.orderId is string && request.resource.data.requestType in ["new","renewal"] && resource.data.status in ["canceled","renewable","active"] && projectAvailable(resource.data.projectId) && (resource.data.status != "active" || (carwashSubscriptionExists(subscriptionId) && (carwashSubscriptionData(subscriptionId).status != "active" || carwashSubscriptionData(subscriptionId).remainingWashes <= 0 || carwashSubscriptionData(subscriptionId).expiresAt <= request.time))));
    allow delete: if isAdmin() || ownsProject(resource.data.projectId);
   }
+
+  match /referrals/{referralId} {
+   allow get, list: if isAdmin()
+    || (signedIn() && resource.data.referrerUserId == request.auth.uid);
+   allow create, update, delete: if isAdmin();
+  }
+
+  match /commissionLedger/{entryId} {
+   allow get, list: if isAdmin()
+    || (signedIn() && resource.data.userId == request.auth.uid);
+   allow create, update, delete: if isAdmin();
+  }
+
   match /{document=**} { allow read, write: if false; }
  }
 }
