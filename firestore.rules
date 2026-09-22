@@ -81,7 +81,9 @@ service cloud.firestore {
     && commissionAgreementExists(projectId)
     && commissionAgreementData(projectId).status == "accepted"
     && commissionAgreementData(projectId).currentAmount is number
-    && commissionAgreementData(projectId).currentAmount >= 0;
+    && commissionAgreementData(projectId).currentAmount >= 0
+    && commissionAgreementData(projectId).acceptedVersion is number
+    && commissionAgreementData(projectId).acceptedVersion > 0;
   }
 
   function validSupermarketTransition(fromStatus, toStatus){
@@ -495,7 +497,7 @@ service cloud.firestore {
           && request.resource.data.commissionAmount
             == commissionAgreementData(resource.data.projectId).currentAmount
           && request.resource.data.commissionAgreementVersion
-            == commissionAgreementData(resource.data.projectId).version
+            == commissionAgreementData(resource.data.projectId).acceptedVersion
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             "status",
             "statusUpdatedAt",
@@ -739,11 +741,7 @@ service cloud.firestore {
     && request.resource.data.templateId == projectData(request.resource.data.projectId).template
     && canOperateProject(request.resource.data.projectId);
 
-   allow update: if (
-      isAdmin()
-      || ownsProject(resource.data.projectId)
-      || isProjectOperator(resource.data.projectId)
-    )
+   allow update: if canOperateProject(resource.data.projectId)
     && request.resource.data.workerId == resource.data.workerId
     && request.resource.data.ownerId == resource.data.ownerId
     && request.resource.data.projectId == resource.data.projectId
@@ -902,11 +900,19 @@ service cloud.firestore {
           request.resource.data.agreementStatus == "accepted"
           && request.resource.data.status == "active"
           && request.resource.data.isActive == true
+          && commissionAgreementExists(resource.data.projectId)
+          && getAfter(commissionAgreementPath(resource.data.projectId)).data.status == "accepted"
+          && getAfter(commissionAgreementPath(resource.data.projectId)).data.pendingStatus == "none"
+          && getAfter(commissionAgreementPath(resource.data.projectId)).data.currentAmount is number
+          && getAfter(commissionAgreementPath(resource.data.projectId)).data.acceptedVersion > 0
         )
         || (
           request.resource.data.agreementStatus == "rejected"
           && request.resource.data.status == "pending_agreement"
           && request.resource.data.isActive == false
+          && commissionAgreementExists(resource.data.projectId)
+          && getAfter(commissionAgreementPath(resource.data.projectId)).data.status == "rejected"
+          && getAfter(commissionAgreementPath(resource.data.projectId)).data.pendingStatus == "none"
         )
       )
     );
@@ -940,6 +946,7 @@ service cloud.firestore {
     && request.resource.data.currency == "EGP"
     && request.resource.data.unit == "per_completed_order"
     && request.resource.data.currentAmount == null
+    && request.resource.data.acceptedVersion == 0
     && request.resource.data.pendingAmount is number
     && request.resource.data.pendingAmount >= 0
     && request.resource.data.status == "pending"
@@ -965,6 +972,7 @@ service cloud.firestore {
       && request.resource.data.currency == resource.data.currency
       && request.resource.data.unit == resource.data.unit
       && request.resource.data.currentAmount == resource.data.currentAmount
+      && request.resource.data.acceptedVersion == resource.data.acceptedVersion
       && request.resource.data.pendingAmount is number
       && request.resource.data.pendingAmount >= 0
       && request.resource.data.pendingStatus == "pending"
@@ -990,17 +998,19 @@ service cloud.firestore {
       && resource.data.pendingStatus == "pending"
       && request.resource.data.pendingAmount == null
       && request.resource.data.pendingStatus == "none"
-      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["currentAmount","pendingAmount","status","pendingStatus","lastDecision","acceptedAt","acceptedBy","rejectedAt","updatedAt"])
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["currentAmount","acceptedVersion","pendingAmount","status","pendingStatus","lastDecision","acceptedAt","acceptedBy","rejectedAt","updatedAt"])
       && (
         (
           request.resource.data.lastDecision == "accepted"
           && request.resource.data.status == "accepted"
           && request.resource.data.currentAmount == resource.data.pendingAmount
+          && request.resource.data.acceptedVersion == resource.data.version
           && request.resource.data.acceptedBy == request.auth.uid
         )
         || (
           request.resource.data.lastDecision == "rejected"
           && request.resource.data.currentAmount == resource.data.currentAmount
+          && request.resource.data.acceptedVersion == resource.data.acceptedVersion
           && (
             (resource.data.currentAmount == null && request.resource.data.status == "rejected")
             || (resource.data.currentAmount != null && request.resource.data.status == "accepted")
@@ -1046,7 +1056,7 @@ service cloud.firestore {
       && request.resource.data.amount
         == commissionAgreementData(request.resource.data.projectId).currentAmount
       && request.resource.data.agreementVersion
-        == commissionAgreementData(request.resource.data.projectId).version
+        == commissionAgreementData(request.resource.data.projectId).acceptedVersion
       && getAfter(orderPath(request.resource.data.orderId)).data.projectId
         == request.resource.data.projectId
       && getAfter(orderPath(request.resource.data.orderId)).data.templateType
