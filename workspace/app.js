@@ -25,6 +25,13 @@ document.getElementById("templatesContainer");
 const referralLink = document.getElementById("referralLink");
 const copyReferralBtn = document.getElementById("copyReferralBtn");
 const referralStatus = document.getElementById("referralStatus");
+function projectManagementUrl(templateId, projectDocId) {
+  if (templateId === "supermarket") {
+    return `../supermarket/?project=${encodeURIComponent(projectDocId)}`;
+  }
+  return `../dashboard/?project=${encodeURIComponent(projectDocId)}`;
+}
+
 protectPage(async (user) => {
 
   try {
@@ -137,7 +144,7 @@ getDiscoverableProjects().forEach(project => {
     if (btn.innerText.trim() === "إدارة المشروع") {
 
       window.location.href =
-        `../dashboard/?project=${encodeURIComponent(projectDocId)}`;
+        projectManagementUrl(templateId, projectDocId);
 
       return;
 
