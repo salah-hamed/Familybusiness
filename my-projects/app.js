@@ -1,5 +1,6 @@
 import auth from "../core/firebase/firebase-auth.js";
 import db from "../core/firebase/firebase-db.js";
+import { getDiscoverableProjects } from "../templates/projects.js";
 
 import {
   onAuthStateChanged
@@ -7,9 +8,7 @@ import {
 
 import {
   doc,
-  getDoc,
-  collection,
-  getDocs
+  getDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const container =
@@ -18,97 +17,74 @@ const container =
 onAuthStateChanged(auth, async (user) => {
 
   if (!user) {
-
     window.location.href = "/Familybusiness/login/";
     return;
-
   }
 
   const snap =
     await getDoc(doc(db, "users", user.uid));
 
   if (!snap.exists()) {
-
     container.innerHTML = "المستخدم غير موجود";
     return;
-
   }
 
   const data = snap.data();
+  const templates = getDiscoverableProjects();
 
   container.innerHTML = `
-<h2>مرحباً ${data.name}</h2>
+    <h2>مرحباً ${data.name}</h2>
 
-<p>
-ترخيص المنصة:
-<b style="color:green;">
-${data.isActive ? "مفعل" : "غير مفعل"}
-</b>
-</p>
+    <p>
+      ترخيص المنصة:
+      <b style="color:${data.isActive ? "green" : "#b45309"};">
+        ${data.isActive ? "مفعل" : "غير مفعل"}
+      </b>
+    </p>
 
-<hr>
+    <hr>
 
-<div id="projectsList">
+    <div id="projectsList"></div>
+  `;
 
-جاري تحميل المشاريع...
+  const projectsList =
+    document.getElementById("projectsList");
 
-</div>
-`;
-const projectsList =
-document.getElementById("projectsList");
+  templates.forEach((template) => {
 
-const templates =
-await getDocs(collection(db, "templates"));
+    const readyToStart = template.creationEnabled === true;
 
-projectsList.innerHTML = "";
+    projectsList.innerHTML += `
+      <div style="
+        border:1px solid #ddd;
+        padding:15px;
+        margin:15px 0;
+        border-radius:12px;
+      ">
+        <h3>
+          ${template.icon}
+          ${template.title}
+        </h3>
 
-templates.forEach((templateDoc) => {
+        <p>
+          ${template.description || ""}
+        </p>
 
-  const template = templateDoc.data();
-const templateId = templateDoc.id;
+        <small>
+          ${template.operatingModel === "partner_operated" ? "تشغيل بالشراكة" : "تشغيل مباشر"}
+        </small>
 
-  if (!template.active) return;
+        <div style="margin-top:12px;">
+          <a
+            href="${readyToStart ? "../workspace/" : "#"}"
+            style="${readyToStart ? "" : "pointer-events:none;opacity:.55;"}"
+          >
+            ${readyToStart ? "فتح مساحة العمل" : "قريبًا للتشغيل"}
+          </a>
+        </div>
+      </div>
+    `;
 
-  projectsList.innerHTML += `
-<div style="
-border:1px solid #ddd;
-padding:15px;
-margin:15px 0;
-border-radius:12px;
-">
+  });
 
-<h3>
-
-${template.icon}
-
-${template.title}
-
-</h3>
-
-<p>
-
-${template.description}
-
-</p>
-
-<button
-class="manageProjectBtn"
-data-link="${template.dashboard}"
->
-إدارة المشروع
-</button>
-</div>
-`;
-
-});
-  document.querySelectorAll(".manageProjectBtn")
-.forEach((btn) => {
-
-  btn.onclick = () => {
-
-  alert(btn.dataset.link);
-
-};
-
-});
 });

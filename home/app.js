@@ -1,29 +1,19 @@
-import db from "../core/firebase/firebase-db.js";
-
-import {
-  collection,
-  getDocs
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getDiscoverableProjects } from "../templates/projects.js";
 
 const projectsContainer =
 document.getElementById("projectsContainer");
 
 loadProjects();
 
-async function loadProjects(){
+function loadProjects(){
 
-    projectsContainer.innerHTML = "جاري تحميل المشاريع...";
-
-    const snapshot =
-    await getDocs(collection(db,"templates"));
+    const projects = getDiscoverableProjects();
 
     projectsContainer.innerHTML = "";
 
-    snapshot.forEach((doc)=>{
+    projects.forEach((project)=>{
 
-        const project = doc.data();
-
-        if(!project.active) return;
+        const readyToStart = project.creationEnabled === true;
 
         projectsContainer.innerHTML += `
 
@@ -43,24 +33,25 @@ async function loadProjects(){
 
             <p>
 
-                ${project.description}
+                ${project.description || ""}
 
             </p>
 
             <span class="project-status">
 
-    ${project.comingSoon ? "🚧 قريبًا" : "✅ جاهز للعمل"}
+                ${readyToStart ? "✅ جاهز للبدء" : "🚧 قريبًا للتشغيل"}
 
-</span>
+            </span>
 
-<a
-    href="${project.comingSoon ? "#" : "./"}"
-    class="project-btn ${project.comingSoon ? "disabled-btn" : ""}"
->
+            <a
+                href="${readyToStart ? "../workspace/" : "#"}"
+                class="project-btn ${readyToStart ? "" : "disabled-btn"}"
+                aria-disabled="${readyToStart ? "false" : "true"}"
+            >
 
-    ${project.comingSoon ? "قريبًا" : "استكشف المشروع"}
+                ${readyToStart ? "ابدأ المشروع" : "قريبًا للتشغيل"}
 
-</a>
+            </a>
 
         </div>
 

@@ -2,6 +2,7 @@ import db from "../../core/firebase/firebase-db.js";
 import {
   getProjectDocId
 } from "../../core/projects/project-service.js";
+import { canCreateTemplate } from "../projects.js";
 
 import {
   doc,
@@ -15,6 +16,10 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 export async function createProject(ownerId, project) {
+
+  if (!canCreateTemplate(project)) {
+    throw new Error("TEMPLATE_NOT_AVAILABLE");
+  }
 
   const userSnap = await getDoc(doc(db, "users", ownerId));
 
@@ -40,6 +45,10 @@ export async function createProject(ownerId, project) {
     projectId: project.id,
 
     template: project.folder,
+
+    operatingModel: project.operatingModel,
+
+    templateVersion: project.version,
 
     businessName: project.title,
 
