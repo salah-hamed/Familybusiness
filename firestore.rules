@@ -44,6 +44,16 @@ service cloud.firestore {
     && operatorData(projectData(projectId).operatorId).agreementStatus == "accepted"
     && operatorData(projectData(projectId).operatorId).isActive == true;
   }
+  function canOperateProject(projectId){
+   return isAdmin()
+    || (
+      signedIn()
+      && projectExists(projectId)
+      && projectData(projectId).operatingModel == "owner_operated"
+      && projectData(projectId).ownerId == request.auth.uid
+    )
+    || isProjectOperator(projectId);
+  }
   function validWorkerRoleForProject(projectId, role){
    return (
       projectData(projectId).template == "supermarket"
@@ -277,7 +287,29 @@ service cloud.firestore {
     && request.resource.data.pricingLocked == false
     && request.resource.data.commissionEligible == false
     && request.resource.data.commissionLocked == false
-    && request.resource.data.commissionAmount == 0;
+    && request.resource.data.commissionAmount == 0
+    && request.resource.data.keys().hasOnly([
+      "projectId",
+      "providerId",
+      "templateType",
+      "serviceType",
+      "status",
+      "customerName",
+      "customerPhone",
+      "customerAddress",
+      "location",
+      "notes",
+      "items",
+      "subtotal",
+      "deliveryFee",
+      "total",
+      "price",
+      "pricingLocked",
+      "commissionEligible",
+      "commissionLocked",
+      "commissionAmount",
+      "createdAt"
+    ]);
   }
 
 
@@ -357,18 +389,7 @@ service cloud.firestore {
     ||
     (
       (
-        isAdmin()
-        || (
-          resource.data.templateType == "supermarket"
-          && isProjectOperator(resource.data.projectId)
-        )
-        || (
-          resource.data.templateType != "supermarket"
-          && (
-            ownsProject(resource.data.projectId)
-            || isProjectOperator(resource.data.projectId)
-          )
-        )
+        canOperateProject(resource.data.projectId)
       )
       && request.resource.data.projectId == resource.data.projectId
       && request.resource.data.providerId == resource.data.providerId
@@ -556,13 +577,27 @@ service cloud.firestore {
     && projectData(supermarketId).operatingModel == "partner_operated"
     && projectData(supermarketId).operatorId == supermarketId
     && operatorExists(supermarketId)
-    && operatorData(supermarketId).ownerId == request.auth.uid;
+    && operatorData(supermarketId).ownerId == request.auth.uid
+    && request.resource.data.keys().hasOnly([
+      "supermarketId",
+      "projectId",
+      "ownerId",
+      "operatorId",
+      "name",
+      "contactName",
+      "phone",
+      "whatsapp",
+      "email",
+      "address",
+      "location",
+      "deliveryFee",
+      "currency",
+      "isAcceptingOrders",
+      "createdAt",
+      "updatedAt"
+    ]);
 
-   allow update: if (
-      isAdmin()
-      || ownsProject(resource.data.projectId)
-      || isProjectOperator(resource.data.projectId)
-    )
+   allow update: if canOperateProject(resource.data.projectId)
     && request.resource.data.supermarketId == resource.data.supermarketId
     && request.resource.data.projectId == resource.data.projectId
     && request.resource.data.ownerId == resource.data.ownerId
@@ -611,8 +646,26 @@ service cloud.firestore {
       && request.resource.data.size is string
       && request.resource.data.source is string
       && request.resource.data.masterId is string
-      && request.resource.data.createdBy is string
-      && request.resource.data.updatedBy is string;
+      && request.resource.data.createdBy == request.auth.uid
+      && request.resource.data.updatedBy == request.auth.uid
+      && request.resource.data.keys().hasOnly([
+        "productId",
+        "projectId",
+        "name",
+        "category",
+        "size",
+        "barcode",
+        "image",
+        "price",
+        "inStock",
+        "isActive",
+        "source",
+        "masterId",
+        "createdBy",
+        "createdAt",
+        "updatedBy",
+        "updatedAt"
+      ]);
 
     allow update: if (
        isAdmin()
@@ -635,7 +688,7 @@ service cloud.firestore {
       && request.resource.data.size is string
       && request.resource.data.source is string
       && request.resource.data.masterId is string
-      && request.resource.data.updatedBy is string
+      && request.resource.data.updatedBy == request.auth.uid
       && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
         "name",
         "category",
@@ -654,9 +707,7 @@ service cloud.firestore {
   }
 
   match /workers/{workerId} {
-   allow get, list: if isAdmin()
-    || ownsProject(resource.data.projectId)
-    || isProjectOperator(resource.data.projectId);
+   allow get, list: if canOperateProject(resource.data.projectId);
 
    allow create: if signedIn()
     && request.resource.data.workerId == workerId
@@ -688,10 +739,7 @@ service cloud.firestore {
     && projectExists(request.resource.data.projectId)
     && request.resource.data.ownerId == projectData(request.resource.data.projectId).ownerId
     && request.resource.data.templateId == projectData(request.resource.data.projectId).template
-    && (
-      ownsProject(request.resource.data.projectId)
-      || isProjectOperator(request.resource.data.projectId)
-    );
+    && canOperateProject(request.resource.data.projectId);
 
    allow update: if (
       isAdmin()
@@ -724,9 +772,7 @@ service cloud.firestore {
   }
 
   match /workerAssignments/{assignmentId} {
-   allow get, list: if isAdmin()
-    || ownsProject(resource.data.projectId)
-    || isProjectOperator(resource.data.projectId);
+   allow get, list: if canOperateProject(resource.data.projectId);
 
    allow create: if signedIn()
     && request.resource.data.assignmentId == assignmentId
@@ -754,6 +800,7 @@ service cloud.firestore {
       (
         request.resource.data.actorType == "owner"
         && ownsProject(request.resource.data.projectId)
+        && projectData(request.resource.data.projectId).operatingModel == "owner_operated"
       )
       ||
       (
