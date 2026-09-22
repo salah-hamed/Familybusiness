@@ -134,11 +134,20 @@ async function loadOperations(){
     $("settingsLocation").value=currentStore.location||"";
     $("settingsDeliveryFee").value=currentStore.deliveryFee??0;
     $("acceptingOrders").checked=currentStore.isAcceptingOrders===true;
+    const customerUrl=new URL("../templates/supermarket/",location.href);
+    customerUrl.searchParams.set("project",projectId);
+    $("customerOrderLink").value=customerUrl.toString();
   }
 
   await Promise.all([loadProducts(),loadRiders(),loadOrders()]);
   renderMasterCatalog();
 }
+
+$("copyCustomerLinkBtn").onclick=async()=>{
+  const value=$("customerOrderLink").value;
+  try{await navigator.clipboard.writeText(value);}catch{$("customerOrderLink").select();document.execCommand("copy");}
+  $("settingsMessage").innerText="تم نسخ رابط العملاء ✅";
+};
 
 $("saveSettingsBtn").onclick=async()=>{
   $("settingsMessage").innerText="جاري الحفظ...";
