@@ -155,6 +155,10 @@ export async function claimOperatorAccess(operatorId, authUser) {
     throw new Error("OPERATOR_ALREADY_CLAIMED");
   }
 
+  if (operator.authUid === authUser.uid) {
+    return;
+  }
+
   await updateDoc(operatorRef, {
     authUid: authUser.uid,
     status: operator.agreementStatus === "accepted" ? "active" : "pending_agreement",
