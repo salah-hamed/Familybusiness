@@ -35,8 +35,12 @@ document.querySelectorAll("[data-copy]").forEach(btn=>btn.onclick=()=>copyValue(
 async function loadEarnings(){
   const snap=await getDocs(query(collection(db,"commissionLedger"),where("userId","==",currentUser.uid),where("projectId","==",projectId)));
   const entries=snap.docs.map(d=>d.data()).filter(x=>x.sourceType==="project_order");
+  const earned=entries.reduce((s,x)=>s+Number(x.amount||0),0);
+  const paid=entries.filter(x=>x.status==="paid"||x.paidAt).reduce((s,x)=>s+Number(x.amount||0),0);
   $("completedOrders").innerText=entries.length;
-  $("earnedCommission").innerText=money(entries.reduce((s,x)=>s+Number(x.amount||0),0));
+  $("earnedCommission").innerText=money(earned);
+  $("paidCommission").innerText=money(paid);
+  $("outstandingCommission").innerText=money(Math.max(0,earned-paid));
 }
 
 function render(){
