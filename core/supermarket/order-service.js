@@ -223,21 +223,19 @@ export async function changeSupermarketOrderStatus({
       commissionAgreementVersion: Number(freshAgreement.version || 1)
     });
 
-    if (!ledgerSnap.exists()) {
-      transaction.set(ledgerRef, {
-        userId: freshAgreement.ownerId,
-        projectId,
-        orderId,
-        sourceType: "project_order",
-        sourceId: orderId,
-        agreementId: projectId,
-        agreementVersion: Number(freshAgreement.version || 1),
-        amount,
-        currency: "EGP",
-        status: "earned",
-        createdAt: serverTimestamp(),
-        paidAt: null
-      });
-    }
+    transaction.set(ledgerRef, {
+      userId: freshAgreement.ownerId,
+      projectId,
+      orderId,
+      sourceType: "project_order",
+      sourceId: orderId,
+      agreementId: projectId,
+      agreementVersion: Number(freshAgreement.version || 1),
+      amount,
+      currency: "EGP",
+      status: "earned",
+      createdAt: serverTimestamp(),
+      paidAt: null
+    });
   });
 }
