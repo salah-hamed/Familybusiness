@@ -5,6 +5,8 @@ service cloud.firestore {
   function userPath(uid){ return /databases/$(database)/documents/users/$(uid); }
   function projectPath(projectId){ return /databases/$(database)/documents/projects/$(projectId); }
   function carwashSubscriptionPath(subscriptionId){ return /databases/$(database)/documents/carwashSubscriptions/$(subscriptionId); }
+  function operatorPath(operatorId){ return /databases/$(database)/documents/operators/$(operatorId); }
+  function commissionAgreementPath(agreementId){ return /databases/$(database)/documents/commissionAgreements/$(agreementId); }
   function userExists(uid){ return exists(userPath(uid)); }
   function userData(uid){ return get(userPath(uid)).data; }
   function isAdmin(){ return signedIn() && userExists(request.auth.uid) && userData(request.auth.uid).role == "admin"; }
@@ -15,6 +17,9 @@ service cloud.firestore {
   function projectAvailable(projectId){ return projectExists(projectId) && projectData(projectId).isActive == true && projectData(projectId).status == "active" && subscriptionActive(projectData(projectId).ownerId); }
   function carwashSubscriptionExists(subscriptionId){ return exists(carwashSubscriptionPath(subscriptionId)); }
   function carwashSubscriptionData(subscriptionId){ return get(carwashSubscriptionPath(subscriptionId)).data; }
+  function operatorExists(operatorId){ return exists(operatorPath(operatorId)); }
+  function operatorData(operatorId){ return get(operatorPath(operatorId)).data; }
+  function isOperator(operatorId){ return signedIn() && operatorExists(operatorId) && operatorData(operatorId).authUid == request.auth.uid; }
 
   function validOrderTemplate(projectId){
    return request.resource.data.templateType is string
@@ -195,7 +200,22 @@ service cloud.firestore {
    allow get: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid) || (resource.data.isActive == true && resource.data.status == "active" && subscriptionActive(resource.data.ownerId));
    allow list: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid);
    allow create: if signedIn() && request.resource.data.ownerId == request.auth.uid && request.resource.data.projectId is string && projectId == request.auth.uid + "_" + request.resource.data.projectId && subscriptionActive(request.auth.uid);
-   allow update: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid && request.resource.data.ownerId == resource.data.ownerId && request.resource.data.projectId == resource.data.projectId && request.resource.data.template == resource.data.template && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["businessName","whatsappNumber","instapayLink","logo","coverImage","primaryColor","priceConfig"]));
+   allow update: if isAdmin() || (
+    signedIn()
+    && resource.data.ownerId == request.auth.uid
+    && request.resource.data.ownerId == resource.data.ownerId
+    && request.resource.data.projectId == resource.data.projectId
+    && request.resource.data.template == resource.data.template
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["businessName","whatsappNumber","instapayLink","logo","coverImage","primaryColor","priceConfig","operatorId","partnerSetupStatus"])
+    && (
+      !request.resource.data.diff(resource.data).affectedKeys().hasAny(["operatorId","partnerSetupStatus"])
+      || (
+        resource.data.operatingModel == "partner_operated"
+        && request.resource.data.operatorId == projectId
+        && request.resource.data.partnerSetupStatus in ["agreement_required","active"]
+      )
+    )
+   );
    allow delete: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid);
   }
 
@@ -242,6 +262,167 @@ service cloud.firestore {
    allow create: if isAdmin() || (signedIn() && request.resource.data.projectId is string && ownsProject(request.resource.data.projectId)) || (request.resource.data.projectId is string && request.resource.data.status == "pending" && request.resource.data.orderId is string && request.resource.data.requestType in ["new","renewal"] && request.resource.data.keys().hasOnly(["projectId","status","orderId","requestType","updatedAt","createdAt"]) && projectAvailable(request.resource.data.projectId));
    allow update: if isAdmin() || (ownsProject(resource.data.projectId) && request.resource.data.projectId == resource.data.projectId) || (request.resource.data.projectId == resource.data.projectId && request.resource.data.status == "pending" && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status","orderId","requestType","updatedAt"]) && request.resource.data.orderId is string && request.resource.data.requestType in ["new","renewal"] && resource.data.status in ["canceled","renewable","active"] && projectAvailable(resource.data.projectId) && (resource.data.status != "active" || (carwashSubscriptionExists(subscriptionId) && (carwashSubscriptionData(subscriptionId).status != "active" || carwashSubscriptionData(subscriptionId).remainingWashes <= 0 || carwashSubscriptionData(subscriptionId).expiresAt <= request.time))));
    allow delete: if isAdmin() || ownsProject(resource.data.projectId);
+  }
+
+  match /operators/{operatorId} {
+   allow get, list: if isAdmin()
+    || (signedIn() && resource.data.ownerId == request.auth.uid)
+    || (signedIn() && resource.data.authUid == request.auth.uid);
+
+   allow create: if signedIn()
+    && request.resource.data.operatorId == operatorId
+    && request.resource.data.projectId == operatorId
+    && request.resource.data.ownerId == request.auth.uid
+    && request.resource.data.authUid == ""
+    && request.resource.data.status == "pending_invite"
+    && request.resource.data.agreementStatus == "not_proposed"
+    && request.resource.data.isActive == false
+    && projectExists(request.resource.data.projectId)
+    && projectData(request.resource.data.projectId).ownerId == request.auth.uid
+    && projectData(request.resource.data.projectId).operatingModel == "partner_operated"
+    && request.resource.data.templateId == projectData(request.resource.data.projectId).template;
+
+   allow update: if isAdmin()
+    || (
+      signedIn()
+      && resource.data.ownerId == request.auth.uid
+      && request.resource.data.operatorId == resource.data.operatorId
+      && request.resource.data.projectId == resource.data.projectId
+      && request.resource.data.ownerId == resource.data.ownerId
+      && request.resource.data.templateId == resource.data.templateId
+      && request.resource.data.authUid == resource.data.authUid
+      && request.resource.data.status == resource.data.status
+      && request.resource.data.isActive == resource.data.isActive
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name","contactName","phone","whatsapp","email","agreementStatus","updatedAt"])
+      && (
+        request.resource.data.agreementStatus == resource.data.agreementStatus
+        || (
+          resource.data.agreementStatus != "accepted"
+          && request.resource.data.agreementStatus == "pending"
+        )
+      )
+    )
+    || (
+      signedIn()
+      && resource.data.authUid == ""
+      && request.auth.token.email_verified == true
+      && request.auth.token.email == resource.data.email
+      && request.resource.data.authUid == request.auth.uid
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["authUid","status","updatedAt"])
+      && (
+        (resource.data.agreementStatus == "accepted" && request.resource.data.status == "active")
+        || (resource.data.agreementStatus != "accepted" && request.resource.data.status == "pending_agreement")
+      )
+    )
+    || (
+      signedIn()
+      && resource.data.authUid == request.auth.uid
+      && request.resource.data.authUid == resource.data.authUid
+      && request.resource.data.ownerId == resource.data.ownerId
+      && request.resource.data.projectId == resource.data.projectId
+      && request.resource.data.templateId == resource.data.templateId
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["agreementStatus","status","isActive","updatedAt"])
+      && (
+        (
+          request.resource.data.agreementStatus == "accepted"
+          && request.resource.data.status == "active"
+          && request.resource.data.isActive == true
+        )
+        || (
+          request.resource.data.agreementStatus == "rejected"
+          && request.resource.data.status == "pending_agreement"
+          && request.resource.data.isActive == false
+        )
+      )
+    );
+
+   allow delete: if isAdmin();
+  }
+
+  match /commissionAgreements/{agreementId} {
+   allow get, list: if isAdmin()
+    || (signedIn() && resource.data.ownerId == request.auth.uid)
+    || (
+      signedIn()
+      && operatorExists(resource.data.operatorId)
+      && operatorData(resource.data.operatorId).authUid == request.auth.uid
+    );
+
+   allow create: if signedIn()
+    && agreementId == request.resource.data.projectId
+    && request.resource.data.agreementId == agreementId
+    && request.resource.data.ownerId == request.auth.uid
+    && request.resource.data.operatorId == agreementId
+    && request.resource.data.currency == "EGP"
+    && request.resource.data.unit == "per_completed_order"
+    && request.resource.data.currentAmount == null
+    && request.resource.data.pendingAmount is number
+    && request.resource.data.pendingAmount >= 0
+    && request.resource.data.status == "pending"
+    && request.resource.data.pendingStatus == "pending"
+    && request.resource.data.proposedBy == request.auth.uid
+    && request.resource.data.version == 1
+    && projectExists(request.resource.data.projectId)
+    && projectData(request.resource.data.projectId).ownerId == request.auth.uid
+    && projectData(request.resource.data.projectId).operatingModel == "partner_operated"
+    && request.resource.data.templateId == projectData(request.resource.data.projectId).template
+    && operatorExists(request.resource.data.operatorId)
+    && operatorData(request.resource.data.operatorId).ownerId == request.auth.uid;
+
+   allow update: if isAdmin()
+    || (
+      signedIn()
+      && resource.data.ownerId == request.auth.uid
+      && request.resource.data.agreementId == resource.data.agreementId
+      && request.resource.data.projectId == resource.data.projectId
+      && request.resource.data.ownerId == resource.data.ownerId
+      && request.resource.data.operatorId == resource.data.operatorId
+      && request.resource.data.templateId == resource.data.templateId
+      && request.resource.data.currency == resource.data.currency
+      && request.resource.data.unit == resource.data.unit
+      && request.resource.data.currentAmount == resource.data.currentAmount
+      && request.resource.data.pendingAmount is number
+      && request.resource.data.pendingAmount >= 0
+      && request.resource.data.pendingStatus == "pending"
+      && request.resource.data.status == resource.data.status
+      && request.resource.data.proposedBy == request.auth.uid
+      && request.resource.data.version == resource.data.version + 1
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["pendingAmount","pendingStatus","proposedAt","proposedBy","rejectedAt","updatedAt","version"])
+    )
+    || (
+      signedIn()
+      && operatorExists(resource.data.operatorId)
+      && operatorData(resource.data.operatorId).authUid == request.auth.uid
+      && request.resource.data.agreementId == resource.data.agreementId
+      && request.resource.data.projectId == resource.data.projectId
+      && request.resource.data.ownerId == resource.data.ownerId
+      && request.resource.data.operatorId == resource.data.operatorId
+      && request.resource.data.templateId == resource.data.templateId
+      && request.resource.data.currency == resource.data.currency
+      && request.resource.data.unit == resource.data.unit
+      && resource.data.pendingStatus == "pending"
+      && request.resource.data.pendingAmount == null
+      && request.resource.data.pendingStatus == "none"
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["currentAmount","pendingAmount","status","pendingStatus","lastDecision","acceptedAt","acceptedBy","rejectedAt","updatedAt"])
+      && (
+        (
+          request.resource.data.lastDecision == "accepted"
+          && request.resource.data.status == "accepted"
+          && request.resource.data.currentAmount == resource.data.pendingAmount
+          && request.resource.data.acceptedBy == request.auth.uid
+        )
+        || (
+          request.resource.data.lastDecision == "rejected"
+          && request.resource.data.currentAmount == resource.data.currentAmount
+          && (
+            (resource.data.currentAmount == null && request.resource.data.status == "rejected")
+            || (resource.data.currentAmount != null && request.resource.data.status == "accepted")
+          )
+        )
+      )
+    );
+
+   allow delete: if false;
   }
 
   match /referrals/{referralId} {
