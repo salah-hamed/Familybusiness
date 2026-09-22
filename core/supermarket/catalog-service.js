@@ -173,7 +173,12 @@ export async function bulkImportStoreProducts(projectId, actorUid, rows = []) {
       };
 
       if (existing) {
-        batch.update(ref, payload);
+        const {
+          source,
+          masterId,
+          ...updatePayload
+        } = payload;
+        batch.update(ref, updatePayload);
       } else {
         batch.set(ref, {
           ...payload,
