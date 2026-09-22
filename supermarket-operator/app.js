@@ -6,7 +6,7 @@ import { SUPERMARKET_MASTER_CATALOG } from "../core/supermarket/master-catalog.j
 import { addStoreProduct, listStoreProducts, updateStoreProduct, findStoreProductByBarcode, bulkImportStoreProducts } from "../core/supermarket/catalog-service.js";
 import { WORKER_ROLES, createWorker, listProjectWorkers, setWorkerActive } from "../core/workers/worker-service.js";
 import { assignWorkerAndPrepareWhatsApp } from "../core/workers/worker-dispatch-service.js";
-import { allowedNextSupermarketStatuses, listSupermarketOrders, changeSupermarketOrderStatus } from "../core/supermarket/order-service.js";
+import { allowedNextSupermarketStatuses, listSupermarketOrders, acceptSupermarketOrder, changeSupermarketOrderStatus } from "../core/supermarket/order-service.js";
 
 import {
   createUserWithEmailAndPassword,
@@ -329,7 +329,14 @@ async function loadOrders(){
     const order=orders.find(o=>o.orderId===card.dataset.order);
     card.querySelectorAll(".statusAction").forEach(btn=>btn.onclick=async()=>{
       btn.disabled=true;
-      try{await changeSupermarketOrderStatus({projectId,orderId:order.orderId,actorUid:currentUser.uid,nextStatus:btn.dataset.next});await loadOrders();}
+      try{
+        if(btn.dataset.next==="accepted"){
+          await acceptSupermarketOrder({projectId,orderId:order.orderId,actorUid:currentUser.uid});
+        }else{
+          await changeSupermarketOrderStatus({projectId,orderId:order.orderId,actorUid:currentUser.uid,nextStatus:btn.dataset.next});
+        }
+        await loadOrders();
+      }
       catch(e){alert(e.message);}finally{btn.disabled=false;}
     });
 
