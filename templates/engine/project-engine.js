@@ -48,6 +48,10 @@ export async function createProject(ownerId, project) {
 
     templateVersion: project.version,
 
+    operatorId: project.operatingModel === "partner_operated" ? "" : null,
+
+    partnerSetupStatus: project.operatingModel === "partner_operated" ? "not_started" : null,
+
     businessName: project.title,
 
     status: "active",
