@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#16a34a">
+  <title>طلبات السوبرماركت</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <header class="storeHeader">
+    <div class="storeIdentity">
+      <div class="logo">🛒</div>
+      <div><span class="eyebrow">اطلب من</span><h1 id="storeName">السوبرماركت</h1><p id="storeAddress"></p></div>
+    </div>
+    <div id="deliveryBadge" class="deliveryBadge">التوصيل —</div>
+  </header>
+
+  <main class="shell">
+    <section id="closedBanner" class="closed hidden"></section>
+
+    <section class="searchBox">
+      <input id="searchInput" type="search" placeholder="🔎 ابحث عن منتج...">
+    </section>
+
+    <div id="categories" class="categories"></div>
+    <section id="productsGrid" class="productsGrid"></section>
+    <p id="emptyProducts" class="empty hidden">لا توجد منتجات مطابقة.</p>
+  </main>
+
+  <button id="cartBar" class="cartBar hidden">
+    <span>🛒 <b id="cartCount">0</b> منتج</span>
+    <strong id="cartTotal">0 جنيه</strong>
+    <span>عرض السلة ←</span>
+  </button>
+
+  <div id="cartSheet" class="sheet hidden">
+    <div class="sheetPanel">
+      <div class="sheetHead"><h2>سلة الطلب</h2><button id="closeCart" class="iconBtn">✕</button></div>
+      <div id="cartItems" class="cartItems"></div>
+
+      <div class="totals">
+        <div><span>المنتجات</span><b id="subtotalText">0 جنيه</b></div>
+        <div><span>التوصيل</span><b id="deliveryText">0 جنيه</b></div>
+        <div class="grand"><span>الإجمالي</span><b id="grandTotalText">0 جنيه</b></div>
+      </div>
+
+      <div class="checkout">
+        <h3>بيانات التوصيل</h3>
+        <label>الاسم<input id="customerName" autocomplete="name"></label>
+        <label>رقم الموبايل<input id="customerPhone" inputmode="tel" autocomplete="tel"></label>
+        <label>العنوان بالتفصيل<textarea id="customerAddress" rows="2"></textarea></label>
+        <div class="locationRow">
+          <button id="locationBtn" class="secondary">📍 إرسال اللوكيشن</button>
+          <span id="locationStatus">اختياري لكنه يساعد المندوب</span>
+        </div>
+        <label>ملاحظات<textarea id="notes" rows="2" placeholder="مثال: اتصل قبل الوصول"></textarea></label>
+        <label class="fallbackLabel">مش لاقي منتج؟<textarea id="extraRequest" rows="2" placeholder="اكتب طلب إضافي هنا وسيظهر للسوبرماركت كملاحظة"></textarea></label>
+        <button id="submitOrder" class="primary">تأكيد الطلب</button>
+        <p id="orderStatus" class="message"></p>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
