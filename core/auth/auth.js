@@ -15,7 +15,7 @@ import {
 
 
 // Register
-export async function registerUser(name, email, password) {
+export async function registerUser(name, email, password, referredByUserId = "") {
 
   try {
 
@@ -37,6 +37,10 @@ export async function registerUser(name, email, password) {
       projectType: "",
       isActive: false,
       subscriptionStatus: "pending",
+      initialActivationPaid: false,
+      billingCycle: "initial",
+      referredByUserId: referredByUserId && referredByUserId !== user.uid ? referredByUserId : "",
+      referralQualified: false,
       createdAt: new Date()
 
     });
