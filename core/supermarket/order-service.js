@@ -39,6 +39,31 @@ export function allowedNextSupermarketStatuses(status) {
   return STATUS_FLOW[status] || [];
 }
 
+async function loadRequestedProducts(projectId, lines = []) {
+  const ids = [...new Set(
+    lines
+      .map(line => clean(line?.productId))
+      .filter(Boolean)
+  )];
+
+  if (!ids.length) return new Map();
+  if (ids.length > 50) throw new Error("TOO_MANY_ORDER_LINES");
+
+  const snaps = await Promise.all(
+    ids.map(productId =>
+      getDoc(doc(db, "supermarkets", projectId, "products", productId))
+    )
+  );
+
+  return new Map(
+    snaps
+      .filter(snap => snap.exists())
+      .map(snap => ({ productId: snap.id, ...snap.data() }))
+      .filter(item => item.isActive === true && item.inStock === true)
+      .map(item => [item.productId, item])
+  );
+}
+
 export async function createSupermarketOrder({
   projectId,
   customerName,
@@ -58,16 +83,7 @@ export async function createSupermarketOrder({
     throw new Error("SUPERMARKET_NOT_ACCEPTING_ORDERS");
   }
 
-  const productSnap = await getDocs(
-    collection(db, "supermarkets", projectId, "products")
-  );
-
-  const available = new Map(
-    productSnap.docs
-      .map(item => ({ productId: item.id, ...item.data() }))
-      .filter(item => item.isActive === true && item.inStock === true)
-      .map(item => [item.productId, item])
-  );
+  const available = await loadRequestedProducts(projectId, cart);
 
   const items = cart
     .map(line => {
@@ -134,10 +150,9 @@ export async function acceptSupermarketOrder({
   actorUid
 }) {
   const orderRef = doc(db, "orders", orderId);
-  const [orderSnap, supermarketSnap, productsSnap] = await Promise.all([
+  const [orderSnap, supermarketSnap] = await Promise.all([
     getDoc(orderRef),
-    getDoc(doc(db, "supermarkets", projectId)),
-    getDocs(collection(db, "supermarkets", projectId, "products"))
+    getDoc(doc(db, "supermarkets", projectId))
   ]);
 
   if (!orderSnap.exists()) throw new Error("ORDER_NOT_FOUND");
@@ -153,12 +168,7 @@ export async function acceptSupermarketOrder({
     throw new Error("ORDER_NOT_ACCEPTABLE");
   }
 
-  const catalog = new Map(
-    productsSnap.docs
-      .map(item => ({ productId: item.id, ...item.data() }))
-      .filter(item => item.isActive === true && item.inStock === true)
-      .map(item => [item.productId, item])
-  );
+  const catalog = await loadRequestedProducts(projectId, order.items || []);
 
   const items = (order.items || []).map(line => {
     const product = catalog.get(line.productId);
