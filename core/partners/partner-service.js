@@ -98,19 +98,36 @@ export async function createOperator({
 }
 
 export async function updateOperatorContact(operatorId, updates = {}) {
+  const operatorRef = doc(db, "operators", operatorId);
+  const operatorSnap = await getDoc(operatorRef);
+
+  if (!operatorSnap.exists()) {
+    throw new Error("OPERATOR_NOT_FOUND");
+  }
+
+  const operator = operatorSnap.data();
   const allowed = {};
 
   if ("name" in updates) allowed.name = String(updates.name || "").trim();
   if ("contactName" in updates) allowed.contactName = String(updates.contactName || "").trim();
   if ("phone" in updates) allowed.phone = String(updates.phone || "").trim();
   if ("whatsapp" in updates) allowed.whatsapp = String(updates.whatsapp || "").trim();
-  if ("email" in updates) allowed.email = String(updates.email || "").trim().toLowerCase();
+
+  if ("email" in updates) {
+    const email = String(updates.email || "").trim().toLowerCase();
+
+    if (operator.authUid && email !== String(operator.email || "").trim().toLowerCase()) {
+      throw new Error("OPERATOR_EMAIL_LOCKED");
+    }
+
+    allowed.email = email;
+  }
 
   if (!Object.keys(allowed).length) return;
 
   allowed.updatedAt = serverTimestamp();
 
-  await updateDoc(doc(db, "operators", operatorId), allowed);
+  await updateDoc(operatorRef, allowed);
 }
 
 export async function claimOperatorAccess(operatorId, authUser) {
@@ -136,6 +153,10 @@ export async function claimOperatorAccess(operatorId, authUser) {
 
   if (operator.authUid && operator.authUid !== authUser.uid) {
     throw new Error("OPERATOR_ALREADY_CLAIMED");
+  }
+
+  if (operator.authUid === authUser.uid) {
+    return;
   }
 
   await updateDoc(operatorRef, {

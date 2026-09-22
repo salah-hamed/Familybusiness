@@ -95,6 +95,10 @@ onAuthStateChanged(auth, async user => {
     const result=await loadCurrentProject(user.uid);
     if(!result.success){ currentProjectId=null; currentProjectOwnerId=null; userName.innerText=result.reason==="access-denied"?"غير مسموح لك بإدارة هذا المشروع":"لم يتم العثور على المشروع"; status.innerText=result.reason==="access-denied"?"تم رفض الوصول إلى المشروع.":"تحقق من رابط المشروع وحاول مرة أخرى."; ["projectLink","copyLinkBtn","openProjectBtn","shareProjectBtn"].forEach(id=>{if($(id))$(id).style.display="none";}); return; }
     const data=result.project; currentProjectId=result.projectDocId; currentProjectOwnerId=data.ownerId;
+    if(data.template==="supermarket"){
+      window.location.replace(`../supermarket/?project=${encodeURIComponent(currentProjectId)}`);
+      return;
+    }
     if(!data.isActive){ ["projectLink","copyLinkBtn","openProjectBtn","shareProjectBtn"].forEach(id=>{if($(id))$(id).style.display="none";}); status.innerText="⏳ المشروع غير مفعل"; return; }
     userName.innerText=data.businessName||"مشروعك"; userEmail.innerText=""; status.innerText="● نشط"; configureDashboard(data);
     projectLink.value=`${window.location.origin}/Familybusiness/templates/${data.template}/?project=${currentProjectId}`;

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#16a34a">
+  <title>مشروع توصيل السوبرماركت | Family Business</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <div>
+        <span class="eyebrow">Family Business · مشروعك</span>
+        <h1>🛒 توصيل السوبرماركت</h1>
+        <p>أنت صاحب المشروع. السوبرماركت يدير الطلبات والتوصيل، وأنت تتابع الأداء والعمولة.</p>
+      </div>
+      <a class="ghostBtn" href="../workspace/">رجوع لمساحة العمل</a>
+    </header>
+
+    <section id="statusBanner" class="banner">جاري تحميل المشروع...</section>
+
+    <section id="setupSection" class="card hidden">
+      <div class="sectionTitle">
+        <div>
+          <span class="eyebrow">الخطوة الأولى</span>
+          <h2>اربط السوبرماركت بالمشروع</h2>
+        </div>
+        <span class="stepPill">1 من 3</span>
+      </div>
+
+      <p class="hint">أدخل بيانات السوبرماركت والمسؤول الذي سيدير الطلبات، ثم اقترح العمولة المتفق عليها لكل طلب مكتمل.</p>
+
+      <div class="formGrid">
+        <label>اسم السوبرماركت<input id="storeName" placeholder="مثال: سوبر ماركت النور"></label>
+        <label>اسم المسؤول<input id="contactName" placeholder="اسم صاحب أو مدير السوبرماركت"></label>
+        <label>إيميل المسؤول<input id="operatorEmail" type="email" placeholder="name@example.com"></label>
+        <label>رقم الهاتف<input id="storePhone" inputmode="tel"></label>
+        <label>واتساب<input id="storeWhatsapp" inputmode="tel"></label>
+        <label>العنوان<input id="storeAddress"></label>
+        <label>رابط اللوكيشن<input id="storeLocation" placeholder="Google Maps link"></label>
+        <label>مصاريف التوصيل<input id="deliveryFee" type="number" min="0" step="0.5" value="0"></label>
+        <label>عمولتك لكل طلب مكتمل<input id="commissionAmount" type="number" min="0" step="0.25" value="1"></label>
+      </div>
+
+      <button id="createSetupBtn" class="primaryBtn">ربط السوبرماركت وإرسال الاتفاق</button>
+      <p id="setupMessage" class="message"></p>
+    </section>
+
+    <section id="projectSection" class="hidden">
+      <div class="statGrid">
+        <article class="statCard"><span>الطلبات المحتسبة</span><strong id="completedOrders">0</strong></article>
+        <article class="statCard"><span>عمولات مكتسبة</span><strong id="earnedCommission">0 جنيه</strong></article>
+        <article class="statCard"><span>تم تسويته</span><strong id="paidCommission">0 جنيه</strong></article>
+        <article class="statCard"><span>مستحق</span><strong id="outstandingCommission">0 جنيه</strong></article>
+        <article class="statCard"><span>عمولة الطلب الحالية</span><strong id="currentCommission">—</strong></article>
+        <article class="statCard"><span>حالة الاتفاق</span><strong id="agreementStatus">—</strong></article>
+      </div>
+
+      <section class="card">
+        <div class="sectionTitle">
+          <div><span class="eyebrow">السوبرماركت المرتبط</span><h2 id="linkedStoreName">—</h2></div>
+          <span id="operatorState" class="statusPill">—</span>
+        </div>
+        <div id="storeMeta" class="metaGrid"></div>
+      </section>
+
+      <section class="card">
+        <div class="sectionTitle">
+          <div><span class="eyebrow">اتفاق العمولة</span><h2>العمولة لكل أوردر مكتمل</h2></div>
+        </div>
+        <p class="hint">لو غيرت العمولة، القيمة الحالية تظل شغالة لحد ما السوبرماركت يقبل القيمة الجديدة.</p>
+        <div class="inlineForm">
+          <input id="newCommissionAmount" type="number" min="0" step="0.25" placeholder="قيمة العمولة الجديدة">
+          <button id="proposeCommissionBtn" class="primaryBtn">إرسال تعديل العمولة</button>
+        </div>
+        <p id="commissionMessage" class="message"></p>
+      </section>
+
+      <section class="card">
+        <div class="sectionTitle">
+          <div><span class="eyebrow">تشغيل السوبرماركت</span><h2>الروابط المهمة</h2></div>
+        </div>
+
+        <div class="linkBox">
+          <span>رابط لوحة السوبرماركت</span>
+          <input id="operatorLink" readonly>
+          <button class="copyBtn" data-copy="operatorLink">نسخ</button>
+        </div>
+
+        <div class="linkBox">
+          <span>رابط طلب العملاء</span>
+          <input id="customerLink" readonly>
+          <button class="copyBtn" data-copy="customerLink">نسخ</button>
+        </div>
+
+        <p id="linksHint" class="hint"></p>
+      </section>
+    </section>
+  </main>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

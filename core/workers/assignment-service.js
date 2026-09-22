@@ -9,7 +9,10 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 async function authorizeActor(transaction, project, actorUid) {
-  if (project.ownerId === actorUid) {
+  if (
+    project.ownerId === actorUid &&
+    project.operatingModel === "owner_operated"
+  ) {
     return "owner";
   }
 

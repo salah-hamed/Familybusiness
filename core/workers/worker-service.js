@@ -60,7 +60,10 @@ async function assertProjectActor(projectId, actorUid) {
 
   const project = projectSnap.data();
 
-  if (project.ownerId === actorUid) {
+  if (
+    project.ownerId === actorUid &&
+    project.operatingModel === "owner_operated"
+  ) {
     return project;
   }
 
