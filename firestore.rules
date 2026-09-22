@@ -6,7 +6,9 @@ service cloud.firestore {
   function projectPath(projectId){ return /databases/$(database)/documents/projects/$(projectId); }
   function carwashSubscriptionPath(subscriptionId){ return /databases/$(database)/documents/carwashSubscriptions/$(subscriptionId); }
   function operatorPath(operatorId){ return /databases/$(database)/documents/operators/$(operatorId); }
-  function commissionAgreementPath(agreementId){ return /databases/$(database)/documents/commissionAgreements/$(agreementId); }\n  function workerPath(workerId){ return /databases/$(database)/documents/workers/$(workerId); }\n  function orderPath(orderId){ return /databases/$(database)/documents/orders/$(orderId); }
+  function commissionAgreementPath(agreementId){ return /databases/$(database)/documents/commissionAgreements/$(agreementId); }
+  function workerPath(workerId){ return /databases/$(database)/documents/workers/$(workerId); }
+  function orderPath(orderId){ return /databases/$(database)/documents/orders/$(orderId); }
   function userExists(uid){ return exists(userPath(uid)); }
   function userData(uid){ return get(userPath(uid)).data; }
   function isAdmin(){ return signedIn() && userExists(request.auth.uid) && userData(request.auth.uid).role == "admin"; }
