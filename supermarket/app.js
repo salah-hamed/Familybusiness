@@ -33,7 +33,7 @@ async function copyValue(id){
 document.querySelectorAll("[data-copy]").forEach(btn=>btn.onclick=()=>copyValue(btn.dataset.copy));
 
 async function loadEarnings(){
-  const snap=await getDocs(query(collection(db,"commissionLedger"),where("projectId","==",projectId)));
+  const snap=await getDocs(query(collection(db,"commissionLedger"),where("userId","==",currentUser.uid),where("projectId","==",projectId)));
   const entries=snap.docs.map(d=>d.data()).filter(x=>x.sourceType==="project_order");
   $("completedOrders").innerText=entries.length;
   $("earnedCommission").innerText=money(entries.reduce((s,x)=>s+Number(x.amount||0),0));
