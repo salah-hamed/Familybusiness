@@ -140,6 +140,10 @@
         <label>مصاريف التوصيل<input id="settingsDeliveryFee" type="number" min="0" step="0.5"></label>
       </div>
       <label class="check"><input id="acceptingOrders" type="checkbox"> استقبال طلبات جديدة</label>
+      <div class="customerLinkBox">
+        <label>رابط طلب العملاء<input id="customerOrderLink" readonly></label>
+        <button id="copyCustomerLinkBtn" class="secondary" type="button">نسخ رابط العملاء</button>
+      </div>
       <button id="saveSettingsBtn" class="primary">حفظ الإعدادات</button>
       <p id="settingsMessage" class="message"></p>
     </section>
