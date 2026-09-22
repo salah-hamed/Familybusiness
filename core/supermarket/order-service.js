@@ -268,7 +268,6 @@ export async function changeSupermarketOrderStatus({
   await runTransaction(db, async transaction => {
     const freshOrderSnap = await transaction.get(orderRef);
     const agreementSnap = await transaction.get(agreementRef);
-    const ledgerSnap = await transaction.get(ledgerRef);
 
     if (!freshOrderSnap.exists()) throw new Error("ORDER_NOT_FOUND");
     if (!agreementSnap.exists()) throw new Error("AGREEMENT_NOT_FOUND");
