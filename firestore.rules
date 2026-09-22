@@ -384,10 +384,13 @@ service cloud.firestore {
       && request.resource.data.pendingAmount is number
       && request.resource.data.pendingAmount >= 0
       && request.resource.data.pendingStatus == "pending"
-      && request.resource.data.status == resource.data.status
+      && (
+        (resource.data.currentAmount != null && request.resource.data.status == "accepted")
+        || (resource.data.currentAmount == null && request.resource.data.status == "pending")
+      )
       && request.resource.data.proposedBy == request.auth.uid
       && request.resource.data.version == resource.data.version + 1
-      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["pendingAmount","pendingStatus","proposedAt","proposedBy","rejectedAt","updatedAt","version"])
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["pendingAmount","pendingStatus","status","proposedAt","proposedBy","rejectedAt","updatedAt","version"])
     )
     || (
       signedIn()
