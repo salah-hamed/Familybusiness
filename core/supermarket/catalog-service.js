@@ -137,6 +137,11 @@ export async function bulkImportStoreProducts(projectId, actorUid, rows = []) {
     }))
     .filter(row => row.name && Number.isFinite(row.price) && row.price >= 0);
 
+  const current = await listStoreProducts(projectId);
+  const byBarcode = new Map(
+    current.filter(item => item.barcode).map(item => [item.barcode, item])
+  );
+
   let imported = 0;
 
   for (let start = 0; start < validRows.length; start += 350) {
@@ -144,11 +149,13 @@ export async function bulkImportStoreProducts(projectId, actorUid, rows = []) {
     const chunk = validRows.slice(start, start + 350);
 
     chunk.forEach(row => {
-      const id = productIdFor({ barcode: row.barcode });
-      const ref = id ? doc(productsCollection(projectId), id) : doc(productsCollection(projectId));
+      const existing = row.barcode ? byBarcode.get(row.barcode) : null;
+      const ref = existing
+        ? doc(db, "supermarkets", projectId, "products", existing.productId)
+        : doc(productsCollection(projectId));
       const now = serverTimestamp();
 
-      batch.set(ref, {
+      const payload = {
         productId: ref.id,
         projectId,
         name: row.name,
@@ -161,11 +168,19 @@ export async function bulkImportStoreProducts(projectId, actorUid, rows = []) {
         isActive: true,
         source: "import",
         masterId: "",
-        createdBy: actorUid,
-        createdAt: now,
         updatedBy: actorUid,
         updatedAt: now
-      }, { merge: true });
+      };
+
+      if (existing) {
+        batch.update(ref, payload);
+      } else {
+        batch.set(ref, {
+          ...payload,
+          createdBy: actorUid,
+          createdAt: now
+        });
+      }
     });
 
     await batch.commit();
