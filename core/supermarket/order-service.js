@@ -204,7 +204,7 @@ export async function acceptSupermarketOrder({
 
 export async function listSupermarketOrders(projectId) {
   const snap = await getDocs(
-    query(collection(db, "orders"), where("projectId", "==", projectId), where("templateType", "==", "supermarket"))
+    query(collection(db, "orders"), where("projectId", "==", projectId))
   );
 
   return snap.docs
@@ -298,7 +298,7 @@ export async function changeSupermarketOrderStatus({
       commissionEligible: true,
       commissionLocked: true,
       commissionAmount: amount,
-      commissionAgreementVersion: Number(freshAgreement.version || 1)
+      commissionAgreementVersion: Number(freshAgreement.acceptedVersion || freshAgreement.version || 1)
     });
 
     transaction.set(ledgerRef, {
@@ -308,7 +308,7 @@ export async function changeSupermarketOrderStatus({
       sourceType: "project_order",
       sourceId: orderId,
       agreementId: projectId,
-      agreementVersion: Number(freshAgreement.version || 1),
+      agreementVersion: Number(freshAgreement.acceptedVersion || freshAgreement.version || 1),
       amount,
       currency: "EGP",
       status: "earned",
