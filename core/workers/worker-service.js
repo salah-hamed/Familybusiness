@@ -27,7 +27,7 @@ const TEMPLATE_WORKER_ROLES = Object.freeze({
   laundry: new Set([WORKER_ROLES.PICKUP_AGENT, WORKER_ROLES.DELIVERY_AGENT])
 });
 
-function roleAllowedForTemplate(templateId, role) {
+export function isWorkerRoleAllowedForTemplate(templateId, role) {
   return TEMPLATE_WORKER_ROLES[templateId]?.has(role) === true;
 }
 
@@ -108,7 +108,7 @@ export async function createWorker({
 
   if (
     !ALLOWED_ROLES.has(normalizedRole) ||
-    !roleAllowedForTemplate(project.template, normalizedRole)
+    !isWorkerRoleAllowedForTemplate(project.template, normalizedRole)
   ) {
     throw new Error("INVALID_WORKER_ROLE");
   }
@@ -191,7 +191,7 @@ export async function updateWorker({
     const role = normalizeText(updates.role);
     if (
       !ALLOWED_ROLES.has(role) ||
-      !roleAllowedForTemplate(worker.templateId, role)
+      !isWorkerRoleAllowedForTemplate(worker.templateId, role)
     ) {
       throw new Error("INVALID_WORKER_ROLE");
     }
