@@ -407,6 +407,13 @@ service cloud.firestore {
       && request.resource.data.statusUpdatedBy == request.auth.uid
       && validSupermarketTransition(resource.data.status, request.resource.data.status)
       && (
+        !(request.resource.data.status in ["assigned","out_for_delivery","delivered"])
+        || (
+          request.resource.data.assignedWorkerId is string
+          && request.resource.data.assignedWorkerId.size() > 0
+        )
+      )
+      && (
         (
           request.resource.data.status != "delivered"
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
@@ -736,6 +743,7 @@ service cloud.firestore {
 
   match /operators/{operatorId} {
    allow get: if isAdmin()
+    || ownsProject(operatorId)
     || (signedIn() && resource.data.ownerId == request.auth.uid)
     || (signedIn() && resource.data.authUid == request.auth.uid)
     || (
@@ -820,7 +828,16 @@ service cloud.firestore {
   }
 
   match /commissionAgreements/{agreementId} {
-   allow get, list: if isAdmin()
+   allow get: if isAdmin()
+    || ownsProject(agreementId)
+    || (signedIn() && resource.data.ownerId == request.auth.uid)
+    || (
+      signedIn()
+      && operatorExists(resource.data.operatorId)
+      && operatorData(resource.data.operatorId).authUid == request.auth.uid
+    );
+
+   allow list: if isAdmin()
     || (signedIn() && resource.data.ownerId == request.auth.uid)
     || (
       signedIn()
