@@ -39,6 +39,33 @@ export function allowedNextSupermarketStatuses(status) {
   return STATUS_FLOW[status] || [];
 }
 
+function normalizeRequestedLines(lines = []) {
+  const merged = new Map();
+
+  for (const line of lines) {
+    const productId = clean(line?.productId);
+    const quantity = Math.floor(Number(line?.quantity || 0));
+
+    if (!productId || !Number.isFinite(quantity) || quantity <= 0) continue;
+
+    merged.set(
+      productId,
+      Math.min(99, (merged.get(productId) || 0) + quantity)
+    );
+  }
+
+  const normalized = [...merged.entries()].map(([productId, quantity]) => ({
+    productId,
+    quantity
+  }));
+
+  if (normalized.length > 50) {
+    throw new Error("TOO_MANY_ORDER_LINES");
+  }
+
+  return normalized;
+}
+
 async function loadRequestedProducts(projectId, lines = []) {
   const ids = [...new Set(
     lines
@@ -83,9 +110,10 @@ export async function createSupermarketOrder({
     throw new Error("SUPERMARKET_NOT_ACCEPTING_ORDERS");
   }
 
-  const available = await loadRequestedProducts(projectId, cart);
+  const requestedLines = normalizeRequestedLines(cart);
+  const available = await loadRequestedProducts(projectId, requestedLines);
 
-  const items = cart
+  const items = requestedLines
     .map(line => {
       const product = available.get(line.productId);
       const quantity = Math.max(0, Math.min(99, Math.floor(Number(line.quantity || 0))));
@@ -168,9 +196,10 @@ export async function acceptSupermarketOrder({
     throw new Error("ORDER_NOT_ACCEPTABLE");
   }
 
-  const catalog = await loadRequestedProducts(projectId, order.items || []);
+  const requestedLines = normalizeRequestedLines(order.items || []);
+  const catalog = await loadRequestedProducts(projectId, requestedLines);
 
-  const items = (order.items || []).map(line => {
+  const items = requestedLines.map(line => {
     const product = catalog.get(line.productId);
     const quantity = Math.max(0, Math.min(99, Math.floor(Number(line.quantity || 0))));
 
