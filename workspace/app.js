@@ -5,7 +5,7 @@ import {
   doc,
   getDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import projects from "../templates/projects.js";
+import projects, { canCreateTemplate, getDiscoverableProjects } from "../templates/projects.js";
 import {
   createProject,
   loadUserProjects
@@ -49,7 +49,7 @@ protectPage(async (user) => {
 const myProjectIds = myProjects.map(project => project.projectId);
 templatesContainer.innerHTML = "";
 
-projects.forEach(project => {
+getDiscoverableProjects().forEach(project => {
 
   const existingProject =
     myProjects.find(item => item.projectId === project.id);
@@ -57,8 +57,9 @@ projects.forEach(project => {
   const projectDocId =
     existingProject?.projectDocId ||
     getProjectDocId(user.uid, project.id);
-  const available = project.active === true;
-  const disabled = !subscriptionActive || !available;
+  const available = project.status === "active" && project.visibility === "public";
+  const creationEnabled = canCreateTemplate(project);
+  const disabled = !subscriptionActive || !available || (!created && !creationEnabled);
 
   templatesContainer.innerHTML += `
 
@@ -72,7 +73,7 @@ projects.forEach(project => {
 
         <h3>${project.title}</h3>
 
-        ${available ? "" : '<div class="comingSoonBadge">قريبًا</div>'}
+        ${!creationEnabled && !created ? '<div class="comingSoonBadge">قريبًا للتشغيل</div>' : ""}
 
         <button
           class="projectBtn"
@@ -82,11 +83,13 @@ projects.forEach(project => {
           ${disabled ? "disabled" : ""}>
 
           ${
-            !available
-              ? "قريبًا"
-              : subscriptionActive
-                ? (created ? "إدارة المشروع" : "إنشاء المشروع")
-                : "الاشتراك غير مفعل"
+            !subscriptionActive
+              ? "الاشتراك غير مفعل"
+              : created
+                ? "إدارة المشروع"
+                : creationEnabled
+                  ? "إنشاء المشروع"
+                  : "قريبًا للتشغيل"
           }
 
         </button>
@@ -117,7 +120,7 @@ projects.forEach(project => {
     }
 
     const project =
-      projects.find(p => p.id === templateId && p.active === true);
+      projects.find(p => p.id === templateId && canCreateTemplate(p));
 
     if (!project) return;
 
