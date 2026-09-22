@@ -7,6 +7,8 @@ service cloud.firestore {
   function carwashSubscriptionPath(subscriptionId){ return /databases/$(database)/documents/carwashSubscriptions/$(subscriptionId); }
   function operatorPath(operatorId){ return /databases/$(database)/documents/operators/$(operatorId); }
   function commissionAgreementPath(agreementId){ return /databases/$(database)/documents/commissionAgreements/$(agreementId); }
+  function workerPath(workerId){ return /databases/$(database)/documents/workers/$(workerId); }
+  function orderPath(orderId){ return /databases/$(database)/documents/orders/$(orderId); }
   function userExists(uid){ return exists(userPath(uid)); }
   function userData(uid){ return get(userPath(uid)).data; }
   function isAdmin(){ return signedIn() && userExists(request.auth.uid) && userData(request.auth.uid).role == "admin"; }
@@ -20,6 +22,36 @@ service cloud.firestore {
   function operatorExists(operatorId){ return exists(operatorPath(operatorId)); }
   function operatorData(operatorId){ return get(operatorPath(operatorId)).data; }
   function isOperator(operatorId){ return signedIn() && operatorExists(operatorId) && operatorData(operatorId).authUid == request.auth.uid; }
+  function workerExists(workerId){ return exists(workerPath(workerId)); }
+  function workerData(workerId){ return get(workerPath(workerId)).data; }
+  function orderExists(orderId){ return exists(orderPath(orderId)); }
+  function orderData(orderId){ return get(orderPath(orderId)).data; }
+  function isProjectOperator(projectId){
+   return signedIn()
+    && projectExists(projectId)
+    && projectData(projectId).operatingModel == "partner_operated"
+    && projectData(projectId).operatorId is string
+    && projectData(projectId).operatorId.size() > 0
+    && operatorExists(projectData(projectId).operatorId)
+    && operatorData(projectData(projectId).operatorId).authUid == request.auth.uid
+    && operatorData(projectData(projectId).operatorId).status == "active"
+    && operatorData(projectData(projectId).operatorId).agreementStatus == "accepted"
+    && operatorData(projectData(projectId).operatorId).isActive == true;
+  }
+  function validWorkerRoleForProject(projectId, role){
+   return (
+      projectData(projectId).template == "supermarket"
+      && role == "rider"
+    )
+    || (
+      projectData(projectId).template == "cleaning"
+      && role == "cleaner"
+    )
+    || (
+      projectData(projectId).template == "laundry"
+      && role in ["pickup_agent","delivery_agent"]
+    );
+  }
 
   function validOrderTemplate(projectId){
    return request.resource.data.templateType is string
@@ -230,8 +262,55 @@ service cloud.firestore {
      || (request.resource.data.templateType == "carwash" && validCarwashOrder(request.resource.data.projectId))
      || (request.resource.data.templateType == "laundry" && validLaundryOrder(request.resource.data.projectId))
     );
-   allow read: if isAdmin() || ownsProject(resource.data.projectId);
-   allow update: if (isAdmin() || ownsProject(resource.data.projectId)) && request.resource.data.projectId == resource.data.projectId && request.resource.data.providerId == resource.data.providerId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status","laundryStage"]) && request.resource.data.status in ["new","accepted","done","canceled"] && (!("laundryStage" in request.resource.data) || (resource.data.templateType == "laundry" && request.resource.data.laundryStage in ["accepted","picked_up","processing","ready_delivery","delivered"]));
+   allow read: if isAdmin() || ownsProject(resource.data.projectId) || isProjectOperator(resource.data.projectId);
+   allow update: if (
+    (
+      (isAdmin() || ownsProject(resource.data.projectId))
+      && request.resource.data.projectId == resource.data.projectId
+      && request.resource.data.providerId == resource.data.providerId
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status","laundryStage"])
+      && request.resource.data.status in ["new","accepted","done","canceled"]
+      && (
+        !("laundryStage" in request.resource.data)
+        || (
+          resource.data.templateType == "laundry"
+          && request.resource.data.laundryStage in ["accepted","picked_up","processing","ready_delivery","delivered"]
+        )
+      )
+    )
+    ||
+    (
+      (isAdmin() || ownsProject(resource.data.projectId) || isProjectOperator(resource.data.projectId))
+      && request.resource.data.projectId == resource.data.projectId
+      && request.resource.data.providerId == resource.data.providerId
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        "assignedWorkerId",
+        "assignedWorkerName",
+        "assignedWorkerRole",
+        "assignedWorkerWhatsapp",
+        "assignedAt",
+        "assignmentUpdatedAt"
+      ])
+      && request.resource.data.assignedWorkerId is string
+      && request.resource.data.assignedWorkerName is string
+      && request.resource.data.assignedWorkerRole is string
+      && request.resource.data.assignedWorkerWhatsapp is string
+      && (
+        request.resource.data.assignedWorkerId == ""
+        || (
+          workerExists(request.resource.data.assignedWorkerId)
+          && workerData(request.resource.data.assignedWorkerId).projectId == resource.data.projectId
+          && workerData(request.resource.data.assignedWorkerId).isActive == true
+          && workerData(request.resource.data.assignedWorkerId).role
+            == request.resource.data.assignedWorkerRole
+          && workerData(request.resource.data.assignedWorkerId).name
+            == request.resource.data.assignedWorkerName
+          && workerData(request.resource.data.assignedWorkerId).whatsapp
+            == request.resource.data.assignedWorkerWhatsapp
+        )
+      )
+    )
+   );
    allow delete: if isAdmin() || ownsProject(resource.data.projectId);
   }
 
@@ -262,6 +341,132 @@ service cloud.firestore {
    allow create: if isAdmin() || (signedIn() && request.resource.data.projectId is string && ownsProject(request.resource.data.projectId)) || (request.resource.data.projectId is string && request.resource.data.status == "pending" && request.resource.data.orderId is string && request.resource.data.requestType in ["new","renewal"] && request.resource.data.keys().hasOnly(["projectId","status","orderId","requestType","updatedAt","createdAt"]) && projectAvailable(request.resource.data.projectId));
    allow update: if isAdmin() || (ownsProject(resource.data.projectId) && request.resource.data.projectId == resource.data.projectId) || (request.resource.data.projectId == resource.data.projectId && request.resource.data.status == "pending" && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status","orderId","requestType","updatedAt"]) && request.resource.data.orderId is string && request.resource.data.requestType in ["new","renewal"] && resource.data.status in ["canceled","renewable","active"] && projectAvailable(resource.data.projectId) && (resource.data.status != "active" || (carwashSubscriptionExists(subscriptionId) && (carwashSubscriptionData(subscriptionId).status != "active" || carwashSubscriptionData(subscriptionId).remainingWashes <= 0 || carwashSubscriptionData(subscriptionId).expiresAt <= request.time))));
    allow delete: if isAdmin() || ownsProject(resource.data.projectId);
+  }
+
+  match /workers/{workerId} {
+   allow get, list: if isAdmin()
+    || ownsProject(resource.data.projectId)
+    || isProjectOperator(resource.data.projectId);
+
+   allow create: if signedIn()
+    && request.resource.data.workerId == workerId
+    && request.resource.data.projectId is string
+    && request.resource.data.ownerId is string
+    && request.resource.data.templateId is string
+    && request.resource.data.name is string
+    && request.resource.data.role in ["rider","cleaner","pickup_agent","delivery_agent"]
+    && validWorkerRoleForProject(request.resource.data.projectId, request.resource.data.role)
+    && request.resource.data.phone is string
+    && request.resource.data.whatsapp is string
+    && request.resource.data.whatsapp.size() > 0
+    && request.resource.data.isActive == true
+    && request.resource.data.createdBy == request.auth.uid
+    && request.resource.data.keys().hasOnly([
+      "workerId",
+      "ownerId",
+      "projectId",
+      "templateId",
+      "name",
+      "role",
+      "phone",
+      "whatsapp",
+      "isActive",
+      "createdBy",
+      "createdAt",
+      "updatedAt"
+    ])
+    && projectExists(request.resource.data.projectId)
+    && request.resource.data.ownerId == projectData(request.resource.data.projectId).ownerId
+    && request.resource.data.templateId == projectData(request.resource.data.projectId).template
+    && (
+      ownsProject(request.resource.data.projectId)
+      || isProjectOperator(request.resource.data.projectId)
+    );
+
+   allow update: if (
+      isAdmin()
+      || ownsProject(resource.data.projectId)
+      || isProjectOperator(resource.data.projectId)
+    )
+    && request.resource.data.workerId == resource.data.workerId
+    && request.resource.data.ownerId == resource.data.ownerId
+    && request.resource.data.projectId == resource.data.projectId
+    && request.resource.data.templateId == resource.data.templateId
+    && request.resource.data.createdBy == resource.data.createdBy
+    && request.resource.data.createdAt == resource.data.createdAt
+    && request.resource.data.name is string
+    && request.resource.data.role in ["rider","cleaner","pickup_agent","delivery_agent"]
+    && validWorkerRoleForProject(resource.data.projectId, request.resource.data.role)
+    && request.resource.data.phone is string
+    && request.resource.data.whatsapp is string
+    && request.resource.data.whatsapp.size() > 0
+    && request.resource.data.isActive is bool
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+      "name",
+      "role",
+      "phone",
+      "whatsapp",
+      "isActive",
+      "updatedAt"
+    ]);
+
+   allow delete: if isAdmin();
+  }
+
+  match /workerAssignments/{assignmentId} {
+   allow get, list: if isAdmin()
+    || ownsProject(resource.data.projectId)
+    || isProjectOperator(resource.data.projectId);
+
+   allow create: if signedIn()
+    && request.resource.data.assignmentId == assignmentId
+    && request.resource.data.projectId is string
+    && request.resource.data.orderId is string
+    && request.resource.data.workerId is string
+    && request.resource.data.actorUid == request.auth.uid
+    && request.resource.data.actorType in ["owner","operator"]
+    && request.resource.data.eventType in ["assigned","unassigned"]
+    && request.resource.data.keys().hasOnly([
+      "assignmentId",
+      "projectId",
+      "orderId",
+      "workerId",
+      "workerName",
+      "workerRole",
+      "actorUid",
+      "actorType",
+      "eventType",
+      "createdAt"
+    ])
+    && orderExists(request.resource.data.orderId)
+    && orderData(request.resource.data.orderId).projectId == request.resource.data.projectId
+    && (
+      (
+        request.resource.data.actorType == "owner"
+        && ownsProject(request.resource.data.projectId)
+      )
+      ||
+      (
+        request.resource.data.actorType == "operator"
+        && isProjectOperator(request.resource.data.projectId)
+      )
+    )
+    && (
+      (
+        request.resource.data.eventType == "assigned"
+        && workerExists(request.resource.data.workerId)
+        && workerData(request.resource.data.workerId).projectId == request.resource.data.projectId
+        && workerData(request.resource.data.workerId).isActive == true
+        && request.resource.data.workerName is string
+        && request.resource.data.workerRole == workerData(request.resource.data.workerId).role
+      )
+      ||
+      (
+        request.resource.data.eventType == "unassigned"
+      )
+    );
+
+   allow update, delete: if false;
   }
 
   match /operators/{operatorId} {
