@@ -129,7 +129,7 @@ export async function createSupermarketOrder({
 
 export async function listSupermarketOrders(projectId) {
   const snap = await getDocs(
-    query(collection(db, "orders"), where("projectId", "==", projectId))
+    query(collection(db, "orders"), where("projectId", "==", projectId), where("templateType", "==", "supermarket"))
   );
 
   return snap.docs
