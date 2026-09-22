@@ -22,8 +22,6 @@ function money(value){return `${Number(value||0).toLocaleString("ar-EG")} جني
 function statusText(status){
   return ({accepted:"مقبول",pending:"بانتظار الموافقة",rejected:"مرفوض",not_proposed:"لم يبدأ"})[status] || status || "—";
 }
-function baseUrl(path){return new URL(path, window.location.href).toString();}
-
 async function copyValue(id){
   const value=$(id)?.value||"";
   if(!value)return;
@@ -33,8 +31,8 @@ async function copyValue(id){
 document.querySelectorAll("[data-copy]").forEach(btn=>btn.onclick=()=>copyValue(btn.dataset.copy));
 
 async function loadEarnings(){
-  const snap=await getDocs(query(collection(db,"commissionLedger"),where("userId","==",currentUser.uid),where("projectId","==",projectId)));
-  const entries=snap.docs.map(d=>d.data()).filter(x=>x.sourceType==="project_order");
+  const snap=await getDocs(query(collection(db,"commissionLedger"),where("userId","==",currentUser.uid)));
+  const entries=snap.docs.map(d=>d.data()).filter(x=>x.sourceType==="project_order"&&x.projectId===projectId);
   const earned=entries.reduce((s,x)=>s+Number(x.amount||0),0);
   const paid=entries.filter(x=>x.status==="paid"||x.paidAt).reduce((s,x)=>s+Number(x.amount||0),0);
   $("completedOrders").innerText=entries.length;
