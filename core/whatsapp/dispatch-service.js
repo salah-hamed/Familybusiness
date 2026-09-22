@@ -8,6 +8,7 @@ export function normalizeWhatsAppPhone(value) {
   if (!digits) return "";
   if (digits.startsWith("20")) return digits;
   if (digits.startsWith("0")) return `20${digits.slice(1)}`;
+  if (/^1\d{9}$/.test(digits)) return `20${digits}`;
 
   return digits;
 }
