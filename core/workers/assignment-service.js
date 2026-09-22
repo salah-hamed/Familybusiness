@@ -1,4 +1,5 @@
 import db from "../firebase/firebase-db.js";
+import { isWorkerRoleAllowedForTemplate } from "./worker-service.js";
 
 import {
   collection,
@@ -76,6 +77,10 @@ export async function assignWorkerToOrder({
 
     if (worker.projectId !== projectId || worker.isActive !== true) {
       throw new Error("WORKER_PROJECT_MISMATCH");
+    }
+
+    if (!isWorkerRoleAllowedForTemplate(project.template, worker.role)) {
+      throw new Error("INVALID_WORKER_ROLE");
     }
 
     const assignedAt = serverTimestamp();
