@@ -3,7 +3,7 @@ import db from "../firebase/firebase-db.js";
 import {
   doc,
   getDoc,
-  setDoc,
+  runTransaction,
   updateDoc,
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -35,36 +35,64 @@ export async function createOperator({
   email = ""
 }) {
   const operatorId = getOperatorDocId(projectDocId);
-  const ref = doc(db, "operators", operatorId);
-  const existing = await getDoc(ref);
+  const operatorRef = doc(db, "operators", operatorId);
+  const projectRef = doc(db, "projects", projectDocId);
+  const normalizedName = String(name || "").trim();
+  const normalizedEmail = String(email || "").trim().toLowerCase();
 
-  if (existing.exists()) {
-    throw new Error("OPERATOR_ALREADY_EXISTS");
-  }
-
-  const payload = {
-    operatorId,
-    projectId: projectDocId,
-    ownerId,
-    templateId,
-    name: String(name || "").trim(),
-    contactName: String(contactName || "").trim(),
-    phone: String(phone || "").trim(),
-    whatsapp: String(whatsapp || "").trim(),
-    email: String(email || "").trim().toLowerCase(),
-    authUid: "",
-    status: "pending_invite",
-    agreementStatus: "not_proposed",
-    isActive: false,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
-  };
-
-  if (!payload.name) {
+  if (!normalizedName) {
     throw new Error("OPERATOR_NAME_REQUIRED");
   }
 
-  await setDoc(ref, payload);
+  if (!normalizedEmail) {
+    throw new Error("OPERATOR_EMAIL_REQUIRED");
+  }
+
+  await runTransaction(db, async (transaction) => {
+    const projectSnap = await transaction.get(projectRef);
+    const operatorSnap = await transaction.get(operatorRef);
+
+    if (!projectSnap.exists()) {
+      throw new Error("PROJECT_NOT_FOUND");
+    }
+
+    if (operatorSnap.exists()) {
+      throw new Error("OPERATOR_ALREADY_EXISTS");
+    }
+
+    const project = projectSnap.data();
+
+    if (
+      project.ownerId !== ownerId ||
+      project.template !== templateId ||
+      project.operatingModel !== "partner_operated"
+    ) {
+      throw new Error("PARTNER_PROJECT_MISMATCH");
+    }
+
+    transaction.set(operatorRef, {
+      operatorId,
+      projectId: projectDocId,
+      ownerId,
+      templateId,
+      name: normalizedName,
+      contactName: String(contactName || "").trim(),
+      phone: String(phone || "").trim(),
+      whatsapp: String(whatsapp || "").trim(),
+      email: normalizedEmail,
+      authUid: "",
+      status: "pending_invite",
+      agreementStatus: "not_proposed",
+      isActive: false,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+
+    transaction.update(projectRef, {
+      operatorId,
+      partnerSetupStatus: "agreement_required"
+    });
+  });
 
   return operatorId;
 }
@@ -83,6 +111,38 @@ export async function updateOperatorContact(operatorId, updates = {}) {
   allowed.updatedAt = serverTimestamp();
 
   await updateDoc(doc(db, "operators", operatorId), allowed);
+}
+
+export async function claimOperatorAccess(operatorId, authUser) {
+  if (!authUser?.uid || !authUser?.email || authUser.emailVerified !== true) {
+    throw new Error("VERIFIED_OPERATOR_EMAIL_REQUIRED");
+  }
+
+  const operatorRef = doc(db, "operators", operatorId);
+  const operatorSnap = await getDoc(operatorRef);
+
+  if (!operatorSnap.exists()) {
+    throw new Error("OPERATOR_NOT_FOUND");
+  }
+
+  const operator = operatorSnap.data();
+
+  if (
+    String(operator.email || "").trim().toLowerCase() !==
+    String(authUser.email).trim().toLowerCase()
+  ) {
+    throw new Error("OPERATOR_EMAIL_MISMATCH");
+  }
+
+  if (operator.authUid && operator.authUid !== authUser.uid) {
+    throw new Error("OPERATOR_ALREADY_CLAIMED");
+  }
+
+  await updateDoc(operatorRef, {
+    authUid: authUser.uid,
+    status: operator.agreementStatus === "accepted" ? "active" : "pending_agreement",
+    updatedAt: serverTimestamp()
+  });
 }
 
 export function operatorCanOperate(operator = {}) {
