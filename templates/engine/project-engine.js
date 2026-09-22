@@ -3,6 +3,7 @@ import {
   getProjectDocId
 } from "../../core/projects/project-service.js";
 import { canCreateTemplate } from "../projects.js";
+import { isSubscriptionActive } from "../../core/subscriptions/subscription-service.js";
 
 import {
   doc,
@@ -29,10 +30,7 @@ export async function createProject(ownerId, project) {
 
   const userData = userSnap.data();
 
-  if (
-    userData.isActive !== true ||
-    userData.subscriptionStatus !== "active"
-  ) {
+  if (!isSubscriptionActive(userData)) {
     throw new Error("SUBSCRIPTION_NOT_ACTIVE");
   }
 
