@@ -18,7 +18,7 @@ export async function getLaundry(projectId){
 }
 
 export async function createOrResumeLaundrySetup({
-  projectId,ownerId,name,contactName="",phone="",whatsapp="",email,address="",location="",commissionAmount
+  projectId,ownerId,name,contactName="",phone="",whatsapp="",email,address="",location="",instapayLink="",commissionAmount
 }){
   const projectSnap=await getDoc(doc(db,"projects",projectId));
   if(!projectSnap.exists())throw new Error("PROJECT_NOT_FOUND");
@@ -40,7 +40,7 @@ export async function createOrResumeLaundrySetup({
     laundryId:projectId,projectId,ownerId,operatorId:projectId,
     name:clean(name),contactName:clean(contactName),phone:clean(phone),
     whatsapp:clean(whatsapp||phone),email:clean(email).toLowerCase(),
-    address:clean(address),location:clean(location),
+    address:clean(address),location:clean(location),instapayLink:clean(instapayLink),
     isAcceptingOrders:true,currency:"EGP",
     updatedAt:serverTimestamp()
   };
@@ -54,7 +54,7 @@ export async function createOrResumeLaundrySetup({
 
 export async function updateLaundrySettings(projectId,updates={}){
   const next={};
-  ["name","contactName","phone","whatsapp","address","location"].forEach(k=>{if(k in updates)next[k]=clean(updates[k]);});
+  ["name","contactName","phone","whatsapp","address","location","instapayLink"].forEach(k=>{if(k in updates)next[k]=clean(updates[k]);});
   if("isAcceptingOrders" in updates)next.isAcceptingOrders=updates.isAcceptingOrders===true;
   if(!Object.keys(next).length)return;
   next.updatedAt=serverTimestamp();
