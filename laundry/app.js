@@ -9,6 +9,12 @@ const $=id=>document.getElementById(id);
 const projectId=new URLSearchParams(location.search).get("project")||"";
 let user=null,project=null,bundle=null;
 const money=v=>`${Number(v||0).toLocaleString("ar-EG")} جنيه`;
+const esc=v=>String(v??"")
+  .replace(/&/g,"&amp;")
+  .replace(/</g,"&lt;")
+  .replace(/>/g,"&gt;")
+  .replace(/"/g,"&quot;")
+  .replace(/'/g,"&#039;");
 const statusText=s=>({accepted:"مقبول",pending:"بانتظار الموافقة",rejected:"مرفوض",not_proposed:"لم يبدأ"})[s]||s||"—";
 
 document.querySelectorAll("[data-copy]").forEach(btn=>btn.onclick=async()=>{
@@ -41,7 +47,7 @@ function render(){
   $("laundryMeta").innerHTML=[
     ["المسؤول",laundry.contactName||operator.contactName||"—"],["الهاتف",laundry.phone||operator.phone||"—"],
     ["الإيميل",laundry.email||operator.email||"—"],["العنوان",laundry.address||"—"]
-  ].map(([k,v])=>`<div><b>${k}</b><div>${v}</div></div>`).join("");
+  ].map(([k,v])=>`<div><b>${esc(k)}</b><div>${esc(v)}</div></div>`).join("");
 
   $("commissionMessage").innerText=pending&&agreement?.pendingAmount!=null?`في انتظار موافقة المغسلة على ${money(agreement.pendingAmount)}.`:"";
   const operatorUrl=new URL("../laundry-operator/",location.href);operatorUrl.searchParams.set("project",projectId);$("operatorLink").value=operatorUrl;
