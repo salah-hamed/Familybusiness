@@ -54,7 +54,6 @@ async function refreshAccount(){
   currentStore=await getSupermarket(projectId);
 
   setVisible("authPanel",false);
-  setVisible("verifyPanel",false);
   $("logoutBtn").classList.remove("hidden");
 
   const hasPending=currentAgreement?.pendingStatus==="pending" && currentAgreement?.pendingAmount!=null;
