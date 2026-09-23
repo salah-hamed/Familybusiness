@@ -429,6 +429,7 @@ service cloud.firestore {
     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["businessName","whatsappNumber","instapayLink","logo","coverImage","primaryColor","priceConfig","operatorId","partnerSetupStatus"])
     && !(
       resource.data.template == "laundry"
+      && ("operatingModel" in resource.data)
       && resource.data.operatingModel == "partner_operated"
       && request.resource.data.diff(resource.data).affectedKeys().hasAny(["priceConfig"])
     )
@@ -823,6 +824,7 @@ service cloud.firestore {
       "email",
       "address",
       "location",
+      "instapayLink",
       "currency",
       "isAcceptingOrders",
       "createdAt",
@@ -852,6 +854,7 @@ service cloud.firestore {
       "email",
       "address",
       "location",
+      "instapayLink",
       "isAcceptingOrders",
       "updatedAt"
     ]);
