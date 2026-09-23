@@ -1139,8 +1139,18 @@ service cloud.firestore {
     || (
       signedIn()
       && resource.data.authUid == ""
-      && request.auth.token.email_verified == true
-      && request.auth.token.email == resource.data.email
+      && (
+        (
+          resource.data.authLoginEmail is string
+          && resource.data.authLoginEmail.size() > 0
+          && request.auth.token.email == resource.data.authLoginEmail
+        )
+        ||
+        (
+          request.auth.token.email_verified == true
+          && request.auth.token.email == resource.data.email
+        )
+      )
     );
 
    allow list: if isAdmin()
@@ -1152,6 +1162,8 @@ service cloud.firestore {
     && request.resource.data.projectId == operatorId
     && request.resource.data.ownerId == request.auth.uid
     && request.resource.data.authUid == ""
+    && request.resource.data.authLoginEmail is string
+    && request.resource.data.authLoginEmail.size() > 0
     && request.resource.data.status == "pending_invite"
     && request.resource.data.agreementStatus == "not_proposed"
     && request.resource.data.isActive == false
@@ -1175,7 +1187,15 @@ service cloud.firestore {
         resource.data.authUid == ""
         || request.resource.data.email == resource.data.email
       )
-      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name","contactName","phone","whatsapp","email","agreementStatus","updatedAt"])
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name","contactName","phone","whatsapp","email","authLoginEmail","agreementStatus","updatedAt"])
+      && (
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(["authLoginEmail"])
+        || (
+          resource.data.authUid == ""
+          && request.resource.data.authLoginEmail is string
+          && request.resource.data.authLoginEmail.size() > 0
+        )
+      )
       && (
         request.resource.data.agreementStatus == resource.data.agreementStatus
         || (
@@ -1187,8 +1207,18 @@ service cloud.firestore {
     || (
       signedIn()
       && resource.data.authUid == ""
-      && request.auth.token.email_verified == true
-      && request.auth.token.email == resource.data.email
+      && (
+        (
+          resource.data.authLoginEmail is string
+          && resource.data.authLoginEmail.size() > 0
+          && request.auth.token.email == resource.data.authLoginEmail
+        )
+        ||
+        (
+          request.auth.token.email_verified == true
+          && request.auth.token.email == resource.data.email
+        )
+      )
       && request.resource.data.authUid == request.auth.uid
       && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["authUid","status","updatedAt"])
       && (
