@@ -52,7 +52,7 @@ function render(){
   ].map(([k,v])=>`<div><b>${esc(k)}</b><div>${esc(v)}</div></div>`).join("");
 
   $("commissionMessage").innerText=pending&&agreement?.pendingAmount!=null?`في انتظار موافقة المغسلة على ${money(agreement.pendingAmount)}.`:"";
-  const operatorUrl=new URL("../laundry-operator/",location.href);operatorUrl.searchParams.set("project",projectId);const inviteToken=getOperatorInviteToken(operator);if(inviteToken)operatorUrl.searchParams.set("invite",inviteToken);$("operatorLink").value=operatorUrl.toString();$("sendOperatorWhatsappBtn").disabled=!(inviteToken&&operator.whatsapp);
+  const operatorUrl=new URL("../laundry-operator/",location.href);operatorUrl.searchParams.set("project",projectId);const inviteToken=getOperatorInviteToken(operator);if(inviteToken)operatorUrl.searchParams.set("invite",inviteToken);$("operatorLink").value=operatorUrl.toString();$("sendOperatorWhatsappBtn").disabled=!(inviteToken&&(operator.whatsapp||operator.phone));
   const customerUrl=new URL("../templates/laundry/",location.href);customerUrl.searchParams.set("project",projectId);
   $("customerLink").value=accepted&&operator.isActive?customerUrl:"";
   $("linksHint").innerText=accepted&&operator.isActive?"المغسلة جاهزة للتشغيل.":"رابط العملاء يتفعل بعد قبول أول اتفاق عمولة وتفعيل حساب المغسلة.";
