@@ -107,7 +107,7 @@ async function init(){
   priceConfig={...priceConfig,...data.priceConfig};
   renderItems();fillSaved();
   if(laundry.whatsapp)$("whatsappBtn").href=`https://wa.me/${normalizeEgyptWhatsapp(laundry.whatsapp)}`;else $("whatsappBtn").style.display="none";
-  if(data.instapayLink)$("paymentBtn").href=data.instapayLink;else $("paymentBtn").style.display="none";
+  if(laundry.instapayLink)$("paymentBtn").href=laundry.instapayLink;else $("paymentBtn").style.display="none";
   $("submitOrder").onclick=async()=>{
     const error=validate();if(error){$("status").innerText=error;return;}
     const {pieces,price}=totals();
