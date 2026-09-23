@@ -1,6 +1,6 @@
 import db from "../core/firebase/firebase-db.js";
 import { protectPage } from "../core/auth/auth-guard.js";
-import { createOrResumeLaundrySetup, getLaundryBundle } from "../core/laundry/laundry-service.js";
+import { createOrResumeLaundrySetup, getLaundryBundle, migrateLegacyLaundryProject } from "../core/laundry/laundry-service.js";
 import { proposeCommission } from "../core/commissions/commission-service.js";
 
 import {doc,getDoc,collection,getDocs,query,where} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -59,6 +59,19 @@ protectPage(async current=>{
   if(!snap.exists()){ $("statusBanner").innerText="المشروع غير موجود.";return;}
   project={projectDocId:snap.id,...snap.data()};
   if(project.ownerId!==user.uid||project.template!=="laundry"){ $("statusBanner").innerText="غير مسموح لك بإدارة هذا المشروع.";return;}
+
+  if(project.operatingModel!=="partner_operated"){
+    $("statusBanner").innerText="جاري ترقية مشروع الغسيل إلى نموذج Laundry 2.0...";
+    try{
+      await migrateLegacyLaundryProject(projectId,user.uid);
+      const migrated=await getDoc(doc(db,"projects",projectId));
+      project={projectDocId:migrated.id,...migrated.data()};
+    }catch(e){
+      $("statusBanner").innerText=`تعذر ترقية المشروع: ${e.message}`;
+      return;
+    }
+  }
+
   await refresh();
 });
 
