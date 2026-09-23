@@ -11,7 +11,10 @@ import {createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut,onAuth
 import {doc,getDoc,updateDoc} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const $=id=>document.getElementById(id);
-const params=new URLSearchParams(location.search);\nconst projectId=params.get("project")||"";\nconst inviteToken=params.get("invite")||"";\nconst inviteAuthEmail=buildOperatorAuthEmail(inviteToken);
+const params=new URLSearchParams(location.search);
+const projectId=params.get("project")||"";
+const inviteToken=params.get("invite")||"";
+const inviteAuthEmail=buildOperatorAuthEmail(inviteToken);
 let user=null,operator=null,agreement=null,laundry=null,workers=[],orders=[];
 const money=v=>`${Number(v||0).toLocaleString("ar-EG")} جنيه`;
 const esc=v=>String(v??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;");
