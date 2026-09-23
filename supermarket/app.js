@@ -87,7 +87,7 @@ function render(){
   const inviteToken=getOperatorInviteToken(operator);
   if(inviteToken)operatorUrl.searchParams.set("invite",inviteToken);
   $("operatorLink").value=operatorUrl.toString();
-  $("sendOperatorWhatsappBtn").disabled=!(inviteToken&&operator.whatsapp);
+  $("sendOperatorWhatsappBtn").disabled=!(inviteToken&&(operator.whatsapp||operator.phone));
 
   const customerUrl=new URL("../templates/supermarket/",location.href);
   customerUrl.searchParams.set("project",projectId);
