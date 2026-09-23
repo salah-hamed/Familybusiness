@@ -1,5 +1,5 @@
 import db from "../firebase/firebase-db.js";
-import { createOperator, getOperator, updateOperatorContact } from "../partners/partner-service.js";
+import { createOperator, getOperator, updateOperatorContact, ensureOperatorInviteAccess } from "../partners/partner-service.js";
 import { proposeCommission, getCommissionAgreement } from "../commissions/commission-service.js";
 
 import {
@@ -18,7 +18,7 @@ export async function getLaundry(projectId){
 }
 
 export async function createOrResumeLaundrySetup({
-  projectId,ownerId,name,contactName="",phone="",whatsapp="",email,address="",location="",instapayLink="",commissionAmount
+  projectId,ownerId,name,contactName="",phone="",whatsapp="",address="",location="",instapayLink="",commissionAmount
 }){
   const projectSnap=await getDoc(doc(db,"projects",projectId));
   if(!projectSnap.exists())throw new Error("PROJECT_NOT_FOUND");
@@ -29,17 +29,18 @@ export async function createOrResumeLaundrySetup({
 
   let operator=await getOperator(projectId);
   if(!operator){
-    await createOperator({projectDocId:projectId,ownerId,templateId:"laundry",name,contactName,phone,whatsapp,email});
+    await createOperator({projectDocId:projectId,ownerId,templateId:"laundry",name,contactName,phone,whatsapp});
   }else{
-    await updateOperatorContact(projectId,{name,contactName,phone,whatsapp,email});
+    await updateOperatorContact(projectId,{name,contactName,phone,whatsapp});
   }
+  operator=await ensureOperatorInviteAccess(projectId,ownerId);
 
   const laundryRef=doc(db,"laundries",projectId);
   const existingLaundry=await getDoc(laundryRef);
   const laundryPayload={
     laundryId:projectId,projectId,ownerId,operatorId:projectId,
     name:clean(name),contactName:clean(contactName),phone:clean(phone),
-    whatsapp:clean(whatsapp||phone),email:clean(email).toLowerCase(),
+    whatsapp:clean(whatsapp||phone),email:"",
     address:clean(address),location:clean(location),instapayLink:clean(instapayLink),
     isAcceptingOrders:true,currency:"EGP",
     updatedAt:serverTimestamp()
