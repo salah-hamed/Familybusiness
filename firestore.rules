@@ -443,6 +443,28 @@ service cloud.firestore {
    )
    || (
     signedIn()
+    && resource.data.ownerId == request.auth.uid
+    && resource.data.template == "laundry"
+    && (
+      !("operatingModel" in resource.data)
+      || resource.data.operatingModel == "owner_operated"
+    )
+    && request.resource.data.ownerId == resource.data.ownerId
+    && request.resource.data.projectId == resource.data.projectId
+    && request.resource.data.template == resource.data.template
+    && request.resource.data.operatingModel == "partner_operated"
+    && request.resource.data.templateVersion == 3
+    && request.resource.data.operatorId == ""
+    && request.resource.data.partnerSetupStatus == "not_started"
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+      "operatingModel",
+      "templateVersion",
+      "operatorId",
+      "partnerSetupStatus"
+    ])
+   )
+   || (
+    signedIn()
     && resource.data.template == "laundry"
     && resource.data.operatingModel == "partner_operated"
     && isProjectOperator(projectId)
