@@ -416,6 +416,11 @@ service cloud.firestore {
     && request.resource.data.projectId == resource.data.projectId
     && request.resource.data.template == resource.data.template
     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["businessName","whatsappNumber","instapayLink","logo","coverImage","primaryColor","priceConfig","operatorId","partnerSetupStatus"])
+    && !(
+      resource.data.template == "laundry"
+      && resource.data.operatingModel == "partner_operated"
+      && request.resource.data.diff(resource.data).affectedKeys().hasAny(["priceConfig"])
+    )
     && (
       !request.resource.data.diff(resource.data).affectedKeys().hasAny(["operatorId","partnerSetupStatus"])
       || (
@@ -424,6 +429,18 @@ service cloud.firestore {
         && request.resource.data.partnerSetupStatus in ["partner_linked","active"]
       )
     )
+   )
+   || (
+    signedIn()
+    && resource.data.template == "laundry"
+    && resource.data.operatingModel == "partner_operated"
+    && isProjectOperator(projectId)
+    && request.resource.data.ownerId == resource.data.ownerId
+    && request.resource.data.projectId == resource.data.projectId
+    && request.resource.data.template == resource.data.template
+    && request.resource.data.operatingModel == resource.data.operatingModel
+    && request.resource.data.operatorId == resource.data.operatorId
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["priceConfig"])
    );
    allow delete: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid);
   }
@@ -511,11 +528,29 @@ service cloud.firestore {
       && request.resource.data.projectId == resource.data.projectId
       && request.resource.data.providerId == resource.data.providerId
       && request.resource.data.statusUpdatedBy == request.auth.uid
-      && validLaundryTransition(
-        resource.data.status,
-        ("laundryStage" in resource.data ? resource.data.laundryStage : ""),
-        request.resource.data.status,
-        ("laundryStage" in request.resource.data ? request.resource.data.laundryStage : "")
+      && (
+        (
+          resource.data.status == "new"
+          && (
+            (
+              request.resource.data.status == "accepted"
+              && request.resource.data.laundryStage == "accepted"
+            )
+            || request.resource.data.status == "canceled"
+          )
+        )
+        ||
+        (
+          resource.data.status == "accepted"
+          && resource.data.laundryStage is string
+          && request.resource.data.laundryStage is string
+          && validLaundryTransition(
+            resource.data.status,
+            resource.data.laundryStage,
+            request.resource.data.status,
+            request.resource.data.laundryStage
+          )
+        )
       )
       && (
         request.resource.data.status == "canceled"
@@ -702,6 +737,78 @@ service cloud.firestore {
    allow create: if isAdmin() || (signedIn() && request.resource.data.projectId is string && ownsProject(request.resource.data.projectId)) || (request.resource.data.projectId is string && request.resource.data.status == "pending" && request.resource.data.orderId is string && request.resource.data.requestType in ["new","renewal"] && request.resource.data.keys().hasOnly(["projectId","status","orderId","requestType","updatedAt","createdAt"]) && projectAvailable(request.resource.data.projectId));
    allow update: if isAdmin() || (ownsProject(resource.data.projectId) && request.resource.data.projectId == resource.data.projectId) || (request.resource.data.projectId == resource.data.projectId && request.resource.data.status == "pending" && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status","orderId","requestType","updatedAt"]) && request.resource.data.orderId is string && request.resource.data.requestType in ["new","renewal"] && resource.data.status in ["canceled","renewable","active"] && projectAvailable(resource.data.projectId) && (resource.data.status != "active" || (carwashSubscriptionExists(subscriptionId) && (carwashSubscriptionData(subscriptionId).status != "active" || carwashSubscriptionData(subscriptionId).remainingWashes <= 0 || carwashSubscriptionData(subscriptionId).expiresAt <= request.time))));
    allow delete: if isAdmin() || ownsProject(resource.data.projectId);
+  }
+
+  match /laundries/{laundryId} {
+   allow get: if isAdmin()
+    || ownsProject(laundryId)
+    || isProjectOperator(laundryId)
+    || laundryPartnerReady(laundryId);
+
+   allow list: if isAdmin()
+    || ownsProject(resource.data.projectId)
+    || isProjectOperator(resource.data.projectId);
+
+   allow create: if signedIn()
+    && request.resource.data.laundryId == laundryId
+    && request.resource.data.projectId == laundryId
+    && request.resource.data.ownerId == request.auth.uid
+    && request.resource.data.operatorId == laundryId
+    && request.resource.data.currency == "EGP"
+    && request.resource.data.isAcceptingOrders is bool
+    && projectExists(laundryId)
+    && projectData(laundryId).ownerId == request.auth.uid
+    && projectData(laundryId).template == "laundry"
+    && projectData(laundryId).operatingModel == "partner_operated"
+    && projectData(laundryId).operatorId == laundryId
+    && operatorExists(laundryId)
+    && operatorData(laundryId).ownerId == request.auth.uid
+    && request.resource.data.keys().hasOnly([
+      "laundryId",
+      "projectId",
+      "ownerId",
+      "operatorId",
+      "name",
+      "contactName",
+      "phone",
+      "whatsapp",
+      "email",
+      "address",
+      "location",
+      "currency",
+      "isAcceptingOrders",
+      "createdAt",
+      "updatedAt"
+    ]);
+
+   allow update: if (
+      isAdmin()
+      || isProjectOperator(resource.data.projectId)
+      || (
+        ownsProject(resource.data.projectId)
+        && operatorExists(resource.data.operatorId)
+        && operatorData(resource.data.operatorId).isActive == false
+      )
+    )
+    && request.resource.data.laundryId == resource.data.laundryId
+    && request.resource.data.projectId == resource.data.projectId
+    && request.resource.data.ownerId == resource.data.ownerId
+    && request.resource.data.operatorId == resource.data.operatorId
+    && request.resource.data.currency == resource.data.currency
+    && request.resource.data.isAcceptingOrders is bool
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+      "name",
+      "contactName",
+      "phone",
+      "whatsapp",
+      "email",
+      "address",
+      "location",
+      "isAcceptingOrders",
+      "updatedAt"
+    ]);
+
+   allow delete: if isAdmin();
   }
 
   match /supermarkets/{supermarketId} {
@@ -1198,7 +1305,7 @@ service cloud.firestore {
       && request.resource.data.status == "earned"
       && request.resource.data.paidAt == null
       && isProjectOperator(request.resource.data.projectId)
-      && projectData(request.resource.data.projectId).template == "supermarket"
+      && projectData(request.resource.data.projectId).template in ["supermarket","laundry"]
       && commissionAgreementExists(request.resource.data.projectId)
       && commissionAgreementData(request.resource.data.projectId).status == "accepted"
       && request.resource.data.userId
@@ -1209,10 +1316,18 @@ service cloud.firestore {
         == commissionAgreementData(request.resource.data.projectId).acceptedVersion
       && getAfter(orderPath(request.resource.data.orderId)).data.projectId
         == request.resource.data.projectId
-      && getAfter(orderPath(request.resource.data.orderId)).data.templateType
-        == "supermarket"
-      && getAfter(orderPath(request.resource.data.orderId)).data.status
-        == "delivered"
+      && (
+        (
+          getAfter(orderPath(request.resource.data.orderId)).data.templateType == "supermarket"
+          && getAfter(orderPath(request.resource.data.orderId)).data.status == "delivered"
+        )
+        ||
+        (
+          getAfter(orderPath(request.resource.data.orderId)).data.templateType == "laundry"
+          && getAfter(orderPath(request.resource.data.orderId)).data.status == "done"
+          && getAfter(orderPath(request.resource.data.orderId)).data.laundryStage == "delivered"
+        )
+      )
       && getAfter(orderPath(request.resource.data.orderId)).data.commissionLocked
         == true
       && getAfter(orderPath(request.resource.data.orderId)).data.commissionAmount
