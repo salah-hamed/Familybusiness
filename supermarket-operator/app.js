@@ -16,7 +16,10 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 const $=id=>document.getElementById(id);
-const params=new URLSearchParams(location.search);\nconst projectId=params.get("project")||"";\nconst inviteToken=params.get("invite")||"";\nconst inviteAuthEmail=buildOperatorAuthEmail(inviteToken);
+const params=new URLSearchParams(location.search);
+const projectId=params.get("project")||"";
+const inviteToken=params.get("invite")||"";
+const inviteAuthEmail=buildOperatorAuthEmail(inviteToken);
 let currentUser=null;
 let currentOperator=null;
 let currentAgreement=null;
