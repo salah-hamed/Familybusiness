@@ -31,6 +31,19 @@
         <article class="statCard wideStat revenueStat"><span class="statIcon">💰</span><div><span class="statLabel">قيمة الطلبات المنفذة</span><strong><span id="doneRevenue">0</span> جنيه</strong></div></article>
       </div>
     </section>
+    <section class="card hidden" id="cleaningWorkersSection">
+      <div class="sectionHeading">
+        <div><span class="eyebrow">فريق التشغيل</span><h2>عمال التنظيف</h2></div>
+      </div>
+      <p class="muted">أضف عمال التنظيف هنا، ثم عيّن العامل المناسب لكل طلب وأرسل له التفاصيل مباشرة على واتساب.</p>
+      <div class="formGrid">
+        <label class="fieldGroup"><span>اسم عامل التنظيف</span><input id="cleanerName" placeholder="مثال: أحمد"></label>
+        <label class="fieldGroup"><span>رقم واتساب</span><input id="cleanerPhone" inputmode="tel" placeholder="01xxxxxxxxx"></label>
+      </div>
+      <button id="addCleanerBtn" class="primaryBtn fullBtn" type="button">إضافة عامل تنظيف</button>
+      <p id="cleanerStatus" class="statusText"></p>
+      <div id="cleanersList" class="cleanersList"><div class="emptyState">لم تتم إضافة أي عامل تنظيف بعد.</div></div>
+    </section>
     <section class="card marketingCard" id="marketingSection">
       <div class="sectionHeading"><div><span class="eyebrow">Quick Marketing Center</span><h2>سوّق لمشروعك في ثواني</h2></div><span class="marketingBadge">📣 جاهز للمشاركة</span></div>
       <p class="marketingIntro">اختر نوع الرسالة، عدّلها لو حبيت، وبعدها شاركها مباشرة مع رابط مشروعك.</p>
