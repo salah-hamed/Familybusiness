@@ -61,9 +61,8 @@ export async function changeLaundryStage({projectId,orderId,actorUid,nextStage})
   const ledgerRef=doc(db,"commissionLedger",`project_order_${orderId}`);
 
   await runTransaction(db,async transaction=>{
-    const [freshOrderSnap,agreementSnap,ledgerSnap]=await Promise.all([
-      transaction.get(ref),transaction.get(agreementRef),transaction.get(ledgerRef)
-    ]);
+    const freshOrderSnap=await transaction.get(ref);
+    const agreementSnap=await transaction.get(agreementRef);
     if(!freshOrderSnap.exists()||!agreementSnap.exists())throw new Error("ORDER_OR_AGREEMENT_NOT_FOUND");
     const fresh=freshOrderSnap.data(),agreement=agreementSnap.data();
     if(!allowedLaundryNextStages(fresh).includes("delivered"))throw new Error("INVALID_LAUNDRY_TRANSITION");
@@ -77,12 +76,10 @@ export async function changeLaundryStage({projectId,orderId,actorUid,nextStage})
       commissionAgreementVersion:Number(agreement.acceptedVersion||agreement.version||1)
     });
 
-    if(!ledgerSnap.exists()){
-      transaction.set(ledgerRef,{
-        userId:agreement.ownerId,projectId,orderId,sourceType:"project_order",sourceId:orderId,
-        agreementId:projectId,agreementVersion:Number(agreement.acceptedVersion||agreement.version||1),
-        amount,currency:"EGP",status:"earned",createdAt:serverTimestamp(),paidAt:null
-      });
-    }
+    transaction.set(ledgerRef,{
+      userId:agreement.ownerId,projectId,orderId,sourceType:"project_order",sourceId:orderId,
+      agreementId:projectId,agreementVersion:Number(agreement.acceptedVersion||agreement.version||1),
+      amount,currency:"EGP",status:"earned",createdAt:serverTimestamp(),paidAt:null
+    });
   });
 }
