@@ -35,6 +35,14 @@ service cloud.firestore {
   function supermarketData(projectId){ return get(supermarketPath(projectId)).data; }
   function laundryExists(projectId){ return exists(laundryPath(projectId)); }
   function laundryData(projectId){ return get(laundryPath(projectId)).data; }
+  function isLinkedProjectOperator(projectId){
+   return signedIn()
+    && projectExists(projectId)
+    && projectData(projectId).operatorId is string
+    && projectData(projectId).operatorId.size() > 0
+    && operatorExists(projectData(projectId).operatorId)
+    && operatorData(projectData(projectId).operatorId).authUid == request.auth.uid;
+  }
   function isProjectOperator(projectId){
    return signedIn()
     && projectExists(projectId)
@@ -114,7 +122,10 @@ service cloud.firestore {
     && commissionAgreementData(projectId).currentAmount is number
     && commissionAgreementData(projectId).currentAmount >= 0
     && commissionAgreementData(projectId).acceptedVersion is number
-    && commissionAgreementData(projectId).acceptedVersion > 0
+    && commissionAgreementData(projectId).acceptedVersion > 0;
+  }
+  function laundryAcceptingOrders(projectId){
+   return laundryPartnerReady(projectId)
     && laundryExists(projectId)
     && laundryData(projectId).isAcceptingOrders == true;
   }
@@ -454,21 +465,18 @@ service cloud.firestore {
     && (
      (request.resource.data.templateType == "cleaning" && validCleaningOrder(request.resource.data.projectId))
      || (request.resource.data.templateType == "carwash" && validCarwashOrder(request.resource.data.projectId))
-     || (request.resource.data.templateType == "laundry" && laundryPartnerReady(request.resource.data.projectId) && validLaundryOrder(request.resource.data.projectId))
+     || (request.resource.data.templateType == "laundry" && laundryAcceptingOrders(request.resource.data.projectId) && validLaundryOrder(request.resource.data.projectId))
      || (request.resource.data.templateType == "supermarket" && validSupermarketOrder(request.resource.data.projectId))
     );
 
    allow read: if isAdmin()
     || (
-      resource.data.templateType == "supermarket"
+      resource.data.templateType in ["supermarket","laundry"]
       && isProjectOperator(resource.data.projectId)
     )
     || (
-      resource.data.templateType != "supermarket"
-      && (
-        ownsProject(resource.data.projectId)
-        || isProjectOperator(resource.data.projectId)
-      )
+      !(resource.data.templateType in ["supermarket","laundry"])
+      && ownsProject(resource.data.projectId)
     );
 
    allow update: if (
@@ -560,10 +568,24 @@ service cloud.firestore {
       )
       && (
         request.resource.data.status == "canceled"
-        || !(request.resource.data.laundryStage in ["pickup_assigned","out_for_delivery","delivered"])
         || (
-          request.resource.data.assignedWorkerId is string
+          request.resource.data.laundryStage == "pickup_assigned"
+          && request.resource.data.assignedWorkerId is string
           && request.resource.data.assignedWorkerId.size() > 0
+          && workerExists(request.resource.data.assignedWorkerId)
+          && workerData(request.resource.data.assignedWorkerId).projectId == resource.data.projectId
+          && workerData(request.resource.data.assignedWorkerId).role == "pickup_agent"
+        )
+        || (
+          request.resource.data.laundryStage in ["out_for_delivery","delivered"]
+          && request.resource.data.assignedWorkerId is string
+          && request.resource.data.assignedWorkerId.size() > 0
+          && workerExists(request.resource.data.assignedWorkerId)
+          && workerData(request.resource.data.assignedWorkerId).projectId == resource.data.projectId
+          && workerData(request.resource.data.assignedWorkerId).role == "delivery_agent"
+        )
+        || !(
+          request.resource.data.laundryStage in ["pickup_assigned","out_for_delivery","delivered"]
         )
       )
       && (
@@ -743,12 +765,15 @@ service cloud.firestore {
   match /laundries/{laundryId} {
    allow get: if isAdmin()
     || ownsProject(laundryId)
-    || isProjectOperator(laundryId)
-    || laundryPartnerReady(laundryId);
+    || isLinkedProjectOperator(laundryId)
+    || (
+      laundryPartnerReady(laundryId)
+      && resource.data.isAcceptingOrders == true
+    );
 
    allow list: if isAdmin()
     || ownsProject(resource.data.projectId)
-    || isProjectOperator(resource.data.projectId);
+    || isLinkedProjectOperator(resource.data.projectId);
 
    allow create: if signedIn()
     && request.resource.data.laundryId == laundryId
@@ -815,7 +840,7 @@ service cloud.firestore {
   match /supermarkets/{supermarketId} {
    allow get: if isAdmin()
     || ownsProject(supermarketId)
-    || isProjectOperator(supermarketId)
+    || isLinkedProjectOperator(supermarketId)
     || supermarketPartnerReady(supermarketId);
 
    allow list: if isAdmin()
