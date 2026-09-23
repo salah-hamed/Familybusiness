@@ -34,14 +34,18 @@ export async function createOrResumeLaundrySetup({
     await updateOperatorContact(projectId,{name,contactName,phone,whatsapp,email});
   }
 
-  await setDoc(doc(db,"laundries",projectId),{
+  const laundryRef=doc(db,"laundries",projectId);
+  const existingLaundry=await getDoc(laundryRef);
+  const laundryPayload={
     laundryId:projectId,projectId,ownerId,operatorId:projectId,
     name:clean(name),contactName:clean(contactName),phone:clean(phone),
     whatsapp:clean(whatsapp||phone),email:clean(email).toLowerCase(),
     address:clean(address),location:clean(location),
     isAcceptingOrders:true,currency:"EGP",
-    createdAt:serverTimestamp(),updatedAt:serverTimestamp()
-  },{merge:true});
+    updatedAt:serverTimestamp()
+  };
+  if(!existingLaundry.exists())laundryPayload.createdAt=serverTimestamp();
+  await setDoc(laundryRef,laundryPayload,{merge:true});
 
   await proposeCommission({projectDocId:projectId,ownerId,operatorId:projectId,templateId:"laundry",amount:commissionAmount});
 
