@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0ea5e9">
+  <title>لوحة تشغيل المغسلة | Family Business</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<main class="shell">
+  <header class="topbar">
+    <div><span class="eyebrow">Laundry 2.0</span><h1 id="pageTitle">لوحة تشغيل المغسلة</h1><p id="pageStatus">سجل الدخول بحساب المسؤول.</p></div>
+    <button id="logoutBtn" class="ghost hidden">تسجيل الخروج</button>
+  </header>
+
+  <section id="authPanel" class="card">
+    <h2>دخول مسؤول المغسلة</h2>
+    <p class="muted">استخدم نفس الإيميل الذي سجله صاحب المشروع.</p>
+    <div class="formGrid">
+      <label>الإيميل<input id="authEmail" type="email"></label>
+      <label>كلمة المرور<input id="authPassword" type="password" minlength="6"></label>
+    </div>
+    <div class="actions"><button id="loginBtn" class="primary">دخول</button><button id="registerBtn" class="secondary">إنشاء الحساب أول مرة</button></div>
+    <p id="authMessage" class="message"></p>
+  </section>
+
+  <section id="verifyPanel" class="card hidden">
+    <h2>فعّل الإيميل</h2><p class="muted">لازم نتاكد إن ده إيميل المسؤول المتفق عليه.</p>
+    <div class="actions"><button id="checkVerifyBtn" class="primary">تم التفعيل — تحقق</button><button id="resendVerifyBtn" class="secondary">إرسال الرسالة مرة أخرى</button></div>
+    <p id="verifyMessage" class="message"></p>
+  </section>
+
+  <section id="agreementPanel" class="card hidden">
+    <span class="eyebrow">اتفاق التشغيل</span><h2>العمولة المقترحة</h2><p id="agreementText" class="agreementText"></p>
+    <div class="actions"><button id="acceptAgreementBtn" class="primary">قبول الاتفاق</button><button id="rejectAgreementBtn" class="danger">رفض</button></div>
+    <p id="agreementMessage" class="message"></p>
+  </section>
+
+  <section id="operationsPanel" class="hidden">
+    <div class="stats">
+      <article><span>طلبات جديدة</span><strong id="statNew">0</strong></article>
+      <article><span>قيد التشغيل</span><strong id="statActive">0</strong></article>
+      <article><span>مكتملة</span><strong id="statDone">0</strong></article>
+      <article><span>عمولة المشروع</span><strong id="statCommission">0 جنيه</strong></article>
+    </div>
+
+    <section class="card">
+      <div class="sectionHead"><div><span class="eyebrow">إعدادات المغسلة</span><h2 id="laundryTitle">المغسلة</h2></div><label class="switchLabel"><input id="acceptingOrders" type="checkbox"> استقبال الطلبات</label></div>
+      <div class="formGrid">
+        <label>الاسم<input id="settingsName"></label><label>الهاتف<input id="settingsPhone"></label>
+        <label>واتساب<input id="settingsWhatsapp"></label><label>العنوان<input id="settingsAddress"></label>
+        <label class="full">اللوكيشن<input id="settingsLocation"></label>
+      </div>
+      <button id="saveSettingsBtn" class="primary">حفظ الإعدادات</button>
+      <div class="linkRow"><input id="customerOrderLink" readonly><button id="copyCustomerLinkBtn" class="secondary">نسخ رابط العملاء</button></div>
+      <p id="settingsMessage" class="message"></p>
+    </section>
+
+    <section class="card">
+      <span class="eyebrow">الأسعار</span><h2>تسعير الغسيل والمكواة</h2>
+      <p class="muted">الأسعار دي هي المصدر المعتمد اللي هيحسب منه طلب العميل.</p>
+      <div id="pricingGrid" class="pricingGrid"></div>
+      <button id="savePricingBtn" class="primary">حفظ الأسعار</button>
+      <p id="pricingMessage" class="message"></p>
+    </section>
+
+    <section class="card">
+      <span class="eyebrow">فريق الاستلام والتوصيل</span><h2>العمال</h2>
+      <div class="formGrid">
+        <label>الاسم<input id="workerName"></label><label>واتساب<input id="workerWhatsapp" inputmode="tel"></label>
+        <label>الدور<select id="workerRole"><option value="pickup_agent">مندوب استلام</option><option value="delivery_agent">مندوب توصيل</option></select></label>
+      </div>
+      <button id="addWorkerBtn" class="primary">إضافة عامل</button>
+      <p id="workerMessage" class="message"></p>
+      <div id="workersList" class="list"></div>
+    </section>
+
+    <section class="card">
+      <div class="sectionHead"><div><span class="eyebrow">التشغيل اليومي</span><h2>الطلبات</h2></div><button id="refreshOrdersBtn" class="secondary">تحديث</button></div>
+      <div id="ordersList" class="list"></div>
+    </section>
+  </section>
+</main>
+<script type="module" src="./app.js"></script>
+</body>
+</html>
