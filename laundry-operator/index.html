@@ -16,19 +16,12 @@
 
   <section id="authPanel" class="card">
     <h2>دخول مسؤول المغسلة</h2>
-    <p class="muted">استخدم نفس الإيميل الذي سجله صاحب المشروع.</p>
+    <p class="muted">افتح رابط الدعوة الذي وصلك على واتساب. أول مرة اختار كلمة مرور، وبعدها استخدم نفس الرابط للدخول.</p>
     <div class="formGrid">
-      <label>الإيميل<input id="authEmail" type="email"></label>
       <label>كلمة المرور<input id="authPassword" type="password" minlength="6"></label>
     </div>
-    <div class="actions"><button id="loginBtn" class="primary">دخول</button><button id="registerBtn" class="secondary">إنشاء الحساب أول مرة</button></div>
+    <div class="actions"><button id="loginBtn" class="primary">دخول</button><button id="registerBtn" class="secondary">تفعيل الدعوة أول مرة</button></div>
     <p id="authMessage" class="message"></p>
-  </section>
-
-  <section id="verifyPanel" class="card hidden">
-    <h2>فعّل الإيميل</h2><p class="muted">لازم نتاكد إن ده إيميل المسؤول المتفق عليه.</p>
-    <div class="actions"><button id="checkVerifyBtn" class="primary">تم التفعيل — تحقق</button><button id="resendVerifyBtn" class="secondary">إرسال الرسالة مرة أخرى</button></div>
-    <p id="verifyMessage" class="message"></p>
   </section>
 
   <section id="agreementPanel" class="card hidden">

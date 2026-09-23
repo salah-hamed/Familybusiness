@@ -22,18 +22,17 @@
 
   <section id="setupSection" class="card hidden">
     <div class="sectionTitle"><div><span class="eyebrow">إعداد المشروع</span><h2>اربط المغسلة</h2></div><span class="pill">1 من 3</span></div>
-    <p class="hint">أدخل بيانات المغسلة والمسؤول، وحدد العمولة المتفق عليها لكل طلب مكتمل.</p>
+    <p class="hint">أدخل بيانات المغسلة ورقم واتساب المسؤول، وحدد العمولة. بعد الحفظ ابعت له دعوة التشغيل على واتساب.</p>
     <div class="formGrid">
       <label>اسم المغسلة<input id="laundryName" placeholder="مثال: مغسلة النور"></label>
       <label>اسم المسؤول<input id="contactName"></label>
-      <label>إيميل المسؤول<input id="operatorEmail" type="email" placeholder="name@example.com"></label>
       <label>الهاتف<input id="laundryPhone" inputmode="tel"></label>
-      <label>واتساب<input id="laundryWhatsapp" inputmode="tel"></label>
+      <label>واتساب المسؤول للدعوة<input id="laundryWhatsapp" inputmode="tel" placeholder="01xxxxxxxxx"></label>
       <label>العنوان<input id="laundryAddress"></label>
       <label>رابط اللوكيشن<input id="laundryLocation" placeholder="Google Maps link"></label>
       <label>عمولتك لكل طلب مكتمل<input id="commissionAmount" type="number" min="0" step="0.25" value="1"></label>
     </div>
-    <button id="createSetupBtn" class="primaryBtn">ربط المغسلة وإرسال الاتفاق</button>
+    <button id="createSetupBtn" class="primaryBtn">ربط المغسلة وتجهيز الدعوة</button>
     <p id="setupMessage" class="message"></p>
   </section>
 
@@ -62,7 +61,7 @@
 
     <section class="card">
       <div class="sectionTitle"><div><span class="eyebrow">روابط التشغيل</span><h2>شارك الروابط المناسبة</h2></div></div>
-      <div class="linkBox"><span>لوحة المغسلة</span><input id="operatorLink" readonly><button data-copy="operatorLink">نسخ</button></div>
+      <div class="linkBox"><span>لوحة المغسلة</span><input id="operatorLink" readonly><button data-copy="operatorLink">نسخ</button><button id="sendOperatorWhatsappBtn" class="primaryBtn">إرسال دعوة واتساب</button></div>
       <div class="linkBox"><span>رابط العملاء</span><input id="customerLink" readonly><button data-copy="customerLink">نسخ</button></div>
       <p id="linksHint" class="hint"></p>
     </section>

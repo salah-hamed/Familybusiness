@@ -29,21 +29,20 @@
         <span class="stepPill">1 من 3</span>
       </div>
 
-      <p class="hint">أدخل بيانات السوبرماركت والمسؤول الذي سيدير الطلبات، ثم اقترح العمولة المتفق عليها لكل طلب مكتمل.</p>
+      <p class="hint">أدخل بيانات السوبرماركت ورقم واتساب المسؤول، ثم اقترح العمولة. بعد الحفظ ابعت له دعوة التشغيل على واتساب.</p>
 
       <div class="formGrid">
         <label>اسم السوبرماركت<input id="storeName" placeholder="مثال: سوبر ماركت النور"></label>
         <label>اسم المسؤول<input id="contactName" placeholder="اسم صاحب أو مدير السوبرماركت"></label>
-        <label>إيميل المسؤول<input id="operatorEmail" type="email" placeholder="name@example.com"></label>
         <label>رقم الهاتف<input id="storePhone" inputmode="tel"></label>
-        <label>واتساب<input id="storeWhatsapp" inputmode="tel"></label>
+        <label>واتساب المسؤول للدعوة<input id="storeWhatsapp" inputmode="tel" placeholder="01xxxxxxxxx"></label>
         <label>العنوان<input id="storeAddress"></label>
         <label>رابط اللوكيشن<input id="storeLocation" placeholder="Google Maps link"></label>
         <label>مصاريف التوصيل<input id="deliveryFee" type="number" min="0" step="0.5" value="0"></label>
         <label>عمولتك لكل طلب مكتمل<input id="commissionAmount" type="number" min="0" step="0.25" value="1"></label>
       </div>
 
-      <button id="createSetupBtn" class="primaryBtn">ربط السوبرماركت وإرسال الاتفاق</button>
+      <button id="createSetupBtn" class="primaryBtn">ربط السوبرماركت وتجهيز الدعوة</button>
       <p id="setupMessage" class="message"></p>
     </section>
 
@@ -86,6 +85,7 @@
           <span>رابط لوحة السوبرماركت</span>
           <input id="operatorLink" readonly>
           <button class="copyBtn" data-copy="operatorLink">نسخ</button>
+          <button id="sendOperatorWhatsappBtn" class="primaryBtn">إرسال دعوة واتساب</button>
         </div>
 
         <div class="linkBox">

@@ -1,5 +1,5 @@
 import auth from "../core/firebase/firebase-auth.js";
-import { claimOperatorAccess, getOperator, operatorCanOperate } from "../core/partners/partner-service.js";
+import { claimOperatorAccess, getOperator, operatorCanOperate, buildOperatorAuthEmail } from "../core/partners/partner-service.js";
 import { acceptPendingCommission, rejectPendingCommission, getCommissionAgreement } from "../core/commissions/commission-service.js";
 import { getSupermarket, updateSupermarketSettings } from "../core/supermarket/supermarket-service.js";
 import { SUPERMARKET_MASTER_CATALOG } from "../core/supermarket/master-catalog.js";
@@ -12,13 +12,14 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
-  sendEmailVerification,
-  onAuthStateChanged,
-  reload
+  onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 const $=id=>document.getElementById(id);
-const projectId=new URLSearchParams(location.search).get("project")||"";
+const params=new URLSearchParams(location.search);
+const projectId=params.get("project")||"";
+const inviteToken=params.get("invite")||"";
+const inviteAuthEmail=buildOperatorAuthEmail(inviteToken);
 let currentUser=null;
 let currentOperator=null;
 let currentAgreement=null;
@@ -38,20 +39,10 @@ async function refreshAccount(){
   if(!projectId){
     $("pageStatus").innerText="رابط السوبرماركت غير مكتمل.";
     setVisible("authPanel",false);
-    setVisible("verifyPanel",false);
-    setVisible("agreementPanel",false);
+      setVisible("agreementPanel",false);
     setVisible("operationsPanel",false);
     return;
   }
-  await reload(currentUser);
-  currentUser=auth.currentUser;
-
-  if(!currentUser.emailVerified){
-    setVisible("authPanel",false);setVisible("verifyPanel",true);setVisible("agreementPanel",false);setVisible("operationsPanel",false);
-    $("pageStatus").innerText="فعّل الإيميل علشان نربطه بالسوبرماركت.";
-    return;
-  }
-
   try{
     await claimOperatorAccess(projectId,currentUser);
   }catch(e){
@@ -66,7 +57,6 @@ async function refreshAccount(){
   currentStore=await getSupermarket(projectId);
 
   setVisible("authPanel",false);
-  setVisible("verifyPanel",false);
   $("logoutBtn").classList.remove("hidden");
 
   const hasPending=currentAgreement?.pendingStatus==="pending" && currentAgreement?.pendingAmount!=null;
@@ -88,34 +78,50 @@ async function refreshAccount(){
   if(canOperate) await loadOperations();
 }
 
-onAuthStateChanged(auth,user=>{
+onAuthStateChanged(auth,async user=>{
   currentUser=user;
-  if(!user){
-    setVisible("authPanel",true);setVisible("verifyPanel",false);setVisible("agreementPanel",false);setVisible("operationsPanel",false);
+
+  if(!projectId||!inviteAuthEmail){
+    setVisible("authPanel",false);setVisible("agreementPanel",false);setVisible("operationsPanel",false);
     $("logoutBtn").classList.add("hidden");
+    $("pageStatus").innerText="دعوة واتساب غير مكتملة أو غير صالحة.";
     return;
   }
+
+  if(user&&String(user.email||"").toLowerCase()!==inviteAuthEmail.toLowerCase()){
+    await signOut(auth);
+    return;
+  }
+
+  if(!user){
+    setVisible("authPanel",true);setVisible("agreementPanel",false);setVisible("operationsPanel",false);
+    $("logoutBtn").classList.add("hidden");
+    $("pageStatus").innerText="افتح الدعوة وأنشئ كلمة مرور أول مرة، أو سجل دخولك لو فعلتها قبل كده.";
+    return;
+  }
+
   refreshAccount();
 });
 
 $("registerBtn").onclick=async()=>{
-  $("authMessage").innerText="جاري إنشاء الحساب...";
+  $("authMessage").innerText="جاري تفعيل الدعوة...";
   try{
-    const cred=await createUserWithEmailAndPassword(auth,$("authEmail").value.trim().toLowerCase(),$("authPassword").value);
-    await sendEmailVerification(cred.user);
-    $("authMessage").innerText="تم إنشاء الحساب. افتح رسالة التفعيل في الإيميل ثم ارجع هنا ✅";
-  }catch(e){$("authMessage").innerText=e.message;}
+    await createUserWithEmailAndPassword(auth,inviteAuthEmail,$("authPassword").value);
+    $("authMessage").innerText="تم تفعيل الدعوة ✅";
+  }catch(e){
+    $("authMessage").innerText=e.code==="auth/email-already-in-use"
+      ?"الدعوة مفعلة بالفعل. استخدم تسجيل الدخول بنفس كلمة المرور."
+      :e.message;
+  }
 };
 $("loginBtn").onclick=async()=>{
   $("authMessage").innerText="جاري تسجيل الدخول...";
   try{
-    await signInWithEmailAndPassword(auth,$("authEmail").value.trim().toLowerCase(),$("authPassword").value);
+    await signInWithEmailAndPassword(auth,inviteAuthEmail,$("authPassword").value);
     $("authMessage").innerText="";
-  }catch(e){$("authMessage").innerText=e.message;}
+  }catch(e){$("authMessage").innerText="تعذر الدخول. راجع كلمة المرور أو تأكد أنك تستخدم نفس رابط الدعوة.";}
 };
 $("logoutBtn").onclick=()=>signOut(auth);
-$("resendVerifyBtn").onclick=async()=>{if(auth.currentUser){await sendEmailVerification(auth.currentUser);$("verifyMessage").innerText="تم إرسال رسالة تفعيل جديدة.";}};
-$("checkVerifyBtn").onclick=()=>refreshAccount();
 
 $("acceptAgreementBtn").onclick=async()=>{
   $("agreementMessage").innerText="جاري قبول الاتفاق...";

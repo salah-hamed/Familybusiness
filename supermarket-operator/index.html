@@ -21,26 +21,15 @@
 
   <section id="authPanel" class="card">
     <h2>دخول مسؤول السوبرماركت</h2>
-    <p class="muted">استخدم نفس الإيميل الذي أضافه صاحب المشروع.</p>
+    <p class="muted">افتح رابط الدعوة الذي وصلك على واتساب. أول مرة اختار كلمة مرور، وبعدها استخدم نفس الرابط للدخول.</p>
     <div class="formGrid">
-      <label>الإيميل<input id="authEmail" type="email"></label>
-      <label>كلمة المرور<input id="authPassword" type="password"></label>
+      <label>كلمة المرور<input id="authPassword" type="password" minlength="6" placeholder="6 أحرف أو أكثر"></label>
     </div>
     <div class="actions">
       <button id="loginBtn" class="primary">تسجيل الدخول</button>
-      <button id="registerBtn" class="secondary">إنشاء حساب المسؤول</button>
+      <button id="registerBtn" class="secondary">تفعيل الدعوة أول مرة</button>
     </div>
     <p id="authMessage" class="message"></p>
-  </section>
-
-  <section id="verifyPanel" class="card hidden">
-    <h2>فعّل الإيميل أولًا</h2>
-    <p class="muted">أرسلنا رابط التفعيل إلى إيميلك. بعد التفعيل ارجع هنا واضغط تحقق.</p>
-    <div class="actions">
-      <button id="resendVerifyBtn" class="secondary">إعادة إرسال التفعيل</button>
-      <button id="checkVerifyBtn" class="primary">تحققت من الإيميل</button>
-    </div>
-    <p id="verifyMessage" class="message"></p>
   </section>
 
   <section id="agreementPanel" class="card hidden">
