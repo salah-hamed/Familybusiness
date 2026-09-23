@@ -58,12 +58,12 @@ $("rejectAgreementBtn").onclick=async()=>{try{await rejectPendingCommission({pro
 async function loadOperations(){
   laundry=await getLaundry(projectId);agreement=await getCommissionAgreement(projectId);
   $("laundryTitle").innerText=laundry?.name||operator?.name||"المغسلة";$("statCommission").innerText=money(agreement?.currentAmount||0);
-  $("settingsName").value=laundry?.name||"";$("settingsPhone").value=laundry?.phone||"";$("settingsWhatsapp").value=laundry?.whatsapp||"";$("settingsAddress").value=laundry?.address||"";$("settingsLocation").value=laundry?.location||"";$("acceptingOrders").checked=laundry?.isAcceptingOrders===true;
+  $("settingsName").value=laundry?.name||"";$("settingsPhone").value=laundry?.phone||"";$("settingsWhatsapp").value=laundry?.whatsapp||"";$("settingsAddress").value=laundry?.address||"";$("settingsLocation").value=laundry?.location||"";$("settingsInstapay").value=laundry?.instapayLink||"";$("acceptingOrders").checked=laundry?.isAcceptingOrders===true;
   const url=new URL("../templates/laundry/",location.href);url.searchParams.set("project",projectId);$("customerOrderLink").value=url;
   const projectSnap=await getDoc(doc(db,"projects",projectId));renderPricing(projectSnap.data()?.priceConfig||{});
   await Promise.all([loadWorkers(),loadOrders()]);
 }
-$("saveSettingsBtn").onclick=async()=>{try{await updateLaundrySettings(projectId,{name:$("settingsName").value,phone:$("settingsPhone").value,whatsapp:$("settingsWhatsapp").value,address:$("settingsAddress").value,location:$("settingsLocation").value,isAcceptingOrders:$("acceptingOrders").checked});$("settingsMessage").innerText="تم الحفظ ✅";}catch(e){$("settingsMessage").innerText=e.message;}};
+$("saveSettingsBtn").onclick=async()=>{try{await updateLaundrySettings(projectId,{name:$("settingsName").value,phone:$("settingsPhone").value,whatsapp:$("settingsWhatsapp").value,address:$("settingsAddress").value,location:$("settingsLocation").value,instapayLink:$("settingsInstapay").value,isAcceptingOrders:$("acceptingOrders").checked});$("settingsMessage").innerText="تم الحفظ ✅";}catch(e){$("settingsMessage").innerText=e.message;}};
 $("copyCustomerLinkBtn").onclick=async()=>{try{await navigator.clipboard.writeText($("customerOrderLink").value);}catch{$("customerOrderLink").select();document.execCommand("copy");}$("settingsMessage").innerText="تم نسخ رابط العملاء ✅";};
 $("savePricingBtn").onclick=async()=>{const config={};document.querySelectorAll("[data-price]").forEach(i=>config[i.dataset.price]=Number(i.value));if(Object.values(config).some(v=>!Number.isFinite(v)||v<0)){$("pricingMessage").innerText="راجع الأسعار.";return;}try{await updateDoc(doc(db,"projects",projectId),{priceConfig:config});$("pricingMessage").innerText="تم حفظ الأسعار ✅";}catch(e){$("pricingMessage").innerText=e.message;}};
 
