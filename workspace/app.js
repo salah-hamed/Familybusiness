@@ -29,6 +29,9 @@ function projectManagementUrl(templateId, projectDocId) {
   if (templateId === "supermarket") {
     return `../supermarket/?project=${encodeURIComponent(projectDocId)}`;
   }
+  if (templateId === "laundry") {
+    return `../laundry/?project=${encodeURIComponent(projectDocId)}`;
+  }
   return `../dashboard/?project=${encodeURIComponent(projectDocId)}`;
 }
 
