@@ -10,6 +10,7 @@ service cloud.firestore {
   function workerPath(workerId){ return /databases/$(database)/documents/workers/$(workerId); }
   function orderPath(orderId){ return /databases/$(database)/documents/orders/$(orderId); }
   function supermarketPath(projectId){ return /databases/$(database)/documents/supermarkets/$(projectId); }
+  function laundryPath(projectId){ return /databases/$(database)/documents/laundries/$(projectId); }
   function commissionLedgerPath(entryId){ return /databases/$(database)/documents/commissionLedger/$(entryId); }
   function userExists(uid){ return exists(userPath(uid)); }
   function userData(uid){ return get(userPath(uid)).data; }
@@ -32,6 +33,8 @@ service cloud.firestore {
   function commissionAgreementData(agreementId){ return get(commissionAgreementPath(agreementId)).data; }
   function supermarketExists(projectId){ return exists(supermarketPath(projectId)); }
   function supermarketData(projectId){ return get(supermarketPath(projectId)).data; }
+  function laundryExists(projectId){ return exists(laundryPath(projectId)); }
+  function laundryData(projectId){ return get(laundryPath(projectId)).data; }
   function isProjectOperator(projectId){
    return signedIn()
     && projectExists(projectId)
@@ -93,6 +96,85 @@ service cloud.firestore {
     || (fromStatus == "ready" && toStatus in ["assigned","canceled"])
     || (fromStatus == "assigned" && toStatus in ["out_for_delivery","canceled"])
     || (fromStatus == "out_for_delivery" && toStatus in ["delivered","canceled"]);
+  }
+
+
+  function laundryPartnerReady(projectId){
+   return projectAvailable(projectId)
+    && projectData(projectId).template == "laundry"
+    && projectData(projectId).operatingModel == "partner_operated"
+    && projectData(projectId).operatorId is string
+    && projectData(projectId).operatorId.size() > 0
+    && operatorExists(projectData(projectId).operatorId)
+    && operatorData(projectData(projectId).operatorId).status == "active"
+    && operatorData(projectData(projectId).operatorId).agreementStatus == "accepted"
+    && operatorData(projectData(projectId).operatorId).isActive == true
+    && commissionAgreementExists(projectId)
+    && commissionAgreementData(projectId).status == "accepted"
+    && commissionAgreementData(projectId).currentAmount is number
+    && commissionAgreementData(projectId).currentAmount >= 0
+    && commissionAgreementData(projectId).acceptedVersion is number
+    && commissionAgreementData(projectId).acceptedVersion > 0
+    && laundryExists(projectId)
+    && laundryData(projectId).isAcceptingOrders == true;
+  }
+
+  function validLaundryTransition(fromStatus, fromStage, toStatus, toStage){
+   return (
+      fromStatus == "new"
+      && (
+        (toStatus == "accepted" && toStage == "accepted")
+        || toStatus == "canceled"
+      )
+    )
+    || (
+      fromStatus == "accepted"
+      && fromStage == "accepted"
+      && (
+        (toStatus == "accepted" && toStage == "pickup_assigned")
+        || toStatus == "canceled"
+      )
+    )
+    || (
+      fromStatus == "accepted"
+      && fromStage == "pickup_assigned"
+      && (
+        (toStatus == "accepted" && toStage == "picked_up")
+        || toStatus == "canceled"
+      )
+    )
+    || (
+      fromStatus == "accepted"
+      && fromStage == "picked_up"
+      && (
+        (toStatus == "accepted" && toStage == "processing")
+        || toStatus == "canceled"
+      )
+    )
+    || (
+      fromStatus == "accepted"
+      && fromStage == "processing"
+      && (
+        (toStatus == "accepted" && toStage == "ready_delivery")
+        || toStatus == "canceled"
+      )
+    )
+    || (
+      fromStatus == "accepted"
+      && fromStage == "ready_delivery"
+      && (
+        (toStatus == "accepted" && toStage == "out_for_delivery")
+        || toStatus == "canceled"
+      )
+    )
+    || (
+      fromStatus == "accepted"
+      && fromStage == "out_for_delivery"
+      && (
+        (toStatus == "done" && toStage == "delivered")
+        || toStatus == "canceled"
+      )
+    );
   }
 
 
@@ -355,7 +437,7 @@ service cloud.firestore {
     && (
      (request.resource.data.templateType == "cleaning" && validCleaningOrder(request.resource.data.projectId))
      || (request.resource.data.templateType == "carwash" && validCarwashOrder(request.resource.data.projectId))
-     || (request.resource.data.templateType == "laundry" && validLaundryOrder(request.resource.data.projectId))
+     || (request.resource.data.templateType == "laundry" && laundryPartnerReady(request.resource.data.projectId) && validLaundryOrder(request.resource.data.projectId))
      || (request.resource.data.templateType == "supermarket" && validSupermarketOrder(request.resource.data.projectId))
     );
 
@@ -374,7 +456,7 @@ service cloud.firestore {
 
    allow update: if (
     (
-      resource.data.templateType != "supermarket"
+      !(resource.data.templateType in ["supermarket","laundry"])
       && (isAdmin() || ownsProject(resource.data.projectId))
       && request.resource.data.projectId == resource.data.projectId
       && request.resource.data.providerId == resource.data.providerId
@@ -419,6 +501,74 @@ service cloud.firestore {
             == request.resource.data.assignedWorkerName
           && workerData(request.resource.data.assignedWorkerId).whatsapp
             == request.resource.data.assignedWorkerWhatsapp
+        )
+      )
+    )
+    ||
+    (
+      resource.data.templateType == "laundry"
+      && (isAdmin() || isProjectOperator(resource.data.projectId))
+      && request.resource.data.projectId == resource.data.projectId
+      && request.resource.data.providerId == resource.data.providerId
+      && request.resource.data.statusUpdatedBy == request.auth.uid
+      && validLaundryTransition(
+        resource.data.status,
+        ("laundryStage" in resource.data ? resource.data.laundryStage : ""),
+        request.resource.data.status,
+        ("laundryStage" in request.resource.data ? request.resource.data.laundryStage : "")
+      )
+      && (
+        request.resource.data.status == "canceled"
+        || (
+          request.resource.data.laundryStage in ["accepted","pickup_assigned","picked_up","processing","ready_delivery","out_for_delivery","delivered"]
+        )
+      )
+      && (
+        !(request.resource.data.laundryStage in ["pickup_assigned","out_for_delivery","delivered"])
+        || (
+          request.resource.data.assignedWorkerId is string
+          && request.resource.data.assignedWorkerId.size() > 0
+        )
+      )
+      && (
+        (
+          request.resource.data.status != "done"
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            "status",
+            "laundryStage",
+            "statusUpdatedAt",
+            "statusUpdatedBy"
+          ])
+        )
+        ||
+        (
+          request.resource.data.status == "done"
+          && request.resource.data.laundryStage == "delivered"
+          && commissionAgreementExists(resource.data.projectId)
+          && commissionAgreementData(resource.data.projectId).status == "accepted"
+          && commissionAgreementData(resource.data.projectId).currentAmount is number
+          && request.resource.data.commissionEligible == true
+          && request.resource.data.commissionLocked == true
+          && request.resource.data.commissionAmount
+            == commissionAgreementData(resource.data.projectId).currentAmount
+          && request.resource.data.commissionAgreementVersion
+            == commissionAgreementData(resource.data.projectId).acceptedVersion
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            "status",
+            "laundryStage",
+            "statusUpdatedAt",
+            "statusUpdatedBy",
+            "deliveredAt",
+            "commissionEligible",
+            "commissionLocked",
+            "commissionAmount",
+            "commissionAgreementVersion"
+          ])
+          && getAfter(commissionLedgerPath("project_order_" + orderId)).data.orderId == orderId
+          && getAfter(commissionLedgerPath("project_order_" + orderId)).data.projectId
+            == resource.data.projectId
+          && getAfter(commissionLedgerPath("project_order_" + orderId)).data.amount
+            == request.resource.data.commissionAmount
         )
       )
     )
@@ -520,7 +670,7 @@ service cloud.firestore {
 
    allow delete: if isAdmin()
     || (
-      resource.data.templateType != "supermarket"
+      !(resource.data.templateType in ["supermarket","laundry"])
       && ownsProject(resource.data.projectId)
     );
   }
