@@ -67,3 +67,30 @@ export async function getLaundryBundle(projectId){
   ]);
   return {project:projectSnap.exists()?{projectDocId:projectSnap.id,...projectSnap.data()}:null,laundry,operator,agreement};
 }
+
+
+export async function migrateLegacyLaundryProject(projectId, ownerId) {
+  const ref = doc(db, "projects", projectId);
+  const snap = await getDoc(ref);
+
+  if (!snap.exists()) throw new Error("PROJECT_NOT_FOUND");
+
+  const project = snap.data();
+
+  if (project.ownerId !== ownerId || project.template !== "laundry") {
+    throw new Error("LAUNDRY_PROJECT_MISMATCH");
+  }
+
+  if (project.operatingModel === "partner_operated") {
+    return false;
+  }
+
+  await updateDoc(ref, {
+    operatingModel: "partner_operated",
+    templateVersion: 3,
+    operatorId: "",
+    partnerSetupStatus: "not_started"
+  });
+
+  return true;
+}
