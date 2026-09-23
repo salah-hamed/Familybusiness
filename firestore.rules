@@ -559,7 +559,8 @@ service cloud.firestore {
         )
       )
       && (
-        !(request.resource.data.laundryStage in ["pickup_assigned","out_for_delivery","delivered"])
+        request.resource.data.status == "canceled"
+        || !(request.resource.data.laundryStage in ["pickup_assigned","out_for_delivery","delivered"])
         || (
           request.resource.data.assignedWorkerId is string
           && request.resource.data.assignedWorkerId.size() > 0
