@@ -1,6 +1,8 @@
 import db from "../core/firebase/firebase-db.js";
 import { protectPage } from "../core/auth/auth-guard.js";
 import { createOrResumeSupermarketSetup, getSupermarketProjectBundle } from "../core/supermarket/supermarket-service.js";
+import { ensureOperatorInviteAccess, getOperatorInviteToken } from "../core/partners/partner-service.js";
+import { normalizeWhatsAppPhone } from "../core/whatsapp/dispatch-service.js";
 import { proposeCommission } from "../core/commissions/commission-service.js";
 
 import {
@@ -70,7 +72,7 @@ function render(){
   $("storeMeta").innerHTML=[
     ["المسؤول",supermarket.contactName||operator.contactName||"—"],
     ["الهاتف",supermarket.phone||operator.phone||"—"],
-    ["الإيميل",supermarket.email||operator.email||"—"],
+    ["واتساب المسؤول",operator.whatsapp||supermarket.whatsapp||"—"],
     ["مصاريف التوصيل",money(supermarket.deliveryFee||0)]
   ].map(([k,v])=>`<div class="metaItem"><b>${k}</b><div>${v}</div></div>`).join("");
 
@@ -82,7 +84,10 @@ function render(){
 
   const operatorUrl=new URL("../supermarket-operator/",location.href);
   operatorUrl.searchParams.set("project",projectId);
+  const inviteToken=getOperatorInviteToken(operator);
+  if(inviteToken)operatorUrl.searchParams.set("invite",inviteToken);
   $("operatorLink").value=operatorUrl.toString();
+  $("sendOperatorWhatsappBtn").disabled=!(inviteToken&&operator.whatsapp);
 
   const customerUrl=new URL("../templates/supermarket/",location.href);
   customerUrl.searchParams.set("project",projectId);
@@ -94,6 +99,9 @@ function render(){
 
 async function refresh(){
   bundle=await getSupermarketProjectBundle(projectId);
+  if(bundle?.operator&&!bundle.operator.authLoginEmail&&!bundle.operator.authUid){
+    bundle.operator=await ensureOperatorInviteAccess(projectId,currentUser.uid);
+  }
   render();
   if(bundle.supermarket) await loadEarnings();
 }
@@ -133,7 +141,6 @@ $("createSetupBtn").onclick=async()=>{
       ownerId:currentUser.uid,
       name:$("storeName").value,
       contactName:$("contactName").value,
-      email:$("operatorEmail").value,
       phone:$("storePhone").value,
       whatsapp:$("storeWhatsapp").value,
       address:$("storeAddress").value,
@@ -141,7 +148,7 @@ $("createSetupBtn").onclick=async()=>{
       deliveryFee:$("deliveryFee").value,
       commissionAmount:$("commissionAmount").value
     });
-    $("setupMessage").innerText="تم ربط السوبرماركت وإرسال اتفاق العمولة ✅";
+    $("setupMessage").innerText="تم ربط السوبرماركت. ابعت دعوة التشغيل من زر واتساب ✅";
     await refresh();
   }catch(e){
     $("setupMessage").innerText=`تعذر الحفظ: ${e.message}`;
@@ -167,4 +174,13 @@ $("proposeCommissionBtn").onclick=async()=>{
   }catch(e){
     $("commissionMessage").innerText=`تعذر إرسال التعديل: ${e.message}`;
   }
+};
+
+$("sendOperatorWhatsappBtn").onclick=()=>{
+  const operator=bundle?.operator;
+  const phone=normalizeWhatsAppPhone(operator?.whatsapp||operator?.phone);
+  const link=$("operatorLink").value;
+  if(!phone||!link){return;}
+  const message=`دعوة من Family Business لإدارة ${bundle?.supermarket?.name||"السوبرماركت"}.\nافتح الرابط الشخصي التالي، أنشئ كلمة مرور أول مرة ثم وافق على العمولة لبدء التشغيل:\n${link}\n\nمهم: الرابط شخصي، لا تعمله Forward لأي شخص.`;
+  window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`,"_blank","noopener");
 };
