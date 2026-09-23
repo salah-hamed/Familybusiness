@@ -89,11 +89,37 @@ async function init(){
   if(!snap.exists()){unavailable();return;}
   const data=snap.data();
   if(data.template!=="laundry"||data.isActive!==true||data.status!=="active"){unavailable();return;}
-  if(!hasConfiguredPricing(data.priceConfig||{})){unavailable("مقدم الخدمة لم يجهز أسعار الغسيل والمكواة بعد. يرجى المحاولة لاحقًا.");return;}
-  $("businessTitle").innerText=data.businessName||"غسيل ومكواة الملابس";
+
+  let laundrySnap,operatorSnap,agreementSnap;
+  try{
+    [laundrySnap,operatorSnap,agreementSnap]=await Promise.all([
+      getDoc(doc(db,"laundries",currentProjectId)),
+      getDoc(doc(db,"operators",currentProjectId)),
+      getDoc(doc(db,"commissionAgreements",currentProjectId))
+    ]);
+  }catch{unavailable("المغسلة غير جاهزة لاستقبال الطلبات حاليًا.");return;}
+
+  if(!laundrySnap.exists()||!operatorSnap.exists()||!agreementSnap.exists()){
+    unavailable("المغسلة لم تكمل إعداد التشغيل بعد.");return;
+  }
+
+  const laundry=laundrySnap.data(),operator=operatorSnap.data(),agreement=agreementSnap.data();
+  const partnerReady=
+    data.operatingModel==="partner_operated" &&
+    operator.status==="active" &&
+    operator.agreementStatus==="accepted" &&
+    operator.isActive===true &&
+    agreement.status==="accepted" &&
+    agreement.currentAmount!=null &&
+    laundry.isAcceptingOrders===true;
+
+  if(!partnerReady){unavailable("المغسلة غير متاحة لاستقبال طلبات جديدة حاليًا.");return;}
+  if(!hasConfiguredPricing(data.priceConfig||{})){unavailable("المغسلة لم تجهز أسعار الغسيل والمكواة بعد. يرجى المحاولة لاحقًا.");return;}
+
+  $("businessTitle").innerText=laundry.name||data.businessName||"غسيل ومكواة الملابس";
   priceConfig={...priceConfig,...data.priceConfig};
   renderItems();fillSaved();
-  if(data.whatsappNumber)$("whatsappBtn").href=`https://wa.me/${normalizeEgyptWhatsapp(data.whatsappNumber)}`;else $("whatsappBtn").style.display="none";
+  if(laundry.whatsapp)$("whatsappBtn").href=`https://wa.me/${normalizeEgyptWhatsapp(laundry.whatsapp)}`;else $("whatsappBtn").style.display="none";
   if(data.instapayLink)$("paymentBtn").href=data.instapayLink;else $("paymentBtn").style.display="none";
   $("submitOrder").onclick=async()=>{
     const error=validate();if(error){$("status").innerText=error;return;}
