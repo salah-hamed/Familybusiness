@@ -436,7 +436,8 @@ service cloud.firestore {
     && (
       !request.resource.data.diff(resource.data).affectedKeys().hasAny(["operatorId","partnerSetupStatus"])
       || (
-        resource.data.operatingModel == "partner_operated"
+        ("operatingModel" in resource.data)
+        && resource.data.operatingModel == "partner_operated"
         && request.resource.data.operatorId == projectId
         && request.resource.data.partnerSetupStatus in ["partner_linked","active"]
       )
