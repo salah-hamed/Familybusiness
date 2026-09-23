@@ -4,6 +4,13 @@ import db from "../core/firebase/firebase-db.js";
 import { logoutUser } from "../core/auth/auth.js";
 import { loadCurrentProject } from "./project.js";
 import { getDashboardTemplate, getTemplateKey } from "./template-config.js";
+import {
+  WORKER_ROLES,
+  createWorker,
+  listProjectWorkers,
+  setWorkerActive
+} from "../core/workers/worker-service.js";
+import { assignWorkerAndPrepareWhatsApp } from "../core/workers/worker-dispatch-service.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { collection, query, where, getDocs, doc, getDoc, updateDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
@@ -11,6 +18,7 @@ let stats = { new: 0, accepted: 0, done: 0, canceled: 0 };
 let currentUser = null, currentProjectId = null, currentProjectOwnerId = null, currentTemplateKey = "cleaning";
 let isAuthReady = false, activeTab = "all", searchTerm = "";
 let currentDashboardConfig = null;
+let cleaningWorkers = [];
 
 const $ = id => document.getElementById(id);
 const userName = $("userName"), userEmail = $("userEmail"), projectType = $("projectType"), status = $("status");
@@ -35,6 +43,11 @@ function configureDashboard(project) {
     if (label) label.style.display = allowedIds.has(id) ? "" : "none";
   });
   currentDashboardConfig.pricing.forEach(([id,label]) => { const input=$(id); const span=input?.closest("label")?.querySelector("span"); if(span) span.innerText=label; });
+
+  const cleaningWorkersSection = $("cleaningWorkersSection");
+  if (cleaningWorkersSection) {
+    cleaningWorkersSection.classList.toggle("hidden", currentTemplateKey !== "cleaning");
+  }
 
   if (currentTemplateKey === "carwash") {
     const theme = $("creativeTheme")?.querySelector('option[value="cleanPro"]');
@@ -88,6 +101,159 @@ async function loadSubscriptions(projectId) {
   }
 }
 
+
+async function loadCleaningWorkers(projectId) {
+  if (currentTemplateKey !== "cleaning" || !projectId) return;
+
+  const list = $("cleanersList");
+  if (list) list.innerHTML = '<div class="emptyState">جاري تحميل فريق التنظيف...</div>';
+
+  try {
+    cleaningWorkers = await listProjectWorkers(projectId, {
+      role: WORKER_ROLES.CLEANER,
+      activeOnly: false
+    });
+    renderCleaningWorkers();
+  } catch (error) {
+    cleaningWorkers = [];
+    if (list) list.innerHTML = `<div class="emptyState">${escapeHTML(error.message)}</div>`;
+  }
+}
+
+function renderCleaningWorkers() {
+  const list = $("cleanersList");
+  if (!list || currentTemplateKey !== "cleaning") return;
+
+  if (!cleaningWorkers.length) {
+    list.innerHTML = '<div class="emptyState">لم تتم إضافة أي عامل تنظيف بعد.</div>';
+    return;
+  }
+
+  list.innerHTML = "";
+
+  cleaningWorkers.forEach(worker => {
+    const row = document.createElement("article");
+    row.className = "cleanerRow";
+    row.innerHTML = `
+      <div>
+        <strong>${escapeHTML(worker.name || "عامل تنظيف")}</strong>
+        <span>${escapeHTML(worker.whatsapp || worker.phone || "")}</span>
+      </div>
+      <button class="secondaryBtn cleanerToggleBtn" type="button">
+        ${worker.isActive === true ? "إيقاف" : "تفعيل"}
+      </button>
+    `;
+
+    row.querySelector(".cleanerToggleBtn")?.addEventListener("click", async () => {
+      const btn = row.querySelector(".cleanerToggleBtn");
+      if (btn) btn.disabled = true;
+      $("cleanerStatus").innerText = "";
+
+      try {
+        await setWorkerActive({
+          workerId: worker.workerId,
+          projectId: currentProjectId,
+          actorUid: currentUser.uid,
+          isActive: worker.isActive !== true
+        });
+        $("cleanerStatus").innerText = worker.isActive === true
+          ? "تم إيقاف عامل التنظيف."
+          : "تم تفعيل عامل التنظيف ✅";
+        await loadCleaningWorkers(currentProjectId);
+        await loadOrders(currentProjectId);
+      } catch (error) {
+        $("cleanerStatus").innerText = error.message;
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    });
+
+    list.appendChild(row);
+  });
+}
+
+function attachCleaningAssignmentControls(card, orderId, order) {
+  if (
+    currentTemplateKey !== "cleaning" ||
+    ["done", "canceled"].includes(order.status || "new")
+  ) {
+    return;
+  }
+
+  const activeCleaners = cleaningWorkers.filter(worker => worker.isActive === true);
+  const assignment = document.createElement("div");
+  assignment.className = "cleanerAssignmentBox";
+
+  const currentAssignment = order.assignedWorkerId
+    ? `المسؤول الحالي: ${escapeHTML(order.assignedWorkerName || "عامل تنظيف")}`
+    : "لم يتم تعيين عامل تنظيف بعد";
+
+  assignment.innerHTML = `
+    <div class="cleanerAssignmentHeader">
+      <strong>تعيين عامل التنظيف</strong>
+      <span>${currentAssignment}</span>
+    </div>
+    <div class="cleanerAssignmentControls">
+      <select class="cleanerSelect" aria-label="اختر عامل التنظيف">
+        <option value="">اختر عامل التنظيف</option>
+        ${activeCleaners.map(worker => `
+          <option value="${escapeHTML(worker.workerId)}" ${worker.workerId === order.assignedWorkerId ? "selected" : ""}>
+            ${escapeHTML(worker.name)}
+          </option>
+        `).join("")}
+      </select>
+      <button class="primaryBtn assignCleanerBtn" type="button" ${activeCleaners.length ? "" : "disabled"}>
+        ${order.assignedWorkerId ? "تغيير وإرسال واتساب" : "تعيين وإرسال واتساب"}
+      </button>
+    </div>
+    <p class="assignmentStatus statusText">${activeCleaners.length ? "" : "أضف عامل تنظيف نشط أولاً."}</p>
+  `;
+
+  const button = assignment.querySelector(".assignCleanerBtn");
+  const select = assignment.querySelector(".cleanerSelect");
+  const assignmentStatus = assignment.querySelector(".assignmentStatus");
+
+  button?.addEventListener("click", async () => {
+    const workerId = select?.value || "";
+    if (!workerId || !currentUser || !currentProjectId) {
+      if (assignmentStatus) assignmentStatus.innerText = "اختر عامل التنظيف أولاً.";
+      return;
+    }
+
+    button.disabled = true;
+    if (assignmentStatus) assignmentStatus.innerText = "جاري التعيين وتجهيز رسالة واتساب...";
+
+    const popup = window.open("about:blank", "_blank");
+
+    try {
+      const result = await assignWorkerAndPrepareWhatsApp({
+        projectId: currentProjectId,
+        orderId,
+        workerId,
+        actorUid: currentUser.uid
+      });
+
+      if (assignmentStatus) assignmentStatus.innerText = `تم تعيين ${result.workerName} ✅`;
+
+      if (popup) {
+        popup.opener = null;
+        popup.location.href = result.whatsappUrl;
+      } else {
+        window.open(result.whatsappUrl, "_blank", "noopener");
+      }
+
+      await loadOrders(currentProjectId);
+    } catch (error) {
+      if (popup) popup.close();
+      if (assignmentStatus) assignmentStatus.innerText = error.message;
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  card.appendChild(assignment);
+}
+
 protectPage();
 onAuthStateChanged(auth, async user => {
   currentUser=user||null; isAuthReady=!!user; if(!user)return;
@@ -105,6 +271,9 @@ onAuthStateChanged(auth, async user => {
     businessName.value=data.businessName||""; whatsappNumber.value=data.whatsappNumber||""; instapayLink.value=data.instapayLink||"";
     const pc=data.priceConfig||{};
     if (currentDashboardConfig) currentDashboardConfig.pricing.forEach(([id,,key]) => { if ($(id)) $(id).value = pc[key] ?? ""; });
+    if (currentTemplateKey === "cleaning") {
+      await loadCleaningWorkers(currentProjectId);
+    }
     await loadOrders(currentProjectId);
     await loadSubscriptions(currentProjectId);
   } catch(error){ console.log(error); }
@@ -117,6 +286,49 @@ $("shareProjectBtn").addEventListener("click",async()=>{if(!projectLink.value)re
 document.querySelectorAll(".navItem[data-target]").forEach(item=>item.addEventListener("click",()=>{document.querySelectorAll(".navItem").forEach(n=>n.classList.remove("active"));item.classList.add("active");scrollToSection(item.dataset.target);}));
 
 $("saveSettingsBtn").addEventListener("click",async()=>{try{if(!isAuthReady||!currentUser||!currentProjectId||currentProjectOwnerId!==currentUser.uid)return;await updateDoc(doc(db,"projects",currentProjectId),{businessName:businessName.value.trim(),whatsappNumber:whatsappNumber.value.trim(),instapayLink:instapayLink.value.trim()});userName.innerText=businessName.value.trim()||"مشروعك";$("settingsStatus").innerText="تم حفظ الإعدادات ✅";}catch(e){$("settingsStatus").innerText=e.message;}});
+
+$("addCleanerBtn")?.addEventListener("click", async () => {
+  if (
+    currentTemplateKey !== "cleaning" ||
+    !currentUser ||
+    !currentProjectId ||
+    currentProjectOwnerId !== currentUser.uid
+  ) return;
+
+  const name = $("cleanerName")?.value.trim() || "";
+  const phone = $("cleanerPhone")?.value.trim() || "";
+
+  if (!name || !phone) {
+    $("cleanerStatus").innerText = "أدخل اسم عامل التنظيف ورقم واتساب.";
+    return;
+  }
+
+  const button = $("addCleanerBtn");
+  button.disabled = true;
+  $("cleanerStatus").innerText = "جاري إضافة عامل التنظيف...";
+
+  try {
+    await createWorker({
+      projectId: currentProjectId,
+      actorUid: currentUser.uid,
+      name,
+      role: WORKER_ROLES.CLEANER,
+      phone,
+      whatsapp: phone
+    });
+
+    $("cleanerName").value = "";
+    $("cleanerPhone").value = "";
+    $("cleanerStatus").innerText = "تمت إضافة عامل التنظيف ✅";
+
+    await loadCleaningWorkers(currentProjectId);
+    await loadOrders(currentProjectId);
+  } catch (error) {
+    $("cleanerStatus").innerText = error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
 
 $("savePricingBtn").addEventListener("click",async()=>{try{
   if(!isAuthReady||!currentUser||!currentProjectId||currentProjectOwnerId!==currentUser.uid||!currentDashboardConfig)return;
@@ -206,5 +418,5 @@ function orderDetails(order){
 }
 
 async function loadOrders(projectId){const box=$("ordersContainer");box.innerHTML='<div class="emptyState">جاري تحميل الطلبات...</div>';try{const snapshot=await getDocs(query(collection(db,"orders"),where("projectId","==",projectId)));stats={new:0,accepted:0,done:0,canceled:0};let doneRevenue=0,todayOrders=0;const today=new Date().toISOString().split("T")[0];box.innerHTML="";
-snapshot.forEach(ds=>{const order=ds.data(),s=order.status||"new";if(s in stats)stats[s]++;if(s==="done")doneRevenue+=Number(order.price||0);if((order.visitDate||order.firstWashDate)===today)todayOrders++;const id=ds.id,name=escapeHTML(order.customerName||"عميل"),phone=escapeHTML(order.customerPhone||"-"),date=escapeHTML(order.visitDate||order.firstWashDate||"-"),time=escapeHTML(order.visitTime||order.preferredTime||"-"),maps=typeof order.location==="string"&&order.location.startsWith("http")?order.location:"",wa=cleanPhone(order.customerPhone);const label={new:"جديد",accepted:"مقبول",done:"تم التنفيذ",canceled:"ملغي"}[s]||s;const card=document.createElement("article");card.className="orderCard";card.dataset.orderId=id;card.dataset.status=s;card.dataset.search=`${order.customerName||""} ${order.customerPhone||""} ${order.carModel||""} ${order.plateNumber||""}`.toLowerCase();card.innerHTML=`<div class="orderTop"><div><h3>${name}</h3><span class="muted">${phone}</span></div><span class="orderStatus status-${s}">${label}</span></div><div class="orderGrid"><div class="orderInfo"><b>📅 الموعد</b>${date} — ${time}</div>${orderDetails(order)}</div><div class="orderPrice">💰 ${Number(order.price||0)} جنيه</div><div class="orderActions">${wa?`<a class="orderAction whatsapp" href="https://wa.me/${wa}" target="_blank" rel="noopener">💬 واتساب</a>`:""}${maps?`<a class="orderAction maps" href="${escapeHTML(maps)}" target="_blank" rel="noopener">🗺️ فتح الموقع</a>`:""}${s==="new"?'<button class="orderAction accept acceptBtn" type="button">قبول الطلب</button>':""}${s==="accepted"?'<button class="orderAction done doneBtn" type="button">إغلاق الطلب</button>':""}${["new","accepted"].includes(s)?'<button class="orderAction cancel cancelBtn" type="button">إلغاء</button>':""}</div>`;box.appendChild(card);card.querySelector(".acceptBtn")?.addEventListener("click",async()=>{if(await updateOrderStatus(id,projectId,"accepted"))loadOrders(projectId);});card.querySelector(".doneBtn")?.addEventListener("click",async()=>{if(await updateOrderStatus(id,projectId,"done"))loadOrders(projectId);});card.querySelector(".cancelBtn")?.addEventListener("click",async()=>{if(await updateOrderStatus(id,projectId,"canceled"))loadOrders(projectId);});});
+snapshot.forEach(ds=>{const order=ds.data(),s=order.status||"new";if(s in stats)stats[s]++;if(s==="done")doneRevenue+=Number(order.price||0);if((order.visitDate||order.firstWashDate)===today)todayOrders++;const id=ds.id,name=escapeHTML(order.customerName||"عميل"),phone=escapeHTML(order.customerPhone||"-"),date=escapeHTML(order.visitDate||order.firstWashDate||"-"),time=escapeHTML(order.visitTime||order.preferredTime||"-"),maps=typeof order.location==="string"&&order.location.startsWith("http")?order.location:"",wa=cleanPhone(order.customerPhone);const label={new:"جديد",accepted:"مقبول",done:"تم التنفيذ",canceled:"ملغي"}[s]||s;const card=document.createElement("article");card.className="orderCard";card.dataset.orderId=id;card.dataset.status=s;card.dataset.search=`${order.customerName||""} ${order.customerPhone||""} ${order.carModel||""} ${order.plateNumber||""}`.toLowerCase();card.innerHTML=`<div class="orderTop"><div><h3>${name}</h3><span class="muted">${phone}</span></div><span class="orderStatus status-${s}">${label}</span></div><div class="orderGrid"><div class="orderInfo"><b>📅 الموعد</b>${date} — ${time}</div>${orderDetails(order)}</div><div class="orderPrice">💰 ${Number(order.price||0)} جنيه</div><div class="orderActions">${wa?`<a class="orderAction whatsapp" href="https://wa.me/${wa}" target="_blank" rel="noopener">💬 واتساب</a>`:""}${maps?`<a class="orderAction maps" href="${escapeHTML(maps)}" target="_blank" rel="noopener">🗺️ فتح الموقع</a>`:""}${s==="new"?'<button class="orderAction accept acceptBtn" type="button">قبول الطلب</button>':""}${s==="accepted"?'<button class="orderAction done doneBtn" type="button">إغلاق الطلب</button>':""}${["new","accepted"].includes(s)?'<button class="orderAction cancel cancelBtn" type="button">إلغاء</button>':""}</div>`;box.appendChild(card);attachCleaningAssignmentControls(card,id,order);card.querySelector(".acceptBtn")?.addEventListener("click",async()=>{if(await updateOrderStatus(id,projectId,"accepted"))loadOrders(projectId);});card.querySelector(".doneBtn")?.addEventListener("click",async()=>{if(await updateOrderStatus(id,projectId,"done"))loadOrders(projectId);});card.querySelector(".cancelBtn")?.addEventListener("click",async()=>{if(await updateOrderStatus(id,projectId,"canceled"))loadOrders(projectId);});});
 $("newOrders").innerText=stats.new;$("acceptedOrders").innerText=stats.accepted;$("doneOrders").innerText=stats.done;$("canceledOrders").innerText=stats.canceled;$("todayOrders").innerText=todayOrders;$("doneRevenue").innerText=doneRevenue;if(snapshot.empty)box.innerHTML='<div class="emptyState">لا توجد طلبات بعد. شارك رابط مشروعك لاستقبال أول طلب ✨</div>';setupTabs();refreshOrderVisibility();}catch(e){box.innerHTML=`<div class="emptyState">${escapeHTML(e.message)}</div>`;console.log(e);}}
