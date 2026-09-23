@@ -1,5 +1,5 @@
 import db from "../firebase/firebase-db.js";
-import { createOperator, getOperator, updateOperatorContact } from "../partners/partner-service.js";
+import { createOperator, getOperator, updateOperatorContact, ensureOperatorInviteAccess } from "../partners/partner-service.js";
 import { proposeCommission, getCommissionAgreement } from "../commissions/commission-service.js";
 
 import {
@@ -32,7 +32,6 @@ export async function createOrResumeSupermarketSetup({
   contactName = "",
   phone = "",
   whatsapp = "",
-  email,
   address = "",
   location = "",
   deliveryFee = 0,
@@ -62,8 +61,7 @@ export async function createOrResumeSupermarketSetup({
       name,
       contactName,
       phone,
-      whatsapp,
-      email
+      whatsapp
     });
     operator = await getOperator(projectId);
   } else {
@@ -71,10 +69,11 @@ export async function createOrResumeSupermarketSetup({
       name,
       contactName,
       phone,
-      whatsapp,
-      email
+      whatsapp
     });
   }
+
+  operator = await ensureOperatorInviteAccess(projectId, ownerId);
 
   const supermarketRef = doc(db, "supermarkets", projectId);
   const supermarketSnap = await getDoc(supermarketRef);
@@ -87,7 +86,7 @@ export async function createOrResumeSupermarketSetup({
     contactName: clean(contactName),
     phone: clean(phone),
     whatsapp: clean(whatsapp || phone),
-    email: clean(email).toLowerCase(),
+    email: "",
     address: clean(address),
     location: clean(location),
     deliveryFee: numberOrZero(deliveryFee),
