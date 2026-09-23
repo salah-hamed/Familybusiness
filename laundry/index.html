@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0ea5e9">
+  <title>Laundry 2.0 | Family Business</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<main class="shell">
+  <header class="hero">
+    <div>
+      <span class="eyebrow">Family Business · مشروعك</span>
+      <h1>🧺 غسيل وكي الملابس</h1>
+      <p>اربط مغسلة واحدة بالمشروع. المغسلة تدير التشغيل والاستلام والتوصيل، وأنت تتابع العمولة.</p>
+    </div>
+    <a class="ghostBtn" href="../workspace/">رجوع لمساحة العمل</a>
+  </header>
+
+  <section id="statusBanner" class="banner">جاري تحميل المشروع...</section>
+
+  <section id="setupSection" class="card hidden">
+    <div class="sectionTitle"><div><span class="eyebrow">إعداد المشروع</span><h2>اربط المغسلة</h2></div><span class="pill">1 من 3</span></div>
+    <p class="hint">أدخل بيانات المغسلة والمسؤول، وحدد العمولة المتفق عليها لكل طلب مكتمل.</p>
+    <div class="formGrid">
+      <label>اسم المغسلة<input id="laundryName" placeholder="مثال: مغسلة النور"></label>
+      <label>اسم المسؤول<input id="contactName"></label>
+      <label>إيميل المسؤول<input id="operatorEmail" type="email" placeholder="name@example.com"></label>
+      <label>الهاتف<input id="laundryPhone" inputmode="tel"></label>
+      <label>واتساب<input id="laundryWhatsapp" inputmode="tel"></label>
+      <label>العنوان<input id="laundryAddress"></label>
+      <label>رابط اللوكيشن<input id="laundryLocation" placeholder="Google Maps link"></label>
+      <label>عمولتك لكل طلب مكتمل<input id="commissionAmount" type="number" min="0" step="0.25" value="1"></label>
+    </div>
+    <button id="createSetupBtn" class="primaryBtn">ربط المغسلة وإرسال الاتفاق</button>
+    <p id="setupMessage" class="message"></p>
+  </section>
+
+  <section id="projectSection" class="hidden">
+    <div class="stats">
+      <article><span>طلبات مكتملة</span><strong id="completedOrders">0</strong></article>
+      <article><span>عمولات مكتسبة</span><strong id="earnedCommission">0 جنيه</strong></article>
+      <article><span>مدفوع</span><strong id="paidCommission">0 جنيه</strong></article>
+      <article><span>مستحق</span><strong id="outstandingCommission">0 جنيه</strong></article>
+    </div>
+
+    <section class="card">
+      <div class="sectionTitle"><div><span class="eyebrow">المغسلة المرتبطة</span><h2 id="linkedLaundryName">—</h2></div><span id="operatorState" class="pill">—</span></div>
+      <div id="laundryMeta" class="metaGrid"></div>
+    </section>
+
+    <section class="card">
+      <div class="sectionTitle"><div><span class="eyebrow">اتفاق العمولة</span><h2 id="currentCommission">—</h2></div><span id="agreementStatus" class="pill">—</span></div>
+      <p class="hint">أي تعديل جديد يفضل Pending لحد ما المغسلة توافق، والعمولة الحالية تفضل شغالة.</p>
+      <div class="inlineForm">
+        <input id="newCommissionAmount" type="number" min="0" step="0.25" placeholder="العمولة الجديدة">
+        <button id="proposeCommissionBtn" class="primaryBtn">إرسال تعديل</button>
+      </div>
+      <p id="commissionMessage" class="message"></p>
+    </section>
+
+    <section class="card">
+      <div class="sectionTitle"><div><span class="eyebrow">روابط التشغيل</span><h2>شارك الروابط المناسبة</h2></div></div>
+      <div class="linkBox"><span>لوحة المغسلة</span><input id="operatorLink" readonly><button data-copy="operatorLink">نسخ</button></div>
+      <div class="linkBox"><span>رابط العملاء</span><input id="customerLink" readonly><button data-copy="customerLink">نسخ</button></div>
+      <p id="linksHint" class="hint"></p>
+    </section>
+  </section>
+</main>
+<script type="module" src="./app.js"></script>
+</body>
+</html>

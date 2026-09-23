@@ -89,12 +89,25 @@ async function init(){
   if(!snap.exists()){unavailable();return;}
   const data=snap.data();
   if(data.template!=="laundry"||data.isActive!==true||data.status!=="active"){unavailable();return;}
-  if(!hasConfiguredPricing(data.priceConfig||{})){unavailable("مقدم الخدمة لم يجهز أسعار الغسيل والمكواة بعد. يرجى المحاولة لاحقًا.");return;}
-  $("businessTitle").innerText=data.businessName||"غسيل ومكواة الملابس";
+
+  let laundrySnap;
+  try{
+    laundrySnap=await getDoc(doc(db,"laundries",currentProjectId));
+  }catch{unavailable("المغسلة غير جاهزة لاستقبال الطلبات حاليًا.");return;}
+
+  if(!laundrySnap.exists()){
+    unavailable("المغسلة لم تكمل إعداد التشغيل بعد.");return;
+  }
+
+  const laundry=laundrySnap.data();
+  if(laundry.isAcceptingOrders!==true){unavailable("المغسلة غير متاحة لاستقبال طلبات جديدة حاليًا.");return;}
+  if(!hasConfiguredPricing(data.priceConfig||{})){unavailable("المغسلة لم تجهز أسعار الغسيل والمكواة بعد. يرجى المحاولة لاحقًا.");return;}
+
+  $("businessTitle").innerText=laundry.name||data.businessName||"غسيل ومكواة الملابس";
   priceConfig={...priceConfig,...data.priceConfig};
   renderItems();fillSaved();
-  if(data.whatsappNumber)$("whatsappBtn").href=`https://wa.me/${normalizeEgyptWhatsapp(data.whatsappNumber)}`;else $("whatsappBtn").style.display="none";
-  if(data.instapayLink)$("paymentBtn").href=data.instapayLink;else $("paymentBtn").style.display="none";
+  if(laundry.whatsapp)$("whatsappBtn").href=`https://wa.me/${normalizeEgyptWhatsapp(laundry.whatsapp)}`;else $("whatsappBtn").style.display="none";
+  if(laundry.instapayLink)$("paymentBtn").href=laundry.instapayLink;else $("paymentBtn").style.display="none";
   $("submitOrder").onclick=async()=>{
     const error=validate();if(error){$("status").innerText=error;return;}
     const {pieces,price}=totals();
