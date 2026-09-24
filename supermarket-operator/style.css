@@ -24,3 +24,6 @@
 .productEditGrid input{width:100%}
 @media(max-width:800px){.productEditGrid{grid-template-columns:1fr 1fr}}
 @media(max-width:520px){.productEditGrid{grid-template-columns:1fr}.productControls>*{flex:1 1 100%}}
+
+.catalogFilter{padding:12px;border:1px solid #cad8ce;border-radius:12px;background:#fff;min-width:190px;font:inherit;color:#13261a}
+@media(max-width:520px){.catalogFilter{width:100%;min-width:0}}
