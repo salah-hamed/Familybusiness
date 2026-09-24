@@ -827,6 +827,8 @@ service cloud.firestore {
             == request.resource.data.commissionAmount
         )
       )
+    )
+    ||
     (
       resource.data.templateType == "restaurant"
       && (isAdmin() || isProjectOperator(resource.data.projectId))
@@ -919,7 +921,6 @@ service cloud.firestore {
             == request.resource.data.commissionAmount
         )
       )
-
     )
    );
 
@@ -1223,7 +1224,15 @@ service cloud.firestore {
       "createdAt","updatedAt"
     ]);
 
-   allow update: if canOperateProject(resource.data.projectId)
+   allow update: if (
+      isAdmin()
+      || isProjectOperator(resource.data.projectId)
+      || (
+        ownsProject(resource.data.projectId)
+        && operatorExists(resource.data.operatorId)
+        && operatorData(resource.data.operatorId).isActive == false
+      )
+    )
     && request.resource.data.restaurantId == resource.data.restaurantId
     && request.resource.data.projectId == resource.data.projectId
     && request.resource.data.ownerId == resource.data.ownerId
