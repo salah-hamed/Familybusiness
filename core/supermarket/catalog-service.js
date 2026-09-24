@@ -1,5 +1,5 @@
 import db from "../firebase/firebase-db.js";
-import { findMasterProduct } from "./master-catalog.js";
+import { findMasterProduct, LEGACY_MASTER_NAME_MAP, canonicalMasterId } from "./master-catalog.js";
 
 import {
   collection,
@@ -10,6 +10,7 @@ import {
   where,
   setDoc,
   updateDoc,
+  deleteDoc,
   writeBatch,
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -144,6 +145,50 @@ export async function bulkAddMasterProducts(projectId, actorUid, selections = []
     added: rows.length,
     skipped: requested.length - rows.length
   };
+}
+
+
+export async function deleteStoreProduct(projectId, productId) {
+  const ref = doc(db, "supermarkets", projectId, "products", productId);
+  const current = await getDoc(ref);
+
+  if (!current.exists()) throw new Error("PRODUCT_NOT_FOUND");
+
+  await deleteDoc(ref);
+}
+
+
+export async function syncLegacyMasterProductDetails(projectId, actorUid) {
+  const current = await listStoreProducts(projectId);
+  const batch = writeBatch(db);
+  let changed = 0;
+
+  current.forEach(product => {
+    const legacyId = clean(product.masterId);
+    if (!legacyId) return;
+
+    const legacyName = LEGACY_MASTER_NAME_MAP[legacyId];
+    const master = findMasterProduct(legacyId);
+
+    if (!legacyName || !master || clean(product.name) !== legacyName) return;
+
+    const ref = doc(db, "supermarkets", projectId, "products", product.productId);
+
+    batch.update(ref, {
+      name: clean(master.name),
+      category: clean(master.category || product.category || "أخرى"),
+      size: clean(master.size || product.size),
+      image: clean(master.image || product.image),
+      updatedBy: actorUid,
+      updatedAt: serverTimestamp()
+    });
+
+    changed++;
+  });
+
+  if (changed) await batch.commit();
+
+  return changed;
 }
 
 export async function updateStoreProduct(projectId, productId, actorUid, updates = {}) {
