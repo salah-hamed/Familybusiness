@@ -1,0 +1,7 @@
+@import url("../supermarket/style.css");
+:root{--green:#EA580C;--green2:#C2410C}
+body{background:linear-gradient(180deg,#fff3e8 0,#faf8f6 42%,#f3f4f6 100%)}
+.hero{background:#431407}
+.eyebrow{color:#fdba74}
+.stepPill,.statusPill{background:#fff0e6;color:#9a3412}
+.copyBtn{background:#fff0e6;color:#9a3412}

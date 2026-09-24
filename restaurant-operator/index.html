@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#EA580C">
+  <title>لوحة المطعم | Family Business</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<main class="shell">
+  <header class="topbar">
+    <div>
+      <span class="eyebrow">Family Business</span>
+      <h1>🍽️ لوحة تشغيل المطعم</h1>
+      <p id="pageStatus">افتح رابط الدعوة الذي وصلك على واتساب.</p>
+    </div>
+    <button id="logoutBtn" class="ghost hidden">تسجيل الخروج</button>
+  </header>
+
+  <section id="authPanel" class="card">
+    <h2>دخول مسؤول المطعم</h2>
+    <p class="muted">أول مرة اختار كلمة مرور. بعد كده استخدم نفس رابط الدعوة للدخول.</p>
+    <div class="formGrid">
+      <label>كلمة المرور<input id="authPassword" type="password" minlength="6" placeholder="6 أحرف أو أكثر"></label>
+    </div>
+    <div class="actions">
+      <button id="loginBtn" class="primary">تسجيل الدخول</button>
+      <button id="registerBtn" class="secondary">تفعيل الدعوة أول مرة</button>
+    </div>
+    <p id="authMessage" class="message"></p>
+  </section>
+
+  <section id="agreementPanel" class="card hidden">
+    <span class="eyebrow">اتفاق التشغيل</span>
+    <h2>تأكيد العمولة</h2>
+    <p id="agreementText" class="agreementAmount">—</p>
+    <p class="muted">أي تعديل لاحق في العمولة يحتاج موافقتك من جديد.</p>
+    <div class="actions">
+      <button id="acceptAgreementBtn" class="primary">قبول العمولة</button>
+      <button id="rejectAgreementBtn" class="danger">رفض</button>
+    </div>
+    <p id="agreementMessage" class="message"></p>
+  </section>
+
+  <section id="operationsPanel" class="hidden">
+    <div class="statGrid">
+      <article><span>طلبات جديدة</span><strong id="statNew">0</strong></article>
+      <article><span>قيد التنفيذ</span><strong id="statActive">0</strong></article>
+      <article><span>تم التوصيل</span><strong id="statDelivered">0</strong></article>
+      <article><span>العمولة الحالية</span><strong id="statCommission">—</strong></article>
+    </div>
+
+    <nav class="tabs">
+      <button data-target="ordersSection">الطلبات</button>
+      <a id="menuLink" class="tabLink" href="#">المنيو والأسعار</a>
+      <button data-target="ridersSection">المندوبون</button>
+      <button data-target="settingsSection">الهوية والإعدادات</button>
+    </nav>
+
+    <section id="ordersSection" class="card">
+      <div class="sectionHead">
+        <div><span class="eyebrow">التشغيل</span><h2>الطلبات</h2></div>
+        <button id="refreshOrdersBtn" class="secondary">تحديث</button>
+      </div>
+      <div id="ordersList" class="stack"></div>
+    </section>
+
+    <section class="card productsShortcut">
+      <div class="sectionHead">
+        <div><span class="eyebrow">المنيو</span><h2>الأطباق والأسعار</h2></div>
+        <a id="openMenuBtn" class="primary tabLink" href="#">فتح إدارة المنيو</a>
+      </div>
+      <p class="muted">أضف الأطباق والتصنيفات والأسعار والصور، وأوقف أي صنف مؤقتًا من صفحة مستقلة.</p>
+    </section>
+
+    <section id="ridersSection" class="card">
+      <div class="sectionHead"><div><span class="eyebrow">التوصيل</span><h2>المندوبون</h2></div></div>
+      <div class="inlineForm">
+        <input id="riderName" placeholder="اسم المندوب">
+        <input id="riderPhone" inputmode="tel" placeholder="رقم الموبايل / واتساب">
+        <button id="addRiderBtn" class="primary">إضافة مندوب</button>
+      </div>
+      <p id="riderMessage" class="message"></p>
+      <div id="ridersList" class="stack"></div>
+    </section>
+
+    <section id="settingsSection" class="card">
+      <div class="sectionHead"><div><span class="eyebrow">هوية المطعم</span><h2 id="restaurantTitle">المطعم</h2></div></div>
+
+      <div class="formGrid">
+        <label>اسم المطعم<input id="settingsName"></label>
+        <label>نوع المطبخ<input id="settingsCuisine" placeholder="مصري، مشويات، بيتزا..."></label>
+        <label>وصف قصير / Slogan<input id="settingsSlogan" placeholder="أكل بيتي بطعم حقيقي"></label>
+        <label>رقم الهاتف<input id="settingsPhone"></label>
+        <label>واتساب<input id="settingsWhatsapp"></label>
+        <label>العنوان<input id="settingsAddress"></label>
+        <label>رابط اللوكيشن<input id="settingsLocation"></label>
+        <label>مصاريف التوصيل<input id="settingsDeliveryFee" type="number" min="0" step="0.5"></label>
+        <label>رابط اللوجو<input id="settingsLogo" placeholder="https://..."></label>
+        <label>رابط صورة الغلاف<input id="settingsCover" placeholder="https://..."></label>
+        <label>اللون الرئيسي<input id="settingsColor" type="color" value="#EA580C"></label>
+      </div>
+
+      <label class="check"><input id="acceptingOrders" type="checkbox"> استقبال طلبات جديدة</label>
+
+      <div class="customerLinkBox">
+        <label>رابط طلب العملاء<input id="customerOrderLink" readonly></label>
+        <button id="copyCustomerLinkBtn" class="secondary" type="button">نسخ رابط العملاء</button>
+      </div>
+
+      <button id="saveSettingsBtn" class="primary">حفظ الهوية والإعدادات</button>
+      <p id="settingsMessage" class="message"></p>
+    </section>
+  </section>
+</main>
+<script type="module" src="./app.js"></script>
+</body>
+</html>

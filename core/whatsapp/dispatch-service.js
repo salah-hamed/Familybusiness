@@ -90,7 +90,7 @@ export function buildWorkerDispatchMessage({
     addLine(lines, "السلالم", order.stairs);
     addLine(lines, "الحساب", order.price != null ? `${order.price} جنيه` : "");
     addLine(lines, "ملاحظات", order.notes);
-  } else if (templateId === "supermarket") {
+  } else if (templateId === "supermarket" || templateId === "restaurant") {
     const items = supermarketItems(order);
     if (items) {
       lines.push("تفاصيل الطلب:");

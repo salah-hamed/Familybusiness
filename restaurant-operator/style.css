@@ -1,0 +1,6 @@
+@import url("../supermarket-operator/style.css");
+:root{--green:#EA580C;--deep:#431407;--muted:#75685f;--line:#eadfd7;--bg:#faf7f4}
+.eyebrow{color:#fdba74}
+.primary{background:var(--green)}
+.secondary,.tabs button,.tabs .tabLink{background:#fff0e6;color:#9a3412}
+.pill{background:#fff0e6;color:#9a3412}
