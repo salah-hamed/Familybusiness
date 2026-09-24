@@ -54,7 +54,7 @@
 
     <nav class="tabs">
       <button data-target="ordersSection">الطلبات</button>
-      <button data-target="catalogSection">المنتجات</button>
+      <button data-target="catalogSection">مكتبة المنتجات</button>
       <button data-target="ridersSection">المندوبون</button>
       <button data-target="settingsSection">الإعدادات</button>
     </nav>
@@ -69,6 +69,25 @@
 
     <section id="catalogSection" class="card">
       <div class="sectionHead"><div><span class="eyebrow">Catalog</span><h2>المنتجات والأسعار</h2></div></div>
+
+      <div class="subcard libraryPanel">
+        <div class="sectionHead">
+          <div>
+            <span class="eyebrow">ابدأ من هنا</span>
+            <h3>مكتبة المنتجات الجاهزة</h3>
+          </div>
+          <span id="masterSelectionCount" class="pill">0 منتج محدد</span>
+        </div>
+        <p class="muted">المنتجات والأسعار الاسترشادية جاهزة. عدّل أي سعر قبل الإضافة، اختار المنتجات اللي موجودة عندك، ثم أضفهم مرة واحدة.</p>
+        <p id="masterPriceMeta" class="muted"></p>
+        <div class="libraryActions">
+          <button id="selectAllMasterBtn" class="secondary" type="button">تحديد الكل</button>
+          <button id="clearMasterSelectionBtn" class="secondary" type="button">إلغاء التحديد</button>
+          <button id="addSelectedMasterBtn" class="primary" type="button">إضافة المنتجات المحددة</button>
+        </div>
+        <p id="masterCatalogMessage" class="message"></p>
+        <div id="masterCatalog" class="catalogGrid"></div>
+      </div>
 
       <div class="subcard">
         <h3>إضافة سريعة</h3>
@@ -88,11 +107,6 @@
         <p id="productMessage" class="message"></p>
       </div>
 
-      <div class="subcard">
-        <div class="sectionHead"><h3>مكتبة جاهزة بأسعار استرشادية</h3><span class="muted">السعر جاهز وتقدر تعدله قبل الإضافة</span></div>
-        <p id="masterPriceMeta" class="muted"></p>
-        <div id="masterCatalog" class="catalogGrid"></div>
-      </div>
 
       <div class="subcard">
         <h3>استيراد Excel / CSV</h3>
