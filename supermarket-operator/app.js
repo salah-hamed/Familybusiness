@@ -220,7 +220,7 @@ $("addProductBtn").onclick=async()=>{
 };
 
 function renderMasterCatalog(){
-  $("masterPriceMeta").innerText=`الأسعار الاسترشادية بتاريخ ${MASTER_PRICE_META.priceAsOf} — ${MASTER_PRICE_META.note}.`;
+  $("masterPriceMeta").innerText=`${MASTER_PRICE_META.source} — تحديث ${MASTER_PRICE_META.priceAsOf}. ${MASTER_PRICE_META.note}.`;
   $("masterCatalog").innerHTML=SUPERMARKET_MASTER_CATALOG.map(item=>`
     <article class="catalogItem">
       <span class="pill">${escapeHTML(item.category)}</span>
