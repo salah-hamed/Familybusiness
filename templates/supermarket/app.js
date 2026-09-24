@@ -108,8 +108,49 @@ function refreshCart(){
 
 function renderCart(){
   const {lines,subtotal,delivery,total}=cartSummary();
-  $("cartItems").innerHTML=lines.map(line=>`<div class="cartLine"><div><b>${escapeHTML(line.name)}</b><div class="meta">${money(line.price)} للقطعة</div></div><span>× ${line.quantity}</span><b>${money(line.subtotal)}</b></div>`).join("");
-  $("subtotalText").innerText=money(subtotal);$("deliveryText").innerText=money(delivery);$("grandTotalText").innerText=money(total);
+
+  $("cartItems").innerHTML=lines.length
+    ? lines.map(line=>`
+      <div class="cartLine" data-cart-product="${line.productId}">
+        <div class="cartProductInfo">
+          <b>${escapeHTML(line.name)}</b>
+          <div class="meta">${money(line.price)} للقطعة</div>
+        </div>
+
+        <div class="cartQtyControls">
+          <button type="button" data-cart-minus="${line.productId}">−</button>
+          <b>${line.quantity}</b>
+          <button type="button" data-cart-plus="${line.productId}">+</button>
+        </div>
+
+        <b class="cartLineTotal">${money(line.subtotal)}</b>
+        <button type="button" class="removeCartItem" data-cart-remove="${line.productId}">حذف</button>
+      </div>
+    `).join("")
+    : '<p class="emptyCart">السلة فاضية.</p>';
+
+  $("subtotalText").innerText=money(subtotal);
+  $("deliveryText").innerText=money(delivery);
+  $("grandTotalText").innerText=money(total);
+
+  document.querySelectorAll("[data-cart-plus]").forEach(btn=>btn.onclick=()=>{
+    changeQty(btn.dataset.cartPlus,1);
+    renderCart();
+  });
+
+  document.querySelectorAll("[data-cart-minus]").forEach(btn=>btn.onclick=()=>{
+    changeQty(btn.dataset.cartMinus,-1);
+    renderCart();
+    if(!cart.size)$("cartSheet").classList.add("hidden");
+  });
+
+  document.querySelectorAll("[data-cart-remove]").forEach(btn=>btn.onclick=()=>{
+    cart.delete(btn.dataset.cartRemove);
+    renderProducts();
+    refreshCart();
+    renderCart();
+    if(!cart.size)$("cartSheet").classList.add("hidden");
+  });
 }
 
 $("searchInput").addEventListener("input",renderProducts);

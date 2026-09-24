@@ -17,3 +17,10 @@
 .tabs .tabLink,.tabLink{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;border:0;border-radius:12px;padding:11px 15px;font-weight:800;cursor:pointer}
 .tabs .tabLink{background:#f0f6f2;color:#245333;white-space:nowrap}
 .productsShortcut .primary{color:#fff}
+
+.productManagerCard{display:grid;gap:12px}
+.productEditGrid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:10px;margin-top:10px}
+.productEditGrid label{font-size:12px}
+.productEditGrid input{width:100%}
+@media(max-width:800px){.productEditGrid{grid-template-columns:1fr 1fr}}
+@media(max-width:520px){.productEditGrid{grid-template-columns:1fr}.productControls>*{flex:1 1 100%}}

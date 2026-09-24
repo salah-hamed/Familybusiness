@@ -2,45 +2,101 @@ export const MASTER_PRICE_META = Object.freeze({
   currency: "EGP",
   priceAsOf: "2026-09-24",
   source: "Carrefour Egypt online spot-check",
-  note: "سعر استرشادي قابل للتعديل حسب سعر السوبرماركت الفعلي"
+  note: "أسعار استرشادية قابلة للتعديل وقد تختلف حسب المنطقة والعروض"
 });
 
 export const SUPERMARKET_MASTER_CATALOG = Object.freeze([
-  { masterId:"water-15l", name:"مياه شرب طبيعية 1.5 لتر", category:"مياه ومشروبات", size:"1.5 لتر", referencePrice:10.50, image:"" },
-  { masterId:"water-600ml", name:"مياه معدنية 600 مل", category:"مياه ومشروبات", size:"600 مل", referencePrice:6.50, image:"" },
-  { masterId:"cola-1l", name:"مشروب كولا حوالي 1 لتر", category:"مياه ومشروبات", size:"950 مل - 1 لتر", referencePrice:24.99, image:"" },
-  { masterId:"cola-can", name:"مشروب غازي عبوة صغيرة", category:"مياه ومشروبات", size:"300 مل", referencePrice:11.99, image:"" },
-  { masterId:"juice-1l", name:"عصير كلاسيك 1 لتر", category:"مياه ومشروبات", size:"1 لتر", referencePrice:37.99, image:"" },
+  { masterId:"water-aquafina-15l", name:"أكوافينا مياه طبيعية - 1.5 لتر", category:"مياه ومشروبات", size:"1.5 لتر", referencePrice:10.50, image:"" },
+  { masterId:"pepsi-300ml", name:"بيبسي - 300 مل", category:"مياه ومشروبات", size:"300 مل", referencePrice:17.99, image:"" },
+  { masterId:"cocacola-950ml", name:"كوكاكولا - 950 مل", category:"مياه ومشروبات", size:"950 مل", referencePrice:24.99, image:"" },
+  { masterId:"juhayna-apple-1l", name:"جهينه كلاسيك عصير تفاح - 1 لتر", category:"مياه ومشروبات", size:"1 لتر", referencePrice:37.99, image:"" },
 
-  { masterId:"milk-1l", name:"لبن كامل الدسم 1 لتر", category:"ألبان", size:"1 لتر", referencePrice:44.50, image:"" },
-  { masterId:"yogurt", name:"زبادي طبيعي", category:"ألبان", size:"180 جم", referencePrice:15.99, image:"" },
-  { masterId:"white-cheese", name:"جبنة بيضاء", category:"ألبان", size:"250 جم", referencePrice:47.50, image:"" },
-  { masterId:"eggs-12", name:"بيض أبيض", category:"ألبان", size:"30 بيضة", referencePrice:99.99, image:"" },
+  { masterId:"beyti-milk-900ml", name:"بيتي لبن كامل الدسم - 900 مل", category:"ألبان", size:"900 مل", referencePrice:44.50, image:"" },
+  { masterId:"juhayna-greek-yogurt-180g", name:"جهينه زبادي يوناني 2% دسم - 180 جم", category:"ألبان", size:"180 جم", referencePrice:40.99, image:"" },
+  { masterId:"domty-feta-250g", name:"دومتي جبنة فيتا طبيعي - 250 جم", category:"ألبان", size:"250 جم", referencePrice:47.50, image:"" },
+  { masterId:"royal-eggs-30", name:"رويال بيض أبيض - 30 بيضة", category:"ألبان", size:"30 بيضة", referencePrice:91.99, image:"" },
 
-  { masterId:"sugar-1kg", name:"سكر أبيض 1 كجم", category:"بقالة", size:"1 كجم", referencePrice:27.50, image:"" },
-  { masterId:"rice-1kg", name:"أرز أبيض مصري 1 كجم", category:"بقالة", size:"1 كجم", referencePrice:25.50, image:"" },
-  { masterId:"pasta-400g", name:"مكرونة 400 جم", category:"بقالة", size:"400 جم", referencePrice:10.99, image:"" },
-  { masterId:"oil-1l", name:"زيت عباد الشمس 1 لتر", category:"بقالة", size:"1 لتر", referencePrice:107.50, image:"" },
-  { masterId:"tea", name:"شاي أسود", category:"بقالة", size:"100 جم", referencePrice:31.50, image:"" },
-  { masterId:"coffee", name:"قهوة سريعة الذوبان", category:"بقالة", size:"100 جم", referencePrice:129.99, image:"" },
+  { masterId:"aldoha-sugar-1kg", name:"الضحى سكر أبيض - 1 كجم", category:"بقالة", size:"1 كجم", referencePrice:34.99, image:"" },
+  { masterId:"aldoha-rice-1kg", name:"الضحى أرز مصري - 1 كجم", category:"بقالة", size:"1 كجم", referencePrice:39.99, image:"" },
+  { masterId:"regina-spaghetti-400g", name:"ريجينا مكرونة اسباجتي - 400 جم", category:"بقالة", size:"400 جم", referencePrice:30.99, image:"" },
+  { masterId:"aldoha-pasta-400g", name:"الضحى مكرونة هلالية - 400 جم", category:"بقالة", size:"400 جم", referencePrice:25.99, image:"" },
+  { masterId:"crystal-oil-1l", name:"كريستال زيت عباد الشمس - 1 لتر", category:"بقالة", size:"1 لتر", referencePrice:107.50, image:"" },
+  { masterId:"lipton-tea-100g", name:"ليبتون شاي - 100 جم", category:"بقالة", size:"100 جم", referencePrice:31.50, image:"" },
+  { masterId:"nescafe-classic-190g", name:"نسكافيه كلاسيك قهوة سريعة الذوبان - 190 جم", category:"بقالة", size:"190 جم", referencePrice:280.99, image:"" },
 
-  { masterId:"chips", name:"سناكس / مقرمشات", category:"سناكس وحلويات", size:"70 جم تقريبًا", referencePrice:14.99, image:"" },
-  { masterId:"biscuits", name:"بسكويت شاي", category:"سناكس وحلويات", size:"80 جم", referencePrice:19.99, image:"" },
-  { masterId:"chocolate", name:"شوكولاتة / ويفر", category:"سناكس وحلويات", size:"قطعة صغيرة", referencePrice:9.99, image:"" },
+  { masterId:"chipsy-cheese-140g", name:"شيبسي رقائق بطاطس بالجبنة والبصل - 140 جم", category:"سناكس وحلويات", size:"140 جم", referencePrice:18.50, image:"" },
+  { masterId:"balance-puffs-70g", name:"بالانس بروتين بافس بطعم الذرة الحلوة - 70 جم", category:"سناكس وحلويات", size:"70 جم", referencePrice:14.99, image:"" },
+  { masterId:"katakito-wafer", name:"كتاكيتو إكسترا ويفر بالحليب - قطعة", category:"سناكس وحلويات", size:"قطعة", referencePrice:21.99, image:"" },
 
-  { masterId:"tissues", name:"مناديل ورقية", category:"منظفات ومنزل", size:"عبوة", referencePrice:33.50, image:"" },
-  { masterId:"dish-soap", name:"سائل غسيل أطباق", category:"منظفات ومنزل", size:"4 لتر", referencePrice:99.99, image:"" },
-  { masterId:"laundry-powder", name:"مسحوق غسيل", category:"منظفات ومنزل", size:"1 كجم", referencePrice:59.99, image:"" },
+  { masterId:"fairy-lemon-620g", name:"فيري سائل غسيل أطباق برائحة الليمون - 620 جم", category:"منظفات ومنزل", size:"620 جم", referencePrice:109.99, image:"" },
+  { masterId:"shiny-dish-4l", name:"شايني سائل غسيل أطباق بالليمون - 4 لتر", category:"منظفات ومنزل", size:"4 لتر", referencePrice:99.99, image:"" },
+  { masterId:"persil-lavender-1kg", name:"برسيل مسحوق غسيل برائحة اللافندر - 1 كجم", category:"منظفات ومنزل", size:"1 كجم", referencePrice:78.50, image:"" },
 
-  { masterId:"soap", name:"صابون استحمام", category:"عناية شخصية", size:"4 قطع", referencePrice:54.99, image:"" },
-  { masterId:"shampoo", name:"شامبو", category:"عناية شخصية", size:"180 مل", referencePrice:91.99, image:"" },
-  { masterId:"toothpaste", name:"معجون أسنان", category:"عناية شخصية", size:"120 مل", referencePrice:48.50, image:"" }
+  { masterId:"lux-soap-4x115g", name:"لوكس صابون - 115 جم × 4 قطع", category:"عناية شخصية", size:"4 قطع × 115 جم", referencePrice:102.50, image:"" },
+  { masterId:"signal-anticavity-120ml", name:"سيجنال معجون أسنان مكافح للتسوس - 120 مل", category:"عناية شخصية", size:"120 مل", referencePrice:48.50, image:"" },
+  { masterId:"closeup-100ml", name:"كلوس أب معجون أسنان بالمينتول الأخضر - 100 مل", category:"عناية شخصية", size:"100 مل", referencePrice:48.50, image:"" }
 ]);
+
+
+export const MASTER_ID_ALIASES = Object.freeze({
+  "water-15l":"water-aquafina-15l",
+  "cola-can":"pepsi-300ml",
+  "cola-1l":"cocacola-950ml",
+  "juice-1l":"juhayna-apple-1l",
+  "milk-1l":"beyti-milk-900ml",
+  "yogurt":"juhayna-greek-yogurt-180g",
+  "white-cheese":"domty-feta-250g",
+  "eggs-12":"royal-eggs-30",
+  "sugar-1kg":"aldoha-sugar-1kg",
+  "rice-1kg":"aldoha-rice-1kg",
+  "pasta-400g":"regina-spaghetti-400g",
+  "oil-1l":"crystal-oil-1l",
+  "tea":"lipton-tea-100g",
+  "coffee":"nescafe-classic-190g",
+  "chips":"chipsy-cheese-140g",
+  "dish-soap":"fairy-lemon-620g",
+  "laundry-powder":"persil-lavender-1kg",
+  "soap":"lux-soap-4x115g",
+  "toothpaste":"signal-anticavity-120ml"
+});
+
+export function canonicalMasterId(masterId) {
+  const id=String(masterId||"").trim();
+  return MASTER_ID_ALIASES[id] || id;
+}
+
+export const LEGACY_MASTER_NAME_MAP = Object.freeze({
+  "water-15l":"مياه معدنية 1.5 لتر",
+  "water-600ml":"مياه معدنية 600 مل",
+  "cola-1l":"مشروب كولا حوالي 1 لتر",
+  "cola-can":"مشروب غازي عبوة صغيرة",
+  "juice-1l":"عصير كلاسيك 1 لتر",
+  "milk-1l":"لبن كامل الدسم 1 لتر",
+  "yogurt":"زبادي طبيعي",
+  "white-cheese":"جبنة بيضاء",
+  "eggs-12":"بيض أبيض",
+  "sugar-1kg":"سكر أبيض 1 كجم",
+  "rice-1kg":"أرز أبيض مصري 1 كجم",
+  "pasta-400g":"مكرونة 400 جم",
+  "oil-1l":"زيت عباد الشمس 1 لتر",
+  "tea":"شاي أسود",
+  "coffee":"قهوة سريعة الذوبان",
+  "chips":"سناكس / مقرمشات",
+  "biscuits":"بسكويت شاي",
+  "chocolate":"شوكولاتة / ويفر",
+  "tissues":"مناديل ورقية",
+  "dish-soap":"سائل غسيل أطباق",
+  "laundry-powder":"مسحوق غسيل",
+  "soap":"صابون استحمام",
+  "shampoo":"شامبو",
+  "toothpaste":"معجون أسنان"
+});
 
 export const SUPERMARKET_CATEGORIES = Object.freeze(
   [...new Set(SUPERMARKET_MASTER_CATALOG.map(item => item.category))]
 );
 
 export function findMasterProduct(masterId) {
-  return SUPERMARKET_MASTER_CATALOG.find(item => item.masterId === masterId) || null;
+  const canonical=canonicalMasterId(masterId);
+  return SUPERMARKET_MASTER_CATALOG.find(item => item.masterId === canonical) || null;
 }
