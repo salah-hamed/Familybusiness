@@ -24,7 +24,8 @@ const ALLOWED_ROLES = new Set(Object.values(WORKER_ROLES));
 const TEMPLATE_WORKER_ROLES = Object.freeze({
   supermarket: new Set([WORKER_ROLES.RIDER]),
   cleaning: new Set([WORKER_ROLES.CLEANER]),
-  laundry: new Set([WORKER_ROLES.PICKUP_AGENT, WORKER_ROLES.DELIVERY_AGENT])
+  laundry: new Set([WORKER_ROLES.PICKUP_AGENT, WORKER_ROLES.DELIVERY_AGENT]),
+  restaurant: new Set([WORKER_ROLES.RIDER])
 });
 
 export function isWorkerRoleAllowedForTemplate(templateId, role) {
