@@ -32,6 +32,7 @@ let store=null;
 let products=[];
 let barcodeStream=null;
 let searchText="";
+let categoryFilter="الكل";
 
 function money(value){
   return `${Number(value||0).toLocaleString("ar-EG")} جنيه`;
@@ -111,6 +112,7 @@ onAuthStateChanged(auth,async user=>{
   if(!await authorize())return;
 
   setVisible("productsPanel",true);
+  initMasterCatalogFilters();
 
   // Render the starter library immediately so it never depends on orders/riders.
   renderMasterCatalog();
@@ -221,14 +223,22 @@ async function loadProducts(){
   });
 }
 
+function initMasterCatalogFilters(){
+  const categories=[...new Set(SUPERMARKET_MASTER_CATALOG.map(item=>item.category))].sort((a,b)=>a.localeCompare(b,"ar"));
+  $("masterCategoryFilter").innerHTML=
+    '<option value="الكل">كل التصنيفات</option>'
+    + categories.map(value=>`<option value="${escapeHTML(value)}">${escapeHTML(value)}</option>`).join("");
+}
+
 function filteredMasterCatalog(){
   const q=searchText.trim().toLowerCase();
-  if(!q)return SUPERMARKET_MASTER_CATALOG;
 
-  return SUPERMARKET_MASTER_CATALOG.filter(item=>
-    [item.name,item.category,item.size]
-      .some(value=>String(value||"").toLowerCase().includes(q))
-  );
+  return SUPERMARKET_MASTER_CATALOG.filter(item=>{
+    const matchesCategory=categoryFilter==="الكل"||item.category===categoryFilter;
+    const matchesSearch=!q||[item.name,item.brand,item.category,item.size]
+      .some(value=>String(value||"").toLowerCase().includes(q));
+    return matchesCategory&&matchesSearch;
+  });
 }
 
 function refreshMasterSelectionCount(){
@@ -264,7 +274,7 @@ function renderMasterCatalog(){
           </label>
           <span class="pill">${escapeHTML(item.category)}</span>
           <h4>${escapeHTML(item.name)}</h4>
-          <small class="muted">${escapeHTML(item.size||"")}</small>
+          <small class="muted">${escapeHTML(item.brand||"")} · ${escapeHTML(item.size||"")}</small>
           <div class="muted">سعر استرشادي: <b>${money(item.referencePrice)}</b></div>
           ${added?`<div class="currentStorePrice">سعر متجرك الحالي: <b>${money(existing.price)}</b></div>`:""}
           <input type="number" min="0" step="0.25" value="${displayedPrice}" data-master-price="${item.masterId}" ${added?"disabled":""}>
@@ -311,6 +321,11 @@ function renderMasterCatalog(){
 
 $("masterSearch").addEventListener("input",event=>{
   searchText=event.target.value;
+  renderMasterCatalog();
+});
+
+$("masterCategoryFilter").addEventListener("change",event=>{
+  categoryFilter=event.target.value;
   renderMasterCatalog();
 });
 
