@@ -10,6 +10,7 @@ service cloud.firestore {
   function workerPath(workerId){ return /databases/$(database)/documents/workers/$(workerId); }
   function orderPath(orderId){ return /databases/$(database)/documents/orders/$(orderId); }
   function supermarketPath(projectId){ return /databases/$(database)/documents/supermarkets/$(projectId); }
+  function restaurantPath(projectId){ return /databases/$(database)/documents/restaurants/$(projectId); }
   function laundryPath(projectId){ return /databases/$(database)/documents/laundries/$(projectId); }
   function commissionLedgerPath(entryId){ return /databases/$(database)/documents/commissionLedger/$(entryId); }
   function userExists(uid){ return exists(userPath(uid)); }
@@ -33,6 +34,8 @@ service cloud.firestore {
   function commissionAgreementData(agreementId){ return get(commissionAgreementPath(agreementId)).data; }
   function supermarketExists(projectId){ return exists(supermarketPath(projectId)); }
   function supermarketData(projectId){ return get(supermarketPath(projectId)).data; }
+  function restaurantExists(projectId){ return exists(restaurantPath(projectId)); }
+  function restaurantData(projectId){ return get(restaurantPath(projectId)).data; }
   function laundryExists(projectId){ return exists(laundryPath(projectId)); }
   function laundryData(projectId){ return get(laundryPath(projectId)).data; }
   function isLinkedProjectOperator(projectId){
@@ -77,11 +80,34 @@ service cloud.firestore {
     || (
       projectData(projectId).template == "laundry"
       && role in ["pickup_agent","delivery_agent"]
+    )
+    || (
+      projectData(projectId).template == "restaurant"
+      && role == "rider"
     );
   }
   function supermarketPartnerReady(projectId){
    return projectAvailable(projectId)
     && projectData(projectId).template == "supermarket"
+    && projectData(projectId).operatingModel == "partner_operated"
+    && projectData(projectId).operatorId is string
+    && projectData(projectId).operatorId.size() > 0
+    && operatorExists(projectData(projectId).operatorId)
+    && operatorData(projectData(projectId).operatorId).status == "active"
+    && operatorData(projectData(projectId).operatorId).agreementStatus == "accepted"
+    && operatorData(projectData(projectId).operatorId).isActive == true
+    && commissionAgreementExists(projectId)
+    && commissionAgreementData(projectId).status == "accepted"
+    && commissionAgreementData(projectId).currentAmount is number
+    && commissionAgreementData(projectId).currentAmount >= 0
+    && commissionAgreementData(projectId).acceptedVersion is number
+    && commissionAgreementData(projectId).acceptedVersion > 0;
+  }
+
+
+  function restaurantPartnerReady(projectId){
+   return projectAvailable(projectId)
+    && projectData(projectId).template == "restaurant"
     && projectData(projectId).operatingModel == "partner_operated"
     && projectData(projectId).operatorId is string
     && projectData(projectId).operatorId.size() > 0
@@ -408,6 +434,59 @@ service cloud.firestore {
   }
 
 
+  function validRestaurantOrder(projectId){
+   return request.resource.data.templateType == "restaurant"
+    && request.resource.data.serviceType == "restaurant_delivery"
+    && restaurantPartnerReady(projectId)
+    && restaurantExists(projectId)
+    && restaurantData(projectId).isAcceptingOrders == true
+    && request.resource.data.customerName is string
+    && request.resource.data.customerName.size() > 0
+    && request.resource.data.customerPhone is string
+    && request.resource.data.customerPhone.size() > 0
+    && request.resource.data.customerAddress is string
+    && request.resource.data.customerAddress.size() > 0
+    && request.resource.data.location is string
+    && request.resource.data.notes is string
+    && request.resource.data.items is list
+    && request.resource.data.items.size() > 0
+    && request.resource.data.items.size() <= 50
+    && request.resource.data.subtotal is number
+    && request.resource.data.subtotal >= 0
+    && request.resource.data.deliveryFee is number
+    && request.resource.data.deliveryFee == restaurantData(projectId).deliveryFee
+    && request.resource.data.total is number
+    && request.resource.data.total == request.resource.data.subtotal + request.resource.data.deliveryFee
+    && request.resource.data.price == request.resource.data.total
+    && request.resource.data.pricingLocked == false
+    && request.resource.data.commissionEligible == false
+    && request.resource.data.commissionLocked == false
+    && request.resource.data.commissionAmount == 0
+    && request.resource.data.keys().hasOnly([
+      "projectId",
+      "providerId",
+      "templateType",
+      "serviceType",
+      "status",
+      "customerName",
+      "customerPhone",
+      "customerAddress",
+      "location",
+      "notes",
+      "items",
+      "subtotal",
+      "deliveryFee",
+      "total",
+      "price",
+      "pricingLocked",
+      "commissionEligible",
+      "commissionLocked",
+      "commissionAmount",
+      "createdAt"
+    ]);
+  }
+
+
   match /users/{uid} {
    allow create: if signedIn() && request.auth.uid == uid && request.resource.data.uid == uid && request.resource.data.isActive == false && request.resource.data.subscriptionStatus == "pending" && request.resource.data.initialActivationPaid == false && request.resource.data.billingCycle == "initial" && request.resource.data.referralQualified == false && request.resource.data.referredByUserId is string && request.resource.data.referredByUserId != request.auth.uid && !("role" in request.resource.data);
    allow get: if isAdmin() || (signedIn() && request.auth.uid == uid);
@@ -491,21 +570,22 @@ service cloud.firestore {
      || (request.resource.data.templateType == "carwash" && validCarwashOrder(request.resource.data.projectId))
      || (request.resource.data.templateType == "laundry" && laundryAcceptingOrders(request.resource.data.projectId) && validLaundryOrder(request.resource.data.projectId))
      || (request.resource.data.templateType == "supermarket" && validSupermarketOrder(request.resource.data.projectId))
+     || (request.resource.data.templateType == "restaurant" && validRestaurantOrder(request.resource.data.projectId))
     );
 
    allow read: if isAdmin()
     || (
-      resource.data.templateType in ["supermarket","laundry"]
+      resource.data.templateType in ["supermarket","laundry","restaurant"]
       && isProjectOperator(resource.data.projectId)
     )
     || (
-      !(resource.data.templateType in ["supermarket","laundry"])
+      !(resource.data.templateType in ["supermarket","laundry","restaurant"])
       && ownsProject(resource.data.projectId)
     );
 
    allow update: if (
     (
-      !(resource.data.templateType in ["supermarket","laundry"])
+      !(resource.data.templateType in ["supermarket","laundry","restaurant"])
       && (isAdmin() || ownsProject(resource.data.projectId))
       && request.resource.data.projectId == resource.data.projectId
       && request.resource.data.providerId == resource.data.providerId
@@ -747,12 +827,105 @@ service cloud.firestore {
             == request.resource.data.commissionAmount
         )
       )
+    (
+      resource.data.templateType == "restaurant"
+      && (isAdmin() || isProjectOperator(resource.data.projectId))
+      && request.resource.data.projectId == resource.data.projectId
+      && request.resource.data.providerId == resource.data.providerId
+      && request.resource.data.statusUpdatedBy == request.auth.uid
+      && validSupermarketTransition(resource.data.status, request.resource.data.status)
+      && (
+        !(request.resource.data.status in ["assigned","out_for_delivery","delivered"])
+        || (
+          request.resource.data.assignedWorkerId is string
+          && request.resource.data.assignedWorkerId.size() > 0
+        )
+      )
+      && (
+        (
+          resource.data.status == "new"
+          && request.resource.data.status == "accepted"
+          && request.resource.data.items is list
+          && request.resource.data.items.size() > 0
+          && request.resource.data.items.size() <= 50
+          && request.resource.data.subtotal is number
+          && request.resource.data.subtotal >= 0
+          && request.resource.data.deliveryFee is number
+          && request.resource.data.deliveryFee == restaurantData(resource.data.projectId).deliveryFee
+          && request.resource.data.total is number
+          && request.resource.data.total
+            == request.resource.data.subtotal + request.resource.data.deliveryFee
+          && request.resource.data.price == request.resource.data.total
+          && request.resource.data.pricingLocked == true
+          && request.resource.data.pricingLockedBy == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            "items",
+            "subtotal",
+            "deliveryFee",
+            "total",
+            "price",
+            "pricingLocked",
+            "pricingLockedAt",
+            "pricingLockedBy",
+            "status",
+            "statusUpdatedAt",
+            "statusUpdatedBy"
+          ])
+        )
+        ||
+        (
+          request.resource.data.status != "accepted"
+          && request.resource.data.status != "delivered"
+          && (
+            request.resource.data.status == "canceled"
+            || resource.data.pricingLocked == true
+          )
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            "status",
+            "statusUpdatedAt",
+            "statusUpdatedBy"
+          ])
+        )
+        ||
+        (
+          request.resource.data.status == "delivered"
+          && resource.data.status == "out_for_delivery"
+          && resource.data.pricingLocked == true
+          && resource.data.assignedWorkerId is string
+          && resource.data.assignedWorkerId.size() > 0
+          && commissionAgreementExists(resource.data.projectId)
+          && commissionAgreementData(resource.data.projectId).status == "accepted"
+          && commissionAgreementData(resource.data.projectId).currentAmount is number
+          && request.resource.data.commissionEligible == true
+          && request.resource.data.commissionLocked == true
+          && request.resource.data.commissionAmount
+            == commissionAgreementData(resource.data.projectId).currentAmount
+          && request.resource.data.commissionAgreementVersion
+            == commissionAgreementData(resource.data.projectId).acceptedVersion
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            "status",
+            "statusUpdatedAt",
+            "statusUpdatedBy",
+            "deliveredAt",
+            "commissionEligible",
+            "commissionLocked",
+            "commissionAmount",
+            "commissionAgreementVersion"
+          ])
+          && getAfter(commissionLedgerPath("project_order_" + orderId)).data.orderId == orderId
+          && getAfter(commissionLedgerPath("project_order_" + orderId)).data.projectId
+            == resource.data.projectId
+          && getAfter(commissionLedgerPath("project_order_" + orderId)).data.amount
+            == request.resource.data.commissionAmount
+        )
+      )
+
     )
    );
 
    allow delete: if isAdmin()
     || (
-      !(resource.data.templateType in ["supermarket","laundry"])
+      !(resource.data.templateType in ["supermarket","laundry","restaurant"])
       && ownsProject(resource.data.projectId)
     );
   }
@@ -1013,6 +1186,107 @@ service cloud.firestore {
 
     allow delete: if isAdmin()
      || isProjectOperator(supermarketId);
+   }
+  }
+
+
+  match /restaurants/{restaurantId} {
+   allow get: if isAdmin()
+    || ownsProject(restaurantId)
+    || isLinkedProjectOperator(restaurantId)
+    || restaurantPartnerReady(restaurantId);
+
+   allow list: if isAdmin()
+    || ownsProject(resource.data.projectId)
+    || isProjectOperator(resource.data.projectId);
+
+   allow create: if signedIn()
+    && request.resource.data.restaurantId == restaurantId
+    && request.resource.data.projectId == restaurantId
+    && request.resource.data.ownerId == request.auth.uid
+    && request.resource.data.operatorId == restaurantId
+    && request.resource.data.currency == "EGP"
+    && request.resource.data.deliveryFee is number
+    && request.resource.data.deliveryFee >= 0
+    && request.resource.data.isAcceptingOrders is bool
+    && projectExists(restaurantId)
+    && projectData(restaurantId).ownerId == request.auth.uid
+    && projectData(restaurantId).template == "restaurant"
+    && projectData(restaurantId).operatingModel == "partner_operated"
+    && projectData(restaurantId).operatorId == restaurantId
+    && operatorExists(restaurantId)
+    && operatorData(restaurantId).ownerId == request.auth.uid
+    && request.resource.data.keys().hasOnly([
+      "restaurantId","projectId","ownerId","operatorId","name","contactName",
+      "phone","whatsapp","address","location","cuisine","slogan","logo",
+      "coverImage","primaryColor","deliveryFee","currency","isAcceptingOrders",
+      "createdAt","updatedAt"
+    ]);
+
+   allow update: if canOperateProject(resource.data.projectId)
+    && request.resource.data.restaurantId == resource.data.restaurantId
+    && request.resource.data.projectId == resource.data.projectId
+    && request.resource.data.ownerId == resource.data.ownerId
+    && request.resource.data.operatorId == resource.data.operatorId
+    && request.resource.data.currency == resource.data.currency
+    && request.resource.data.deliveryFee is number
+    && request.resource.data.deliveryFee >= 0
+    && request.resource.data.isAcceptingOrders is bool
+    && request.resource.data.primaryColor is string
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+      "name","contactName","phone","whatsapp","address","location","cuisine",
+      "slogan","logo","coverImage","primaryColor","deliveryFee",
+      "isAcceptingOrders","updatedAt"
+    ]);
+
+   allow delete: if isAdmin();
+
+   match /menu/{itemId} {
+    allow get, list: if isAdmin()
+     || ownsProject(restaurantId)
+     || isProjectOperator(restaurantId)
+     || restaurantPartnerReady(restaurantId);
+
+    allow create: if (isAdmin() || isProjectOperator(restaurantId))
+     && request.resource.data.itemId == itemId
+     && request.resource.data.projectId == restaurantId
+     && request.resource.data.name is string
+     && request.resource.data.name.size() > 0
+     && request.resource.data.category is string
+     && request.resource.data.description is string
+     && request.resource.data.price is number
+     && request.resource.data.price >= 0
+     && request.resource.data.image is string
+     && request.resource.data.isAvailable is bool
+     && request.resource.data.isActive is bool
+     && request.resource.data.createdBy == request.auth.uid
+     && request.resource.data.updatedBy == request.auth.uid
+     && request.resource.data.keys().hasOnly([
+       "itemId","projectId","name","category","description","price","image",
+       "isAvailable","isActive","createdBy","createdAt","updatedBy","updatedAt"
+     ]);
+
+    allow update: if (isAdmin() || isProjectOperator(restaurantId))
+     && request.resource.data.itemId == resource.data.itemId
+     && request.resource.data.projectId == resource.data.projectId
+     && request.resource.data.createdBy == resource.data.createdBy
+     && request.resource.data.createdAt == resource.data.createdAt
+     && request.resource.data.name is string
+     && request.resource.data.name.size() > 0
+     && request.resource.data.category is string
+     && request.resource.data.description is string
+     && request.resource.data.price is number
+     && request.resource.data.price >= 0
+     && request.resource.data.image is string
+     && request.resource.data.isAvailable is bool
+     && request.resource.data.isActive is bool
+     && request.resource.data.updatedBy == request.auth.uid
+     && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+       "name","category","description","price","image","isAvailable",
+       "isActive","updatedBy","updatedAt"
+     ]);
+
+    allow delete: if isAdmin() || isProjectOperator(restaurantId);
    }
   }
 
@@ -1388,7 +1662,7 @@ service cloud.firestore {
       && request.resource.data.status == "earned"
       && request.resource.data.paidAt == null
       && isProjectOperator(request.resource.data.projectId)
-      && projectData(request.resource.data.projectId).template in ["supermarket","laundry"]
+      && projectData(request.resource.data.projectId).template in ["supermarket","laundry","restaurant"]
       && commissionAgreementExists(request.resource.data.projectId)
       && commissionAgreementData(request.resource.data.projectId).status == "accepted"
       && request.resource.data.userId
@@ -1401,7 +1675,7 @@ service cloud.firestore {
         == request.resource.data.projectId
       && (
         (
-          getAfter(orderPath(request.resource.data.orderId)).data.templateType == "supermarket"
+          getAfter(orderPath(request.resource.data.orderId)).data.templateType in ["supermarket","restaurant"]
           && getAfter(orderPath(request.resource.data.orderId)).data.status == "delivered"
         )
         ||
