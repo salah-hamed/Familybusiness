@@ -37,6 +37,34 @@ export const SUPERMARKET_MASTER_CATALOG = Object.freeze([
   { masterId:"closeup-100ml", name:"كلوس أب معجون أسنان بالمينتول الأخضر - 100 مل", category:"عناية شخصية", size:"100 مل", referencePrice:48.50, image:"" }
 ]);
 
+
+export const MASTER_ID_ALIASES = Object.freeze({
+  "water-15l":"water-aquafina-15l",
+  "cola-can":"pepsi-300ml",
+  "cola-1l":"cocacola-950ml",
+  "juice-1l":"juhayna-apple-1l",
+  "milk-1l":"beyti-milk-900ml",
+  "yogurt":"juhayna-greek-yogurt-180g",
+  "white-cheese":"domty-feta-250g",
+  "eggs-12":"royal-eggs-30",
+  "sugar-1kg":"aldoha-sugar-1kg",
+  "rice-1kg":"aldoha-rice-1kg",
+  "pasta-400g":"regina-spaghetti-400g",
+  "oil-1l":"crystal-oil-1l",
+  "tea":"lipton-tea-100g",
+  "coffee":"nescafe-classic-190g",
+  "chips":"chipsy-cheese-140g",
+  "dish-soap":"fairy-lemon-620g",
+  "laundry-powder":"persil-lavender-1kg",
+  "soap":"lux-soap-4x115g",
+  "toothpaste":"signal-anticavity-120ml"
+});
+
+export function canonicalMasterId(masterId) {
+  const id=String(masterId||"").trim();
+  return MASTER_ID_ALIASES[id] || id;
+}
+
 export const LEGACY_MASTER_NAME_MAP = Object.freeze({
   "water-15l":"مياه معدنية 1.5 لتر",
   "water-600ml":"مياه معدنية 600 مل",
@@ -69,5 +97,6 @@ export const SUPERMARKET_CATEGORIES = Object.freeze(
 );
 
 export function findMasterProduct(masterId) {
-  return SUPERMARKET_MASTER_CATALOG.find(item => item.masterId === masterId) || null;
+  const canonical=canonicalMasterId(masterId);
+  return SUPERMARKET_MASTER_CATALOG.find(item => item.masterId === canonical) || null;
 }
