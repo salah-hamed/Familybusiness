@@ -2,10 +2,12 @@ import auth from "../core/firebase/firebase-auth.js";
 import { claimOperatorAccess, getOperator, operatorCanOperate, buildOperatorAuthEmail } from "../core/partners/partner-service.js";
 import { getCommissionAgreement } from "../core/commissions/commission-service.js";
 import { getSupermarket } from "../core/supermarket/supermarket-service.js";
-import { SUPERMARKET_MASTER_CATALOG, MASTER_PRICE_META } from "../core/supermarket/master-catalog.js";
+import { SUPERMARKET_MASTER_CATALOG, MASTER_PRICE_META, canonicalMasterId } from "../core/supermarket/master-catalog.js";
 import {
   addStoreProduct,
   bulkAddMasterProducts,
+  deleteStoreProduct,
+  syncLegacyMasterProductDetails,
   listStoreProducts,
   updateStoreProduct,
   findStoreProductByBarcode,
@@ -114,6 +116,7 @@ onAuthStateChanged(auth,async user=>{
   renderMasterCatalog();
 
   try{
+    await syncLegacyMasterProductDetails(projectId,currentUser.uid);
     await loadProducts();
     renderMasterCatalog();
   }catch(e){
@@ -126,18 +129,34 @@ async function loadProducts(){
 
   $("productsList").innerHTML=products.length
     ? products.map(product=>`
-      <article class="rowCard" data-product-id="${product.productId}">
+      <article class="rowCard productManagerCard" data-product-id="${product.productId}">
         <div class="rowTop">
           <div>
             <b>${escapeHTML(product.name)}</b>
             <div class="muted">${escapeHTML(product.category||"أخرى")} · ${escapeHTML(product.size||"")}</div>
           </div>
-          <span class="pill">${product.inStock&&product.isActive?"متاح":"متوقف"}</span>
+          <span class="pill">${product.inStock&&product.isActive?"متاح للعملاء":"متوقف مؤقتًا"}</span>
         </div>
+
+        <div class="productEditGrid">
+          <label>اسم المنتج
+            <input class="editName" value="${escapeHTML(product.name)}">
+          </label>
+          <label>التصنيف
+            <input class="editCategory" value="${escapeHTML(product.category||"أخرى")}">
+          </label>
+          <label>الحجم
+            <input class="editSize" value="${escapeHTML(product.size||"")}">
+          </label>
+          <label>السعر
+            <input class="editPrice" type="number" min="0" step="0.25" value="${Number(product.price||0)}">
+          </label>
+        </div>
+
         <div class="productControls">
-          <input class="editPrice" type="number" min="0" step="0.25" value="${Number(product.price||0)}">
-          <button class="secondary saveProduct">حفظ السعر</button>
-          <button class="secondary toggleProduct">${product.inStock&&product.isActive?"إيقاف":"تفعيل"}</button>
+          <button class="primary saveProduct">حفظ التعديلات</button>
+          <button class="secondary toggleProduct">${product.inStock&&product.isActive?"إيقاف مؤقت":"إعادة التفعيل"}</button>
+          <button class="danger deleteProduct">حذف نهائي</button>
         </div>
       </article>
     `).join("")
@@ -150,10 +169,15 @@ async function loadProducts(){
     card.querySelector(".saveProduct").onclick=async()=>{
       const btn=card.querySelector(".saveProduct");
       btn.disabled=true;
+
       try{
         await updateStoreProduct(projectId,id,currentUser.uid,{
+          name:card.querySelector(".editName").value,
+          category:card.querySelector(".editCategory").value,
+          size:card.querySelector(".editSize").value,
           price:card.querySelector(".editPrice").value
         });
+
         await loadProducts();
         renderMasterCatalog();
       }catch(e){
@@ -165,11 +189,29 @@ async function loadProducts(){
 
     card.querySelector(".toggleProduct").onclick=async()=>{
       const active=!(product.inStock&&product.isActive);
+
       try{
         await updateStoreProduct(projectId,id,currentUser.uid,{
           inStock:active,
           isActive:active
         });
+
+        await loadProducts();
+        renderMasterCatalog();
+      }catch(e){
+        alert(e.message);
+      }
+    };
+
+    card.querySelector(".deleteProduct").onclick=async()=>{
+      const confirmed=confirm(
+        `حذف "${product.name}" نهائيًا من المتجر؟\n\nلو عايز تخفيه مؤقتًا فقط استخدم "إيقاف مؤقت".`
+      );
+
+      if(!confirmed)return;
+
+      try{
+        await deleteStoreProduct(projectId,id);
         await loadProducts();
         renderMasterCatalog();
       }catch(e){
@@ -201,7 +243,9 @@ function renderMasterCatalog(){
     `${MASTER_PRICE_META.source} — تحديث ${MASTER_PRICE_META.priceAsOf}. ${MASTER_PRICE_META.note}.`;
 
   const existingByMaster=new Map(
-    products.filter(item=>item.masterId).map(item=>[item.masterId,item])
+    products
+      .filter(item=>item.masterId)
+      .map(item=>[canonicalMasterId(item.masterId),item])
   );
 
   const library=filteredMasterCatalog();
