@@ -54,7 +54,7 @@
 
     <nav class="tabs">
       <button data-target="ordersSection">الطلبات</button>
-      <button data-target="catalogSection">مكتبة المنتجات</button>
+      <a id="productLibraryLink" class="tabLink" href="#">مكتبة المنتجات</a>
       <button data-target="ridersSection">المندوبون</button>
       <button data-target="settingsSection">الإعدادات</button>
     </nav>
@@ -67,59 +67,15 @@
       <div id="ordersList" class="stack"></div>
     </section>
 
-    <section id="catalogSection" class="card">
-      <div class="sectionHead"><div><span class="eyebrow">Catalog</span><h2>المنتجات والأسعار</h2></div></div>
-
-      <div class="subcard libraryPanel">
-        <div class="sectionHead">
-          <div>
-            <span class="eyebrow">ابدأ من هنا</span>
-            <h3>مكتبة المنتجات الجاهزة</h3>
-          </div>
-          <span id="masterSelectionCount" class="pill">0 منتج محدد</span>
+    <section class="card productsShortcut">
+      <div class="sectionHead">
+        <div>
+          <span class="eyebrow">المنتجات</span>
+          <h2>إدارة مكتبة ومنتجات السوبرماركت</h2>
         </div>
-        <p class="muted">المنتجات والأسعار الاسترشادية جاهزة. عدّل أي سعر قبل الإضافة، اختار المنتجات اللي موجودة عندك، ثم أضفهم مرة واحدة.</p>
-        <p id="masterPriceMeta" class="muted"></p>
-        <div class="libraryActions">
-          <button id="selectAllMasterBtn" class="secondary" type="button">تحديد الكل</button>
-          <button id="clearMasterSelectionBtn" class="secondary" type="button">إلغاء التحديد</button>
-          <button id="addSelectedMasterBtn" class="primary" type="button">إضافة المنتجات المحددة</button>
-        </div>
-        <p id="masterCatalogMessage" class="message"></p>
-        <div id="masterCatalog" class="catalogGrid"></div>
+        <a id="openProductLibraryBtn" class="primary tabLink" href="#">فتح مكتبة المنتجات</a>
       </div>
-
-      <div class="subcard">
-        <h3>إضافة سريعة</h3>
-        <div class="formGrid three">
-          <label>اسم المنتج<input id="productName"></label>
-          <label>التصنيف<input id="productCategory" placeholder="مثال: ألبان"></label>
-          <label>السعر<input id="productPrice" type="number" min="0" step="0.25"></label>
-          <label>الباركود<input id="productBarcode" inputmode="numeric"></label>
-          <label>الحجم<input id="productSize" placeholder="1 لتر"></label>
-          <label>رابط صورة اختياري<input id="productImage"></label>
-        </div>
-        <div class="actions">
-          <button id="addProductBtn" class="primary">إضافة المنتج</button>
-          <button id="scanBarcodeBtn" class="secondary">📷 مسح باركود</button>
-        </div>
-        <video id="barcodeVideo" class="barcodeVideo hidden" playsinline></video>
-        <p id="productMessage" class="message"></p>
-      </div>
-
-
-      <div class="subcard">
-        <h3>استيراد Excel / CSV</h3>
-        <p class="muted">الأعمدة المدعومة: name أو اسم المنتج، price أو السعر، category أو التصنيف، barcode أو الباركود.</p>
-        <input id="importFile" type="file" accept=".csv,.xlsx,.xls">
-        <button id="importBtn" class="secondary">استيراد المنتجات</button>
-        <p id="importMessage" class="message"></p>
-      </div>
-
-      <div class="subcard">
-        <h3>منتجات السوبرماركت</h3>
-        <div id="productsList" class="stack"></div>
-      </div>
+      <p class="muted">المكتبة والأسعار وإضافة المنتجات ونشرها للعملاء أصبحت في صفحة مستقلة علشان لوحة التشغيل تفضل سريعة ومختصرة.</p>
     </section>
 
     <section id="ridersSection" class="card">
