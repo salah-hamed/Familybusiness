@@ -94,7 +94,9 @@ export async function bulkAddMasterProducts(projectId, actorUid, selections = []
   const requested = Array.isArray(selections) ? selections : [];
   const current = await listStoreProducts(projectId);
   const existingMasterIds = new Set(
-    current.map(item => clean(item.masterId)).filter(Boolean)
+    current
+      .map(item => canonicalMasterId(clean(item.masterId)))
+      .filter(Boolean)
   );
 
   const rows = requested
