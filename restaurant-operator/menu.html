@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#EA580C">
+  <title>إدارة منيو المطعم | Family Business</title>
+  <link rel="stylesheet" href="../supermarket-operator/style.css">
+</head>
+<body>
+<main class="shell">
+  <header class="topbar">
+    <div>
+      <span class="eyebrow">Family Business · Restaurant</span>
+      <h1>🍽️ إدارة المنيو والأسعار</h1>
+      <p id="pageStatus">جاري تحميل المنيو...</p>
+    </div>
+    <a id="backToDashboard" class="ghost tabLink" href="./">الرجوع للوحة التشغيل</a>
+  </header>
+
+  <section id="menuPanel" class="hidden">
+    <section class="card">
+      <span class="eyebrow">إضافة صنف</span>
+      <h2>أضف طبق أو منتج للمنيو</h2>
+      <div class="formGrid three">
+        <label>اسم الصنف<input id="itemName" placeholder="مثال: كشري كبير"></label>
+        <label>التصنيف<input id="itemCategory" placeholder="وجبات، مشروبات، حلويات..."></label>
+        <label>السعر<input id="itemPrice" type="number" min="0" step="0.5"></label>
+        <label>وصف مختصر<input id="itemDescription" placeholder="مكونات أو وصف الطبق"></label>
+        <label>رابط الصورة<input id="itemImage" placeholder="https://..."></label>
+      </div>
+      <button id="addItemBtn" class="primary">إضافة للمنيو</button>
+      <p id="itemMessage" class="message"></p>
+    </section>
+
+    <section class="card">
+      <div class="sectionHead">
+        <div><span class="eyebrow">المنيو الحالي</span><h2>الأصناف والأسعار</h2></div>
+        <input id="menuSearch" type="search" placeholder="ابحث عن صنف...">
+      </div>
+      <div id="menuList" class="stack"></div>
+    </section>
+  </section>
+</main>
+<script type="module" src="./menu.js"></script>
+</body>
+</html>
