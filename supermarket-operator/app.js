@@ -2,7 +2,7 @@ import auth from "../core/firebase/firebase-auth.js";
 import { claimOperatorAccess, getOperator, operatorCanOperate, buildOperatorAuthEmail } from "../core/partners/partner-service.js";
 import { acceptPendingCommission, rejectPendingCommission, getCommissionAgreement } from "../core/commissions/commission-service.js";
 import { getSupermarket, updateSupermarketSettings } from "../core/supermarket/supermarket-service.js";
-import { SUPERMARKET_MASTER_CATALOG } from "../core/supermarket/master-catalog.js";
+import { SUPERMARKET_MASTER_CATALOG, MASTER_PRICE_META } from "../core/supermarket/master-catalog.js";
 import { addStoreProduct, listStoreProducts, updateStoreProduct, findStoreProductByBarcode, bulkImportStoreProducts } from "../core/supermarket/catalog-service.js";
 import { WORKER_ROLES, createWorker, listProjectWorkers, setWorkerActive } from "../core/workers/worker-service.js";
 import { assignWorkerAndPrepareWhatsApp } from "../core/workers/worker-dispatch-service.js";
@@ -220,12 +220,14 @@ $("addProductBtn").onclick=async()=>{
 };
 
 function renderMasterCatalog(){
+  $("masterPriceMeta").innerText=`الأسعار الاسترشادية بتاريخ ${MASTER_PRICE_META.priceAsOf} — ${MASTER_PRICE_META.note}.`;
   $("masterCatalog").innerHTML=SUPERMARKET_MASTER_CATALOG.map(item=>`
     <article class="catalogItem">
       <span class="pill">${escapeHTML(item.category)}</span>
       <h4>${escapeHTML(item.name)}</h4>
       <small class="muted">${escapeHTML(item.size||"")}</small>
-      <input type="number" min="0" step="0.25" placeholder="السعر" data-master-price="${item.masterId}">
+      <div class="muted">سعر استرشادي: <b>${money(item.referencePrice)}</b></div>
+      <input type="number" min="0" step="0.25" value="${Number(item.referencePrice||0)}" data-master-price="${item.masterId}">
       <button class="secondary masterAdd" data-master-id="${item.masterId}">إضافة</button>
     </article>`).join("");
 
