@@ -88,6 +88,64 @@ export async function addStoreProduct(projectId, actorUid, data = {}) {
   return ref.id;
 }
 
+
+export async function bulkAddMasterProducts(projectId, actorUid, selections = []) {
+  const requested = Array.isArray(selections) ? selections : [];
+  const current = await listStoreProducts(projectId);
+  const existingMasterIds = new Set(
+    current.map(item => clean(item.masterId)).filter(Boolean)
+  );
+
+  const rows = requested
+    .map(item => {
+      const master = findMasterProduct(item?.masterId);
+      if (!master || existingMasterIds.has(master.masterId)) return null;
+
+      return {
+        master,
+        price: normalizePrice(item?.price ?? master.referencePrice ?? 0)
+      };
+    })
+    .filter(Boolean);
+
+  if (!rows.length) {
+    return { added: 0, skipped: requested.length };
+  }
+
+  const batch = writeBatch(db);
+  const now = serverTimestamp();
+
+  rows.forEach(({ master, price }) => {
+    const ref = doc(productsCollection(projectId), `master_${master.masterId}`);
+
+    batch.set(ref, {
+      productId: ref.id,
+      projectId,
+      name: clean(master.name),
+      category: clean(master.category || "أخرى"),
+      size: clean(master.size),
+      barcode: "",
+      image: clean(master.image),
+      price,
+      inStock: true,
+      isActive: true,
+      source: "master_catalog",
+      masterId: master.masterId,
+      createdBy: actorUid,
+      createdAt: now,
+      updatedBy: actorUid,
+      updatedAt: now
+    });
+  });
+
+  await batch.commit();
+
+  return {
+    added: rows.length,
+    skipped: requested.length - rows.length
+  };
+}
+
 export async function updateStoreProduct(projectId, productId, actorUid, updates = {}) {
   const ref = doc(db, "supermarkets", projectId, "products", productId);
   const current = await getDoc(ref);
