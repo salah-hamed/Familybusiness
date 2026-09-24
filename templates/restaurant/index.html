@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#EA580C">
+  <title>طلبات المطعم</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <header class="restaurantHero" id="restaurantHero">
+    <div class="heroOverlay">
+      <div id="restaurantLogo" class="restaurantLogo">🍽️</div>
+      <div class="heroText">
+        <span id="cuisineText" class="eyebrow"></span>
+        <h1 id="restaurantName">المطعم</h1>
+        <p id="restaurantSlogan"></p>
+        <small id="restaurantAddress"></small>
+      </div>
+      <div id="deliveryBadge" class="deliveryBadge">التوصيل —</div>
+    </div>
+  </header>
+
+  <main class="shell">
+    <section id="closedBanner" class="closed hidden"></section>
+
+    <section class="searchBox">
+      <input id="searchInput" type="search" placeholder="🔎 ابحث في المنيو...">
+    </section>
+
+    <div id="categories" class="categories"></div>
+    <section id="menuGrid" class="menuGrid"></section>
+    <p id="emptyMenu" class="empty hidden">لا توجد أصناف مطابقة.</p>
+  </main>
+
+  <button id="cartBar" class="cartBar hidden">
+    <span>🛒 <b id="cartCount">0</b> قطعة</span>
+    <strong id="cartTotal">0 جنيه</strong>
+    <span>عرض السلة ←</span>
+  </button>
+
+  <div id="cartSheet" class="sheet hidden">
+    <div class="sheetPanel">
+      <div class="sheetHead"><h2>سلة الطلب</h2><button id="closeCart" class="iconBtn">✕</button></div>
+      <div id="cartItems" class="cartItems"></div>
+
+      <div class="totals">
+        <div><span>الطلبات</span><b id="subtotalText">0 جنيه</b></div>
+        <div><span>التوصيل</span><b id="deliveryText">0 جنيه</b></div>
+        <div class="grand"><span>الإجمالي</span><b id="grandTotalText">0 جنيه</b></div>
+      </div>
+
+      <div class="checkout">
+        <h3>بيانات التوصيل</h3>
+        <label>الاسم<input id="customerName" autocomplete="name"></label>
+        <label>رقم الموبايل<input id="customerPhone" inputmode="tel" autocomplete="tel"></label>
+        <label>العنوان بالتفصيل<textarea id="customerAddress" rows="2"></textarea></label>
+        <div class="locationRow">
+          <button id="locationBtn" class="secondary">📍 إرسال اللوكيشن</button>
+          <span id="locationStatus">اختياري لكنه يساعد المندوب</span>
+        </div>
+        <label>ملاحظات<textarea id="notes" rows="2" placeholder="مثال: بدون بصل، اتصل قبل الوصول"></textarea></label>
+        <button id="submitOrder" class="primary">تأكيد الطلب</button>
+        <p id="orderStatus" class="message"></p>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
