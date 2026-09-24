@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#14532d">
+  <title>مكتبة المنتجات | Family Business</title>
+  <link rel="stylesheet" href="./style.css">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
+</head>
+<body>
+<main class="shell">
+  <header class="topbar">
+    <div>
+      <span class="eyebrow">Family Business · Supermarket</span>
+      <h1>🛒 مكتبة المنتجات</h1>
+      <p id="pageStatus">جاري تجهيز مكتبة السوبرماركت...</p>
+    </div>
+    <a id="backToDashboard" class="ghost tabLink" href="./">الرجوع للوحة التشغيل</a>
+  </header>
+
+  <section id="productsPanel" class="hidden">
+    <section class="card libraryPanel">
+      <div class="sectionHead">
+        <div>
+          <span class="eyebrow">المكتبة الجاهزة</span>
+          <h2>اختار منتجات محلك</h2>
+        </div>
+        <span id="masterSelectionCount" class="pill">0 منتج محدد</span>
+      </div>
+
+      <p class="muted">الأسعار استرشادية فقط. عدّل السعر قبل الإضافة حسب سعر السوبرماركت الفعلي، وبعد الإضافة تقدر تغيّره في أي وقت.</p>
+      <p id="masterPriceMeta" class="muted"></p>
+
+      <div class="inlineForm">
+        <input id="masterSearch" type="search" placeholder="ابحث عن منتج أو تصنيف...">
+      </div>
+
+      <div class="libraryActions">
+        <button id="selectAllMasterBtn" class="secondary" type="button">تحديد الكل</button>
+        <button id="clearMasterSelectionBtn" class="secondary" type="button">إلغاء التحديد</button>
+        <button id="addSelectedMasterBtn" class="primary" type="button">إضافة المنتجات المحددة</button>
+      </div>
+      <p id="masterCatalogMessage" class="message"></p>
+      <div id="masterCatalog" class="catalogGrid"></div>
+    </section>
+
+    <section class="card">
+      <div class="sectionHead">
+        <div><span class="eyebrow">منتجات المتجر</span><h2>منتجات السوبرماركت الحالية</h2></div>
+      </div>
+      <p class="muted">عدّل السعر أو أوقف المنتج من الظهور للعملاء.</p>
+      <div id="productsList" class="stack"></div>
+    </section>
+
+    <section class="card">
+      <span class="eyebrow">منتج غير موجود في المكتبة؟</span>
+      <h2>إضافة منتج يدويًا</h2>
+      <div class="formGrid three">
+        <label>اسم المنتج<input id="productName"></label>
+        <label>التصنيف<input id="productCategory" placeholder="مثال: ألبان"></label>
+        <label>السعر<input id="productPrice" type="number" min="0" step="0.25"></label>
+        <label>الباركود<input id="productBarcode" inputmode="numeric"></label>
+        <label>الحجم<input id="productSize" placeholder="1 لتر"></label>
+        <label>رابط صورة اختياري<input id="productImage"></label>
+      </div>
+      <div class="actions">
+        <button id="addProductBtn" class="primary">إضافة المنتج</button>
+        <button id="scanBarcodeBtn" class="secondary">📷 مسح باركود</button>
+      </div>
+      <video id="barcodeVideo" class="barcodeVideo hidden" playsinline></video>
+      <p id="productMessage" class="message"></p>
+    </section>
+
+    <section class="card">
+      <span class="eyebrow">استيراد جماعي</span>
+      <h2>Excel / CSV</h2>
+      <p class="muted">الأعمدة المدعومة: name أو اسم المنتج، price أو السعر، category أو التصنيف، barcode أو الباركود.</p>
+      <input id="importFile" type="file" accept=".csv,.xlsx,.xls">
+      <button id="importBtn" class="secondary">استيراد المنتجات</button>
+      <p id="importMessage" class="message"></p>
+    </section>
+  </section>
+</main>
+<script type="module" src="./products.js"></script>
+</body>
+</html>
