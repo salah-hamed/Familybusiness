@@ -145,26 +145,34 @@ function masterDescriptorTokens(master) {
     );
 }
 
-function masterMatchScore(master, candidate = {}) {
-  if (!master) return 0;
+function masterBrandSizeMatch(master, candidate = {}) {
+  if (!master) return false;
 
   const brandCompact = normalizeIdentityText(master.brand).replace(/\s+/g, "");
-  if (!brandCompact || brandCompact === "local") return 0;
+  if (!brandCompact || brandCompact === "local") return false;
 
   const searchable = normalizeIdentityText([candidate.name, candidate.size].join(" "));
   const compact = searchable.replace(/\s+/g, "");
-
-  if (!compact.includes(brandCompact)) return 0;
+  if (!compact.includes(brandCompact)) return false;
 
   const masterSize = normalizeSizeKey(master.size, master.name);
   const candidateSize = normalizeSizeKey(candidate.size, candidate.name);
 
-  if (masterSize && candidateSize && masterSize !== candidateSize) return 0;
+  return !(masterSize && candidateSize && masterSize !== candidateSize);
+}
 
+function masterMatchScore(master, candidate = {}) {
+  if (!masterBrandSizeMatch(master, candidate)) return 0;
+
+  const compact = normalizeIdentityText([candidate.name, candidate.size].join(" ")).replace(/\s+/g, "");
   const tokens = masterDescriptorTokens(master);
-  const matchedTokens = tokens.filter(token => compact.includes(token)).length;
 
-  if (tokens.length && matchedTokens === 0) return 0;
+  // Brand + size alone can be ambiguous (e.g. regular vs diet).
+  // Automatic cross-language merge therefore requires a distinctive SKU token.
+  if (!tokens.length) return 0;
+
+  const matchedTokens = tokens.filter(token => compact.includes(token)).length;
+  if (matchedTokens === 0) return 0;
 
   return 100 + matchedTokens;
 }
@@ -640,6 +648,20 @@ export async function mergeDuplicateStoreProducts(projectId, actorUid) {
 
   buckets.forEach(bucket => {
     const used = new Set();
+
+    if (bucket.length === 2) {
+      const masterItem = bucket.find(item => clean(item.masterId));
+      const otherItem = bucket.find(item => !clean(item.masterId));
+
+      if (
+        masterItem
+        && otherItem
+        && masterBrandSizeMatch(findMasterProduct(masterItem.masterId), otherItem)
+      ) {
+        duplicateGroups.push([masterItem, otherItem]);
+        return;
+      }
+    }
 
     bucket.forEach(item => {
       if (used.has(item.productId)) return;
