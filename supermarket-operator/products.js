@@ -460,29 +460,57 @@ function stopBarcode(){
 
 $("scanBarcodeBtn").onclick=scanBarcode;
 
+function normalizeImportHeader(value){
+  return String(value??"").trim().toLowerCase().replace(/\s+/g," ");
+}
+
+function findImportHeaderRow(rows){
+  const nameAliases=new Set(["name","product","اسم المنتج","المنتج","اسم الصنف"]);
+  const priceAliases=new Set(["price","السعر","السعر (ج.م)","سعر","السعر بالجنيه"]);
+
+  return rows.findIndex(row=>{
+    const headers=(Array.isArray(row)?row:[]).map(normalizeImportHeader);
+    return headers.some(value=>nameAliases.has(value))
+      && headers.some(value=>priceAliases.has(value));
+  });
+}
+
+function matrixToImportRows(matrix){
+  if(!matrix.length)return[];
+
+  const headerIndex=findImportHeaderRow(matrix);
+  if(headerIndex<0)throw new Error("IMPORT_HEADERS_NOT_FOUND");
+
+  const headers=matrix[headerIndex].map(value=>String(value??"").trim());
+
+  return matrix
+    .slice(headerIndex+1)
+    .filter(row=>Array.isArray(row)&&row.some(value=>String(value??"").trim()!==""))
+    .map(row=>Object.fromEntries(headers.map((header,index)=>[header,row[index]??""])));
+}
+
 async function parseImportFile(file){
+  if(!window.XLSX)throw new Error("XLSX_LIBRARY_NOT_READY");
+
   const ext=file.name.split(".").pop().toLowerCase();
+  let workbook;
 
   if(ext==="csv"){
     const text=await file.text();
-    const lines=text.split(/\r?\n/).filter(Boolean);
-    if(!lines.length)return[];
-
-    const headers=lines.shift().split(",").map(value=>value.trim());
-
-    return lines.map(line=>{
-      const values=line.split(",").map(value=>value.trim());
-      return Object.fromEntries(headers.map((header,index)=>[header,values[index]??""]));
-    });
+    workbook=window.XLSX.read(text,{type:"string"});
+  }else{
+    const data=await file.arrayBuffer();
+    workbook=window.XLSX.read(data,{type:"array"});
   }
 
-  if(!window.XLSX)throw new Error("XLSX_LIBRARY_NOT_READY");
-
-  const data=await file.arrayBuffer();
-  const workbook=window.XLSX.read(data,{type:"array"});
   const worksheet=workbook.Sheets[workbook.SheetNames[0]];
+  const matrix=window.XLSX.utils.sheet_to_json(worksheet,{
+    header:1,
+    defval:"",
+    raw:true
+  });
 
-  return window.XLSX.utils.sheet_to_json(worksheet,{defval:""});
+  return matrixToImportRows(matrix);
 }
 
 $("importBtn").onclick=async()=>{

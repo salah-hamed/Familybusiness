@@ -233,18 +233,58 @@ export async function findStoreProductByBarcode(projectId, barcode) {
 export async function bulkImportStoreProducts(projectId, actorUid, rows = []) {
   const validRows = rows
     .map(row => ({
-      name: clean(row.name || row.product || row["اسم المنتج"]),
-      category: clean(row.category || row["التصنيف"] || "أخرى"),
-      price: Number(row.price ?? row["السعر"]),
-      barcode: clean(row.barcode || row["الباركود"]).replace(/\D/g, ""),
-      size: clean(row.size || row["الحجم"]),
-      image: clean(row.image || row["الصورة"])
+      name: clean(
+        row.name
+        || row.product
+        || row["اسم المنتج"]
+        || row["المنتج"]
+        || row["اسم الصنف"]
+      ),
+      category: clean(
+        row.category
+        || row["التصنيف"]
+        || row["القسم"]
+        || row["الفئة"]
+        || "أخرى"
+      ),
+      price: Number(
+        row.price
+        ?? row["السعر"]
+        ?? row["السعر (ج.م)"]
+        ?? row["سعر"]
+        ?? row["السعر بالجنيه"]
+      ),
+      barcode: clean(
+        row.barcode
+        || row["الباركود"]
+        || row["باركود"]
+      ).replace(/\D/g, ""),
+      size: clean(
+        row.size
+        || row["الحجم"]
+        || row["المقاس"]
+        || row["العبوة"]
+      ),
+      image: clean(
+        row["رابط الصورة"]
+        || row.image
+        || row["الصورة"]
+      ),
+      externalId: clean(
+        row["رقم المنتج بالمتجر"]
+        || row["رقم المنتج"]
+        || row["product id"]
+        || row["product_id"]
+      ).replace(/[^A-Za-z0-9_-]/g, "")
     }))
     .filter(row => row.name && Number.isFinite(row.price) && row.price >= 0);
 
   const current = await listStoreProducts(projectId);
   const byBarcode = new Map(
     current.filter(item => item.barcode).map(item => [item.barcode, item])
+  );
+  const byProductId = new Map(
+    current.map(item => [item.productId, item])
   );
 
   let imported = 0;
@@ -254,10 +294,15 @@ export async function bulkImportStoreProducts(projectId, actorUid, rows = []) {
     const chunk = validRows.slice(start, start + 350);
 
     chunk.forEach(row => {
-      const existing = row.barcode ? byBarcode.get(row.barcode) : null;
+      const deterministicId = row.externalId ? `import_${row.externalId}` : "";
+      const existing =
+        (deterministicId ? byProductId.get(deterministicId) : null)
+        || (row.barcode ? byBarcode.get(row.barcode) : null);
       const ref = existing
         ? doc(db, "supermarkets", projectId, "products", existing.productId)
-        : doc(productsCollection(projectId));
+        : deterministicId
+          ? doc(productsCollection(projectId), deterministicId)
+          : doc(productsCollection(projectId));
       const now = serverTimestamp();
 
       const payload = {
