@@ -327,7 +327,6 @@ export async function addStoreProduct(projectId, actorUid, data = {}) {
   }
 
   await setDoc(ref, payload, { merge: true });
-  await syncSupermarketCatalogMeta(projectId);
 
   return ref.id;
 }
@@ -385,7 +384,6 @@ export async function bulkAddMasterProducts(projectId, actorUid, selections = []
   });
 
   await batch.commit();
-  await syncSupermarketCatalogMeta(projectId);
 
   return {
     added: rows.length,
@@ -401,7 +399,6 @@ export async function deleteStoreProduct(projectId, productId) {
   if (!current.exists()) throw new Error("PRODUCT_NOT_FOUND");
 
   await deleteDoc(ref);
-  await syncSupermarketCatalogMeta(projectId);
 }
 
 
@@ -621,7 +618,6 @@ export async function bulkImportStoreProducts(projectId, actorUid, rows = []) {
     await batch.commit();
   }
 
-  await syncSupermarketCatalogMeta(projectId);
 
   return {
     imported: validRows.length,
@@ -718,7 +714,6 @@ export async function mergeDuplicateStoreProducts(projectId, actorUid) {
     await batch.commit();
   }
 
-  await syncSupermarketCatalogMeta(projectId);
 
   return {
     groups: duplicateGroups.length,
@@ -748,7 +743,6 @@ export async function bulkUpdateStoreProducts(projectId, productIds, actorUid, u
     await batch.commit();
   }
 
-  await syncSupermarketCatalogMeta(projectId);
   return ids.length;
 }
 
@@ -764,10 +758,9 @@ export async function bulkDeleteStoreProducts(projectId, productIds) {
     await batch.commit();
   }
 
-  await syncSupermarketCatalogMeta(projectId);
   return ids.length;
 }
 
-export async function refreshSupermarketCatalogMeta(projectId) {
-  return syncSupermarketCatalogMeta(projectId);
+export async function refreshSupermarketCatalogMeta(projectId, suppliedProducts = null) {
+  return syncSupermarketCatalogMeta(projectId, suppliedProducts);
 }
