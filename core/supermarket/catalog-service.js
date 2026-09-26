@@ -93,13 +93,20 @@ async function syncSupermarketCatalogMeta(projectId, suppliedProducts = null) {
       .filter(Boolean)
   )].sort((a, b) => a.localeCompare(b, "ar"));
 
-  await updateDoc(doc(db, "supermarkets", projectId), {
-    catalogCategories: categories,
-    catalogProductCount: current.length,
-    catalogUpdatedAt: serverTimestamp()
-  });
+  try {
+    await updateDoc(doc(db, "supermarkets", projectId), {
+      catalogCategories: categories,
+      catalogProductCount: current.length,
+      catalogUpdatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    if (String(error?.code || "").includes("permission-denied")) {
+      return { categories, productCount: current.length, metadataPendingRules: true };
+    }
+    throw error;
+  }
 
-  return { categories, productCount: current.length };
+  return { categories, productCount: current.length, metadataPendingRules: false };
 }
 
 function productIdFor({ masterId = "", barcode = "" } = {}) {
@@ -128,10 +135,23 @@ export async function addStoreProduct(projectId, actorUid, data = {}) {
   const barcode = clean(data.barcode).replace(/\D/g, "");
   const masterId = clean(data.masterId || master?.masterId);
   const explicitId = productIdFor({ masterId, barcode });
-  const ref = explicitId ? doc(productsCollection(projectId), explicitId) : doc(productsCollection(projectId));
 
   if (!name) throw new Error("PRODUCT_NAME_REQUIRED");
 
+  const identityKey = productIdentityKey({
+    name,
+    size: clean(data.size || master?.size)
+  });
+  const current = await listStoreProducts(projectId);
+  const duplicate = identityKey
+    ? current.find(item => productIdentityKey(item) === identityKey)
+    : null;
+
+  if (duplicate && (!explicitId || duplicate.productId !== explicitId)) {
+    throw new Error("PRODUCT_ALREADY_EXISTS");
+  }
+
+  const ref = explicitId ? doc(productsCollection(projectId), explicitId) : doc(productsCollection(projectId));
   const existing = await getDoc(ref);
   const now = serverTimestamp();
 
