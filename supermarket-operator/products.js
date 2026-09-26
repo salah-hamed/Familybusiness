@@ -11,7 +11,11 @@ import {
   listStoreProducts,
   updateStoreProduct,
   findStoreProductByBarcode,
-  bulkImportStoreProducts
+  bulkImportStoreProducts,
+  mergeDuplicateStoreProducts,
+  bulkUpdateStoreProducts,
+  bulkDeleteStoreProducts,
+  refreshSupermarketCatalogMeta
 } from "../core/supermarket/catalog-service.js";
 
 import {
@@ -31,8 +35,17 @@ let agreement=null;
 let store=null;
 let products=[];
 let barcodeStream=null;
-let searchText="";
-let categoryFilter="الكل";
+
+let masterSearchText="";
+let masterCategoryFilter="الكل";
+let masterRenderLimit=24;
+
+let storeSearchText="";
+let storeCategoryFilter="الكل";
+let storeStatusFilter="الكل";
+let storeImageFilter="الكل";
+let storeRenderLimit=50;
+const selectedStoreProducts=new Set();
 
 function money(value){
   return `${Number(value||0).toLocaleString("ar-EG")} جنيه`;
@@ -56,6 +69,91 @@ function dashboardUrl(){
   url.searchParams.set("project",projectId);
   if(inviteToken)url.searchParams.set("invite",inviteToken);
   return url.toString();
+}
+
+function normalizeLookup(value){
+  return String(value||"")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g,"")
+    .toLowerCase()
+    .replace(/[أإآ]/g,"ا")
+    .replace(/ى/g,"ي")
+    .replace(/ة/g,"ه")
+    .replace(/[^a-z0-9\u0600-\u06ff.]+/g," ")
+    .replace(/\s+/g," ")
+    .trim();
+}
+
+function sizeKey(...values){
+  const text=normalizeLookup(values.filter(Boolean).join(" "))
+    .replace(/litres?|liters?|litre|liter|ltr/g," l ")
+    .replace(/millilitres?|milliliters?|millilitre|milliliter|ml/g," ml ")
+    .replace(/kilograms?|kilogram|kgs?|كجم/g," kg ")
+    .replace(/grams?|gram|gms?|جم/g," g ")
+    .replace(/لتر/g," l ")
+    .replace(/مل/g," ml ")
+    .replace(/×|x/gi," x ");
+
+  return [...text.matchAll(/(\d+(?:\.\d+)?)\s*(ml|l|kg|g|قطعه|قطع|عبوه|عبوات|رول|كيس|اكياس|pcs?)/g)]
+    .map(match=>`${match[1]}${match[2]}`)
+    .slice(0,3)
+    .join("x");
+}
+
+function categoryEmoji(category){
+  const value=String(category||"");
+  if(/مياه|مشروبات|عصائر/.test(value))return "🥤";
+  if(/ألبان|بيض|جبن/.test(value))return "🥛";
+  if(/أرز|مكرونة|بقول|دقيق|سكر/.test(value))return "🌾";
+  if(/زيوت|سمن/.test(value))return "🫗";
+  if(/سناكس|بسكويت|شوكولاتة|حلويات/.test(value))return "🍫";
+  if(/منظفات|منزل|ورقيات/.test(value))return "🧽";
+  if(/عناية/.test(value))return "🧴";
+  if(/مجمدات/.test(value))return "❄️";
+  return "🛒";
+}
+
+function masterImageFor(item){
+  if(item.image)return item.image;
+
+  const direct=products.find(product=>
+    canonicalMasterId(product.masterId)===item.masterId
+    && product.image
+  );
+  if(direct?.image)return direct.image;
+
+  const brand=normalizeLookup(item.brand);
+  const wantedSize=sizeKey(item.size,item.name);
+
+  if(!brand)return "";
+
+  const masterTokens=item.masterId
+    .split("-")
+    .map(normalizeLookup)
+    .filter(token=>
+      token.length>2
+      && !/^\d/.test(token)
+      && !["water","milk","oil","soap","gel"].includes(token)
+    );
+
+  const candidates=products
+    .filter(product=>product.image)
+    .map(product=>{
+      const name=normalizeLookup(product.name);
+      const productSize=sizeKey(product.size,product.name);
+      if(!name.includes(brand))return null;
+      if(wantedSize&&productSize&&wantedSize!==productSize)return null;
+
+      const tokenScore=masterTokens.reduce((score,token)=>score+(name.includes(token)?1:0),0);
+      return {product,score:tokenScore};
+    })
+    .filter(Boolean)
+    .sort((a,b)=>b.score-a.score);
+
+  if(!candidates.length)return "";
+  if(candidates.length===1)return candidates[0].product.image;
+  if(candidates[0].score>candidates[1].score)return candidates[0].product.image;
+  return "";
 }
 
 async function authorize(){
@@ -86,7 +184,7 @@ async function authorize(){
     return false;
   }
 
-  $("pageStatus").innerText=`${store?.name||operator?.name||"السوبرماركت"} — اختار المنتجات والأسعار المناسبة لمحلك.`;
+  $("pageStatus").innerText=`${store?.name||operator?.name||"السوبرماركت"} — إدارة المنتجات والتصنيفات والصور.`;
   return true;
 }
 
@@ -113,46 +211,115 @@ onAuthStateChanged(auth,async user=>{
 
   setVisible("productsPanel",true);
   initMasterCatalogFilters();
-
-  // Render the starter library immediately so it never depends on orders/riders.
   renderMasterCatalog();
 
   try{
     await syncLegacyMasterProductDetails(projectId,currentUser.uid);
     await loadProducts();
-    renderMasterCatalog();
+    await refreshSupermarketCatalogMeta(projectId);
   }catch(e){
-    $("masterCatalogMessage").innerText=`المكتبة جاهزة، لكن تعذر تحميل منتجات المتجر الحالية: ${e.message}`;
+    $("masterCatalogMessage").innerText=`المكتبة جاهزة، لكن تعذر استكمال مزامنة بعض بيانات المتجر: ${e.message}`;
   }
 });
+
+function initMasterCatalogFilters(){
+  const categories=[...new Set(SUPERMARKET_MASTER_CATALOG.map(item=>item.category))]
+    .sort((a,b)=>a.localeCompare(b,"ar"));
+
+  $("masterCategoryFilter").innerHTML=
+    '<option value="الكل">كل التصنيفات</option>'
+    +categories.map(value=>`<option value="${escapeHTML(value)}">${escapeHTML(value)}</option>`).join("");
+}
+
+function refreshStoreCategoryFilter(){
+  const categories=[...new Set(products.map(item=>item.category||"أخرى"))]
+    .sort((a,b)=>String(a).localeCompare(String(b),"ar"));
+
+  const previous=storeCategoryFilter;
+  $("storeCategoryFilter").innerHTML=
+    '<option value="الكل">كل التصنيفات</option>'
+    +categories.map(value=>`<option value="${escapeHTML(value)}">${escapeHTML(value)}</option>`).join("");
+
+  if(previous==="الكل"||categories.includes(previous)){
+    $("storeCategoryFilter").value=previous;
+  }else{
+    storeCategoryFilter="الكل";
+  }
+}
 
 async function loadProducts(){
   products=await listStoreProducts(projectId);
 
-  $("productsList").innerHTML=products.length
-    ? products.map(product=>`
+  for(const id of [...selectedStoreProducts]){
+    if(!products.some(item=>item.productId===id))selectedStoreProducts.delete(id);
+  }
+
+  refreshStoreCategoryFilter();
+  renderStoreProducts();
+  renderMasterCatalog();
+}
+
+function filteredStoreProducts(){
+  const q=normalizeLookup(storeSearchText);
+
+  return products.filter(product=>{
+    const searchable=normalizeLookup([product.name,product.size,product.category].join(" "));
+    const matchesSearch=!q||searchable.includes(q);
+    const matchesCategory=storeCategoryFilter==="الكل"||(product.category||"أخرى")===storeCategoryFilter;
+    const active=product.isActive===true&&product.inStock===true;
+    const matchesStatus=
+      storeStatusFilter==="الكل"
+      ||(storeStatusFilter==="active"&&active)
+      ||(storeStatusFilter==="paused"&&!active);
+    const hasImage=Boolean(String(product.image||"").trim());
+    const matchesImage=
+      storeImageFilter==="الكل"
+      ||(storeImageFilter==="with"&&hasImage)
+      ||(storeImageFilter==="without"&&!hasImage);
+
+    return matchesSearch&&matchesCategory&&matchesStatus&&matchesImage;
+  });
+}
+
+function refreshBulkSelection(){
+  $("bulkSelectionCount").innerText=`${selectedStoreProducts.size} محدد`;
+  const disabled=selectedStoreProducts.size===0;
+  ["bulkActivateBtn","bulkPauseBtn","bulkCategoryBtn","bulkDeleteBtn"]
+    .forEach(id=>$(id).disabled=disabled);
+}
+
+function renderStoreProducts(){
+  const filtered=filteredStoreProducts();
+  const visible=filtered.slice(0,storeRenderLimit);
+
+  $("storeProductsCount").innerText=`${filtered.length} من ${products.length} منتج`;
+  $("loadMoreStoreBtn").classList.toggle("hidden",visible.length>=filtered.length);
+
+  $("productsList").innerHTML=visible.length
+    ?visible.map(product=>{
+      const image=String(product.image||"").trim();
+      return `
       <article class="rowCard productManagerCard" data-product-id="${product.productId}">
-        <div class="rowTop">
-          <div>
+        <div class="productManagerTop">
+          <label class="productSelect">
+            <input class="storeProductSelect" type="checkbox" ${selectedStoreProducts.has(product.productId)?"checked":""}>
+          </label>
+          <div class="storeProductThumb">
+            ${image?`<img src="${escapeHTML(image)}" alt="" loading="lazy">`:`<span>${categoryEmoji(product.category)}</span>`}
+          </div>
+          <div class="productManagerInfo">
             <b>${escapeHTML(product.name)}</b>
             <div class="muted">${escapeHTML(product.category||"أخرى")} · ${escapeHTML(product.size||"")}</div>
+            <small class="muted">${image?"✅ صورة متاحة":"⚠️ بدون صورة"} · ${escapeHTML(product.source||"manual")}</small>
           </div>
-          <span class="pill">${product.inStock&&product.isActive?"متاح للعملاء":"متوقف مؤقتًا"}</span>
+          <span class="pill">${product.inStock&&product.isActive?"متاح":"متوقف"}</span>
         </div>
 
         <div class="productEditGrid">
-          <label>اسم المنتج
-            <input class="editName" value="${escapeHTML(product.name)}">
-          </label>
-          <label>التصنيف
-            <input class="editCategory" value="${escapeHTML(product.category||"أخرى")}">
-          </label>
-          <label>الحجم
-            <input class="editSize" value="${escapeHTML(product.size||"")}">
-          </label>
-          <label>السعر
-            <input class="editPrice" type="number" min="0" step="0.25" value="${Number(product.price||0)}">
-          </label>
+          <label>اسم المنتج<input class="editName" value="${escapeHTML(product.name)}"></label>
+          <label>التصنيف<input class="editCategory" value="${escapeHTML(product.category||"أخرى")}"></label>
+          <label>الحجم<input class="editSize" value="${escapeHTML(product.size||"")}"></label>
+          <label>السعر<input class="editPrice" type="number" min="0" step="0.25" value="${Number(product.price||0)}"></label>
         </div>
 
         <div class="productControls">
@@ -160,13 +327,19 @@ async function loadProducts(){
           <button class="secondary toggleProduct">${product.inStock&&product.isActive?"إيقاف مؤقت":"إعادة التفعيل"}</button>
           <button class="danger deleteProduct">حذف نهائي</button>
         </div>
-      </article>
-    `).join("")
-    : '<p class="muted">لسه مفيش منتجات في متجرك. اختار من المكتبة الجاهزة فوق.</p>';
+      </article>`;
+    }).join("")
+    :'<p class="muted">لا توجد منتجات مطابقة للفلاتر الحالية.</p>';
 
   document.querySelectorAll("[data-product-id]").forEach(card=>{
     const id=card.dataset.productId;
     const product=products.find(item=>item.productId===id);
+
+    card.querySelector(".storeProductSelect").onchange=event=>{
+      if(event.target.checked)selectedStoreProducts.add(id);
+      else selectedStoreProducts.delete(id);
+      refreshBulkSelection();
+    };
 
     card.querySelector(".saveProduct").onclick=async()=>{
       const btn=card.querySelector(".saveProduct");
@@ -179,9 +352,7 @@ async function loadProducts(){
           size:card.querySelector(".editSize").value,
           price:card.querySelector(".editPrice").value
         });
-
         await loadProducts();
-        renderMasterCatalog();
       }catch(e){
         alert(e.message);
       }finally{
@@ -191,52 +362,40 @@ async function loadProducts(){
 
     card.querySelector(".toggleProduct").onclick=async()=>{
       const active=!(product.inStock&&product.isActive);
-
       try{
         await updateStoreProduct(projectId,id,currentUser.uid,{
           inStock:active,
           isActive:active
         });
-
         await loadProducts();
-        renderMasterCatalog();
       }catch(e){
         alert(e.message);
       }
     };
 
     card.querySelector(".deleteProduct").onclick=async()=>{
-      const confirmed=confirm(
-        `حذف "${product.name}" نهائيًا من المتجر؟\n\nلو عايز تخفيه مؤقتًا فقط استخدم "إيقاف مؤقت".`
-      );
-
-      if(!confirmed)return;
-
+      if(!confirm(`حذف "${product.name}" نهائيًا؟`))return;
       try{
         await deleteStoreProduct(projectId,id);
+        selectedStoreProducts.delete(id);
         await loadProducts();
-        renderMasterCatalog();
       }catch(e){
         alert(e.message);
       }
     };
   });
-}
 
-function initMasterCatalogFilters(){
-  const categories=[...new Set(SUPERMARKET_MASTER_CATALOG.map(item=>item.category))].sort((a,b)=>a.localeCompare(b,"ar"));
-  $("masterCategoryFilter").innerHTML=
-    '<option value="الكل">كل التصنيفات</option>'
-    + categories.map(value=>`<option value="${escapeHTML(value)}">${escapeHTML(value)}</option>`).join("");
+  refreshBulkSelection();
 }
 
 function filteredMasterCatalog(){
-  const q=searchText.trim().toLowerCase();
+  const q=masterSearchText.trim().toLowerCase();
 
   return SUPERMARKET_MASTER_CATALOG.filter(item=>{
-    const matchesCategory=categoryFilter==="الكل"||item.category===categoryFilter;
+    const matchesCategory=masterCategoryFilter==="الكل"||item.category===masterCategoryFilter;
     const matchesSearch=!q||[item.name,item.brand,item.category,item.size]
       .some(value=>String(value||"").toLowerCase().includes(q));
+
     return matchesCategory&&matchesSearch;
   });
 }
@@ -244,7 +403,7 @@ function filteredMasterCatalog(){
 function refreshMasterSelectionCount(){
   const available=[...document.querySelectorAll(".masterSelect:not(:disabled)")];
   const selected=available.filter(input=>input.checked);
-  $("masterSelectionCount").innerText=`${selected.length} منتج محدد من ${available.length}`;
+  $("masterSelectionCount").innerText=`${selected.length} منتج محدد من ${available.length} ظاهر`;
   $("addSelectedMasterBtn").disabled=selected.length===0;
 }
 
@@ -259,15 +418,21 @@ function renderMasterCatalog(){
   );
 
   const library=filteredMasterCatalog();
+  const visible=library.slice(0,masterRenderLimit);
+  $("loadMoreMasterBtn").classList.toggle("hidden",visible.length>=library.length);
 
-  $("masterCatalog").innerHTML=library.length
-    ? library.map(item=>{
+  $("masterCatalog").innerHTML=visible.length
+    ?visible.map(item=>{
       const existing=existingByMaster.get(item.masterId);
       const added=Boolean(existing);
       const displayedPrice=added?Number(existing.price||0):Number(item.referencePrice||0);
+      const image=masterImageFor(item);
 
       return `
         <article class="catalogItem ${added?"catalogItemAdded":""}">
+          <div class="masterProductImage">
+            ${image?`<img src="${escapeHTML(image)}" alt="" loading="lazy">`:`<span>${categoryEmoji(item.category)}</span>`}
+          </div>
           <label class="catalogSelect">
             <input class="masterSelect" type="checkbox" data-master-id="${item.masterId}" ${added?"disabled":"checked"}>
             <span>${added?"مضاف بالفعل":"اختيار"}</span>
@@ -281,10 +446,9 @@ function renderMasterCatalog(){
           <button class="secondary masterAdd" data-master-id="${item.masterId}" ${added?"disabled":""}>
             ${added?"مضاف بالفعل":"إضافة المنتج"}
           </button>
-        </article>
-      `;
+        </article>`;
     }).join("")
-    : '<p class="muted">لا توجد منتجات مطابقة للبحث.</p>';
+    :'<p class="muted">لا توجد منتجات مطابقة للبحث.</p>';
 
   document.querySelectorAll(".masterSelect").forEach(input=>{
     input.addEventListener("change",refreshMasterSelectionCount);
@@ -304,14 +468,17 @@ function renderMasterCatalog(){
           price,
           name:item.name,
           category:item.category,
-          size:item.size
+          size:item.size,
+          image:masterImageFor(item)
         });
         await loadProducts();
-        renderMasterCatalog();
         $("masterCatalogMessage").innerText=`تمت إضافة ${item.name} ✅`;
       }catch(e){
         btn.disabled=false;
-        $("masterCatalogMessage").innerText=e.message;
+        $("masterCatalogMessage").innerText=
+          e.message==="PRODUCT_ALREADY_EXISTS"
+            ?"المنتج موجود بالفعل في متجرك بنفس الاسم والحجم."
+            :e.message;
       }
     };
   });
@@ -320,14 +487,21 @@ function renderMasterCatalog(){
 }
 
 $("masterSearch").addEventListener("input",event=>{
-  searchText=event.target.value;
+  masterSearchText=event.target.value;
+  masterRenderLimit=24;
   renderMasterCatalog();
 });
 
 $("masterCategoryFilter").addEventListener("change",event=>{
-  categoryFilter=event.target.value;
+  masterCategoryFilter=event.target.value;
+  masterRenderLimit=24;
   renderMasterCatalog();
 });
+
+$("loadMoreMasterBtn").onclick=()=>{
+  masterRenderLimit+=24;
+  renderMasterCatalog();
+};
 
 $("selectAllMasterBtn").onclick=()=>{
   document.querySelectorAll(".masterSelect:not(:disabled)").forEach(input=>input.checked=true);
@@ -359,12 +533,96 @@ $("addSelectedMasterBtn").onclick=async()=>{
   try{
     const result=await bulkAddMasterProducts(projectId,currentUser.uid,selections);
     await loadProducts();
-    renderMasterCatalog();
     $("masterCatalogMessage").innerText=
       `تمت إضافة ${result.added} منتج للمحل ✅${result.skipped?` — تم تخطي ${result.skipped} مضافين بالفعل`:""}`;
   }catch(e){
     $("masterCatalogMessage").innerText=`تعذر إضافة المنتجات: ${e.message}`;
     refreshMasterSelectionCount();
+  }
+};
+
+$("storeProductSearch").addEventListener("input",event=>{
+  storeSearchText=event.target.value;
+  storeRenderLimit=50;
+  renderStoreProducts();
+});
+
+$("storeCategoryFilter").addEventListener("change",event=>{
+  storeCategoryFilter=event.target.value;
+  storeRenderLimit=50;
+  renderStoreProducts();
+});
+
+$("storeStatusFilter").addEventListener("change",event=>{
+  storeStatusFilter=event.target.value;
+  storeRenderLimit=50;
+  renderStoreProducts();
+});
+
+$("storeImageFilter").addEventListener("change",event=>{
+  storeImageFilter=event.target.value;
+  storeRenderLimit=50;
+  renderStoreProducts();
+});
+
+$("loadMoreStoreBtn").onclick=()=>{
+  storeRenderLimit+=50;
+  renderStoreProducts();
+};
+
+$("bulkActivateBtn").onclick=async()=>{
+  try{
+    await bulkUpdateStoreProducts(projectId,[...selectedStoreProducts],currentUser.uid,{isActive:true,inStock:true});
+    selectedStoreProducts.clear();
+    await loadProducts();
+  }catch(e){alert(e.message);}
+};
+
+$("bulkPauseBtn").onclick=async()=>{
+  try{
+    await bulkUpdateStoreProducts(projectId,[...selectedStoreProducts],currentUser.uid,{isActive:false,inStock:false});
+    selectedStoreProducts.clear();
+    await loadProducts();
+  }catch(e){alert(e.message);}
+};
+
+$("bulkCategoryBtn").onclick=async()=>{
+  const category=prompt("اكتب التصنيف الجديد للمنتجات المحددة:");
+  if(!category?.trim())return;
+
+  try{
+    await bulkUpdateStoreProducts(projectId,[...selectedStoreProducts],currentUser.uid,{category});
+    selectedStoreProducts.clear();
+    await loadProducts();
+  }catch(e){alert(e.message);}
+};
+
+$("bulkDeleteBtn").onclick=async()=>{
+  if(!selectedStoreProducts.size)return;
+  if(!confirm(`حذف ${selectedStoreProducts.size} منتج نهائيًا؟`))return;
+
+  try{
+    await bulkDeleteStoreProducts(projectId,[...selectedStoreProducts]);
+    selectedStoreProducts.clear();
+    await loadProducts();
+  }catch(e){alert(e.message);}
+};
+
+$("mergeDuplicatesBtn").onclick=async()=>{
+  $("mergeDuplicatesBtn").disabled=true;
+  $("duplicateMessage").innerText="جاري فحص المنتجات بالاسم والحجم...";
+
+  try{
+    const result=await mergeDuplicateStoreProducts(projectId,currentUser.uid);
+    await loadProducts();
+
+    $("duplicateMessage").innerText=result.groups
+      ?`تم فحص الكتالوج ✅ تم دمج ${result.groups} مجموعة مكررة وحذف ${result.removed} نسخة زائدة، وإثراء ${result.enriched} منتج ببيانات ناقصة.`
+      :"تم الفحص ✅ لم نجد تكرارات مؤكدة بالاسم والحجم.";
+  }catch(e){
+    $("duplicateMessage").innerText=`تعذر فحص التكرارات: ${e.message}`;
+  }finally{
+    $("mergeDuplicatesBtn").disabled=false;
   }
 };
 
@@ -386,9 +644,11 @@ $("addProductBtn").onclick=async()=>{
       .forEach(id=>$(id).value="");
 
     await loadProducts();
-    renderMasterCatalog();
   }catch(e){
-    $("productMessage").innerText=e.message;
+    $("productMessage").innerText=
+      e.message==="PRODUCT_ALREADY_EXISTS"
+        ?"المنتج موجود بالفعل بنفس الاسم والحجم."
+        :e.message;
   }
 };
 
@@ -419,7 +679,6 @@ async function scanBarcode(){
 
     const detect=async()=>{
       if(!barcodeStream)return;
-
       const codes=await detector.detect(video);
 
       if(codes.length){
@@ -429,14 +688,14 @@ async function scanBarcode(){
 
         const existing=await findStoreProductByBarcode(projectId,value);
         $("productMessage").innerText=existing
-          ? `الباركود موجود بالفعل: ${existing.name}`
-          : "تم قراءة الباركود. اكتب اسم المنتج والسعر ثم أضفه.";
+          ?`الباركود موجود بالفعل: ${existing.name}`
+          :"تم قراءة الباركود. الباركود مساعد فقط وليس أساس منع التكرار.";
         return;
       }
 
       if(Date.now()-started>15000){
         stopBarcode();
-        $("productMessage").innerText="لم يتم التقاط باركود. جرّب الإضاءة أو أدخله يدويًا.";
+        $("productMessage").innerText="لم يتم التقاط باركود. تقدر تكمل بدونه.";
         return;
       }
 
@@ -521,14 +780,14 @@ $("importBtn").onclick=async()=>{
     return;
   }
 
-  $("importMessage").innerText="جاري الاستيراد...";
+  $("importMessage").innerText="جاري الاستيراد وتنظيف التكرارات...";
 
   try{
     const rows=await parseImportFile(file);
-    const count=await bulkImportStoreProducts(projectId,currentUser.uid,rows);
-    $("importMessage").innerText=`تم استيراد ${count} منتج ✅`;
+    const result=await bulkImportStoreProducts(projectId,currentUser.uid,rows);
+    $("importMessage").innerText=
+      `تمت معالجة ${result.imported} منتج ✅ — جديد: ${result.added} — موجود وتم إثراؤه: ${result.updated}`;
     await loadProducts();
-    renderMasterCatalog();
   }catch(e){
     $("importMessage").innerText=`فشل الاستيراد: ${e.message}`;
   }
