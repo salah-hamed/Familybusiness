@@ -409,6 +409,8 @@ service cloud.firestore {
     && request.resource.data.commissionEligible == false
     && request.resource.data.commissionLocked == false
     && request.resource.data.commissionAmount == 0
+    && request.resource.data.trackingToken is string
+    && request.resource.data.trackingToken.size() >= 40
     && request.resource.data.keys().hasOnly([
       "projectId",
       "providerId",
@@ -429,6 +431,7 @@ service cloud.firestore {
       "commissionEligible",
       "commissionLocked",
       "commissionAmount",
+      "trackingToken",
       "createdAt"
     ]);
   }
@@ -1101,8 +1104,22 @@ service cloud.firestore {
       "location",
       "deliveryFee",
       "isAcceptingOrders",
+      "catalogCategories",
+      "catalogProductCount",
+      "catalogUpdatedAt",
       "updatedAt"
-    ]);
+    ])
+    && (
+      !request.resource.data.diff(resource.data).affectedKeys().hasAny(["catalogCategories"])
+      || request.resource.data.catalogCategories is list
+    )
+    && (
+      !request.resource.data.diff(resource.data).affectedKeys().hasAny(["catalogProductCount"])
+      || (
+        request.resource.data.catalogProductCount is number
+        && request.resource.data.catalogProductCount >= 0
+      )
+    );
 
    allow delete: if isAdmin();
 
@@ -1641,6 +1658,101 @@ service cloud.firestore {
         )
       )
     );
+
+   allow delete: if false;
+  }
+
+
+  match /orderTracking/{trackingToken} {
+   allow get: if resource.data.trackingToken == trackingToken
+    && resource.data.templateType == "supermarket"
+    && supermarketPartnerReady(resource.data.projectId);
+
+   allow list: if false;
+
+   allow create: if request.resource.data.trackingToken == trackingToken
+    && trackingToken.size() >= 40
+    && request.resource.data.templateType == "supermarket"
+    && request.resource.data.projectId is string
+    && request.resource.data.orderId is string
+    && request.resource.data.status == "new"
+    && request.resource.data.items is list
+    && request.resource.data.subtotal is number
+    && request.resource.data.deliveryFee is number
+    && request.resource.data.total is number
+    && request.resource.data.keys().hasOnly([
+      "trackingToken",
+      "orderId",
+      "projectId",
+      "templateType",
+      "status",
+      "items",
+      "subtotal",
+      "deliveryFee",
+      "total",
+      "createdAt",
+      "updatedAt"
+    ])
+    && supermarketPartnerReady(request.resource.data.projectId)
+    && getAfter(orderPath(request.resource.data.orderId)).data.projectId
+      == request.resource.data.projectId
+    && getAfter(orderPath(request.resource.data.orderId)).data.templateType
+      == "supermarket"
+    && getAfter(orderPath(request.resource.data.orderId)).data.trackingToken
+      == trackingToken
+    && getAfter(orderPath(request.resource.data.orderId)).data.status
+      == request.resource.data.status
+    && getAfter(orderPath(request.resource.data.orderId)).data.items
+      == request.resource.data.items
+    && getAfter(orderPath(request.resource.data.orderId)).data.subtotal
+      == request.resource.data.subtotal
+    && getAfter(orderPath(request.resource.data.orderId)).data.deliveryFee
+      == request.resource.data.deliveryFee
+    && getAfter(orderPath(request.resource.data.orderId)).data.total
+      == request.resource.data.total;
+
+   allow update: if (
+      isAdmin()
+      || isProjectOperator(resource.data.projectId)
+    )
+    && request.resource.data.trackingToken == resource.data.trackingToken
+    && request.resource.data.orderId == resource.data.orderId
+    && request.resource.data.projectId == resource.data.projectId
+    && request.resource.data.templateType == resource.data.templateType
+    && request.resource.data.createdAt == resource.data.createdAt
+    && request.resource.data.status
+      == getAfter(orderPath(resource.data.orderId)).data.status
+    && request.resource.data.items
+      == getAfter(orderPath(resource.data.orderId)).data.items
+    && request.resource.data.subtotal
+      == getAfter(orderPath(resource.data.orderId)).data.subtotal
+    && request.resource.data.deliveryFee
+      == getAfter(orderPath(resource.data.orderId)).data.deliveryFee
+    && request.resource.data.total
+      == getAfter(orderPath(resource.data.orderId)).data.total
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+      "status",
+      "items",
+      "subtotal",
+      "deliveryFee",
+      "total",
+      "updatedAt",
+      "deliveredAt"
+    ])
+    && request.resource.data.keys().hasOnly([
+      "trackingToken",
+      "orderId",
+      "projectId",
+      "templateType",
+      "status",
+      "items",
+      "subtotal",
+      "deliveryFee",
+      "total",
+      "createdAt",
+      "updatedAt",
+      "deliveredAt"
+    ]);
 
    allow delete: if false;
   }

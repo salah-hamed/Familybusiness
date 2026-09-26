@@ -3,14 +3,14 @@ import { getCommissionAgreement, getEffectiveCommissionAmount } from "../commiss
 
 import {
   collection,
-  addDoc,
   doc,
   getDoc,
   getDocs,
   query,
   where,
-  updateDoc,
+  writeBatch,
   runTransaction,
+  onSnapshot,
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
@@ -33,6 +33,27 @@ function money(value) {
   const n = Number(value);
   if (!Number.isFinite(n) || n < 0) throw new Error("INVALID_MONEY_VALUE");
   return Math.round(n * 100) / 100;
+}
+
+function randomTrackingToken() {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return [...bytes].map(value => value.toString(16).padStart(2, "0")).join("");
+}
+
+function trackingRef(token) {
+  return doc(db, "orderTracking", token);
+}
+
+function trackingPatchFromOrder(order = {}, overrides = {}) {
+  return {
+    status: overrides.status ?? order.status,
+    items: overrides.items ?? order.items ?? [],
+    subtotal: overrides.subtotal ?? order.subtotal ?? 0,
+    deliveryFee: overrides.deliveryFee ?? order.deliveryFee ?? 0,
+    total: overrides.total ?? order.total ?? order.price ?? 0,
+    updatedAt: serverTimestamp()
+  };
 }
 
 export function allowedNextSupermarketStatuses(status) {
@@ -140,8 +161,13 @@ export async function createSupermarketOrder({
   const subtotal = money(items.reduce((sum, item) => sum + item.subtotal, 0));
   const deliveryFee = money(supermarket.deliveryFee || 0);
   const total = money(subtotal + deliveryFee);
+  const trackingToken = randomTrackingToken();
 
-  const ref = await addDoc(collection(db, "orders"), {
+  const orderRef = doc(collection(db, "orders"));
+  const publicTrackingRef = trackingRef(trackingToken);
+  const batch = writeBatch(db);
+
+  batch.set(orderRef, {
     projectId,
     providerId: projectId,
     templateType: "supermarket",
@@ -161,15 +187,96 @@ export async function createSupermarketOrder({
     commissionEligible: false,
     commissionLocked: false,
     commissionAmount: 0,
+    trackingToken,
     createdAt: serverTimestamp()
   });
 
+  batch.set(publicTrackingRef, {
+    trackingToken,
+    orderId: orderRef.id,
+    projectId,
+    templateType: "supermarket",
+    status: "new",
+    items,
+    subtotal,
+    deliveryFee,
+    total,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  });
+
+  let trackingEnabled = true;
+
+  try {
+    await batch.commit();
+  } catch (error) {
+    const code = String(error?.code || "");
+
+    if (!code.includes("permission-denied")) throw error;
+
+    const legacyBatch = writeBatch(db);
+
+    legacyBatch.set(orderRef, {
+      projectId,
+      providerId: projectId,
+      templateType: "supermarket",
+      serviceType: "supermarket_delivery",
+      status: "new",
+      customerName: clean(customerName),
+      customerPhone: clean(customerPhone),
+      customerAddress: clean(customerAddress),
+      location: clean(location),
+      notes: clean(notes),
+      items,
+      subtotal,
+      deliveryFee,
+      total,
+      price: total,
+      pricingLocked: false,
+      commissionEligible: false,
+      commissionLocked: false,
+      commissionAmount: 0,
+      createdAt: serverTimestamp()
+    });
+
+    await legacyBatch.commit();
+    trackingEnabled = false;
+  }
+
   return {
-    orderId: ref.id,
+    orderId: orderRef.id,
+    trackingToken: trackingEnabled ? trackingToken : "",
+    trackingEnabled,
     subtotal,
     deliveryFee,
     total
   };
+}
+
+export async function getSupermarketOrderTracking(trackingToken) {
+  const token = clean(trackingToken);
+  if (!token) return null;
+
+  const snap = await getDoc(trackingRef(token));
+  if (!snap.exists()) return null;
+
+  const data = snap.data();
+  if (data.projectId == null || data.templateType !== "supermarket") return null;
+
+  return { trackingToken: token, ...data };
+}
+
+export function subscribeSupermarketOrderTracking(trackingToken, onChange, onError = null) {
+  const token = clean(trackingToken);
+  if (!token) return () => {};
+
+  return onSnapshot(
+    trackingRef(token),
+    snap => {
+      onChange?.(snap.exists() ? { trackingToken: token, ...snap.data() } : null);
+    },
+    error => onError?.(error)
+  );
 }
 
 export async function acceptSupermarketOrder({
@@ -224,7 +331,8 @@ export async function acceptSupermarketOrder({
   const deliveryFee = money(supermarketSnap.data().deliveryFee || 0);
   const total = money(subtotal + deliveryFee);
 
-  await updateDoc(orderRef, {
+  const batch = writeBatch(db);
+  batch.update(orderRef, {
     items,
     subtotal,
     deliveryFee,
@@ -237,6 +345,18 @@ export async function acceptSupermarketOrder({
     statusUpdatedAt: serverTimestamp(),
     statusUpdatedBy: actorUid
   });
+
+  if (order.trackingToken) {
+    batch.update(trackingRef(order.trackingToken), trackingPatchFromOrder(order, {
+      status: "accepted",
+      items,
+      subtotal,
+      deliveryFee,
+      total
+    }));
+  }
+
+  await batch.commit();
 
   return { subtotal, deliveryFee, total };
 }
@@ -285,11 +405,21 @@ export async function changeSupermarketOrderStatus({
   }
 
   if (nextStatus !== "delivered") {
-    await updateDoc(orderRef, {
+    const batch = writeBatch(db);
+
+    batch.update(orderRef, {
       status: nextStatus,
       statusUpdatedAt: serverTimestamp(),
       statusUpdatedBy: actorUid
     });
+
+    if (order.trackingToken) {
+      batch.update(trackingRef(order.trackingToken), trackingPatchFromOrder(order, {
+        status: nextStatus
+      }));
+    }
+
+    await batch.commit();
     return;
   }
 
@@ -342,6 +472,13 @@ export async function changeSupermarketOrderStatus({
       commissionAmount: amount,
       commissionAgreementVersion: Number(freshAgreement.acceptedVersion || freshAgreement.version || 1)
     });
+
+    if (freshOrder.trackingToken) {
+      transaction.update(trackingRef(freshOrder.trackingToken), {
+        ...trackingPatchFromOrder(freshOrder, { status: "delivered" }),
+        deliveredAt: serverTimestamp()
+      });
+    }
 
     transaction.set(ledgerRef, {
       userId: freshAgreement.ownerId,

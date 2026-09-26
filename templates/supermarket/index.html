@@ -13,7 +13,10 @@
       <div class="logo">🛒</div>
       <div><span class="eyebrow">اطلب من</span><h1 id="storeName">السوبرماركت</h1><p id="storeAddress"></p></div>
     </div>
-    <div id="deliveryBadge" class="deliveryBadge">التوصيل —</div>
+    <div class="headerActions">
+      <button id="myOrdersBtn" class="ordersBtn" type="button">📦 طلباتي</button>
+      <div id="deliveryBadge" class="deliveryBadge">التوصيل —</div>
+    </div>
   </header>
 
   <main class="shell">
@@ -26,6 +29,7 @@
     <div id="categories" class="categories"></div>
     <section id="productsGrid" class="productsGrid"></section>
     <p id="emptyProducts" class="empty hidden">لا توجد منتجات مطابقة.</p>
+    <button id="loadMoreProductsBtn" class="secondary loadMoreProducts hidden" type="button">عرض منتجات أكثر</button>
   </main>
 
   <button id="cartBar" class="cartBar hidden">
@@ -59,6 +63,19 @@
         <button id="submitOrder" class="primary">تأكيد الطلب</button>
         <p id="orderStatus" class="message"></p>
       </div>
+    </div>
+  </div>
+
+  <div id="ordersSheet" class="sheet hidden">
+    <div class="sheetPanel ordersPanel">
+      <div class="sheetHead">
+        <div>
+          <h2>طلباتي</h2>
+          <p class="ordersIntro">الطلبات التي أرسلتها من هذا الجهاز.</p>
+        </div>
+        <button id="closeOrders" class="iconBtn">✕</button>
+      </div>
+      <div id="ordersList" class="myOrdersList"></div>
     </div>
   </div>
 

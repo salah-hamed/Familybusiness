@@ -40,20 +40,59 @@
       </div>
 
       <div class="libraryActions">
-        <button id="selectAllMasterBtn" class="secondary" type="button">تحديد الكل</button>
+        <button id="selectAllMasterBtn" class="secondary" type="button">تحديد الظاهر</button>
         <button id="clearMasterSelectionBtn" class="secondary" type="button">إلغاء التحديد</button>
         <button id="addSelectedMasterBtn" class="primary" type="button">إضافة المنتجات المحددة</button>
       </div>
       <p id="masterCatalogMessage" class="message"></p>
       <div id="masterCatalog" class="catalogGrid"></div>
+      <button id="loadMoreMasterBtn" class="secondary loadMoreBtn hidden" type="button">عرض منتجات أكثر</button>
+    </section>
+
+    <section class="card cleanupCard">
+      <div class="sectionHead">
+        <div>
+          <span class="eyebrow">تنظيف الكتالوج</span>
+          <h2>فحص المنتجات المكررة</h2>
+        </div>
+        <button id="mergeDuplicatesBtn" class="secondary" type="button">فحص ودمج آمن</button>
+      </div>
+      <p class="muted">الدمج يعتمد على الاسم + الحجم، وليس على الباركود. السعر الحالي للمنتج الذي سيتم الاحتفاظ به لا يتغير، والصورة أو البيانات الناقصة تُستكمل من النسخة الأخرى.</p>
+      <p id="duplicateMessage" class="message"></p>
     </section>
 
     <section class="card">
       <div class="sectionHead">
-        <div><span class="eyebrow">منتجات المتجر</span><h2>منتجات السوبرماركت الحالية</h2></div>
+        <div><span class="eyebrow">منتجات المتجر</span><h2>إدارة منتجات السوبرماركت</h2></div>
+        <span id="storeProductsCount" class="pill">0 منتج</span>
       </div>
-      <p class="muted">عدّل السعر أو أوقف المنتج من الظهور للعملاء.</p>
+
+      <div class="productFilters">
+        <input id="storeProductSearch" type="search" placeholder="ابحث بالاسم أو الحجم...">
+        <select id="storeCategoryFilter"><option value="الكل">كل التصنيفات</option></select>
+        <select id="storeStatusFilter">
+          <option value="الكل">كل الحالات</option>
+          <option value="active">متاح للعملاء</option>
+          <option value="paused">متوقف</option>
+        </select>
+        <select id="storeImageFilter">
+          <option value="الكل">كل الصور</option>
+          <option value="with">مع صورة</option>
+          <option value="without">بدون صورة</option>
+        </select>
+      </div>
+
+      <div class="bulkBar">
+        <span id="bulkSelectionCount">0 محدد</span>
+        <button id="bulkActivateBtn" class="secondary" type="button">تفعيل</button>
+        <button id="bulkPauseBtn" class="secondary" type="button">إيقاف</button>
+        <button id="bulkCategoryBtn" class="secondary" type="button">تغيير التصنيف</button>
+        <button id="bulkDeleteBtn" class="danger" type="button">حذف</button>
+      </div>
+
+      <p class="muted">يتم عرض المنتجات على دفعات حتى تظل الصفحة سريعة حتى مع آلاف المنتجات.</p>
       <div id="productsList" class="stack"></div>
+      <button id="loadMoreStoreBtn" class="secondary loadMoreBtn hidden" type="button">عرض 50 منتج إضافي</button>
     </section>
 
     <section class="card">
@@ -63,7 +102,7 @@
         <label>اسم المنتج<input id="productName"></label>
         <label>التصنيف<input id="productCategory" placeholder="مثال: ألبان"></label>
         <label>السعر<input id="productPrice" type="number" min="0" step="0.25"></label>
-        <label>الباركود<input id="productBarcode" inputmode="numeric"></label>
+        <label>الباركود (اختياري)<input id="productBarcode" inputmode="numeric" placeholder="للبحث فقط — ليس أساس منع التكرار"></label>
         <label>الحجم<input id="productSize" placeholder="1 لتر"></label>
         <label>رابط صورة اختياري<input id="productImage"></label>
       </div>
@@ -78,7 +117,7 @@
     <section class="card">
       <span class="eyebrow">استيراد جماعي</span>
       <h2>Excel / CSV</h2>
-      <p class="muted">الأعمدة المدعومة: name أو اسم المنتج، price أو السعر، category أو التصنيف، barcode أو الباركود.</p>
+      <p class="muted">الأعمدة المدعومة: اسم المنتج، التصنيف، السعر، الحجم، الصورة، ورقم المنتج بالمتجر. كشف التكرار يعتمد أساسًا على الاسم + الحجم وليس الباركود.</p>
       <input id="importFile" type="file" accept=".csv,.xlsx,.xls">
       <button id="importBtn" class="secondary">استيراد المنتجات</button>
       <p id="importMessage" class="message"></p>
