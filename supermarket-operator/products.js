@@ -210,7 +210,29 @@ function masterEquivalentProduct(item){
 
 function masterImageFor(item){
   if(item.image)return item.image;
-  return masterEquivalentProduct(item)?.image||"";
+
+  const equivalent=masterEquivalentProduct(item);
+  if(equivalent?.image)return equivalent.image;
+
+  const wantedSize=sizeKey(item.size,item.name);
+  const brand=normalizeLookup(item.brand).replace(/\s+/g,"");
+  if(!brand||brand==="local")return "";
+
+  const candidates=products
+    .filter(product=>product.image)
+    .map(product=>{
+      const searchable=normalizeLookup([product.name,product.size].join(" "));
+      const compact=searchable.replace(/\s+/g,"");
+      const productSize=sizeKey(product.size,product.name);
+
+      if(!compact.includes(brand))return null;
+      if(wantedSize&&productSize&&wantedSize!==productSize)return null;
+
+      return product;
+    })
+    .filter(Boolean);
+
+  return candidates.length===1?candidates[0].image:"";
 }
 
 async function authorize(){
