@@ -8,6 +8,8 @@ import {
   getDocs,
   query,
   where,
+  limit,
+  startAfter,
   setDoc,
   updateDoc,
   deleteDoc,
@@ -279,6 +281,35 @@ export async function listStoreProducts(projectId, { activeOnly = false } = {}) 
     .map(item => ({ productId: item.id, ...item.data() }))
     .filter(item => !activeOnly || (item.isActive === true && item.inStock === true))
     .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "ar"));
+}
+
+export async function listStoreProductsPage(
+  projectId,
+  {
+    pageSize = 50,
+    cursor = null,
+    category = "الكل"
+  } = {}
+) {
+  const constraints = [];
+
+  if (category && category !== "الكل") {
+    constraints.push(where("category", "==", category));
+  }
+
+  if (cursor) {
+    constraints.push(startAfter(cursor));
+  }
+
+  constraints.push(limit(Math.max(1, Math.min(100, Number(pageSize) || 50))));
+
+  const snap = await getDocs(query(productsCollection(projectId), ...constraints));
+
+  return {
+    products: snap.docs.map(item => ({ productId: item.id, ...item.data() })),
+    cursor: snap.docs.at(-1) || cursor,
+    hasMore: snap.size === Math.max(1, Math.min(100, Number(pageSize) || 50))
+  };
 }
 
 export async function addStoreProduct(projectId, actorUid, data = {}) {
