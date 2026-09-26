@@ -694,9 +694,13 @@ export async function mergeDuplicateStoreProducts(projectId, actorUid) {
     const bestImage = clean(keeper.image) || clean(items.find(item => clean(item.image))?.image);
     const bestSize = clean(keeper.size) || clean(items.find(item => clean(item.size))?.size);
     const bestBarcode = clean(keeper.barcode) || clean(items.find(item => clean(item.barcode))?.barcode);
-    const bestCategory = items
-      .map(item => clean(item.category))
-      .find(value => value && value !== "أخرى" && !/carrefour|buy |shop |online/i.test(value))
+    const validCategory = item => {
+      const value = clean(item?.category);
+      return value && value !== "أخرى" && !/carrefour|buy |shop |online/i.test(value);
+    };
+    const bestCategory =
+      clean(items.find(item => item.source === "import" && validCategory(item))?.category)
+      || clean(items.find(item => validCategory(item))?.category)
       || clean(keeper.category || "أخرى");
 
     const patch = {
