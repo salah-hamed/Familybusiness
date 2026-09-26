@@ -58,11 +58,73 @@ function normalizeSizeKey(...values) {
   return matches.slice(0, 3).join("x");
 }
 
+function baseProductName(value) {
+  return normalizeIdentityText(value)
+    .replace(/\b\d+(?:\.\d+)?\s*(ml|l|kg|g|مل|لتر|كجم|جم|قطعه|قطع|عبوه|عبوات|رول|كيس|اكياس|pcs?)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function bigrams(value) {
+  const compact = baseProductName(value).replace(/\s+/g, "");
+  if (!compact) return [];
+  if (compact.length < 2) return [compact];
+  return Array.from({ length: compact.length - 1 }, (_, index) => compact.slice(index, index + 2));
+}
+
+function nameSimilarity(a, b) {
+  const left = bigrams(a);
+  const right = bigrams(b);
+  if (!left.length || !right.length) return 0;
+
+  const counts = new Map();
+  right.forEach(pair => counts.set(pair, (counts.get(pair) || 0) + 1));
+
+  let overlap = 0;
+  left.forEach(pair => {
+    const count = counts.get(pair) || 0;
+    if (!count) return;
+    overlap++;
+    counts.set(pair, count - 1);
+  });
+
+  return (2 * overlap) / (left.length + right.length);
+}
+
 function productIdentityKey(data = {}) {
-  const name = normalizeIdentityText(data.name);
+  const name = baseProductName(data.name);
   const size = normalizeSizeKey(data.size, data.name);
   if (!name) return "";
   return `${name}|${size}`;
+}
+
+function findNameSizeDuplicate(items = [], candidate = {}) {
+  const candidateName = baseProductName(candidate.name);
+  const candidateSize = normalizeSizeKey(candidate.size, candidate.name);
+
+  if (!candidateName) return null;
+
+  const exactKey = productIdentityKey(candidate);
+  const exact = items.find(item => productIdentityKey(item) === exactKey);
+  if (exact) return exact;
+
+  let best = null;
+  let bestScore = 0;
+
+  items.forEach(item => {
+    const itemSize = normalizeSizeKey(item.size, item.name);
+
+    if (candidateSize && itemSize && candidateSize !== itemSize) return;
+    if ((!candidateSize || !itemSize) && baseProductName(item.name) !== candidateName) return;
+
+    const score = nameSimilarity(item.name, candidate.name);
+    if (score >= 0.9 && score > bestScore) {
+      best = item;
+      bestScore = score;
+    }
+  });
+
+  return best;
 }
 
 function shouldUseIncomingCategory(currentCategory, incomingCategory) {
@@ -144,7 +206,10 @@ export async function addStoreProduct(projectId, actorUid, data = {}) {
   });
   const current = await listStoreProducts(projectId);
   const duplicate = identityKey
-    ? current.find(item => productIdentityKey(item) === identityKey)
+    ? findNameSizeDuplicate(current, {
+        name,
+        size: clean(data.size || master?.size)
+      })
     : null;
 
   if (duplicate && (!explicitId || duplicate.productId !== explicitId)) {
@@ -403,7 +468,8 @@ export async function bulkImportStoreProducts(projectId, actorUid, rows = []) {
 
     let existing =
       (deterministicId ? byProductId.get(deterministicId) : null)
-      || (identityKey ? byIdentity.get(identityKey) : null);
+      || (identityKey ? byIdentity.get(identityKey) : null)
+      || findNameSizeDuplicate([...byProductId.values()], row);
 
     if (existing) {
       const patch = {
@@ -483,16 +549,27 @@ export async function bulkImportStoreProducts(projectId, actorUid, rows = []) {
 
 export async function mergeDuplicateStoreProducts(projectId, actorUid) {
   const current = await listStoreProducts(projectId);
-  const groups = new Map();
+  const duplicateGroups = [];
+  const used = new Set();
 
   current.forEach(item => {
-    const key = productIdentityKey(item);
-    if (!key) return;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(item);
-  });
+    if (used.has(item.productId)) return;
 
-  const duplicateGroups = [...groups.values()].filter(items => items.length > 1);
+    const group = [item];
+    used.add(item.productId);
+
+    current.forEach(candidate => {
+      if (used.has(candidate.productId)) return;
+
+      const match = findNameSizeDuplicate([item], candidate);
+      if (!match) return;
+
+      group.push(candidate);
+      used.add(candidate.productId);
+    });
+
+    if (group.length > 1) duplicateGroups.push(group);
+  });
   const operations = [];
   let removed = 0;
   let enriched = 0;
