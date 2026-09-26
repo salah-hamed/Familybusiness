@@ -569,7 +569,15 @@ export async function bulkImportStoreProducts(projectId, actorUid, rows = []) {
       if (!clean(existing.image) && row.image) patch.image = row.image;
       if (!clean(existing.size) && row.size) patch.size = row.size;
       if (!clean(existing.barcode) && row.barcode) patch.barcode = row.barcode;
-      if (shouldUseIncomingCategory(existing.category, row.category)) patch.category = row.category;
+      if (
+        row.category
+        && (
+          existing.source === "master_catalog"
+          || shouldUseIncomingCategory(existing.category, row.category)
+        )
+      ) {
+        patch.category = row.category;
+      }
 
       operations.push({
         type: "update",
