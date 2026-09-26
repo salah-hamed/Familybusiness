@@ -27,3 +27,32 @@
 
 .catalogFilter{padding:12px;border:1px solid #cad8ce;border-radius:12px;background:#fff;min-width:190px;font:inherit;color:#13261a}
 @media(max-width:520px){.catalogFilter{width:100%;min-width:0}}
+
+
+/* FB-R06F — scalable product manager */
+.productFilters{display:grid;grid-template-columns:2fr repeat(3,minmax(150px,1fr));gap:10px;margin:14px 0}
+.productFilters input,.productFilters select{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:12px;background:#fff;font:inherit}
+.bulkBar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:#f7faf8;border:1px solid var(--line);border-radius:14px;padding:10px;margin:10px 0}
+.bulkBar span{font-weight:800;margin-left:auto}
+.loadMoreBtn{display:block;margin:16px auto 0;min-width:180px}
+.productManagerTop{display:grid;grid-template-columns:auto 64px 1fr auto;gap:12px;align-items:center}
+.productSelect input{width:18px;height:18px}
+.storeProductThumb,.masterProductImage{background:#f3f6f4;border:1px solid var(--line);display:grid;place-items:center;overflow:hidden}
+.storeProductThumb{width:64px;height:64px;border-radius:14px;font-size:28px}
+.masterProductImage{height:118px;border-radius:14px;margin-bottom:10px;font-size:42px}
+.storeProductThumb img,.masterProductImage img{width:100%;height:100%;object-fit:contain;background:#fff}
+.productManagerInfo{min-width:0}
+.productManagerInfo b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.catalogItem{display:flex;flex-direction:column}
+.catalogItem .masterProductImage{order:-2}
+.cleanupCard{border-style:dashed}
+@media(max-width:760px){
+  .productFilters{grid-template-columns:1fr 1fr}
+  .productManagerTop{grid-template-columns:auto 56px 1fr}
+  .productManagerTop>.pill{grid-column:2/-1;justify-self:start}
+  .storeProductThumb{width:56px;height:56px}
+}
+@media(max-width:520px){
+  .productFilters{grid-template-columns:1fr}
+  .bulkBar span{width:100%;margin:0}
+}
