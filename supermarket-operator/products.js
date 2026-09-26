@@ -146,64 +146,71 @@ function nameSimilarity(a,b){
   return (2*overlap)/(aPairs.length+bPairs.length);
 }
 
-function masterImageFor(item){
-  if(item.image)return item.image;
-
+function masterEquivalentProduct(item){
   const direct=products.find(product=>
     canonicalMasterId(product.masterId)===item.masterId
-    && product.image
   );
-  if(direct?.image)return direct.image;
+  if(direct)return direct;
 
   const wantedSize=sizeKey(item.size,item.name);
-  const brand=normalizeLookup(item.brand);
+  const brand=normalizeLookup(item.brand).replace(/\s+/g,"");
+  const ignored=new Set(["ml","kg","gm","ltr","liter","litre","water","milk","oil","gel"]);
   const masterTokens=item.masterId
     .split("-")
-    .map(normalizeLookup)
-    .filter(token=>token.length>2&&!/^\d/.test(token));
+    .map(token=>normalizeLookup(token).replace(/\s+/g,""))
+    .filter(token=>
+      token.length>2
+      && !/^\d/.test(token)
+      && !brand.includes(token)
+      && !ignored.has(token)
+    );
 
-  const brandCandidates=products
-    .filter(product=>product.image)
+  const candidates=products
     .map(product=>{
       const searchable=normalizeLookup([product.name,product.size].join(" "));
+      const compact=searchable.replace(/\s+/g,"");
       const productSize=sizeKey(product.size,product.name);
 
-      if(brand&&brand!=="local"&&!searchable.includes(brand))return null;
+      if(brand&&brand!=="local"&&!compact.includes(brand))return null;
       if(wantedSize&&productSize&&wantedSize!==productSize)return null;
 
-      const tokenScore=masterTokens.reduce(
-        (score,token)=>score+(searchable.includes(token)?1:0),
-        0
-      );
+      const tokenScore=masterTokens.filter(token=>compact.includes(token)).length;
+      if(masterTokens.length&&tokenScore===0)return null;
 
-      return {product,score:tokenScore};
+      return {product,score:100+tokenScore};
     })
     .filter(Boolean)
     .sort((a,b)=>b.score-a.score);
 
-  if(brandCandidates.length){
-    if(brandCandidates.length===1)return brandCandidates[0].product.image;
-    if(brandCandidates[0].score>brandCandidates[1].score)return brandCandidates[0].product.image;
-    if(brandCandidates[0].score>=1)return brandCandidates[0].product.image;
-  }
+  if(candidates.length===1)return candidates[0].product;
+  if(candidates.length>1&&candidates[0].score>candidates[1].score)return candidates[0].product;
 
   let fuzzyBest=null;
   let fuzzyScore=0;
+  let fuzzyTie=false;
 
-  products
-    .filter(product=>product.image)
-    .forEach(product=>{
-      const productSize=sizeKey(product.size,product.name);
-      if(wantedSize&&productSize&&wantedSize!==productSize)return;
+  products.forEach(product=>{
+    const productSize=sizeKey(product.size,product.name);
+    if(wantedSize&&productSize&&wantedSize!==productSize)return;
 
-      const score=nameSimilarity(product.name,item.name);
-      if(score>=0.82&&score>fuzzyScore){
-        fuzzyBest=product;
-        fuzzyScore=score;
-      }
-    });
+    const score=nameSimilarity(product.name,item.name);
+    if(score<0.9)return;
 
-  return fuzzyBest?.image||"";
+    if(score>fuzzyScore){
+      fuzzyBest=product;
+      fuzzyScore=score;
+      fuzzyTie=false;
+    }else if(score===fuzzyScore){
+      fuzzyTie=true;
+    }
+  });
+
+  return fuzzyTie?null:fuzzyBest;
+}
+
+function masterImageFor(item){
+  if(item.image)return item.image;
+  return masterEquivalentProduct(item)?.image||"";
 }
 
 async function authorize(){
@@ -463,19 +470,13 @@ function renderMasterCatalog(){
   $("masterPriceMeta").innerText=
     `${MASTER_PRICE_META.source} — تحديث ${MASTER_PRICE_META.priceAsOf}. ${MASTER_PRICE_META.note}.`;
 
-  const existingByMaster=new Map(
-    products
-      .filter(item=>item.masterId)
-      .map(item=>[canonicalMasterId(item.masterId),item])
-  );
-
   const library=filteredMasterCatalog();
   const visible=library.slice(0,masterRenderLimit);
   $("loadMoreMasterBtn").classList.toggle("hidden",visible.length>=library.length);
 
   $("masterCatalog").innerHTML=visible.length
     ?visible.map(item=>{
-      const existing=existingByMaster.get(item.masterId);
+      const existing=masterEquivalentProduct(item);
       const added=Boolean(existing);
       const displayedPrice=added?Number(existing.price||0):Number(item.referencePrice||0);
       const image=masterImageFor(item);
@@ -568,9 +569,11 @@ $("clearMasterSelectionBtn").onclick=()=>{
 $("addSelectedMasterBtn").onclick=async()=>{
   const selections=[...document.querySelectorAll(".masterSelect:checked:not(:disabled)")].map(input=>{
     const masterId=input.dataset.masterId;
+    const master=SUPERMARKET_MASTER_CATALOG.find(item=>item.masterId===masterId);
     return {
       masterId,
-      price:document.querySelector(`[data-master-price="${masterId}"]`).value
+      price:document.querySelector(`[data-master-price="${masterId}"]`).value,
+      image:master?masterImageFor(master):""
     };
   });
 
