@@ -7,15 +7,13 @@ import {
   addStoreProduct,
   bulkAddMasterProducts,
   deleteStoreProduct,
-  syncLegacyMasterProductDetails,
-  listStoreProducts,
+  listStoreProductsPage,
   updateStoreProduct,
   findStoreProductByBarcode,
   bulkImportStoreProducts,
   mergeDuplicateStoreProducts,
   bulkUpdateStoreProducts,
-  bulkDeleteStoreProducts,
-  refreshSupermarketCatalogMeta
+  bulkDeleteStoreProducts
 } from "../core/supermarket/catalog-service.js";
 
 import {
@@ -44,7 +42,9 @@ let storeSearchText="";
 let storeCategoryFilter="الكل";
 let storeStatusFilter="الكل";
 let storeImageFilter="الكل";
-let storeRenderLimit=50;
+let storeCursor=null;
+let storeHasMore=true;
+let storeLoading=false;
 const selectedStoreProducts=new Set();
 
 function money(value){
@@ -293,10 +293,9 @@ onAuthStateChanged(auth,async user=>{
   renderMasterCatalog();
 
   try{
-    await syncLegacyMasterProductDetails(projectId,currentUser.uid);
-    await loadProducts();
+    await loadProducts({reset:true});
   }catch(e){
-    $("masterCatalogMessage").innerText=`المكتبة جاهزة، لكن تعذر استكمال مزامنة بعض بيانات المتجر: ${e.message}`;
+    $("masterCatalogMessage").innerText=`المكتبة جاهزة، لكن تعذر تحميل منتجات المتجر: ${e.message}`;
   }
 });
 
@@ -310,8 +309,12 @@ function initMasterCatalogFilters(){
 }
 
 function refreshStoreCategoryFilter(){
-  const categories=[...new Set(products.map(item=>item.category||"أخرى"))]
-    .sort((a,b)=>String(a).localeCompare(String(b),"ar"));
+  const categories=[
+    ...new Set([
+      ...(Array.isArray(store?.catalogCategories)?store.catalogCategories:[]),
+      ...products.map(item=>item.category||"أخرى")
+    ].filter(Boolean))
+  ].sort((a,b)=>String(a).localeCompare(String(b),"ar"));
 
   const previous=storeCategoryFilter;
   $("storeCategoryFilter").innerHTML=
@@ -325,17 +328,48 @@ function refreshStoreCategoryFilter(){
   }
 }
 
-async function loadProducts(){
-  products=await listStoreProducts(projectId);
-  await refreshSupermarketCatalogMeta(projectId,products);
+async function loadProducts({reset=false}={}){
+  if(storeLoading)return;
 
-  for(const id of [...selectedStoreProducts]){
-    if(!products.some(item=>item.productId===id))selectedStoreProducts.delete(id);
+  if(reset){
+    products=[];
+    storeCursor=null;
+    storeHasMore=true;
+    selectedStoreProducts.clear();
   }
 
-  refreshStoreCategoryFilter();
-  renderStoreProducts();
-  renderMasterCatalog();
+  if(!storeHasMore)return;
+
+  storeLoading=true;
+  $("loadMoreStoreBtn").disabled=true;
+
+  try{
+    const result=await listStoreProductsPage(projectId,{
+      pageSize:50,
+      cursor:storeCursor,
+      category:storeCategoryFilter
+    });
+
+    storeCursor=result.cursor;
+    storeHasMore=result.hasMore;
+
+    result.products.forEach(product=>{
+      if(!products.some(item=>item.productId===product.productId)){
+        products.push(product);
+      }
+    });
+
+    for(const id of [...selectedStoreProducts]){
+      if(!products.some(item=>item.productId===id))selectedStoreProducts.delete(id);
+    }
+
+    refreshStoreCategoryFilter();
+    renderStoreProducts();
+    renderMasterCatalog();
+  }finally{
+    storeLoading=false;
+    $("loadMoreStoreBtn").disabled=false;
+  }
 }
 
 function filteredStoreProducts(){
@@ -368,11 +402,13 @@ function refreshBulkSelection(){
 }
 
 function renderStoreProducts(){
-  const filtered=filteredStoreProducts();
-  const visible=filtered.slice(0,storeRenderLimit);
+  const visible=filteredStoreProducts();
 
-  $("storeProductsCount").innerText=`${filtered.length} من ${products.length} منتج`;
-  $("loadMoreStoreBtn").classList.toggle("hidden",visible.length>=filtered.length);
+  const totalHint=Number(store?.catalogProductCount||0);
+  $("storeProductsCount").innerText=totalHint
+    ? `${visible.length} محمل من أصل ${totalHint} منتج`
+    : `${visible.length} منتج محمل`;
+  $("loadMoreStoreBtn").classList.toggle("hidden",!storeHasMore);
 
   $("productsList").innerHTML=visible.length
     ?visible.map(product=>{
@@ -433,7 +469,7 @@ function renderStoreProducts(){
           price:card.querySelector(".editPrice").value,
           image:card.querySelector(".editImage").value
         });
-        await loadProducts();
+        await loadProducts({reset:true});
       }catch(e){
         alert(e.message);
       }finally{
@@ -448,7 +484,7 @@ function renderStoreProducts(){
           inStock:active,
           isActive:active
         });
-        await loadProducts();
+        await loadProducts({reset:true});
       }catch(e){
         alert(e.message);
       }
@@ -459,7 +495,7 @@ function renderStoreProducts(){
       try{
         await deleteStoreProduct(projectId,id);
         selectedStoreProducts.delete(id);
-        await loadProducts();
+        await loadProducts({reset:true});
       }catch(e){
         alert(e.message);
       }
@@ -546,7 +582,7 @@ function renderMasterCatalog(){
           size:item.size,
           image:masterImageFor(item)
         });
-        await loadProducts();
+        await loadProducts({reset:true});
         $("masterCatalogMessage").innerText=`تمت إضافة ${item.name} ✅`;
       }catch(e){
         btn.disabled=false;
@@ -609,7 +645,7 @@ $("addSelectedMasterBtn").onclick=async()=>{
 
   try{
     const result=await bulkAddMasterProducts(projectId,currentUser.uid,selections);
-    await loadProducts();
+    await loadProducts({reset:true});
     $("masterCatalogMessage").innerText=
       `تمت إضافة ${result.added} منتج للمحل ✅${result.skipped?` — تم تخطي ${result.skipped} مضافين بالفعل`:""}`;
   }catch(e){
@@ -620,38 +656,31 @@ $("addSelectedMasterBtn").onclick=async()=>{
 
 $("storeProductSearch").addEventListener("input",event=>{
   storeSearchText=event.target.value;
-  storeRenderLimit=50;
   renderStoreProducts();
 });
 
-$("storeCategoryFilter").addEventListener("change",event=>{
+$("storeCategoryFilter").addEventListener("change",async event=>{
   storeCategoryFilter=event.target.value;
-  storeRenderLimit=50;
-  renderStoreProducts();
+  await loadProducts({reset:true});
 });
 
 $("storeStatusFilter").addEventListener("change",event=>{
   storeStatusFilter=event.target.value;
-  storeRenderLimit=50;
   renderStoreProducts();
 });
 
 $("storeImageFilter").addEventListener("change",event=>{
   storeImageFilter=event.target.value;
-  storeRenderLimit=50;
   renderStoreProducts();
 });
 
-$("loadMoreStoreBtn").onclick=()=>{
-  storeRenderLimit+=50;
-  renderStoreProducts();
-};
+$("loadMoreStoreBtn").onclick=()=>loadProducts();
 
 $("bulkActivateBtn").onclick=async()=>{
   try{
     await bulkUpdateStoreProducts(projectId,[...selectedStoreProducts],currentUser.uid,{isActive:true,inStock:true});
     selectedStoreProducts.clear();
-    await loadProducts();
+    await loadProducts({reset:true});
   }catch(e){alert(e.message);}
 };
 
@@ -659,7 +688,7 @@ $("bulkPauseBtn").onclick=async()=>{
   try{
     await bulkUpdateStoreProducts(projectId,[...selectedStoreProducts],currentUser.uid,{isActive:false,inStock:false});
     selectedStoreProducts.clear();
-    await loadProducts();
+    await loadProducts({reset:true});
   }catch(e){alert(e.message);}
 };
 
@@ -670,7 +699,7 @@ $("bulkCategoryBtn").onclick=async()=>{
   try{
     await bulkUpdateStoreProducts(projectId,[...selectedStoreProducts],currentUser.uid,{category});
     selectedStoreProducts.clear();
-    await loadProducts();
+    await loadProducts({reset:true});
   }catch(e){alert(e.message);}
 };
 
@@ -681,7 +710,7 @@ $("bulkDeleteBtn").onclick=async()=>{
   try{
     await bulkDeleteStoreProducts(projectId,[...selectedStoreProducts]);
     selectedStoreProducts.clear();
-    await loadProducts();
+    await loadProducts({reset:true});
   }catch(e){alert(e.message);}
 };
 
@@ -691,7 +720,7 @@ $("mergeDuplicatesBtn").onclick=async()=>{
 
   try{
     const result=await mergeDuplicateStoreProducts(projectId,currentUser.uid);
-    await loadProducts();
+    await loadProducts({reset:true});
 
     $("duplicateMessage").innerText=result.groups
       ?`تم فحص الكتالوج ✅ تم دمج ${result.groups} مجموعة مكررة وحذف ${result.removed} نسخة زائدة، وإثراء ${result.enriched} منتج ببيانات ناقصة.`
@@ -720,7 +749,7 @@ $("addProductBtn").onclick=async()=>{
     ["productName","productCategory","productPrice","productBarcode","productSize","productImage"]
       .forEach(id=>$(id).value="");
 
-    await loadProducts();
+    await loadProducts({reset:true});
   }catch(e){
     $("productMessage").innerText=
       e.message==="PRODUCT_ALREADY_EXISTS"
@@ -864,7 +893,7 @@ $("importBtn").onclick=async()=>{
     const result=await bulkImportStoreProducts(projectId,currentUser.uid,rows);
     $("importMessage").innerText=
       `تمت معالجة ${result.imported} منتج ✅ — جديد: ${result.added} — موجود وتم إثراؤه: ${result.updated}`;
-    await loadProducts();
+    await loadProducts({reset:true});
   }catch(e){
     $("importMessage").innerText=`فشل الاستيراد: ${e.message}`;
   }
