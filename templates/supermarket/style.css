@@ -15,3 +15,36 @@
   .cartLineTotal{align-self:center}
   .removeCartItem{width:100%}
 }
+
+
+/* FB-R06G/H — paged catalog + customer orders */
+.headerActions{display:flex;align-items:center;gap:8px}
+.ordersBtn{border:0;background:#f3f7f4;color:#14532d;border-radius:12px;padding:9px 11px;font-weight:800}
+.loadMoreProducts{display:block;margin:18px auto 0;min-width:180px}
+.ordersPanel{max-height:94vh}
+.ordersIntro{margin:3px 0 0;color:var(--muted);font-size:12px}
+.myOrdersList{display:grid;gap:12px}
+.customerOrderCard{border:1px solid var(--line);border-radius:18px;padding:14px;background:#fff}
+.orderCardHead{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.orderCardHead>div{display:grid;gap:3px}
+.orderCardHead small{color:var(--muted)}
+.orderStatusBadge{background:#fff7db;color:#8a5a00;border-radius:999px;padding:6px 9px;font-size:11px;font-weight:900}
+.orderStatusBadge.delivered{background:#dcfce7;color:#166534}
+.orderStatusBadge.canceled{background:#fee2e2;color:#991b1b}
+.orderItemsSummary{margin:10px 0;color:#4b5563;font-size:13px;line-height:1.7}
+.orderTotal{padding:8px 0;border-top:1px dashed var(--line);border-bottom:1px dashed var(--line);margin-bottom:10px}
+.trackingTimeline{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;margin:14px 0}
+.trackingStep{display:grid;justify-items:center;gap:6px;text-align:center;color:#9ca3af;position:relative}
+.trackingStep span{width:12px;height:12px;border-radius:50%;background:#d1d5db;position:relative;z-index:2}
+.trackingStep.done{color:#166534}
+.trackingStep.done span{background:#22c55e}
+.trackingStep.current span{outline:4px solid #dcfce7}
+.trackingStep small{font-size:9px;line-height:1.25}
+.orderCanceled{background:#fee2e2;color:#991b1b;border-radius:12px;padding:10px;text-align:center;font-weight:800;margin:12px 0}
+.reorderBtn{width:100%}
+@media(max-width:620px){
+  .storeHeader{align-items:flex-start}
+  .headerActions{flex-direction:column;align-items:stretch}
+  .ordersBtn,.deliveryBadge{text-align:center}
+  .trackingTimeline{overflow-x:auto;grid-template-columns:repeat(7,74px);justify-content:start;padding-bottom:6px}
+}
