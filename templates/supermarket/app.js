@@ -86,7 +86,15 @@ function renderProducts(){
 function changeQty(id,delta){
   const next=Math.max(0,Math.min(99,qtyFor(id)+delta));
   if(next)cart.set(id,next);else cart.delete(id);
-  renderProducts();refreshCart();
+  renderProducts();
+  refreshCart();
+
+  if(cart.size){
+    $("submitOrder").disabled=false;
+    if($("orderStatus").innerText.startsWith("تم إرسال طلبك بنجاح")){
+      $("orderStatus").innerText="";
+    }
+  }
 }
 
 function cartSummary(){
@@ -192,11 +200,35 @@ $("submitOrder").onclick=async()=>{
       notes,
       cart:[...cart.entries()].map(([productId,quantity])=>({productId,quantity}))
     });
-    saveCustomer();cart.clear();refreshCart();renderProducts();
-    $("orderStatus").innerText=`تم إرسال طلبك بنجاح ✅ رقم الطلب ${result.orderId.slice(0,7)} — الإجمالي ${money(result.total)}`;
+    saveCustomer();
+    cart.clear();
+    refreshCart();
+    renderProducts();
+    renderCart();
+
+    const successMessage=`تم إرسال طلبك بنجاح ✅ رقم الطلب ${result.orderId.slice(0,7)} — الإجمالي ${money(result.total)}`;
+    $("orderStatus").innerText=successMessage;
+    $("submitOrder").disabled=true;
+
+    setTimeout(()=>{
+      $("cartSheet").classList.add("hidden");
+    },900);
   }catch(e){
-    $("orderStatus").innerText=`تعذر إرسال الطلب: ${e.message}`;
-  }finally{$("submitOrder").disabled=false;}
+    const code=String(e?.code||"");
+    const message=String(e?.message||"");
+
+    const friendly=
+      message==="EMPTY_CART"
+        ?"السلة فارغة. أضف منتج واحد على الأقل قبل تأكيد الطلب."
+        :code.includes("resource-exhausted")
+          ?"تم الوصول مؤقتًا لحد استخدام قاعدة البيانات. جرّب مرة أخرى لاحقًا."
+          :code.includes("permission-denied")
+            ?"تعذر إرسال الطلب بسبب صلاحيات المشروع. أعد فتح رابط المتجر وحاول مرة أخرى."
+            :message||"UNKNOWN_ERROR";
+
+    $("orderStatus").innerText=`تعذر إرسال الطلب: ${friendly}`;
+    $("submitOrder").disabled=false;
+  }
 };
 
 init();
