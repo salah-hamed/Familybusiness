@@ -322,25 +322,20 @@ export async function addStoreProduct(projectId, actorUid, data = {}) {
 
   if (!name) throw new Error("PRODUCT_NAME_REQUIRED");
 
-  const identityKey = productIdentityKey({
-    name,
-    size: clean(data.size || master?.size)
-  });
-  const current = await listStoreProducts(projectId);
-  const duplicate = identityKey
-    ? findProductDuplicate(current, {
-        name,
-        size: clean(data.size || master?.size),
-        masterId
-      })
-    : null;
+  const requestedSize = clean(data.size || master?.size);
+  const ref = explicitId ? doc(productsCollection(projectId), explicitId) : doc(productsCollection(projectId));
+  const [existing, sameNameSnap] = await Promise.all([
+    getDoc(ref),
+    getDocs(query(productsCollection(projectId), where("name", "==", name), limit(10)))
+  ]);
 
-  if (duplicate && (!explicitId || duplicate.productId !== explicitId)) {
+  const duplicate = sameNameSnap.docs
+    .map(item => ({ productId: item.id, ...item.data() }))
+    .find(item => normalizeSizeKey(item.size, item.name) === normalizeSizeKey(requestedSize, name));
+
+  if (duplicate && duplicate.productId !== ref.id) {
     throw new Error("PRODUCT_ALREADY_EXISTS");
   }
-
-  const ref = explicitId ? doc(productsCollection(projectId), explicitId) : doc(productsCollection(projectId));
-  const existing = await getDoc(ref);
   const now = serverTimestamp();
 
   const payload = {
@@ -373,35 +368,49 @@ export async function addStoreProduct(projectId, actorUid, data = {}) {
 
 export async function bulkAddMasterProducts(projectId, actorUid, selections = []) {
   const requested = Array.isArray(selections) ? selections : [];
-  const current = await listStoreProducts(projectId);
-  const existingMasterIds = new Set(
-    current
-      .map(item => canonicalMasterId(clean(item.masterId)))
-      .filter(Boolean)
-  );
+  const rows = [];
+  let skipped = 0;
 
-  const rows = requested
-    .map(item => {
-      const master = findMasterProduct(item?.masterId);
-      if (!master || existingMasterIds.has(master.masterId)) return null;
+  for (const item of requested) {
+    const master = findMasterProduct(item?.masterId);
+    if (!master) {
+      skipped++;
+      continue;
+    }
 
-      const equivalent = findProductDuplicate(current, {
-        name: master.name,
-        size: master.size,
-        masterId: master.masterId
-      });
-      if (equivalent) return null;
+    const ref = doc(productsCollection(projectId), `master_${master.masterId}`);
+    const [directSnap, sameNameSnap] = await Promise.all([
+      getDoc(ref),
+      getDocs(
+        query(
+          productsCollection(projectId),
+          where("name", "==", clean(master.name)),
+          limit(10)
+        )
+      )
+    ]);
 
-      return {
-        master,
-        price: normalizePrice(item?.price ?? master.referencePrice ?? 0),
-        image: clean(item?.image || master.image)
-      };
-    })
-    .filter(Boolean);
+    const duplicateByNameSize = sameNameSnap.docs
+      .map(snap => ({ productId: snap.id, ...snap.data() }))
+      .find(product =>
+        normalizeSizeKey(product.size, product.name)
+          === normalizeSizeKey(master.size, master.name)
+      );
+
+    if (directSnap.exists() || duplicateByNameSize) {
+      skipped++;
+      continue;
+    }
+
+    rows.push({
+      master,
+      price: normalizePrice(item?.price ?? master.referencePrice ?? 0),
+      image: clean(item?.image || master.image)
+    });
+  }
 
   if (!rows.length) {
-    return { added: 0, skipped: requested.length };
+    return { added: 0, skipped };
   }
 
   const batch = writeBatch(db);
@@ -434,10 +443,9 @@ export async function bulkAddMasterProducts(projectId, actorUid, selections = []
 
   return {
     added: rows.length,
-    skipped: requested.length - rows.length
+    skipped
   };
 }
-
 
 export async function deleteStoreProduct(projectId, productId) {
   const ref = doc(db, "supermarkets", projectId, "products", productId);
