@@ -127,6 +127,89 @@ function findNameSizeDuplicate(items = [], candidate = {}) {
   return best;
 }
 
+function masterDescriptorTokens(master) {
+  if (!master) return [];
+
+  const brandCompact = normalizeIdentityText(master.brand).replace(/\s+/g, "");
+  const ignored = new Set(["ml","kg","gm","ltr","liter","litre","water","milk","oil","gel"]);
+
+  return String(master.masterId || "")
+    .split("-")
+    .map(token => normalizeIdentityText(token).replace(/\s+/g, ""))
+    .filter(token =>
+      token.length > 2
+      && !/^\d/.test(token)
+      && token !== brandCompact
+      && !brandCompact.includes(token)
+      && !ignored.has(token)
+    );
+}
+
+function masterMatchScore(master, candidate = {}) {
+  if (!master) return 0;
+
+  const brandCompact = normalizeIdentityText(master.brand).replace(/\s+/g, "");
+  if (!brandCompact || brandCompact === "local") return 0;
+
+  const searchable = normalizeIdentityText([candidate.name, candidate.size].join(" "));
+  const compact = searchable.replace(/\s+/g, "");
+
+  if (!compact.includes(brandCompact)) return 0;
+
+  const masterSize = normalizeSizeKey(master.size, master.name);
+  const candidateSize = normalizeSizeKey(candidate.size, candidate.name);
+
+  if (masterSize && candidateSize && masterSize !== candidateSize) return 0;
+
+  const tokens = masterDescriptorTokens(master);
+  const matchedTokens = tokens.filter(token => compact.includes(token)).length;
+
+  if (tokens.length && matchedTokens === 0) return 0;
+
+  return 100 + matchedTokens;
+}
+
+function findMasterLinkedDuplicate(items = [], candidate = {}) {
+  let best = null;
+  let bestScore = 0;
+  let tied = false;
+
+  items.forEach(item => {
+    let score = 0;
+
+    if (clean(item.masterId)) {
+      score = masterMatchScore(findMasterProduct(item.masterId), candidate);
+    } else if (clean(candidate.masterId)) {
+      score = masterMatchScore(findMasterProduct(candidate.masterId), item);
+    }
+
+    if (!score) return;
+
+    if (score > bestScore) {
+      best = item;
+      bestScore = score;
+      tied = false;
+    } else if (score === bestScore) {
+      tied = true;
+    }
+  });
+
+  return tied ? null : best;
+}
+
+function findProductDuplicate(items = [], candidate = {}) {
+  return findNameSizeDuplicate(items, candidate)
+    || findMasterLinkedDuplicate(items, candidate);
+}
+
+function duplicateBucketKey(item = {}) {
+  const size = normalizeSizeKey(item.size, item.name) || "nosize";
+  const master = clean(item.masterId) ? findMasterProduct(item.masterId) : null;
+  const identity = master?.brand || item.name;
+  const prefix = normalizeIdentityText(identity).replace(/\s+/g, "").slice(0, 4) || "misc";
+  return `${size}|${prefix}`;
+}
+
 function shouldUseIncomingCategory(currentCategory, incomingCategory) {
   const current = clean(currentCategory);
   const incoming = clean(incomingCategory);
@@ -206,9 +289,10 @@ export async function addStoreProduct(projectId, actorUid, data = {}) {
   });
   const current = await listStoreProducts(projectId);
   const duplicate = identityKey
-    ? findNameSizeDuplicate(current, {
+    ? findProductDuplicate(current, {
         name,
-        size: clean(data.size || master?.size)
+        size: clean(data.size || master?.size),
+        masterId
       })
     : null;
 
@@ -469,7 +553,7 @@ export async function bulkImportStoreProducts(projectId, actorUid, rows = []) {
     let existing =
       (deterministicId ? byProductId.get(deterministicId) : null)
       || (identityKey ? byIdentity.get(identityKey) : null)
-      || findNameSizeDuplicate([...byProductId.values()], row);
+      || findProductDuplicate([...byProductId.values()], row);
 
     if (existing) {
       const patch = {
@@ -550,25 +634,35 @@ export async function bulkImportStoreProducts(projectId, actorUid, rows = []) {
 export async function mergeDuplicateStoreProducts(projectId, actorUid) {
   const current = await listStoreProducts(projectId);
   const duplicateGroups = [];
-  const used = new Set();
+  const buckets = new Map();
 
   current.forEach(item => {
-    if (used.has(item.productId)) return;
+    const key = duplicateBucketKey(item);
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(item);
+  });
 
-    const group = [item];
-    used.add(item.productId);
+  buckets.forEach(bucket => {
+    const used = new Set();
 
-    current.forEach(candidate => {
-      if (used.has(candidate.productId)) return;
+    bucket.forEach(item => {
+      if (used.has(item.productId)) return;
 
-      const match = findNameSizeDuplicate([item], candidate);
-      if (!match) return;
+      const group = [item];
+      used.add(item.productId);
 
-      group.push(candidate);
-      used.add(candidate.productId);
+      bucket.forEach(candidate => {
+        if (used.has(candidate.productId)) return;
+
+        const match = findProductDuplicate([item], candidate);
+        if (!match) return;
+
+        group.push(candidate);
+        used.add(candidate.productId);
+      });
+
+      if (group.length > 1) duplicateGroups.push(group);
     });
-
-    if (group.length > 1) duplicateGroups.push(group);
   });
   const operations = [];
   let removed = 0;
