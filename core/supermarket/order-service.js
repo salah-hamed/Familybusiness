@@ -205,11 +205,48 @@ export async function createSupermarketOrder({
     updatedAt: serverTimestamp()
   });
 
-  await batch.commit();
+  let trackingEnabled = true;
+
+  try {
+    await batch.commit();
+  } catch (error) {
+    const code = String(error?.code || "");
+
+    if (!code.includes("permission-denied")) throw error;
+
+    const legacyBatch = writeBatch(db);
+
+    legacyBatch.set(orderRef, {
+      projectId,
+      providerId: projectId,
+      templateType: "supermarket",
+      serviceType: "supermarket_delivery",
+      status: "new",
+      customerName: clean(customerName),
+      customerPhone: clean(customerPhone),
+      customerAddress: clean(customerAddress),
+      location: clean(location),
+      notes: clean(notes),
+      items,
+      subtotal,
+      deliveryFee,
+      total,
+      price: total,
+      pricingLocked: false,
+      commissionEligible: false,
+      commissionLocked: false,
+      commissionAmount: 0,
+      createdAt: serverTimestamp()
+    });
+
+    await legacyBatch.commit();
+    trackingEnabled = false;
+  }
 
   return {
     orderId: orderRef.id,
-    trackingToken,
+    trackingToken: trackingEnabled ? trackingToken : "",
+    trackingEnabled,
     subtotal,
     deliveryFee,
     total
