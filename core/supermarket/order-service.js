@@ -243,12 +243,15 @@ export async function acceptSupermarketOrder({
 
 export async function listSupermarketOrders(projectId) {
   const snap = await getDocs(
-    query(collection(db, "orders"), where("projectId", "==", projectId))
+    query(
+      collection(db, "orders"),
+      where("projectId", "==", projectId),
+      where("templateType", "==", "supermarket")
+    )
   );
 
   return snap.docs
     .map(item => ({ orderId: item.id, ...item.data() }))
-    .filter(item => item.templateType === "supermarket")
     .sort((a, b) => {
       const at = a.createdAt?.seconds || 0;
       const bt = b.createdAt?.seconds || 0;
