@@ -1,21 +1,37 @@
 import db from "../../core/firebase/firebase-db.js";
-import { createSupermarketOrder } from "../../core/supermarket/order-service.js";
+import {
+  createSupermarketOrder,
+  getSupermarketOrderTracking,
+  subscribeSupermarketOrderTracking
+} from "../../core/supermarket/order-service.js";
 
 import {
   doc,
   getDoc,
   collection,
-  getDocs
+  getDocs,
+  query,
+  where,
+  limit,
+  startAfter
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const $=id=>document.getElementById(id);
 const projectId=new URLSearchParams(location.search).get("project")||"";
+const PAGE_SIZE=40;
 let store=null;
 let products=[];
+const productCache=new Map();
 let category="الكل";
+let lastProductDoc=null;
+let hasMoreProducts=true;
+let loadingProducts=false;
 let cart=new Map();
 let locationUrl="";
 const customerKey=`fb_supermarket_customer_${projectId}`;
+const historyKey=`fb_supermarket_orders_${projectId}`;
+const orderSubscriptions=new Map();
+let trackedOrders=new Map();
 
 function money(v){return `${Number(v||0).toLocaleString("ar-EG")} جنيه`;}
 function escapeHTML(v){return String(v??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;");}
@@ -25,10 +41,9 @@ async function init(){
   if(!projectId){showClosed("رابط المشروع غير مكتمل.");return;}
 
   try{
-    const [projectSnap,storeSnap,productsSnap]=await Promise.all([
+    const [projectSnap,storeSnap]=await Promise.all([
       getDoc(doc(db,"projects",projectId)),
-      getDoc(doc(db,"supermarkets",projectId)),
-      getDocs(collection(db,"supermarkets",projectId,"products"))
+      getDoc(doc(db,"supermarkets",projectId))
     ]);
 
     if(!projectSnap.exists()||projectSnap.data().template!=="supermarket"){showClosed("المشروع غير متاح.");return;}
@@ -37,15 +52,15 @@ async function init(){
     store={supermarketId:storeSnap.id,...storeSnap.data()};
     if(store.isAcceptingOrders!==true){showClosed("السوبرماركت موقف استقبال الطلبات مؤقتًا.");return;}
 
-    products=productsSnap.docs.map(d=>({productId:d.id,...d.data()})).filter(p=>p.isActive===true&&p.inStock===true);
     $("storeName").innerText=store.name||"السوبرماركت";
     $("storeAddress").innerText=store.address||"";
     $("deliveryBadge").innerText=`التوصيل ${money(store.deliveryFee||0)}`;
 
     loadSavedCustomer();
     renderCategories();
-    renderProducts();
+    await loadProductsPage({reset:true});
     refreshCart();
+    refreshOrdersButton();
   }catch(e){
     showClosed(e.code==="permission-denied"?"المشروع غير جاهز لاستقبال الطلبات بعد.":`تعذر تحميل المتجر: ${e.message}`);
   }
@@ -53,10 +68,78 @@ async function init(){
 
 function showClosed(message){$("closedBanner").innerText=message;$("closedBanner").classList.remove("hidden");}
 
+function availableCategories(){
+  const configured=Array.isArray(store?.catalogCategories)
+    ? store.catalogCategories.filter(Boolean)
+    : [];
+  const loaded=[...new Set([...productCache.values()].map(product=>product.category||"أخرى"))];
+  return [...new Set([...configured,...loaded])].sort((a,b)=>String(a).localeCompare(String(b),"ar"));
+}
+
 function renderCategories(){
-  const cats=["الكل",...new Set(products.map(p=>p.category||"أخرى"))];
+  const cats=["الكل",...availableCategories()];
   $("categories").innerHTML=cats.map(c=>`<button class="${c===category?"active":""}" data-category="${escapeHTML(c)}">${escapeHTML(c)}</button>`).join("");
-  $("categories").querySelectorAll("button").forEach(btn=>btn.onclick=()=>{category=btn.dataset.category;renderCategories();renderProducts();});
+  $("categories").querySelectorAll("button").forEach(btn=>btn.onclick=async()=>{
+    const next=btn.dataset.category;
+    if(next===category)return;
+    category=next;
+    renderCategories();
+    await loadProductsPage({reset:true});
+  });
+}
+
+async function loadProductsPage({reset=false}={}){
+  if(loadingProducts)return;
+
+  if(reset){
+    products=[];
+    lastProductDoc=null;
+    hasMoreProducts=true;
+    $("productsGrid").innerHTML='<p class="empty">جاري تحميل المنتجات...</p>';
+  }
+
+  if(!hasMoreProducts)return;
+
+  loadingProducts=true;
+  $("loadMoreProductsBtn").disabled=true;
+
+  try{
+    const base=collection(db,"supermarkets",projectId,"products");
+    const constraints=[];
+
+    if(category!=="الكل"){
+      constraints.push(where("category","==",category));
+    }
+
+    if(lastProductDoc){
+      constraints.push(startAfter(lastProductDoc));
+    }
+
+    constraints.push(limit(PAGE_SIZE));
+
+    const snap=await getDocs(query(base,...constraints));
+    lastProductDoc=snap.docs.at(-1)||lastProductDoc;
+    hasMoreProducts=snap.size===PAGE_SIZE;
+
+    snap.docs
+      .map(d=>({productId:d.id,...d.data()}))
+      .filter(product=>product.isActive===true&&product.inStock===true)
+      .forEach(product=>{
+        productCache.set(product.productId,product);
+        if(!products.some(item=>item.productId===product.productId)){
+          products.push(product);
+        }
+      });
+
+    renderCategories();
+    renderProducts();
+  }catch(e){
+    $("productsGrid").innerHTML=`<p class="closed">تعذر تحميل المنتجات: ${escapeHTML(e.message)}</p>`;
+  }finally{
+    loadingProducts=false;
+    $("loadMoreProductsBtn").disabled=false;
+    $("loadMoreProductsBtn").classList.toggle("hidden",!hasMoreProducts);
+  }
 }
 
 function renderProducts(){
@@ -84,6 +167,7 @@ function renderProducts(){
 }
 
 function changeQty(id,delta){
+  if(!productCache.has(id))return;
   const next=Math.max(0,Math.min(99,qtyFor(id)+delta));
   if(next)cart.set(id,next);else cart.delete(id);
   renderProducts();
@@ -99,7 +183,7 @@ function changeQty(id,delta){
 
 function cartSummary(){
   const lines=[...cart.entries()].map(([id,quantity])=>{
-    const product=products.find(p=>p.productId===id);
+    const product=productCache.get(id);
     return product?{...product,quantity,subtotal:Number(product.price||0)*quantity}:null;
   }).filter(Boolean);
   const subtotal=lines.reduce((s,x)=>s+x.subtotal,0);
@@ -162,6 +246,7 @@ function renderCart(){
 }
 
 $("searchInput").addEventListener("input",renderProducts);
+$("loadMoreProductsBtn").onclick=()=>loadProductsPage();
 $("cartBar").onclick=()=>{renderCart();$("cartSheet").classList.remove("hidden");};
 $("closeCart").onclick=()=>$("cartSheet").classList.add("hidden");
 $("cartSheet").addEventListener("click",e=>{if(e.target===$("cartSheet"))$("cartSheet").classList.add("hidden");});
