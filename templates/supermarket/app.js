@@ -270,6 +270,205 @@ function saveCustomer(){
   localStorage.setItem(customerKey,JSON.stringify({name:$("customerName").value.trim(),phone:$("customerPhone").value.trim(),address:$("customerAddress").value.trim()}));
 }
 
+function loadHistoryTokens(){
+  try{
+    const data=JSON.parse(localStorage.getItem(historyKey)||"[]");
+    return Array.isArray(data)?data.filter(Boolean):[];
+  }catch{
+    return [];
+  }
+}
+
+function rememberOrder(trackingToken){
+  if(!trackingToken)return;
+  const tokens=loadHistoryTokens().filter(token=>token!==trackingToken);
+  tokens.unshift(trackingToken);
+  localStorage.setItem(historyKey,JSON.stringify(tokens.slice(0,20)));
+  refreshOrdersButton();
+}
+
+function refreshOrdersButton(){
+  const count=loadHistoryTokens().length;
+  $("myOrdersBtn").innerText=count?`📦 طلباتي (${count})`:"📦 طلباتي";
+}
+
+const statusSteps=[
+  ["new","تم استلام الطلب"],
+  ["accepted","تم قبول الطلب"],
+  ["preparing","جاري تجهيز الطلب"],
+  ["ready","الطلب جاهز"],
+  ["assigned","تم تعيين المندوب"],
+  ["out_for_delivery","خرج للتوصيل"],
+  ["delivered","تم التوصيل"]
+];
+
+function statusLabel(status){
+  return Object.fromEntries(statusSteps)[status]
+    ||(status==="canceled"?"تم إلغاء الطلب":status||"—");
+}
+
+function formatOrderDate(value){
+  const date=value?.toDate?.();
+  if(!date)return "";
+  return new Intl.DateTimeFormat("ar-EG",{dateStyle:"medium",timeStyle:"short"}).format(date);
+}
+
+function renderOrderTimeline(order){
+  if(order.status==="canceled"){
+    return '<div class="orderCanceled">تم إلغاء الطلب</div>';
+  }
+
+  const currentIndex=statusSteps.findIndex(([status])=>status===order.status);
+
+  return `<div class="trackingTimeline">${statusSteps.map(([status,label],index)=>`
+    <div class="trackingStep ${index<=currentIndex?"done":""} ${index===currentIndex?"current":""}">
+      <span></span>
+      <small>${label}</small>
+    </div>`).join("")}</div>`;
+}
+
+function renderMyOrders(){
+  const orders=[...trackedOrders.values()]
+    .filter(Boolean)
+    .sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
+
+  $("ordersList").innerHTML=orders.length
+    ?orders.map(order=>{
+      const items=(order.items||[])
+        .map(item=>`${Number(item.quantity||0)} × ${escapeHTML(item.name)}`)
+        .join("، ");
+
+      return `<article class="customerOrderCard" data-tracking-token="${order.trackingToken}">
+        <div class="orderCardHead">
+          <div>
+            <b>طلب #${escapeHTML(String(order.orderId||"").slice(0,7))}</b>
+            <small>${escapeHTML(formatOrderDate(order.createdAt))}</small>
+          </div>
+          <span class="orderStatusBadge ${order.status==="delivered"?"delivered":order.status==="canceled"?"canceled":""}">
+            ${escapeHTML(statusLabel(order.status))}
+          </span>
+        </div>
+        <div class="orderItemsSummary">${items||"تفاصيل الطلب غير متاحة"}</div>
+        <div class="orderTotal">الإجمالي: <b>${money(order.total)}</b></div>
+        ${renderOrderTimeline(order)}
+        <button class="secondary reorderBtn" type="button">إعادة نفس المنتجات للسلة</button>
+      </article>`;
+    }).join("")
+    :'<p class="empty">لا توجد طلبات محفوظة على هذا الجهاز حتى الآن.</p>';
+
+  document.querySelectorAll(".customerOrderCard").forEach(card=>{
+    const order=trackedOrders.get(card.dataset.trackingToken);
+    card.querySelector(".reorderBtn").onclick=()=>reorderTrackingOrder(order);
+  });
+}
+
+async function loadMyOrders(){
+  const tokens=loadHistoryTokens();
+
+  if(!tokens.length){
+    trackedOrders=new Map();
+    renderMyOrders();
+    return;
+  }
+
+  const results=await Promise.all(
+    tokens.map(async token=>{
+      try{
+        return await getSupermarketOrderTracking(token);
+      }catch{
+        return null;
+      }
+    })
+  );
+
+  trackedOrders=new Map(
+    results
+      .filter(order=>order&&order.projectId===projectId)
+      .map(order=>[order.trackingToken,order])
+  );
+
+  for(const [token,order] of trackedOrders){
+    if(["delivered","canceled"].includes(order.status))continue;
+    if(orderSubscriptions.has(token))continue;
+
+    const unsubscribe=subscribeSupermarketOrderTracking(
+      token,
+      updated=>{
+        if(!updated)return;
+        trackedOrders.set(token,updated);
+        renderMyOrders();
+
+        if(["delivered","canceled"].includes(updated.status)){
+          orderSubscriptions.get(token)?.();
+          orderSubscriptions.delete(token);
+        }
+      }
+    );
+
+    orderSubscriptions.set(token,unsubscribe);
+  }
+
+  renderMyOrders();
+}
+
+async function reorderTrackingOrder(order){
+  if(!order?.items?.length)return;
+
+  let added=0;
+  let unavailable=0;
+
+  for(const item of order.items){
+    try{
+      const snap=await getDoc(doc(db,"supermarkets",projectId,"products",item.productId));
+
+      if(!snap.exists()){
+        unavailable++;
+        continue;
+      }
+
+      const product={productId:snap.id,...snap.data()};
+
+      if(product.isActive!==true||product.inStock!==true){
+        unavailable++;
+        continue;
+      }
+
+      productCache.set(product.productId,product);
+      cart.set(
+        product.productId,
+        Math.min(99,qtyFor(product.productId)+Math.max(1,Number(item.quantity||1)))
+      );
+      added++;
+    }catch{
+      unavailable++;
+    }
+  }
+
+  refreshCart();
+  renderProducts();
+
+  if(added){
+    $("ordersSheet").classList.add("hidden");
+    renderCart();
+    $("cartSheet").classList.remove("hidden");
+  }
+
+  if(unavailable){
+    $("orderStatus").innerText=`تمت إعادة المنتجات المتاحة. ${unavailable} منتج غير متاح حاليًا.`;
+  }
+}
+
+$("myOrdersBtn").onclick=async()=>{
+  $("ordersSheet").classList.remove("hidden");
+  $("ordersList").innerHTML='<p class="empty">جاري تحميل طلباتك...</p>';
+  await loadMyOrders();
+};
+
+$("closeOrders").onclick=()=>$("ordersSheet").classList.add("hidden");
+$("ordersSheet").addEventListener("click",event=>{
+  if(event.target===$("ordersSheet"))$("ordersSheet").classList.add("hidden");
+});
+
 $("submitOrder").onclick=async()=>{
   const extra=$("extraRequest").value.trim();
   const notes=[$("notes").value.trim(),extra?`طلب إضافي: ${extra}`:""].filter(Boolean).join("\n");
@@ -286,12 +485,13 @@ $("submitOrder").onclick=async()=>{
       cart:[...cart.entries()].map(([productId,quantity])=>({productId,quantity}))
     });
     saveCustomer();
+    rememberOrder(result.trackingToken);
     cart.clear();
     refreshCart();
     renderProducts();
     renderCart();
 
-    const successMessage=`تم إرسال طلبك بنجاح ✅ رقم الطلب ${result.orderId.slice(0,7)} — الإجمالي ${money(result.total)}`;
+    const successMessage=`تم إرسال طلبك بنجاح ✅ رقم الطلب ${result.orderId.slice(0,7)} — الإجمالي ${money(result.total)}. تقدر تتابع حالته من «طلباتي».`;
     $("orderStatus").innerText=successMessage;
     $("submitOrder").disabled=true;
 
