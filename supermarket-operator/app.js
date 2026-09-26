@@ -155,7 +155,15 @@ async function loadOperations(){
   $("productLibraryLink").href=productsUrl.toString();
   $("openProductLibraryBtn").href=productsUrl.toString();
 
-  await Promise.all([loadRiders(),loadOrders()]);
+  const [ridersResult,ordersResult]=await Promise.allSettled([loadRiders(),loadOrders()]);
+
+  if(ridersResult.status==="rejected"){
+    $("ridersList").innerHTML=`<p class="message">تعذر تحميل المندوبين: ${escapeHTML(ridersResult.reason?.message||"UNKNOWN_ERROR")}</p>`;
+  }
+
+  if(ordersResult.status==="rejected"){
+    $("ordersList").innerHTML=`<p class="message">تعذر تحميل الطلبات: ${escapeHTML(ordersResult.reason?.message||"UNKNOWN_ERROR")}</p>`;
+  }
 }
 
 $("copyCustomerLinkBtn").onclick=async()=>{
