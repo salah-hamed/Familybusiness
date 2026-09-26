@@ -121,7 +121,10 @@ async function loadProductsPage({reset=false}={}){
 
   try{
     const base=collection(db,"supermarkets",projectId,"products");
-    const constraints=[];
+    const constraints=[
+      where("isActive","==",true),
+      where("inStock","==",true)
+    ];
 
     if(category!=="الكل"){
       constraints.push(where("category","==",category));
@@ -139,7 +142,6 @@ async function loadProductsPage({reset=false}={}){
 
     snap.docs
       .map(d=>({productId:d.id,...d.data()}))
-      .filter(product=>product.isActive===true&&product.inStock===true)
       .forEach(product=>{
         productCache.set(product.productId,product);
         if(!products.some(item=>item.productId===product.productId)){
