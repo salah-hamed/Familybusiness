@@ -29,6 +29,79 @@ function clean(value) {
   return String(value || "").trim();
 }
 
+function normalizeIdentityText(value) {
+  return clean(value)
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[أإآ]/g, "ا")
+    .replace(/ى/g, "ي")
+    .replace(/ة/g, "ه")
+    .replace(/[^a-z0-9\u0600-\u06ff.]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeSizeKey(...values) {
+  const text = normalizeIdentityText(values.filter(Boolean).join(" "))
+    .replace(/litres?|liters?|litre|liter|ltr/g, " l ")
+    .replace(/millilitres?|milliliters?|millilitre|milliliter|ml/g, " ml ")
+    .replace(/kilograms?|kilogram|kgs?|كجم/g, " kg ")
+    .replace(/grams?|gram|gms?|جم/g, " g ")
+    .replace(/لتر/g, " l ")
+    .replace(/مل/g, " ml ")
+    .replace(/×|x/gi, " x ");
+
+  const matches = [...text.matchAll(/(\d+(?:\.\d+)?)\s*(ml|l|kg|g|قطعه|قطع|عبوه|عبوات|رول|كيس|اكياس|pcs?)/g)]
+    .map(match => `${match[1]}${match[2]}`);
+
+  return matches.slice(0, 3).join("x");
+}
+
+function productIdentityKey(data = {}) {
+  const name = normalizeIdentityText(data.name);
+  const size = normalizeSizeKey(data.size, data.name);
+  if (!name) return "";
+  return `${name}|${size}`;
+}
+
+function shouldUseIncomingCategory(currentCategory, incomingCategory) {
+  const current = clean(currentCategory);
+  const incoming = clean(incomingCategory);
+  if (!incoming) return false;
+  if (!current || current === "أخرى") return true;
+  return /carrefour|buy |shop |online|super market/i.test(current);
+}
+
+function chooseDuplicateKeeper(items = []) {
+  return [...items].sort((a, b) => {
+    const score = item =>
+      (clean(item.masterId) ? 8 : 0)
+      + (clean(item.image) ? 4 : 0)
+      + (item.isActive === true ? 2 : 0)
+      + (item.inStock === true ? 1 : 0);
+    return score(b) - score(a);
+  })[0] || null;
+}
+
+async function syncSupermarketCatalogMeta(projectId, suppliedProducts = null) {
+  const current = suppliedProducts || await listStoreProducts(projectId);
+  const categories = [...new Set(
+    current
+      .filter(item => item.isActive === true && item.inStock === true)
+      .map(item => clean(item.category || "أخرى"))
+      .filter(Boolean)
+  )].sort((a, b) => a.localeCompare(b, "ar"));
+
+  await updateDoc(doc(db, "supermarkets", projectId), {
+    catalogCategories: categories,
+    catalogProductCount: current.length,
+    catalogUpdatedAt: serverTimestamp()
+  });
+
+  return { categories, productCount: current.length };
+}
+
 function productIdFor({ masterId = "", barcode = "" } = {}) {
   const safeMaster = clean(masterId).replace(/[^A-Za-z0-9_-]/g, "");
   if (safeMaster) return `master_${safeMaster}`;
@@ -85,6 +158,7 @@ export async function addStoreProduct(projectId, actorUid, data = {}) {
   }
 
   await setDoc(ref, payload, { merge: true });
+  await syncSupermarketCatalogMeta(projectId);
 
   return ref.id;
 }
@@ -142,6 +216,7 @@ export async function bulkAddMasterProducts(projectId, actorUid, selections = []
   });
 
   await batch.commit();
+  await syncSupermarketCatalogMeta(projectId);
 
   return {
     added: rows.length,
@@ -157,6 +232,7 @@ export async function deleteStoreProduct(projectId, productId) {
   if (!current.exists()) throw new Error("PRODUCT_NOT_FOUND");
 
   await deleteDoc(ref);
+  await syncSupermarketCatalogMeta(projectId);
 }
 
 
@@ -214,6 +290,14 @@ export async function updateStoreProduct(projectId, productId, actorUid, updates
   next.updatedAt = serverTimestamp();
 
   await updateDoc(ref, next);
+
+  if (
+    "category" in updates
+    || "inStock" in updates
+    || "isActive" in updates
+  ) {
+    await syncSupermarketCatalogMeta(projectId);
+  }
 }
 
 export async function findStoreProductByBarcode(projectId, barcode) {
@@ -280,67 +364,219 @@ export async function bulkImportStoreProducts(projectId, actorUid, rows = []) {
     .filter(row => row.name && Number.isFinite(row.price) && row.price >= 0);
 
   const current = await listStoreProducts(projectId);
-  const byBarcode = new Map(
-    current.filter(item => item.barcode).map(item => [item.barcode, item])
-  );
-  const byProductId = new Map(
-    current.map(item => [item.productId, item])
-  );
+  const byProductId = new Map(current.map(item => [item.productId, item]));
+  const byIdentity = new Map();
 
-  let imported = 0;
+  current.forEach(item => {
+    const key = productIdentityKey(item);
+    if (key && !byIdentity.has(key)) byIdentity.set(key, item);
+  });
 
-  for (let start = 0; start < validRows.length; start += 350) {
-    const batch = writeBatch(db);
-    const chunk = validRows.slice(start, start + 350);
+  let added = 0;
+  let updated = 0;
+  let duplicateRows = 0;
+  const operations = [];
 
-    chunk.forEach(row => {
-      const deterministicId = row.externalId ? `import_${row.externalId}` : "";
-      const existing =
-        (deterministicId ? byProductId.get(deterministicId) : null)
-        || (row.barcode ? byBarcode.get(row.barcode) : null);
-      const ref = existing
-        ? doc(db, "supermarkets", projectId, "products", existing.productId)
-        : deterministicId
-          ? doc(productsCollection(projectId), deterministicId)
-          : doc(productsCollection(projectId));
-      const now = serverTimestamp();
+  for (const row of validRows) {
+    const deterministicId = row.externalId ? `import_${row.externalId}` : "";
+    const identityKey = productIdentityKey(row);
 
-      const payload = {
-        productId: ref.id,
-        projectId,
-        name: row.name,
-        category: row.category,
-        size: row.size,
-        barcode: row.barcode,
-        image: row.image,
-        price: normalizePrice(row.price),
-        inStock: true,
-        isActive: true,
-        source: "import",
-        masterId: "",
+    let existing =
+      (deterministicId ? byProductId.get(deterministicId) : null)
+      || (identityKey ? byIdentity.get(identityKey) : null);
+
+    if (existing) {
+      const patch = {
         updatedBy: actorUid,
-        updatedAt: now
+        updatedAt: serverTimestamp()
       };
 
-      if (existing) {
-        const {
-          source,
-          masterId,
-          ...updatePayload
-        } = payload;
-        batch.update(ref, updatePayload);
-      } else {
-        batch.set(ref, {
-          ...payload,
-          createdBy: actorUid,
-          createdAt: now
-        });
-      }
-    });
+      if (!clean(existing.image) && row.image) patch.image = row.image;
+      if (!clean(existing.size) && row.size) patch.size = row.size;
+      if (!clean(existing.barcode) && row.barcode) patch.barcode = row.barcode;
+      if (shouldUseIncomingCategory(existing.category, row.category)) patch.category = row.category;
 
-    await batch.commit();
-    imported += chunk.length;
+      operations.push({
+        type: "update",
+        ref: doc(db, "supermarkets", projectId, "products", existing.productId),
+        data: patch
+      });
+
+      existing = { ...existing, ...patch };
+      byProductId.set(existing.productId, existing);
+      if (identityKey) byIdentity.set(identityKey, existing);
+      updated++;
+      duplicateRows++;
+      continue;
+    }
+
+    const ref = deterministicId
+      ? doc(productsCollection(projectId), deterministicId)
+      : doc(productsCollection(projectId));
+    const now = serverTimestamp();
+
+    const payload = {
+      productId: ref.id,
+      projectId,
+      name: row.name,
+      category: row.category,
+      size: row.size,
+      barcode: row.barcode,
+      image: row.image,
+      price: normalizePrice(row.price),
+      inStock: true,
+      isActive: true,
+      source: "import",
+      masterId: "",
+      createdBy: actorUid,
+      createdAt: now,
+      updatedBy: actorUid,
+      updatedAt: now
+    };
+
+    operations.push({ type: "set", ref, data: payload });
+
+    const local = { ...payload, createdAt: null, updatedAt: null };
+    byProductId.set(ref.id, local);
+    if (identityKey) byIdentity.set(identityKey, local);
+    added++;
   }
 
-  return imported;
+  for (let start = 0; start < operations.length; start += 350) {
+    const batch = writeBatch(db);
+    operations.slice(start, start + 350).forEach(operation => {
+      if (operation.type === "update") batch.update(operation.ref, operation.data);
+      else batch.set(operation.ref, operation.data);
+    });
+    await batch.commit();
+  }
+
+  await syncSupermarketCatalogMeta(projectId);
+
+  return {
+    imported: validRows.length,
+    added,
+    updated,
+    duplicateRows
+  };
+}
+
+export async function mergeDuplicateStoreProducts(projectId, actorUid) {
+  const current = await listStoreProducts(projectId);
+  const groups = new Map();
+
+  current.forEach(item => {
+    const key = productIdentityKey(item);
+    if (!key) return;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(item);
+  });
+
+  const duplicateGroups = [...groups.values()].filter(items => items.length > 1);
+  const operations = [];
+  let removed = 0;
+  let enriched = 0;
+
+  duplicateGroups.forEach(items => {
+    const keeper = chooseDuplicateKeeper(items);
+    if (!keeper) return;
+
+    const others = items.filter(item => item.productId !== keeper.productId);
+    const bestImage = clean(keeper.image) || clean(items.find(item => clean(item.image))?.image);
+    const bestSize = clean(keeper.size) || clean(items.find(item => clean(item.size))?.size);
+    const bestBarcode = clean(keeper.barcode) || clean(items.find(item => clean(item.barcode))?.barcode);
+    const bestCategory = items
+      .map(item => clean(item.category))
+      .find(value => value && value !== "أخرى" && !/carrefour|buy |shop |online/i.test(value))
+      || clean(keeper.category || "أخرى");
+
+    const patch = {
+      updatedBy: actorUid,
+      updatedAt: serverTimestamp()
+    };
+
+    if (bestImage && bestImage !== clean(keeper.image)) patch.image = bestImage;
+    if (bestSize && bestSize !== clean(keeper.size)) patch.size = bestSize;
+    if (bestBarcode && bestBarcode !== clean(keeper.barcode)) patch.barcode = bestBarcode;
+    if (bestCategory && bestCategory !== clean(keeper.category)) patch.category = bestCategory;
+
+    if (Object.keys(patch).length > 2) {
+      operations.push({
+        type: "update",
+        ref: doc(db, "supermarkets", projectId, "products", keeper.productId),
+        data: patch
+      });
+      enriched++;
+    }
+
+    others.forEach(item => {
+      operations.push({
+        type: "delete",
+        ref: doc(db, "supermarkets", projectId, "products", item.productId)
+      });
+      removed++;
+    });
+  });
+
+  for (let start = 0; start < operations.length; start += 350) {
+    const batch = writeBatch(db);
+    operations.slice(start, start + 350).forEach(operation => {
+      if (operation.type === "delete") batch.delete(operation.ref);
+      else batch.update(operation.ref, operation.data);
+    });
+    await batch.commit();
+  }
+
+  await syncSupermarketCatalogMeta(projectId);
+
+  return {
+    groups: duplicateGroups.length,
+    removed,
+    enriched
+  };
+}
+
+export async function bulkUpdateStoreProducts(projectId, productIds, actorUid, updates = {}) {
+  const ids = [...new Set((productIds || []).filter(Boolean))];
+  if (!ids.length) return 0;
+
+  const patch = {
+    updatedBy: actorUid,
+    updatedAt: serverTimestamp()
+  };
+
+  if ("category" in updates) patch.category = clean(updates.category || "أخرى");
+  if ("inStock" in updates) patch.inStock = updates.inStock === true;
+  if ("isActive" in updates) patch.isActive = updates.isActive === true;
+
+  for (let start = 0; start < ids.length; start += 350) {
+    const batch = writeBatch(db);
+    ids.slice(start, start + 350).forEach(productId => {
+      batch.update(doc(db, "supermarkets", projectId, "products", productId), patch);
+    });
+    await batch.commit();
+  }
+
+  await syncSupermarketCatalogMeta(projectId);
+  return ids.length;
+}
+
+export async function bulkDeleteStoreProducts(projectId, productIds) {
+  const ids = [...new Set((productIds || []).filter(Boolean))];
+  if (!ids.length) return 0;
+
+  for (let start = 0; start < ids.length; start += 350) {
+    const batch = writeBatch(db);
+    ids.slice(start, start + 350).forEach(productId => {
+      batch.delete(doc(db, "supermarkets", projectId, "products", productId));
+    });
+    await batch.commit();
+  }
+
+  await syncSupermarketCatalogMeta(projectId);
+  return ids.length;
+}
+
+export async function refreshSupermarketCatalogMeta(projectId) {
+  return syncSupermarketCatalogMeta(projectId);
 }
