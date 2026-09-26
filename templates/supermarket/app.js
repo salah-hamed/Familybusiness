@@ -491,7 +491,9 @@ $("submitOrder").onclick=async()=>{
     renderProducts();
     renderCart();
 
-    const successMessage=`تم إرسال طلبك بنجاح ✅ رقم الطلب ${result.orderId.slice(0,7)} — الإجمالي ${money(result.total)}. تقدر تتابع حالته من «طلباتي».`;
+    const successMessage=result.trackingEnabled
+      ? `تم إرسال طلبك بنجاح ✅ رقم الطلب ${result.orderId.slice(0,7)} — الإجمالي ${money(result.total)}. تقدر تتابع حالته من «طلباتي».`
+      : `تم إرسال طلبك بنجاح ✅ رقم الطلب ${result.orderId.slice(0,7)} — الإجمالي ${money(result.total)}.`;
     $("orderStatus").innerText=successMessage;
     $("submitOrder").disabled=true;
 
