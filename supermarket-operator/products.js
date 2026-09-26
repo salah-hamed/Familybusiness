@@ -156,8 +156,39 @@ function masterImageFor(item){
   if(direct?.image)return direct.image;
 
   const wantedSize=sizeKey(item.size,item.name);
-  let best=null;
-  let bestScore=0;
+  const brand=normalizeLookup(item.brand);
+  const masterTokens=item.masterId
+    .split("-")
+    .map(normalizeLookup)
+    .filter(token=>token.length>2&&!/^\d/.test(token));
+
+  const brandCandidates=products
+    .filter(product=>product.image)
+    .map(product=>{
+      const searchable=normalizeLookup([product.name,product.size].join(" "));
+      const productSize=sizeKey(product.size,product.name);
+
+      if(brand&&brand!=="local"&&!searchable.includes(brand))return null;
+      if(wantedSize&&productSize&&wantedSize!==productSize)return null;
+
+      const tokenScore=masterTokens.reduce(
+        (score,token)=>score+(searchable.includes(token)?1:0),
+        0
+      );
+
+      return {product,score:tokenScore};
+    })
+    .filter(Boolean)
+    .sort((a,b)=>b.score-a.score);
+
+  if(brandCandidates.length){
+    if(brandCandidates.length===1)return brandCandidates[0].product.image;
+    if(brandCandidates[0].score>brandCandidates[1].score)return brandCandidates[0].product.image;
+    if(brandCandidates[0].score>=1)return brandCandidates[0].product.image;
+  }
+
+  let fuzzyBest=null;
+  let fuzzyScore=0;
 
   products
     .filter(product=>product.image)
@@ -166,13 +197,13 @@ function masterImageFor(item){
       if(wantedSize&&productSize&&wantedSize!==productSize)return;
 
       const score=nameSimilarity(product.name,item.name);
-      if(score>=0.82&&score>bestScore){
-        best=product;
-        bestScore=score;
+      if(score>=0.82&&score>fuzzyScore){
+        fuzzyBest=product;
+        fuzzyScore=score;
       }
     });
 
-  return best?.image||"";
+  return fuzzyBest?.image||"";
 }
 
 async function authorize(){
