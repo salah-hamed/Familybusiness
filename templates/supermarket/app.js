@@ -37,6 +37,22 @@ function money(v){return `${Number(v||0).toLocaleString("ar-EG")} جنيه`;}
 function escapeHTML(v){return String(v??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;");}
 function qtyFor(id){return cart.get(id)||0;}
 
+function categoryEmoji(value){
+  const text=String(value||"");
+  if(/مياه|مشروبات|عصائر/.test(text))return "🥤";
+  if(/ألبان|بيض|جبن/.test(text))return "🥛";
+  if(/أرز|مكرونة|بقول|دقيق|سكر/.test(text))return "🌾";
+  if(/زيوت|سمن/.test(text))return "🫗";
+  if(/سناكس|بسكويت|شوكولاتة|حلويات/.test(text))return "🍫";
+  if(/منظفات|منزل|ورقيات/.test(text))return "🧽";
+  if(/عناية/.test(text))return "🧴";
+  if(/مجمدات/.test(text))return "❄️";
+  if(/لحوم|دواجن/.test(text))return "🍗";
+  if(/أسماك/.test(text))return "🐟";
+  if(/خضروات|فواكه/.test(text))return "🥬";
+  return "🛍️";
+}
+
 async function init(){
   if(!projectId){showClosed("رابط المشروع غير مكتمل.");return;}
 
@@ -144,11 +160,20 @@ async function loadProductsPage({reset=false}={}){
 
 function renderProducts(){
   const q=$("searchInput").value.trim().toLowerCase();
-  const visible=products.filter(p=>(category==="الكل"||(p.category||"أخرى")===category)&&(!q||String(p.name||"").toLowerCase().includes(q)));
+  const visible=products.filter(p=>
+    (category==="الكل"||(p.category||"أخرى")===category)
+    && (
+      !q
+      || [p.name,p.size,p.category]
+        .some(value=>String(value||"").toLowerCase().includes(q))
+    )
+  );
   $("emptyProducts").classList.toggle("hidden",visible.length>0);
   $("productsGrid").innerHTML=visible.map(p=>{
     const qty=qtyFor(p.productId);
-    const image=p.image?`<img src="${escapeHTML(p.image)}" alt="">`:"🛍️";
+    const image=p.image
+      ?`<img src="${escapeHTML(p.image)}" alt="" loading="lazy">`
+      :`<span>${categoryEmoji(p.category)}</span>`;
     return `<article class="productCard">
       <div class="productImage">${image}</div>
       <h3>${escapeHTML(p.name)}</h3>
