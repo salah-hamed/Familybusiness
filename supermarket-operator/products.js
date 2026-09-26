@@ -113,6 +113,39 @@ function categoryEmoji(category){
   return "🛒";
 }
 
+function baseProductName(value){
+  return normalizeLookup(value)
+    .replace(/\b\d+(?:\.\d+)?\s*(ml|l|kg|g|مل|لتر|كجم|جم|قطعه|قطع|عبوه|عبوات|رول|كيس|اكياس|pcs?)\b/g," ")
+    .replace(/\s+/g," ")
+    .trim();
+}
+
+function nameSimilarity(a,b){
+  const compact=value=>baseProductName(value).replace(/\s+/g,"");
+  const left=compact(a);
+  const right=compact(b);
+
+  if(!left||!right)return 0;
+  if(left===right)return 1;
+
+  const pairs=value=>value.length<2?[value]:Array.from({length:value.length-1},(_,index)=>value.slice(index,index+2));
+  const aPairs=pairs(left);
+  const bPairs=pairs(right);
+  const counts=new Map();
+
+  bPairs.forEach(pair=>counts.set(pair,(counts.get(pair)||0)+1));
+
+  let overlap=0;
+  aPairs.forEach(pair=>{
+    const count=counts.get(pair)||0;
+    if(!count)return;
+    overlap++;
+    counts.set(pair,count-1);
+  });
+
+  return (2*overlap)/(aPairs.length+bPairs.length);
+}
+
 function masterImageFor(item){
   if(item.image)return item.image;
 
@@ -122,38 +155,24 @@ function masterImageFor(item){
   );
   if(direct?.image)return direct.image;
 
-  const brand=normalizeLookup(item.brand);
   const wantedSize=sizeKey(item.size,item.name);
+  let best=null;
+  let bestScore=0;
 
-  if(!brand)return "";
-
-  const masterTokens=item.masterId
-    .split("-")
-    .map(normalizeLookup)
-    .filter(token=>
-      token.length>2
-      && !/^\d/.test(token)
-      && !["water","milk","oil","soap","gel"].includes(token)
-    );
-
-  const candidates=products
+  products
     .filter(product=>product.image)
-    .map(product=>{
-      const name=normalizeLookup(product.name);
+    .forEach(product=>{
       const productSize=sizeKey(product.size,product.name);
-      if(!name.includes(brand))return null;
-      if(wantedSize&&productSize&&wantedSize!==productSize)return null;
+      if(wantedSize&&productSize&&wantedSize!==productSize)return;
 
-      const tokenScore=masterTokens.reduce((score,token)=>score+(name.includes(token)?1:0),0);
-      return {product,score:tokenScore};
-    })
-    .filter(Boolean)
-    .sort((a,b)=>b.score-a.score);
+      const score=nameSimilarity(product.name,item.name);
+      if(score>=0.82&&score>bestScore){
+        best=product;
+        bestScore=score;
+      }
+    });
 
-  if(!candidates.length)return "";
-  if(candidates.length===1)return candidates[0].product.image;
-  if(candidates[0].score>candidates[1].score)return candidates[0].product.image;
-  return "";
+  return best?.image||"";
 }
 
 async function authorize(){
@@ -320,6 +339,7 @@ function renderStoreProducts(){
           <label>التصنيف<input class="editCategory" value="${escapeHTML(product.category||"أخرى")}"></label>
           <label>الحجم<input class="editSize" value="${escapeHTML(product.size||"")}"></label>
           <label>السعر<input class="editPrice" type="number" min="0" step="0.25" value="${Number(product.price||0)}"></label>
+          <label>رابط الصورة<input class="editImage" value="${escapeHTML(product.image||"")}" placeholder="https://..."></label>
         </div>
 
         <div class="productControls">
@@ -350,7 +370,8 @@ function renderStoreProducts(){
           name:card.querySelector(".editName").value,
           category:card.querySelector(".editCategory").value,
           size:card.querySelector(".editSize").value,
-          price:card.querySelector(".editPrice").value
+          price:card.querySelector(".editPrice").value,
+          image:card.querySelector(".editImage").value
         });
         await loadProducts();
       }catch(e){
