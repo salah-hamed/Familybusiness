@@ -346,9 +346,17 @@ export async function bulkAddMasterProducts(projectId, actorUid, selections = []
       const master = findMasterProduct(item?.masterId);
       if (!master || existingMasterIds.has(master.masterId)) return null;
 
+      const equivalent = findProductDuplicate(current, {
+        name: master.name,
+        size: master.size,
+        masterId: master.masterId
+      });
+      if (equivalent) return null;
+
       return {
         master,
-        price: normalizePrice(item?.price ?? master.referencePrice ?? 0)
+        price: normalizePrice(item?.price ?? master.referencePrice ?? 0),
+        image: clean(item?.image || master.image)
       };
     })
     .filter(Boolean);
@@ -360,7 +368,7 @@ export async function bulkAddMasterProducts(projectId, actorUid, selections = []
   const batch = writeBatch(db);
   const now = serverTimestamp();
 
-  rows.forEach(({ master, price }) => {
+  rows.forEach(({ master, price, image }) => {
     const ref = doc(productsCollection(projectId), `master_${master.masterId}`);
 
     batch.set(ref, {
@@ -370,7 +378,7 @@ export async function bulkAddMasterProducts(projectId, actorUid, selections = []
       category: clean(master.category || "أخرى"),
       size: clean(master.size),
       barcode: "",
-      image: clean(master.image),
+      image: clean(image || master.image),
       price,
       inStock: true,
       isActive: true,
@@ -456,14 +464,6 @@ export async function updateStoreProduct(projectId, productId, actorUid, updates
   next.updatedAt = serverTimestamp();
 
   await updateDoc(ref, next);
-
-  if (
-    "category" in updates
-    || "inStock" in updates
-    || "isActive" in updates
-  ) {
-    await syncSupermarketCatalogMeta(projectId);
-  }
 }
 
 export async function findStoreProductByBarcode(projectId, barcode) {
