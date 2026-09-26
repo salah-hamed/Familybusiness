@@ -266,7 +266,6 @@ onAuthStateChanged(auth,async user=>{
   try{
     await syncLegacyMasterProductDetails(projectId,currentUser.uid);
     await loadProducts();
-    await refreshSupermarketCatalogMeta(projectId);
   }catch(e){
     $("masterCatalogMessage").innerText=`المكتبة جاهزة، لكن تعذر استكمال مزامنة بعض بيانات المتجر: ${e.message}`;
   }
@@ -299,6 +298,7 @@ function refreshStoreCategoryFilter(){
 
 async function loadProducts(){
   products=await listStoreProducts(projectId);
+  await refreshSupermarketCatalogMeta(projectId,products);
 
   for(const id of [...selectedStoreProducts]){
     if(!products.some(item=>item.productId===id))selectedStoreProducts.delete(id);
