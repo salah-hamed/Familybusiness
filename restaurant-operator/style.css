@@ -17,3 +17,5 @@
 .menuItemThumb{width:88px;height:88px;border-radius:16px;background:#fff3e8;overflow:hidden;display:grid;place-items:center;font-size:32px;border:1px solid var(--line)}
 .menuItemThumb img{width:100%;height:100%;object-fit:cover}
 @media(max-width:700px){.mediaPreviewCard{grid-template-columns:1fr}.logoPreviewWrap{justify-items:start}.menuItemWithImage{grid-template-columns:70px 1fr}.menuItemThumb{width:70px;height:70px}.menuItemWithImage>.pill{grid-column:2}}
+
+.menuDraftPreview{display:flex;align-items:center;gap:12px;margin:12px 0;padding:12px;border:1px dashed var(--line);border-radius:14px;background:#fffaf7}
