@@ -82,7 +82,7 @@ service cloud.firestore {
       && role in ["pickup_agent","delivery_agent"]
     )
     || (
-      projectData(projectId).template == "restaurant"
+      projectData(projectId).template in ["restaurant","bakery"]
       && role == "rider"
     );
   }
@@ -107,7 +107,7 @@ service cloud.firestore {
 
   function restaurantPartnerReady(projectId){
    return projectAvailable(projectId)
-    && projectData(projectId).template == "restaurant"
+    && projectData(projectId).template in ["restaurant","bakery"]
     && projectData(projectId).operatingModel == "partner_operated"
     && projectData(projectId).operatorId is string
     && projectData(projectId).operatorId.size() > 0
@@ -129,7 +129,7 @@ service cloud.firestore {
       && supermarketPartnerReady(projectId)
     )
     || (
-      templateType == "restaurant"
+      templateType in ["restaurant","bakery"]
       && restaurantPartnerReady(projectId)
     );
   }
@@ -449,8 +449,18 @@ service cloud.firestore {
 
 
   function validRestaurantOrder(projectId){
-   return request.resource.data.templateType == "restaurant"
-    && request.resource.data.serviceType == "restaurant_delivery"
+   return request.resource.data.templateType in ["restaurant","bakery"]
+    && request.resource.data.templateType == projectData(projectId).template
+    && (
+      (
+        request.resource.data.templateType == "restaurant"
+        && request.resource.data.serviceType == "restaurant_delivery"
+      )
+      || (
+        request.resource.data.templateType == "bakery"
+        && request.resource.data.serviceType == "bakery_delivery"
+      )
+    )
     && restaurantPartnerReady(projectId)
     && restaurantExists(projectId)
     && restaurantData(projectId).isAcceptingOrders == true
@@ -587,22 +597,22 @@ service cloud.firestore {
      || (request.resource.data.templateType == "carwash" && validCarwashOrder(request.resource.data.projectId))
      || (request.resource.data.templateType == "laundry" && laundryAcceptingOrders(request.resource.data.projectId) && validLaundryOrder(request.resource.data.projectId))
      || (request.resource.data.templateType == "supermarket" && validSupermarketOrder(request.resource.data.projectId))
-     || (request.resource.data.templateType == "restaurant" && validRestaurantOrder(request.resource.data.projectId))
+     || (request.resource.data.templateType in ["restaurant","bakery"] && validRestaurantOrder(request.resource.data.projectId))
     );
 
    allow read: if isAdmin()
     || (
-      resource.data.templateType in ["supermarket","laundry","restaurant"]
+      resource.data.templateType in ["supermarket","laundry","restaurant","bakery"]
       && isProjectOperator(resource.data.projectId)
     )
     || (
-      !(resource.data.templateType in ["supermarket","laundry","restaurant"])
+      !(resource.data.templateType in ["supermarket","laundry","restaurant","bakery"])
       && ownsProject(resource.data.projectId)
     );
 
    allow update: if (
     (
-      !(resource.data.templateType in ["supermarket","laundry","restaurant"])
+      !(resource.data.templateType in ["supermarket","laundry","restaurant","bakery"])
       && (isAdmin() || ownsProject(resource.data.projectId))
       && request.resource.data.projectId == resource.data.projectId
       && request.resource.data.providerId == resource.data.providerId
@@ -847,7 +857,7 @@ service cloud.firestore {
     )
     ||
     (
-      resource.data.templateType == "restaurant"
+      resource.data.templateType in ["restaurant","bakery"]
       && (isAdmin() || isProjectOperator(resource.data.projectId))
       && request.resource.data.projectId == resource.data.projectId
       && request.resource.data.providerId == resource.data.providerId
@@ -943,7 +953,7 @@ service cloud.firestore {
 
    allow delete: if isAdmin()
     || (
-      !(resource.data.templateType in ["supermarket","laundry","restaurant"])
+      !(resource.data.templateType in ["supermarket","laundry","restaurant","bakery"])
       && ownsProject(resource.data.projectId)
     );
   }
@@ -1243,7 +1253,7 @@ service cloud.firestore {
     && request.resource.data.isAcceptingOrders is bool
     && projectExists(restaurantId)
     && projectData(restaurantId).ownerId == request.auth.uid
-    && projectData(restaurantId).template == "restaurant"
+    && projectData(restaurantId).template in ["restaurant","bakery"]
     && projectData(restaurantId).operatingModel == "partner_operated"
     && projectData(restaurantId).operatorId == restaurantId
     && operatorExists(restaurantId)
@@ -1305,6 +1315,8 @@ service cloud.firestore {
      && request.resource.data.name.size() > 0
      && request.resource.data.category is string
      && request.resource.data.description is string
+     && request.resource.data.unit is string
+     && request.resource.data.unit.size() > 0
      && request.resource.data.price is number
      && request.resource.data.price >= 0
      && request.resource.data.image is string
@@ -1313,7 +1325,7 @@ service cloud.firestore {
      && request.resource.data.createdBy == request.auth.uid
      && request.resource.data.updatedBy == request.auth.uid
      && request.resource.data.keys().hasOnly([
-       "itemId","projectId","name","category","description","price","image",
+       "itemId","projectId","name","category","description","unit","price","image",
        "isAvailable","isActive","createdBy","createdAt","updatedBy","updatedAt"
      ]);
 
@@ -1326,6 +1338,13 @@ service cloud.firestore {
      && request.resource.data.name.size() > 0
      && request.resource.data.category is string
      && request.resource.data.description is string
+     && (
+       !("unit" in request.resource.data)
+       || (
+         request.resource.data.unit is string
+         && request.resource.data.unit.size() > 0
+       )
+     )
      && request.resource.data.price is number
      && request.resource.data.price >= 0
      && request.resource.data.image is string
@@ -1333,7 +1352,7 @@ service cloud.firestore {
      && request.resource.data.isActive is bool
      && request.resource.data.updatedBy == request.auth.uid
      && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-       "name","category","description","price","image","isAvailable",
+       "name","category","description","unit","price","image","isAvailable",
        "isActive","updatedBy","updatedAt"
      ]);
 
@@ -1690,14 +1709,14 @@ service cloud.firestore {
 
   match /orderTracking/{trackingToken} {
    allow get: if resource.data.trackingToken == trackingToken
-    && resource.data.templateType in ["supermarket","restaurant"]
+    && resource.data.templateType in ["supermarket","restaurant","bakery"]
     && trackingTemplateReady(resource.data.projectId, resource.data.templateType);
 
    allow list: if false;
 
    allow create: if request.resource.data.trackingToken == trackingToken
     && trackingToken.size() >= 40
-    && request.resource.data.templateType in ["supermarket","restaurant"]
+    && request.resource.data.templateType in ["supermarket","restaurant","bakery"]
     && request.resource.data.projectId is string
     && request.resource.data.orderId is string
     && request.resource.data.status == "new"
@@ -1811,7 +1830,7 @@ service cloud.firestore {
       && request.resource.data.status == "earned"
       && request.resource.data.paidAt == null
       && isProjectOperator(request.resource.data.projectId)
-      && projectData(request.resource.data.projectId).template in ["supermarket","laundry","restaurant"]
+      && projectData(request.resource.data.projectId).template in ["supermarket","laundry","restaurant","bakery"]
       && commissionAgreementExists(request.resource.data.projectId)
       && commissionAgreementData(request.resource.data.projectId).status == "accepted"
       && request.resource.data.userId
@@ -1824,7 +1843,7 @@ service cloud.firestore {
         == request.resource.data.projectId
       && (
         (
-          getAfter(orderPath(request.resource.data.orderId)).data.templateType in ["supermarket","restaurant"]
+          getAfter(orderPath(request.resource.data.orderId)).data.templateType in ["supermarket","restaurant","bakery"]
           && getAfter(orderPath(request.resource.data.orderId)).data.status == "delivered"
         )
         ||

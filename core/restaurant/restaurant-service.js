@@ -19,9 +19,9 @@ function numberOrZero(value) {
   return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : 0;
 }
 
-function color(value) {
+function color(value, fallback = "#EA580C") {
   const v = clean(value);
-  return /^#[0-9a-fA-F]{6}$/.test(v) ? v : "#EA580C";
+  return /^#[0-9a-fA-F]{6}$/.test(v) ? v : fallback;
 }
 
 export async function getRestaurant(projectId) {
@@ -33,6 +33,7 @@ export async function getRestaurant(projectId) {
 export async function createOrResumeRestaurantSetup({
   projectId,
   ownerId,
+  templateId = "restaurant",
   name,
   contactName = "",
   phone = "",
@@ -43,7 +44,7 @@ export async function createOrResumeRestaurantSetup({
   slogan = "",
   logo = "",
   coverImage = "",
-  primaryColor = "#EA580C",
+  primaryColor = "",
   deliveryFee = 0,
   commissionAmount
 }) {
@@ -55,7 +56,8 @@ export async function createOrResumeRestaurantSetup({
 
   if (
     project.ownerId !== ownerId ||
-    project.template !== "restaurant" ||
+    !["restaurant","bakery"].includes(templateId) ||
+    project.template !== templateId ||
     project.operatingModel !== "partner_operated"
   ) {
     throw new Error("RESTAURANT_PROJECT_MISMATCH");
@@ -67,7 +69,7 @@ export async function createOrResumeRestaurantSetup({
     await createOperator({
       projectDocId: projectId,
       ownerId,
-      templateId: "restaurant",
+      templateId,
       name,
       contactName,
       phone,
@@ -102,7 +104,7 @@ export async function createOrResumeRestaurantSetup({
     slogan: clean(slogan),
     logo: clean(logo),
     coverImage: clean(coverImage),
-    primaryColor: color(primaryColor),
+    primaryColor: color(primaryColor, templateId === "bakery" ? "#D97706" : "#EA580C"),
     deliveryFee: numberOrZero(deliveryFee),
     currency: "EGP",
     isAcceptingOrders: true,
@@ -117,7 +119,7 @@ export async function createOrResumeRestaurantSetup({
     projectDocId: projectId,
     ownerId,
     operatorId: projectId,
-    templateId: "restaurant",
+    templateId,
     amount: commissionAmount
   });
 

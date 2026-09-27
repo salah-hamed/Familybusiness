@@ -64,6 +64,22 @@ const projects = [
     creationEnabled: true
   },
   {
+    id: "bakery",
+    templateId: "bakery",
+    title: "مخبوزات وفطائر",
+    description: "اربط مخبزًا أو محل فطائر بمشروعك، واترك له إدارة المنتجات والأسعار والطلبات والتوصيل مقابل عمولة متفق عليها لكل طلب مكتمل.",
+    icon: "🥐",
+    color: "#D97706",
+    folder: "bakery",
+    status: TEMPLATE_STATUS.ACTIVE,
+    visibility: TEMPLATE_VISIBILITY.PUBLIC,
+    operatingModel: OPERATING_MODEL.PARTNER,
+    version: 1,
+    sortOrder: 3,
+    isFeatured: true,
+    creationEnabled: true
+  },
+  {
     id: "laundry",
     templateId: "laundry",
     title: "غسيل وكي الملابس",
@@ -75,7 +91,7 @@ const projects = [
     visibility: TEMPLATE_VISIBILITY.PUBLIC,
     operatingModel: OPERATING_MODEL.PARTNER,
     version: 3,
-    sortOrder: 3,
+    sortOrder: 4,
     isFeatured: false,
     creationEnabled: true
   },

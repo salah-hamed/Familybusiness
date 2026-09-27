@@ -98,6 +98,7 @@ async function loadRequestedMenu(projectId, lines = []) {
 
 export async function createRestaurantOrder({
   projectId,
+  templateType = "restaurant",
   customerName,
   customerPhone,
   customerAddress,
@@ -105,6 +106,10 @@ export async function createRestaurantOrder({
   notes = "",
   cart = []
 }) {
+  if (!["restaurant","bakery"].includes(templateType)) {
+    throw new Error("FOOD_TEMPLATE_NOT_SUPPORTED");
+  }
+
   const restaurantSnap = await getDoc(doc(db, "restaurants", projectId));
   if (!restaurantSnap.exists()) throw new Error("RESTAURANT_NOT_FOUND");
 
@@ -122,6 +127,7 @@ export async function createRestaurantOrder({
     return {
       itemId: item.itemId,
       name: item.name,
+      unit: clean(item.unit || "قطعة"),
       quantity,
       unitPrice,
       subtotal: money(quantity * unitPrice)
@@ -149,8 +155,8 @@ export async function createRestaurantOrder({
   batch.set(orderRef, {
     projectId,
     providerId: projectId,
-    templateType: "restaurant",
-    serviceType: "restaurant_delivery",
+    templateType,
+    serviceType: templateType === "bakery" ? "bakery_delivery" : "restaurant_delivery",
     status: "new",
     customerName: clean(customerName),
     customerPhone: clean(customerPhone),
@@ -174,7 +180,7 @@ export async function createRestaurantOrder({
     trackingToken,
     orderId: orderRef.id,
     projectId,
-    templateType: "restaurant",
+    templateType,
     status: "new",
     items,
     subtotal,
@@ -196,8 +202,8 @@ export async function createRestaurantOrder({
     legacyBatch.set(orderRef, {
       projectId,
       providerId: projectId,
-      templateType: "restaurant",
-      serviceType: "restaurant_delivery",
+      templateType,
+      serviceType: templateType === "bakery" ? "bakery_delivery" : "restaurant_delivery",
       status: "new",
       customerName: clean(customerName),
       customerPhone: clean(customerPhone),
@@ -229,7 +235,7 @@ export async function createRestaurantOrder({
   };
 }
 
-export async function acceptRestaurantOrder({ projectId, orderId, actorUid }) {
+export async function acceptRestaurantOrder({ projectId, orderId, actorUid, templateType = "restaurant" }) {
   const orderRef = doc(db, "orders", orderId);
   const [orderSnap, restaurantSnap] = await Promise.all([
     getDoc(orderRef),
@@ -243,7 +249,7 @@ export async function acceptRestaurantOrder({ projectId, orderId, actorUid }) {
 
   if (
     order.projectId !== projectId ||
-    order.templateType !== "restaurant" ||
+    order.templateType !== templateType ||
     order.status !== "new"
   ) {
     throw new Error("ORDER_NOT_ACCEPTABLE");
@@ -260,6 +266,7 @@ export async function acceptRestaurantOrder({ projectId, orderId, actorUid }) {
     return {
       itemId: item.itemId,
       name: item.name,
+      unit: clean(item.unit || "قطعة"),
       quantity,
       unitPrice,
       subtotal: money(quantity * unitPrice)
@@ -301,12 +308,12 @@ export async function acceptRestaurantOrder({ projectId, orderId, actorUid }) {
   return { subtotal, deliveryFee, total };
 }
 
-export async function listRestaurantOrders(projectId, { pageSize = 50 } = {}) {
+export async function listRestaurantOrders(projectId, { pageSize = 50, templateType = "restaurant" } = {}) {
   const snap = await getDocs(
     query(
       collection(db, "orders"),
       where("projectId", "==", projectId),
-      where("templateType", "==", "restaurant"),
+      where("templateType", "==", templateType),
       limit(Math.max(1, Math.min(100, Number(pageSize) || 50)))
     )
   );
@@ -316,7 +323,7 @@ export async function listRestaurantOrders(projectId, { pageSize = 50 } = {}) {
     .sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 }
 
-export async function getRestaurantOrderTracking(trackingToken) {
+export async function getRestaurantOrderTracking(trackingToken, templateType = "restaurant") {
   const token = clean(trackingToken);
   if (!token) return null;
 
@@ -324,23 +331,27 @@ export async function getRestaurantOrderTracking(trackingToken) {
   if (!snap.exists()) return null;
 
   const data = snap.data();
-  if (data.templateType !== "restaurant") return null;
+  if (data.templateType !== templateType) return null;
 
   return { trackingToken: token, ...data };
 }
 
-export function subscribeRestaurantOrderTracking(trackingToken, onChange, onError = null) {
+export function subscribeRestaurantOrderTracking(trackingToken, onChange, onError = null, templateType = "restaurant") {
   const token = clean(trackingToken);
   if (!token) return () => {};
 
   return onSnapshot(
     trackingRef(token),
-    snap => onChange?.(snap.exists() ? { trackingToken: token, ...snap.data() } : null),
+    snap => {
+      if (!snap.exists()) return onChange?.(null);
+      const data = { trackingToken: token, ...snap.data() };
+      onChange?.(data.templateType === templateType ? data : null);
+    },
     error => onError?.(error)
   );
 }
 
-export async function changeRestaurantOrderStatus({ projectId, orderId, actorUid, nextStatus }) {
+export async function changeRestaurantOrderStatus({ projectId, orderId, actorUid, nextStatus, templateType = "restaurant" }) {
   const orderRef = doc(db, "orders", orderId);
   const orderSnap = await getDoc(orderRef);
 
@@ -348,7 +359,7 @@ export async function changeRestaurantOrderStatus({ projectId, orderId, actorUid
 
   const order = orderSnap.data();
 
-  if (order.projectId !== projectId || order.templateType !== "restaurant") {
+  if (order.projectId !== projectId || order.templateType !== templateType) {
     throw new Error("ORDER_PROJECT_MISMATCH");
   }
 
@@ -397,7 +408,7 @@ export async function changeRestaurantOrderStatus({ projectId, orderId, actorUid
     const freshAgreement = agreementSnap.data();
     const amount = getEffectiveCommissionAmount(freshAgreement);
 
-    if (freshOrder.projectId !== projectId || freshOrder.templateType !== "restaurant") {
+    if (freshOrder.projectId !== projectId || freshOrder.templateType !== templateType) {
       throw new Error("ORDER_PROJECT_MISMATCH");
     }
     if (!allowedNextRestaurantStatuses(freshOrder.status).includes("delivered")) {

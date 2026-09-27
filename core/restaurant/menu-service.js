@@ -129,6 +129,7 @@ export async function addRestaurantMenuItem(projectId, actorUid, data = {}) {
     name,
     category,
     description: clean(data.description),
+    unit: clean(data.unit || "قطعة"),
     price: money(data.price),
     image: clean(data.image),
     isAvailable: data.isAvailable !== false,
@@ -158,6 +159,7 @@ export async function updateRestaurantMenuItem(projectId, itemId, actorUid, upda
   }
   if ("category" in updates) next.category = clean(updates.category || "أخرى");
   if ("description" in updates) next.description = clean(updates.description);
+  if ("unit" in updates) next.unit = clean(updates.unit || "قطعة");
   if ("price" in updates) next.price = money(updates.price);
   if ("image" in updates) next.image = clean(updates.image);
   if ("isAvailable" in updates) next.isAvailable = updates.isAvailable === true;
