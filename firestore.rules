@@ -16,11 +16,23 @@ service cloud.firestore {
   function userExists(uid){ return exists(userPath(uid)); }
   function userData(uid){ return get(userPath(uid)).data; }
   function isAdmin(){ return signedIn() && userExists(request.auth.uid) && userData(request.auth.uid).role == "admin"; }
-  function subscriptionActive(uid){ return userExists(uid) && userData(uid).isActive == true && userData(uid).subscriptionStatus == "active" && (!("subscriptionExpiresAt" in userData(uid)) || userData(uid).subscriptionExpiresAt > request.time); }
+  function subscriptionActive(uid){
+   let user = userData(uid);
+   return userExists(uid)
+    && user.isActive == true
+    && user.subscriptionStatus == "active"
+    && (!("subscriptionExpiresAt" in user) || user.subscriptionExpiresAt > request.time);
+  }
   function projectExists(projectId){ return exists(projectPath(projectId)); }
   function projectData(projectId){ return get(projectPath(projectId)).data; }
   function ownsProject(projectId){ return signedIn() && projectExists(projectId) && projectData(projectId).ownerId == request.auth.uid; }
-  function projectAvailable(projectId){ return projectExists(projectId) && projectData(projectId).isActive == true && projectData(projectId).status == "active" && subscriptionActive(projectData(projectId).ownerId); }
+  function projectAvailable(projectId){
+   let project = projectData(projectId);
+   return projectExists(projectId)
+    && project.isActive == true
+    && project.status == "active"
+    && subscriptionActive(project.ownerId);
+  }
   function carwashSubscriptionExists(subscriptionId){ return exists(carwashSubscriptionPath(subscriptionId)); }
   function carwashSubscriptionData(subscriptionId){ return get(carwashSubscriptionPath(subscriptionId)).data; }
   function operatorExists(operatorId){ return exists(operatorPath(operatorId)); }
@@ -87,40 +99,46 @@ service cloud.firestore {
     );
   }
   function supermarketPartnerReady(projectId){
+   let project = projectData(projectId);
+   let operator = operatorData(project.operatorId);
+   let agreement = commissionAgreementData(projectId);
    return projectAvailable(projectId)
-    && projectData(projectId).template == "supermarket"
-    && projectData(projectId).operatingModel == "partner_operated"
-    && projectData(projectId).operatorId is string
-    && projectData(projectId).operatorId.size() > 0
-    && operatorExists(projectData(projectId).operatorId)
-    && operatorData(projectData(projectId).operatorId).status == "active"
-    && operatorData(projectData(projectId).operatorId).agreementStatus == "accepted"
-    && operatorData(projectData(projectId).operatorId).isActive == true
+    && project.template == "supermarket"
+    && project.operatingModel == "partner_operated"
+    && project.operatorId is string
+    && project.operatorId.size() > 0
+    && operatorExists(project.operatorId)
+    && operator.status == "active"
+    && operator.agreementStatus == "accepted"
+    && operator.isActive == true
     && commissionAgreementExists(projectId)
-    && commissionAgreementData(projectId).status == "accepted"
-    && commissionAgreementData(projectId).currentAmount is number
-    && commissionAgreementData(projectId).currentAmount >= 0
-    && commissionAgreementData(projectId).acceptedVersion is number
-    && commissionAgreementData(projectId).acceptedVersion > 0;
+    && agreement.status == "accepted"
+    && agreement.currentAmount is number
+    && agreement.currentAmount >= 0
+    && agreement.acceptedVersion is number
+    && agreement.acceptedVersion > 0;
   }
 
 
   function restaurantPartnerReady(projectId){
+   let project = projectData(projectId);
+   let operator = operatorData(project.operatorId);
+   let agreement = commissionAgreementData(projectId);
    return projectAvailable(projectId)
-    && projectData(projectId).template in ["restaurant","bakery"]
-    && projectData(projectId).operatingModel == "partner_operated"
-    && projectData(projectId).operatorId is string
-    && projectData(projectId).operatorId.size() > 0
-    && operatorExists(projectData(projectId).operatorId)
-    && operatorData(projectData(projectId).operatorId).status == "active"
-    && operatorData(projectData(projectId).operatorId).agreementStatus == "accepted"
-    && operatorData(projectData(projectId).operatorId).isActive == true
+    && project.template in ["restaurant","bakery"]
+    && project.operatingModel == "partner_operated"
+    && project.operatorId is string
+    && project.operatorId.size() > 0
+    && operatorExists(project.operatorId)
+    && operator.status == "active"
+    && operator.agreementStatus == "accepted"
+    && operator.isActive == true
     && commissionAgreementExists(projectId)
-    && commissionAgreementData(projectId).status == "accepted"
-    && commissionAgreementData(projectId).currentAmount is number
-    && commissionAgreementData(projectId).currentAmount >= 0
-    && commissionAgreementData(projectId).acceptedVersion is number
-    && commissionAgreementData(projectId).acceptedVersion > 0;
+    && agreement.status == "accepted"
+    && agreement.currentAmount is number
+    && agreement.currentAmount >= 0
+    && agreement.acceptedVersion is number
+    && agreement.acceptedVersion > 0;
   }
 
   function trackingTemplateReady(projectId, templateType){
@@ -145,26 +163,30 @@ service cloud.firestore {
 
 
   function laundryPartnerReady(projectId){
+   let project = projectData(projectId);
+   let operator = operatorData(project.operatorId);
+   let agreement = commissionAgreementData(projectId);
    return projectAvailable(projectId)
-    && projectData(projectId).template == "laundry"
-    && projectData(projectId).operatingModel == "partner_operated"
-    && projectData(projectId).operatorId is string
-    && projectData(projectId).operatorId.size() > 0
-    && operatorExists(projectData(projectId).operatorId)
-    && operatorData(projectData(projectId).operatorId).status == "active"
-    && operatorData(projectData(projectId).operatorId).agreementStatus == "accepted"
-    && operatorData(projectData(projectId).operatorId).isActive == true
+    && project.template == "laundry"
+    && project.operatingModel == "partner_operated"
+    && project.operatorId is string
+    && project.operatorId.size() > 0
+    && operatorExists(project.operatorId)
+    && operator.status == "active"
+    && operator.agreementStatus == "accepted"
+    && operator.isActive == true
     && commissionAgreementExists(projectId)
-    && commissionAgreementData(projectId).status == "accepted"
-    && commissionAgreementData(projectId).currentAmount is number
-    && commissionAgreementData(projectId).currentAmount >= 0
-    && commissionAgreementData(projectId).acceptedVersion is number
-    && commissionAgreementData(projectId).acceptedVersion > 0;
+    && agreement.status == "accepted"
+    && agreement.currentAmount is number
+    && agreement.currentAmount >= 0
+    && agreement.acceptedVersion is number
+    && agreement.acceptedVersion > 0;
   }
   function laundryAcceptingOrders(projectId){
+   let laundry = laundryData(projectId);
    return laundryPartnerReady(projectId)
     && laundryExists(projectId)
-    && laundryData(projectId).isAcceptingOrders == true;
+    && laundry.isAcceptingOrders == true;
   }
 
   function validLaundryTransition(fromStatus, fromStage, toStatus, toStage){
