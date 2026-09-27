@@ -291,13 +291,29 @@ service cloud.firestore {
     && request.resource.data.providerId == request.resource.data.projectId
     && request.resource.data.status == "new"
     && request.resource.data.createdAt == request.time
-    && projectAvailable(projectId)
     && validOrderTemplate(projectId);
+  }
+
+  function validOrderByTemplate(projectId, templateType){
+   return templateType == "supermarket"
+    ? validSupermarketOrder(projectId)
+    : templateType == "restaurant"
+      ? validRestaurantOrder(projectId)
+      : templateType == "bakery"
+        ? validRestaurantOrder(projectId)
+        : templateType == "laundry"
+          ? (laundryAcceptingOrders(projectId) && validLaundryOrder(projectId))
+          : templateType == "cleaning"
+            ? validCleaningOrder(projectId)
+            : templateType == "carwash"
+              ? validCarwashOrder(projectId)
+              : false;
   }
 
   function validCleaningOrder(projectId){
    let config = projectData(projectId).priceConfig;
    return request.resource.data.templateType == "cleaning"
+    && projectAvailable(projectId)
     && validCustomerInput()
     && request.resource.data.rooms is number
     && request.resource.data.rooms >= 0
@@ -352,6 +368,7 @@ service cloud.firestore {
   function validCarwashOrder(projectId){
    let config = projectData(projectId).priceConfig;
    return request.resource.data.templateType == "carwash"
+    && projectAvailable(projectId)
     && validCustomerInput()
     && request.resource.data.serviceType == "external_car_wash"
     && request.resource.data.planType == "monthly_new"
@@ -687,30 +704,11 @@ service cloud.firestore {
   }
 
   match /orders/{orderId} {
-   allow create: if request.resource.data.templateType == "supermarket"
-    && validOrderEnvelope(request.resource.data.projectId)
-    && validSupermarketOrder(request.resource.data.projectId);
-
-   allow create: if request.resource.data.templateType == "restaurant"
-    && validOrderEnvelope(request.resource.data.projectId)
-    && validRestaurantOrder(request.resource.data.projectId);
-
-   allow create: if request.resource.data.templateType == "bakery"
-    && validOrderEnvelope(request.resource.data.projectId)
-    && validRestaurantOrder(request.resource.data.projectId);
-
-   allow create: if request.resource.data.templateType == "laundry"
-    && validOrderEnvelope(request.resource.data.projectId)
-    && laundryAcceptingOrders(request.resource.data.projectId)
-    && validLaundryOrder(request.resource.data.projectId);
-
-   allow create: if request.resource.data.templateType == "cleaning"
-    && validOrderEnvelope(request.resource.data.projectId)
-    && validCleaningOrder(request.resource.data.projectId);
-
-   allow create: if request.resource.data.templateType == "carwash"
-    && validOrderEnvelope(request.resource.data.projectId)
-    && validCarwashOrder(request.resource.data.projectId);
+   allow create: if validOrderEnvelope(request.resource.data.projectId)
+    && validOrderByTemplate(
+      request.resource.data.projectId,
+      request.resource.data.templateType
+    );
 
    allow read: if isAdmin()
     || (
