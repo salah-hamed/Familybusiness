@@ -5,6 +5,10 @@ import {
   doc,
   getDoc,
   getDocs,
+  query,
+  where,
+  limit,
+  startAfter,
   setDoc,
   updateDoc,
   deleteDoc,
@@ -25,16 +29,91 @@ function money(value) {
   return Math.round(n * 100) / 100;
 }
 
-export async function listRestaurantMenu(projectId, { availableOnly = false } = {}) {
+async function syncRestaurantMenuMeta(projectId) {
   const snap = await getDocs(menuCollection(projectId));
+  const items = snap.docs.map(item => item.data());
+  const categories = [...new Set(
+    items
+      .filter(item => item.isActive === true && item.isAvailable === true)
+      .map(item => clean(item.category || "أخرى"))
+      .filter(Boolean)
+  )].sort((a,b) => a.localeCompare(b, "ar"));
+
+  try {
+    await updateDoc(doc(db, "restaurants", projectId), {
+      menuCategories: categories,
+      menuItemCount: items.length,
+      menuUpdatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    if (String(error?.code || "").includes("permission-denied")) {
+      return {
+        categories,
+        itemCount: items.length,
+        metadataPendingRules: true
+      };
+    }
+    throw error;
+  }
+
+  return {
+    categories,
+    itemCount: items.length,
+    metadataPendingRules: false
+  };
+}
+
+export async function listRestaurantMenu(projectId, { availableOnly = false } = {}) {
+  const ref = menuCollection(projectId);
+  const snap = availableOnly
+    ? await getDocs(
+        query(
+          ref,
+          where("isActive", "==", true),
+          where("isAvailable", "==", true)
+        )
+      )
+    : await getDocs(ref);
 
   return snap.docs
     .map(item => ({ itemId: item.id, ...item.data() }))
-    .filter(item => !availableOnly || (item.isActive === true && item.isAvailable === true))
     .sort((a,b) => {
       const categoryOrder = String(a.category || "").localeCompare(String(b.category || ""), "ar");
       return categoryOrder || String(a.name || "").localeCompare(String(b.name || ""), "ar");
     });
+}
+
+export async function listRestaurantMenuPage(
+  projectId,
+  {
+    pageSize = 40,
+    cursor = null,
+    category = "الكل"
+  } = {}
+) {
+  const constraints = [
+    where("isActive", "==", true),
+    where("isAvailable", "==", true)
+  ];
+
+  if (category && category !== "الكل") {
+    constraints.push(where("category", "==", category));
+  }
+
+  if (cursor) {
+    constraints.push(startAfter(cursor));
+  }
+
+  const size = Math.max(1, Math.min(100, Number(pageSize) || 40));
+  constraints.push(limit(size));
+
+  const snap = await getDocs(query(menuCollection(projectId), ...constraints));
+
+  return {
+    items: snap.docs.map(item => ({ itemId: item.id, ...item.data() })),
+    cursor: snap.docs.at(-1) || cursor,
+    hasMore: snap.size === size
+  };
 }
 
 export async function addRestaurantMenuItem(projectId, actorUid, data = {}) {
@@ -60,6 +139,7 @@ export async function addRestaurantMenuItem(projectId, actorUid, data = {}) {
     updatedAt: serverTimestamp()
   });
 
+  await syncRestaurantMenuMeta(projectId);
   return ref.id;
 }
 
@@ -87,6 +167,7 @@ export async function updateRestaurantMenuItem(projectId, itemId, actorUid, upda
   next.updatedAt = serverTimestamp();
 
   await updateDoc(ref, next);
+  await syncRestaurantMenuMeta(projectId);
 }
 
 export async function deleteRestaurantMenuItem(projectId, itemId) {
@@ -96,4 +177,9 @@ export async function deleteRestaurantMenuItem(projectId, itemId) {
   if (!snap.exists()) throw new Error("MENU_ITEM_NOT_FOUND");
 
   await deleteDoc(ref);
+  await syncRestaurantMenuMeta(projectId);
+}
+
+export async function refreshRestaurantMenuMeta(projectId) {
+  return syncRestaurantMenuMeta(projectId);
 }

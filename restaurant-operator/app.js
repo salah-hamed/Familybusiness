@@ -136,30 +136,91 @@ $("rejectAgreementBtn").onclick=async()=>{
   }catch(e){$("agreementMessage").innerText=e.message;}
 };
 
-async function loadOperations(){
-  currentRestaurant=await getRestaurant(projectId);
-  currentAgreement=await getCommissionAgreement(projectId);
-  $("statCommission").innerText=money(currentAgreement?.currentAmount||0);
+function renderRestaurantSettings(){
+  if(!currentRestaurant)return;
 
-  if(currentRestaurant){
-    $("restaurantTitle").innerText=currentRestaurant.name||"المطعم";
-    $("settingsName").value=currentRestaurant.name||"";
-    $("settingsCuisine").value=currentRestaurant.cuisine||"";
-    $("settingsSlogan").value=currentRestaurant.slogan||"";
-    $("settingsPhone").value=currentRestaurant.phone||"";
-    $("settingsWhatsapp").value=currentRestaurant.whatsapp||"";
-    $("settingsAddress").value=currentRestaurant.address||"";
-    $("settingsLocation").value=currentRestaurant.location||"";
-    $("settingsDeliveryFee").value=currentRestaurant.deliveryFee??0;
-    $("settingsLogo").value=currentRestaurant.logo||"";
-    $("settingsCover").value=currentRestaurant.coverImage||"";
-    $("settingsColor").value=currentRestaurant.primaryColor||"#EA580C";
-    $("acceptingOrders").checked=currentRestaurant.isAcceptingOrders===true;
+  $("restaurantTitle").innerText=currentRestaurant.name||"المطعم";
+  $("settingsName").value=currentRestaurant.name||"";
+  $("settingsCuisine").value=currentRestaurant.cuisine||"";
+  $("settingsSlogan").value=currentRestaurant.slogan||"";
+  $("settingsPhone").value=currentRestaurant.phone||"";
+  $("settingsWhatsapp").value=currentRestaurant.whatsapp||"";
+  $("settingsAddress").value=currentRestaurant.address||"";
+  $("settingsLocation").value=currentRestaurant.location||"";
+  $("settingsDeliveryFee").value=currentRestaurant.deliveryFee??0;
+  $("settingsLogo").value=currentRestaurant.logo||"";
+  $("settingsCover").value=currentRestaurant.coverImage||"";
+  $("settingsColor").value=currentRestaurant.primaryColor||"#EA580C";
+  $("acceptingOrders").checked=currentRestaurant.isAcceptingOrders===true;
 
-    const customerUrl=new URL("../templates/restaurant/",location.href);
-    customerUrl.searchParams.set("project",projectId);
-    $("customerOrderLink").value=customerUrl.toString();
+  const customerUrl=new URL("../templates/restaurant/",location.href);
+  customerUrl.searchParams.set("project",projectId);
+  $("customerOrderLink").value=customerUrl.toString();
+
+  updateMediaPreview();
+}
+
+function safeImageUrl(value){
+  const raw=String(value||"").trim();
+  if(!raw)return "";
+  try{
+    const url=new URL(raw);
+    return url.protocol==="https:"?url.toString():"";
+  }catch{
+    return "";
   }
+}
+
+function testImageUrl(value,timeout=8000){
+  const url=safeImageUrl(value);
+  if(!String(value||"").trim())return Promise.resolve(true);
+  if(!url)return Promise.resolve(false);
+
+  return new Promise(resolve=>{
+    const image=new Image();
+    const timer=setTimeout(()=>resolve(false),timeout);
+    image.onload=()=>{clearTimeout(timer);resolve(true);};
+    image.onerror=()=>{clearTimeout(timer);resolve(false);};
+    image.src=url;
+  });
+}
+
+function setPreview(containerId,url,fallback){
+  const node=$(containerId);
+  node.innerHTML="";
+
+  if(!url){
+    node.innerHTML=`<span>${fallback}</span>`;
+    return;
+  }
+
+  const image=document.createElement("img");
+  image.src=url;
+  image.alt="";
+  image.referrerPolicy="no-referrer";
+  image.onload=()=>{
+    $("mediaPreviewMessage").innerText="";
+  };
+  image.onerror=()=>{
+    node.innerHTML=`<span>${fallback}</span>`;
+    $("mediaPreviewMessage").innerText="تعذر عرض إحدى الصور. استخدم رابط صورة مباشر HTTPS يسمح بالعرض الخارجي.";
+  };
+  node.appendChild(image);
+}
+
+function updateMediaPreview(){
+  setPreview("logoPreview",safeImageUrl($("settingsLogo").value),"🍽️");
+  setPreview("coverPreview",safeImageUrl($("settingsCover").value),"لا توجد صورة غلاف");
+}
+
+async function loadOperations(){
+  [currentRestaurant,currentAgreement]=await Promise.all([
+    getRestaurant(projectId),
+    getCommissionAgreement(projectId)
+  ]);
+
+  $("statCommission").innerText=money(currentAgreement?.currentAmount||0);
+  renderRestaurantSettings();
 
   const menuUrl=new URL("./menu.html",location.href);
   menuUrl.searchParams.set("project",projectId);
@@ -167,7 +228,18 @@ async function loadOperations(){
   $("menuLink").href=menuUrl.toString();
   $("openMenuBtn").href=menuUrl.toString();
 
-  await Promise.all([loadRiders(),loadOrders()]);
+  const [ridersResult,ordersResult]=await Promise.allSettled([
+    loadRiders(),
+    loadOrders()
+  ]);
+
+  if(ridersResult.status==="rejected"){
+    $("riderMessage").innerText=`تعذر تحميل المندوبين: ${ridersResult.reason?.message||"UNKNOWN_ERROR"}`;
+  }
+
+  if(ordersResult.status==="rejected"){
+    $("ordersMessage").innerText=`تعذر تحميل الطلبات: ${ordersResult.reason?.message||"UNKNOWN_ERROR"}`;
+  }
 }
 
 $("copyCustomerLinkBtn").onclick=async()=>{
@@ -177,8 +249,21 @@ $("copyCustomerLinkBtn").onclick=async()=>{
 };
 
 $("saveSettingsBtn").onclick=async()=>{
-  $("settingsMessage").innerText="جاري الحفظ...";
+  $("settingsMessage").innerText="جاري فحص الصور وحفظ الإعدادات...";
+  $("saveSettingsBtn").disabled=true;
+
   try{
+    const logo=$("settingsLogo").value.trim();
+    const coverImage=$("settingsCover").value.trim();
+
+    const [logoOk,coverOk]=await Promise.all([
+      testImageUrl(logo),
+      testImageUrl(coverImage)
+    ]);
+
+    if(!logoOk)throw new Error("رابط اللوجو غير صالح أو الموقع يمنع عرض الصورة خارجيًا.");
+    if(!coverOk)throw new Error("رابط صورة الغلاف غير صالح أو الموقع يمنع عرض الصورة خارجيًا.");
+
     await updateRestaurantSettings(projectId,{
       name:$("settingsName").value,
       cuisine:$("settingsCuisine").value,
@@ -188,15 +273,34 @@ $("saveSettingsBtn").onclick=async()=>{
       address:$("settingsAddress").value,
       location:$("settingsLocation").value,
       deliveryFee:$("settingsDeliveryFee").value,
-      logo:$("settingsLogo").value,
-      coverImage:$("settingsCover").value,
+      logo,
+      coverImage,
       primaryColor:$("settingsColor").value,
       isAcceptingOrders:$("acceptingOrders").checked
     });
+
     $("settingsMessage").innerText="تم حفظ الهوية والإعدادات ✅";
-    await loadOperations();
-  }catch(e){$("settingsMessage").innerText=e.message;}
+    currentRestaurant=await getRestaurant(projectId);
+    renderRestaurantSettings();
+
+    Promise.allSettled([loadRiders(),loadOrders()]).then(([ridersResult,ordersResult])=>{
+      if(ridersResult.status==="rejected"){
+        $("riderMessage").innerText=`تم حفظ الإعدادات، لكن تعذر تحديث المندوبين: ${ridersResult.reason?.message||"UNKNOWN_ERROR"}`;
+      }
+      if(ordersResult.status==="rejected"){
+        $("ordersMessage").innerText=`تم حفظ الإعدادات، لكن تعذر تحديث الطلبات: ${ordersResult.reason?.message||"UNKNOWN_ERROR"}`;
+      }
+    });
+  }catch(e){
+    $("settingsMessage").innerText=`تعذر الحفظ: ${e.message}`;
+  }finally{
+    $("saveSettingsBtn").disabled=false;
+  }
 };
+
+["settingsLogo","settingsCover"].forEach(id=>{
+  $(id).addEventListener("input",updateMediaPreview);
+});
 
 async function loadRiders(){
   riders=await listProjectWorkers(projectId,{role:WORKER_ROLES.RIDER,activeOnly:false});
@@ -236,7 +340,8 @@ function activeRiderOptions(){
 }
 
 async function loadOrders(){
-  orders=await listRestaurantOrders(projectId);
+  $("ordersMessage").innerText="";
+  orders=await listRestaurantOrders(projectId,{pageSize:50});
   $("statNew").innerText=orders.filter(o=>o.status==="new").length;
   $("statActive").innerText=orders.filter(o=>!["new","delivered","canceled"].includes(o.status)).length;
   $("statDelivered").innerText=orders.filter(o=>o.status==="delivered").length;
@@ -291,5 +396,12 @@ async function loadOrders(){
   });
 }
 
-$("refreshOrdersBtn").onclick=loadOrders;
+$("refreshOrdersBtn").onclick=async()=>{
+  $("ordersMessage").innerText="جاري تحديث الطلبات...";
+  try{
+    await loadOrders();
+  }catch(e){
+    $("ordersMessage").innerText=`تعذر تحديث الطلبات: ${e.message}`;
+  }
+};
 document.querySelectorAll(".tabs button").forEach(btn=>btn.onclick=()=>document.getElementById(btn.dataset.target)?.scrollIntoView({behavior:"smooth",block:"start"}));
