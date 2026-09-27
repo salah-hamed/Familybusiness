@@ -9,6 +9,9 @@ import {
   getDocs,
   query,
   where,
+  limit,
+  writeBatch,
+  onSnapshot,
   updateDoc,
   runTransaction,
   serverTimestamp
@@ -33,6 +36,27 @@ function money(value) {
   const n = Number(value);
   if (!Number.isFinite(n) || n < 0) throw new Error("INVALID_MONEY_VALUE");
   return Math.round(n * 100) / 100;
+}
+
+function randomTrackingToken() {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return [...bytes].map(value => value.toString(16).padStart(2, "0")).join("");
+}
+
+function trackingRef(token) {
+  return doc(db, "orderTracking", token);
+}
+
+function trackingPatchFromOrder(order = {}, overrides = {}) {
+  return {
+    status: overrides.status ?? order.status,
+    items: overrides.items ?? order.items ?? [],
+    subtotal: overrides.subtotal ?? order.subtotal ?? 0,
+    deliveryFee: overrides.deliveryFee ?? order.deliveryFee ?? 0,
+    total: overrides.total ?? order.total ?? order.price ?? 0,
+    updatedAt: serverTimestamp()
+  };
 }
 
 export function allowedNextRestaurantStatuses(status) {
@@ -109,11 +133,20 @@ export async function createRestaurantOrder({
   if (!clean(customerPhone)) throw new Error("CUSTOMER_PHONE_REQUIRED");
   if (!clean(customerAddress)) throw new Error("CUSTOMER_ADDRESS_REQUIRED");
 
+  if (items.length !== requestedLines.length) {
+    throw new Error("ORDER_ITEM_UNAVAILABLE");
+  }
+
   const subtotal = money(items.reduce((sum,item) => sum + item.subtotal, 0));
   const deliveryFee = money(restaurant.deliveryFee || 0);
   const total = money(subtotal + deliveryFee);
+  const trackingToken = randomTrackingToken();
 
-  const ref = await addDoc(collection(db, "orders"), {
+  const orderRef = doc(collection(db, "orders"));
+  const publicTrackingRef = trackingRef(trackingToken);
+  const batch = writeBatch(db);
+
+  batch.set(orderRef, {
     projectId,
     providerId: projectId,
     templateType: "restaurant",
@@ -133,10 +166,67 @@ export async function createRestaurantOrder({
     commissionEligible: false,
     commissionLocked: false,
     commissionAmount: 0,
+    trackingToken,
     createdAt: serverTimestamp()
   });
 
-  return { orderId: ref.id, subtotal, deliveryFee, total };
+  batch.set(publicTrackingRef, {
+    trackingToken,
+    orderId: orderRef.id,
+    projectId,
+    templateType: "restaurant",
+    status: "new",
+    items,
+    subtotal,
+    deliveryFee,
+    total,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  });
+
+  let trackingEnabled = true;
+
+  try {
+    await batch.commit();
+  } catch (error) {
+    const code = String(error?.code || "");
+    if (!code.includes("permission-denied")) throw error;
+
+    const legacyBatch = writeBatch(db);
+    legacyBatch.set(orderRef, {
+      projectId,
+      providerId: projectId,
+      templateType: "restaurant",
+      serviceType: "restaurant_delivery",
+      status: "new",
+      customerName: clean(customerName),
+      customerPhone: clean(customerPhone),
+      customerAddress: clean(customerAddress),
+      location: clean(location),
+      notes: clean(notes),
+      items,
+      subtotal,
+      deliveryFee,
+      total,
+      price: total,
+      pricingLocked: false,
+      commissionEligible: false,
+      commissionLocked: false,
+      commissionAmount: 0,
+      createdAt: serverTimestamp()
+    });
+    await legacyBatch.commit();
+    trackingEnabled = false;
+  }
+
+  return {
+    orderId: orderRef.id,
+    trackingToken: trackingEnabled ? trackingToken : "",
+    trackingEnabled,
+    subtotal,
+    deliveryFee,
+    total
+  };
 }
 
 export async function acceptRestaurantOrder({ projectId, orderId, actorUid }) {
@@ -180,7 +270,9 @@ export async function acceptRestaurantOrder({ projectId, orderId, actorUid }) {
   const deliveryFee = money(restaurantSnap.data().deliveryFee || 0);
   const total = money(subtotal + deliveryFee);
 
-  await updateDoc(orderRef, {
+  const batch = writeBatch(db);
+
+  batch.update(orderRef, {
     items,
     subtotal,
     deliveryFee,
@@ -194,16 +286,58 @@ export async function acceptRestaurantOrder({ projectId, orderId, actorUid }) {
     statusUpdatedBy: actorUid
   });
 
+  if (order.trackingToken) {
+    batch.update(trackingRef(order.trackingToken), trackingPatchFromOrder(order, {
+      status: "accepted",
+      items,
+      subtotal,
+      deliveryFee,
+      total
+    }));
+  }
+
+  await batch.commit();
+
   return { subtotal, deliveryFee, total };
 }
 
-export async function listRestaurantOrders(projectId) {
-  const snap = await getDocs(query(collection(db, "orders"), where("projectId", "==", projectId)));
+export async function listRestaurantOrders(projectId, { pageSize = 50 } = {}) {
+  const snap = await getDocs(
+    query(
+      collection(db, "orders"),
+      where("projectId", "==", projectId),
+      where("templateType", "==", "restaurant"),
+      limit(Math.max(1, Math.min(100, Number(pageSize) || 50)))
+    )
+  );
 
   return snap.docs
     .map(item => ({ orderId: item.id, ...item.data() }))
-    .filter(item => item.templateType === "restaurant")
     .sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+}
+
+export async function getRestaurantOrderTracking(trackingToken) {
+  const token = clean(trackingToken);
+  if (!token) return null;
+
+  const snap = await getDoc(trackingRef(token));
+  if (!snap.exists()) return null;
+
+  const data = snap.data();
+  if (data.templateType !== "restaurant") return null;
+
+  return { trackingToken: token, ...data };
+}
+
+export function subscribeRestaurantOrderTracking(trackingToken, onChange, onError = null) {
+  const token = clean(trackingToken);
+  if (!token) return () => {};
+
+  return onSnapshot(
+    trackingRef(token),
+    snap => onChange?.(snap.exists() ? { trackingToken: token, ...snap.data() } : null),
+    error => onError?.(error)
+  );
 }
 
 export async function changeRestaurantOrderStatus({ projectId, orderId, actorUid, nextStatus }) {
@@ -225,11 +359,21 @@ export async function changeRestaurantOrderStatus({ projectId, orderId, actorUid
   if (nextStatus === "accepted") throw new Error("USE_ACCEPT_RESTAURANT_ORDER");
 
   if (nextStatus !== "delivered") {
-    await updateDoc(orderRef, {
+    const batch = writeBatch(db);
+
+    batch.update(orderRef, {
       status: nextStatus,
       statusUpdatedAt: serverTimestamp(),
       statusUpdatedBy: actorUid
     });
+
+    if (order.trackingToken) {
+      batch.update(trackingRef(order.trackingToken), trackingPatchFromOrder(order, {
+        status: nextStatus
+      }));
+    }
+
+    await batch.commit();
     return;
   }
 
@@ -272,6 +416,13 @@ export async function changeRestaurantOrderStatus({ projectId, orderId, actorUid
       commissionAmount: amount,
       commissionAgreementVersion: Number(freshAgreement.acceptedVersion || freshAgreement.version || 1)
     });
+
+    if (freshOrder.trackingToken) {
+      transaction.update(trackingRef(freshOrder.trackingToken), {
+        ...trackingPatchFromOrder(freshOrder, { status: "delivered" }),
+        deliveredAt: serverTimestamp()
+      });
+    }
 
     transaction.set(ledgerRef, {
       userId: freshAgreement.ownerId,
