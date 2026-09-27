@@ -222,3 +222,17 @@ test("public order create still accepts bounded valid customer data", async () =
     })
   );
 });
+
+test("user cannot expand display name beyond the validated limit", async () => {
+  const uid = "bounded_name_user";
+  await seedUser(uid, { name: "Safe Name" });
+  const db = testEnv.authenticatedContext(uid).firestore();
+
+  await assertFails(
+    setDoc(
+      doc(db, "users", uid),
+      { name: "x".repeat(101) },
+      { merge: true }
+    )
+  );
+});
