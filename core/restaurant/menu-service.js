@@ -5,6 +5,10 @@ import {
   doc,
   getDoc,
   getDocs,
+  query,
+  where,
+  limit,
+  startAfter,
   setDoc,
   updateDoc,
   deleteDoc,
@@ -26,15 +30,56 @@ function money(value) {
 }
 
 export async function listRestaurantMenu(projectId, { availableOnly = false } = {}) {
-  const snap = await getDocs(menuCollection(projectId));
+  const ref = menuCollection(projectId);
+  const snap = availableOnly
+    ? await getDocs(
+        query(
+          ref,
+          where("isActive", "==", true),
+          where("isAvailable", "==", true)
+        )
+      )
+    : await getDocs(ref);
 
   return snap.docs
     .map(item => ({ itemId: item.id, ...item.data() }))
-    .filter(item => !availableOnly || (item.isActive === true && item.isAvailable === true))
     .sort((a,b) => {
       const categoryOrder = String(a.category || "").localeCompare(String(b.category || ""), "ar");
       return categoryOrder || String(a.name || "").localeCompare(String(b.name || ""), "ar");
     });
+}
+
+export async function listRestaurantMenuPage(
+  projectId,
+  {
+    pageSize = 40,
+    cursor = null,
+    category = "الكل"
+  } = {}
+) {
+  const constraints = [
+    where("isActive", "==", true),
+    where("isAvailable", "==", true)
+  ];
+
+  if (category && category !== "الكل") {
+    constraints.push(where("category", "==", category));
+  }
+
+  if (cursor) {
+    constraints.push(startAfter(cursor));
+  }
+
+  const size = Math.max(1, Math.min(100, Number(pageSize) || 40));
+  constraints.push(limit(size));
+
+  const snap = await getDocs(query(menuCollection(projectId), ...constraints));
+
+  return {
+    items: snap.docs.map(item => ({ itemId: item.id, ...item.data() })),
+    cursor: snap.docs.at(-1) || cursor,
+    hasMore: snap.size === size
+  };
 }
 
 export async function addRestaurantMenuItem(projectId, actorUid, data = {}) {
