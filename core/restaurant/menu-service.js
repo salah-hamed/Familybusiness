@@ -39,13 +39,28 @@ async function syncRestaurantMenuMeta(projectId) {
       .filter(Boolean)
   )].sort((a,b) => a.localeCompare(b, "ar"));
 
-  await updateDoc(doc(db, "restaurants", projectId), {
-    menuCategories: categories,
-    menuItemCount: items.length,
-    menuUpdatedAt: serverTimestamp()
-  });
+  try {
+    await updateDoc(doc(db, "restaurants", projectId), {
+      menuCategories: categories,
+      menuItemCount: items.length,
+      menuUpdatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    if (String(error?.code || "").includes("permission-denied")) {
+      return {
+        categories,
+        itemCount: items.length,
+        metadataPendingRules: true
+      };
+    }
+    throw error;
+  }
 
-  return { categories, itemCount: items.length };
+  return {
+    categories,
+    itemCount: items.length,
+    metadataPendingRules: false
+  };
 }
 
 export async function listRestaurantMenu(projectId, { availableOnly = false } = {}) {
