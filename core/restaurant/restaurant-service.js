@@ -33,6 +33,7 @@ export async function getRestaurant(projectId) {
 export async function createOrResumeRestaurantSetup({
   projectId,
   ownerId,
+  templateId = "restaurant",
   name,
   contactName = "",
   phone = "",
@@ -55,7 +56,8 @@ export async function createOrResumeRestaurantSetup({
 
   if (
     project.ownerId !== ownerId ||
-    project.template !== "restaurant" ||
+    !["restaurant","bakery"].includes(templateId) ||
+    project.template !== templateId ||
     project.operatingModel !== "partner_operated"
   ) {
     throw new Error("RESTAURANT_PROJECT_MISMATCH");
@@ -67,7 +69,7 @@ export async function createOrResumeRestaurantSetup({
     await createOperator({
       projectDocId: projectId,
       ownerId,
-      templateId: "restaurant",
+      templateId,
       name,
       contactName,
       phone,
@@ -117,7 +119,7 @@ export async function createOrResumeRestaurantSetup({
     projectDocId: projectId,
     ownerId,
     operatorId: projectId,
-    templateId: "restaurant",
+    templateId,
     amount: commissionAmount
   });
 
