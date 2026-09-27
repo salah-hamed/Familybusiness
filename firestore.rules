@@ -226,6 +226,62 @@ service cloud.firestore {
   }
 
 
+  function validPublicOrderInput(){
+   return request.resource.data.customerName is string
+    && request.resource.data.customerName.size() > 0
+    && request.resource.data.customerName.size() <= 100
+    && request.resource.data.customerPhone is string
+    && request.resource.data.customerPhone.size() > 0
+    && request.resource.data.customerPhone.size() <= 30
+    && request.resource.data.customerAddress is string
+    && request.resource.data.customerAddress.size() > 0
+    && request.resource.data.customerAddress.size() <= 500
+    && (!("location" in request.resource.data)
+      || (request.resource.data.location is string && request.resource.data.location.size() <= 500))
+    && (!("notes" in request.resource.data)
+      || (request.resource.data.notes is string && request.resource.data.notes.size() <= 1000))
+    && request.resource.data.createdAt == request.time;
+  }
+
+  function validActiveProjectCreate(projectDocId){
+   let templateId = request.resource.data.projectId;
+   return templateId in ["supermarket","restaurant","bakery","laundry"]
+    && projectDocId == request.auth.uid + "_" + templateId
+    && request.resource.data.ownerId == request.auth.uid
+    && request.resource.data.template == templateId
+    && request.resource.data.operatingModel == "partner_operated"
+    && (
+      (templateId == "laundry" && request.resource.data.templateVersion == 3)
+      || (templateId in ["supermarket","restaurant","bakery"] && request.resource.data.templateVersion == 1)
+    )
+    && request.resource.data.operatorId == ""
+    && request.resource.data.partnerSetupStatus == "not_started"
+    && request.resource.data.businessName is string
+    && request.resource.data.businessName.size() > 0
+    && request.resource.data.businessName.size() <= 120
+    && request.resource.data.status == "active"
+    && request.resource.data.isActive == true
+    && request.resource.data.createdAt == request.time
+    && request.resource.data.whatsappNumber is string
+    && request.resource.data.whatsappNumber.size() <= 30
+    && request.resource.data.instapayLink is string
+    && request.resource.data.instapayLink.size() <= 500
+    && request.resource.data.logo is string
+    && request.resource.data.logo.size() <= 1000
+    && request.resource.data.coverImage is string
+    && request.resource.data.coverImage.size() <= 1000
+    && request.resource.data.primaryColor is string
+    && request.resource.data.primaryColor.size() <= 32
+    && request.resource.data.priceConfig is map
+    && request.resource.data.priceConfig.keys().hasOnly([])
+    && request.resource.data.keys().hasOnly([
+      "ownerId","projectId","template","operatingModel","templateVersion",
+      "operatorId","partnerSetupStatus","businessName","status","isActive",
+      "createdAt","whatsappNumber","instapayLink","logo","coverImage",
+      "primaryColor","priceConfig"
+    ]);
+  }
+
   function validOrderTemplate(projectId){
    return request.resource.data.templateType is string
     && projectData(projectId).template == request.resource.data.templateType;
@@ -515,7 +571,31 @@ service cloud.firestore {
 
 
   match /users/{uid} {
-   allow create: if signedIn() && request.auth.uid == uid && request.resource.data.uid == uid && request.resource.data.isActive == false && request.resource.data.subscriptionStatus == "pending" && request.resource.data.initialActivationPaid == false && request.resource.data.billingCycle == "initial" && request.resource.data.referralQualified == false && request.resource.data.referredByUserId is string && request.resource.data.referredByUserId != request.auth.uid && !("role" in request.resource.data);
+   allow create: if signedIn()
+    && request.auth.uid == uid
+    && request.resource.data.uid == uid
+    && request.resource.data.name is string
+    && request.resource.data.name.size() > 0
+    && request.resource.data.name.size() <= 100
+    && request.resource.data.email is string
+    && request.resource.data.email.size() > 0
+    && request.resource.data.email.size() <= 254
+    && request.resource.data.projectType == ""
+    && request.resource.data.isActive == false
+    && request.resource.data.subscriptionStatus == "pending"
+    && request.resource.data.initialActivationPaid == false
+    && request.resource.data.billingCycle == "initial"
+    && request.resource.data.referralQualified == false
+    && request.resource.data.referredByUserId is string
+    && request.resource.data.referredByUserId.size() <= 128
+    && request.resource.data.referredByUserId != request.auth.uid
+    && request.resource.data.createdAt == request.time
+    && !("role" in request.resource.data)
+    && request.resource.data.keys().hasOnly([
+      "uid","name","email","projectType","isActive","subscriptionStatus",
+      "initialActivationPaid","billingCycle","referredByUserId",
+      "referralQualified","createdAt"
+    ]);
    allow get: if isAdmin() || (signedIn() && request.auth.uid == uid);
    allow list: if isAdmin();
    allow update: if isAdmin() || (signedIn() && request.auth.uid == uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name"]));
@@ -525,7 +605,7 @@ service cloud.firestore {
   match /projects/{projectId} {
    allow get: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid) || (resource.data.isActive == true && resource.data.status == "active" && subscriptionActive(resource.data.ownerId));
    allow list: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid);
-   allow create: if signedIn() && request.resource.data.ownerId == request.auth.uid && request.resource.data.projectId is string && projectId == request.auth.uid + "_" + request.resource.data.projectId && subscriptionActive(request.auth.uid);
+   allow create: if signedIn() && subscriptionActive(request.auth.uid) && validActiveProjectCreate(projectId);
    allow update: if isAdmin() || (
     signedIn()
     && resource.data.ownerId == request.auth.uid
@@ -583,7 +663,7 @@ service cloud.firestore {
     && request.resource.data.operatorId == resource.data.operatorId
     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["priceConfig"])
    );
-   allow delete: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid);
+   allow delete: if isAdmin();
   }
 
   match /orders/{orderId} {
@@ -591,6 +671,7 @@ service cloud.firestore {
     && request.resource.data.providerId == request.resource.data.projectId
     && request.resource.data.status == "new"
     && projectAvailable(request.resource.data.projectId)
+    && validPublicOrderInput()
     && validOrderTemplate(request.resource.data.projectId)
     && (
      (request.resource.data.templateType == "cleaning" && validCleaningOrder(request.resource.data.projectId))
