@@ -51,6 +51,141 @@ async function seedProject(projectId, data) {
   });
 }
 
+async function seedPartnerRuntime(templateId, suffix = "runtime") {
+  const ownerId = `owner_${templateId}_${suffix}`;
+  const projectId = `${ownerId}_${templateId}`;
+
+  await testEnv.withSecurityRulesDisabled(async context => {
+    const db = context.firestore();
+    await setDoc(doc(db, "users", ownerId), {
+      uid: ownerId,
+      name: "Owner",
+      email: `${ownerId}@example.com`,
+      isActive: true,
+      subscriptionStatus: "active"
+    });
+    await setDoc(doc(db, "projects", projectId), {
+      ownerId,
+      projectId: templateId,
+      template: templateId,
+      operatingModel: "partner_operated",
+      templateVersion: templateId === "laundry" ? 3 : 1,
+      operatorId: projectId,
+      partnerSetupStatus: "active",
+      businessName: "Test Business",
+      status: "active",
+      isActive: true,
+      priceConfig: templateId === "laundry" ? {
+        shirtWash: 10, shirtIron: 5,
+        trousersWash: 12, trousersIron: 6,
+        tshirtWash: 8, tshirtIron: 4,
+        dressWash: 20, dressIron: 10,
+        galabeyaWash: 18, galabeyaIron: 9,
+        suitWash: 30, suitIron: 15,
+        shoesWash: 25
+      } : {}
+    });
+    await setDoc(doc(db, "operators", projectId), {
+      authUid: `operator_${templateId}`,
+      status: "active",
+      agreementStatus: "accepted",
+      isActive: true
+    });
+    await setDoc(doc(db, "commissionAgreements", projectId), {
+      status: "accepted",
+      currentAmount: 5,
+      acceptedVersion: 1
+    });
+
+    if (templateId === "supermarket") {
+      await setDoc(doc(db, "supermarkets", projectId), {
+        isAcceptingOrders: true,
+        deliveryFee: 10
+      });
+    }
+
+    if (templateId === "restaurant" || templateId === "bakery") {
+      await setDoc(doc(db, "restaurants", projectId), {
+        isAcceptingOrders: true,
+        deliveryFee: 10
+      });
+    }
+
+    if (templateId === "laundry") {
+      await setDoc(doc(db, "laundries", projectId), {
+        isAcceptingOrders: true
+      });
+    }
+  });
+
+  return { ownerId, projectId };
+}
+
+function baseCustomerOrder(projectId, templateType, serviceType) {
+  return {
+    projectId,
+    providerId: projectId,
+    templateType,
+    serviceType,
+    status: "new",
+    customerName: "عميل اختبار",
+    customerPhone: "01000000000",
+    customerAddress: "عنوان اختبار",
+    location: "",
+    notes: "",
+    createdAt: serverTimestamp()
+  };
+}
+
+function partnerDeliveryOrder(projectId, templateType) {
+  return {
+    ...baseCustomerOrder(
+      projectId,
+      templateType,
+      templateType === "supermarket"
+        ? "supermarket_delivery"
+        : templateType === "bakery"
+          ? "bakery_delivery"
+          : "restaurant_delivery"
+    ),
+    items: [{ name: "اختبار", quantity: 1, unitPrice: 20, subtotal: 20 }],
+    subtotal: 20,
+    deliveryFee: 10,
+    total: 30,
+    price: 30,
+    pricingLocked: false,
+    commissionEligible: false,
+    commissionLocked: false,
+    commissionAmount: 0,
+    trackingToken: "a".repeat(40)
+  };
+}
+
+function laundryOrder(projectId) {
+  const item = (key, quantity, unitPrice) => ({
+    key,
+    service: "wash",
+    quantity,
+    unitPrice,
+    subtotal: quantity * unitPrice
+  });
+
+  return {
+    ...baseCustomerOrder(projectId, "laundry", "laundry_per_piece"),
+    items: [
+      item("shirt", 1, 10),
+      item("trousers", 0, 12),
+      item("tshirt", 0, 8),
+      item("dress", 0, 20),
+      item("galabeya", 0, 18),
+      item("suit", 0, 30),
+      item("shoes", 0, 25)
+    ],
+    totalPieces: 1,
+    price: 10
+  };
+}
+
 function activePartnerProject(uid, templateId, version = 1) {
   return {
     ownerId: uid,
@@ -73,18 +208,25 @@ function activePartnerProject(uid, templateId, version = 1) {
   };
 }
 
-test("active subscriber can create an approved active template", async () => {
-  const uid = "owner_active";
-  await seedUser(uid);
-  const db = testEnv.authenticatedContext(uid).firestore();
+for (const [templateId, version] of [
+  ["supermarket", 1],
+  ["restaurant", 1],
+  ["bakery", 1],
+  ["laundry", 3]
+]) {
+  test(`active subscriber can create approved template: ${templateId}`, async () => {
+    const uid = `owner_create_${templateId}`;
+    await seedUser(uid);
+    const db = testEnv.authenticatedContext(uid).firestore();
 
-  await assertSucceeds(
-    setDoc(
-      doc(db, "projects", `${uid}_supermarket`),
-      activePartnerProject(uid, "supermarket", 1)
-    )
-  );
-});
+    await assertSucceeds(
+      setDoc(
+        doc(db, "projects", `${uid}_${templateId}`),
+        activePartnerProject(uid, templateId, version)
+      )
+    );
+  });
+}
 
 test("subscriber cannot bypass registry to create paused Cleaning", async () => {
   const uid = "owner_cleaning";
@@ -233,6 +375,53 @@ test("user cannot expand display name beyond the validated limit", async () => {
       doc(db, "users", uid),
       { name: "x".repeat(101) },
       { merge: true }
+    )
+  );
+});
+
+test("new user profile accepts bounded registration fields", async () => {
+  const uid = "new_profile_user";
+  const db = testEnv.authenticatedContext(uid).firestore();
+
+  await assertSucceeds(
+    setDoc(doc(db, "users", uid), {
+      uid,
+      name: "مستخدم جديد",
+      email: "new@example.com",
+      projectType: "",
+      isActive: false,
+      subscriptionStatus: "pending",
+      initialActivationPaid: false,
+      billingCycle: "initial",
+      referredByUserId: "",
+      referralQualified: false,
+      createdAt: serverTimestamp()
+    })
+  );
+});
+
+for (const templateType of ["supermarket", "restaurant", "bakery"]) {
+  test(`valid public ${templateType} order passes partner readiness and input bounds`, async () => {
+    const { projectId } = await seedPartnerRuntime(templateType, "valid_order");
+    const db = testEnv.unauthenticatedContext().firestore();
+
+    await assertSucceeds(
+      setDoc(
+        doc(db, "orders", `valid_${templateType}_order`),
+        partnerDeliveryOrder(projectId, templateType)
+      )
+    );
+  });
+}
+
+test("valid public laundry order passes partner readiness and input bounds", async () => {
+  const { projectId } = await seedPartnerRuntime("laundry", "valid_order");
+  const db = testEnv.unauthenticatedContext().firestore();
+
+  await assertSucceeds(
+    setDoc(
+      doc(db, "orders", "valid_laundry_order"),
+      laundryOrder(projectId)
     )
   );
 });
