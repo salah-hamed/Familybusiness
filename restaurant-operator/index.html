@@ -63,6 +63,7 @@
         <div><span class="eyebrow">التشغيل</span><h2>الطلبات</h2></div>
         <button id="refreshOrdersBtn" class="secondary">تحديث</button>
       </div>
+      <p id="ordersMessage" class="message"></p>
       <div id="ordersList" class="stack"></div>
     </section>
 
@@ -101,6 +102,18 @@
         <label>رابط صورة الغلاف<input id="settingsCover" placeholder="https://..."></label>
         <label>اللون الرئيسي<input id="settingsColor" type="color" value="#EA580C"></label>
       </div>
+
+      <div class="mediaPreviewCard">
+        <div>
+          <span class="muted">معاينة صورة الغلاف</span>
+          <div id="coverPreview" class="coverPreview"><span>لا توجد صورة غلاف</span></div>
+        </div>
+        <div class="logoPreviewWrap">
+          <span class="muted">معاينة اللوجو</span>
+          <div id="logoPreview" class="logoPreview"><span>🍽️</span></div>
+        </div>
+      </div>
+      <p id="mediaPreviewMessage" class="message"></p>
 
       <label class="check"><input id="acceptingOrders" type="checkbox"> استقبال طلبات جديدة</label>
 
