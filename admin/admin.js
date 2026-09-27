@@ -5,6 +5,7 @@ import {
   REFERRAL_CONFIG,
   formatEgp
 } from "../core/config/platform-config.js";
+import { escapeHTML } from "../core/utils/helpers.js";
 
 import {
   collection,
@@ -183,9 +184,9 @@ async function loadUsers() {
     card.style.borderRadius = "12px";
 
     card.innerHTML = `
-      <p><b>${data.name || "بدون اسم"}</b></p>
-      <p>${data.email || ""}</p>
-      <p>الحالة: <b>${data.subscriptionStatus || "pending"}</b></p>
+      <p><b>${escapeHTML(data.name || "بدون اسم")}</b></p>
+      <p>${escapeHTML(data.email || "")}</p>
+      <p>الحالة: <b>${escapeHTML(data.subscriptionStatus || "pending")}</b></p>
       <p>أول اشتراك: ${initialAlreadyPaid ? "تم" : "لم يتم"}</p>
       <p>انتهاء الاشتراك: ${formatDate(data.subscriptionExpiresAt)}</p>
       <p>الإحالة: ${data.referredByUserId ? "موجودة" : "لا يوجد"}</p>
