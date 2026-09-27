@@ -50,7 +50,7 @@ function render(){
   $("projectSection").classList.toggle("hidden",!configured);
 
   if(!configured){
-    $("statusBanner").innerText="ابدأ بربط مطعم واحد بالمشروع وتحديد العمولة المقترحة.";
+    $("statusBanner").innerText="ابدأ بربط مخبز أو محل مخبوزات بالمشروع وتحديد العمولة المقترحة.";
     return;
   }
 
@@ -69,7 +69,7 @@ function render(){
   $("currentCommission").innerText=accepted?money(agreement.currentAmount):"لم تُعتمد بعد";
 
   $("restaurantMeta").innerHTML=[
-    ["نوع المطبخ",restaurant.cuisine||"—"],
+    ["نوع المخبوزات",restaurant.cuisine||"—"],
     ["المسؤول",restaurant.contactName||operator.contactName||"—"],
     ["الهاتف",restaurant.phone||operator.phone||"—"],
     ["واتساب",operator.whatsapp||restaurant.whatsapp||"—"],
@@ -159,7 +159,7 @@ $("proposeCommissionBtn").onclick=async()=>{
       templateId:"bakery",
       amount:$("newCommissionAmount").value
     });
-    $("commissionMessage").innerText="تم إرسال العمولة الجديدة للمطعم للموافقة ✅";
+    $("commissionMessage").innerText="تم إرسال العمولة الجديدة للمخبز للموافقة ✅";
     $("newCommissionAmount").value="";
     await refresh();
   }catch(e){
