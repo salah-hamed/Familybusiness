@@ -16,3 +16,18 @@ test("Restaurant/Bakery order query is sorted newest-first before limiting", () 
   assert.ok(startAfterAt > orderByAt, "cursor pagination must follow the ordered query");
   assert.ok(limitAt > orderByAt, "limit must be applied after server-side ordering");
 });
+
+test("ordered food-order query has a version-controlled composite index", () => {
+  const config = JSON.parse(readFileSync("firestore.indexes.json", "utf8"));
+  const found = config.indexes.some(index =>
+    index.collectionGroup === "orders"
+    && index.queryScope === "COLLECTION"
+    && JSON.stringify(index.fields) === JSON.stringify([
+      { fieldPath: "projectId", order: "ASCENDING" },
+      { fieldPath: "templateType", order: "ASCENDING" },
+      { fieldPath: "createdAt", order: "DESCENDING" }
+    ])
+  );
+
+  assert.equal(found, true);
+});
