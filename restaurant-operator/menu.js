@@ -34,7 +34,7 @@ function safeImageUrl(value){
   if(!raw)return "";
   try{
     const url=new URL(raw);
-    return ["https:","http:"].includes(url.protocol)?url.toString():"";
+    return url.protocol==="https:"?url.toString():"";
   }catch{
     return "";
   }
