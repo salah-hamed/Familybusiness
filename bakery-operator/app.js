@@ -150,7 +150,7 @@ function renderRestaurantSettings(){
   $("settingsDeliveryFee").value=currentRestaurant.deliveryFee??0;
   $("settingsLogo").value=currentRestaurant.logo||"";
   $("settingsCover").value=currentRestaurant.coverImage||"";
-  $("settingsColor").value=currentRestaurant.primaryColor||"#EA580C";
+  $("settingsColor").value=currentRestaurant.primaryColor||"#D97706";
   $("acceptingOrders").checked=currentRestaurant.isAcceptingOrders===true;
 
   const customerUrl=new URL("../templates/bakery/",location.href);
@@ -209,7 +209,7 @@ function setPreview(containerId,url,fallback){
 }
 
 function updateMediaPreview(){
-  setPreview("logoPreview",safeImageUrl($("settingsLogo").value),"🍽️");
+  setPreview("logoPreview",safeImageUrl($("settingsLogo").value),"🥐");
   setPreview("coverPreview",safeImageUrl($("settingsCover").value),"لا توجد صورة غلاف");
 }
 
@@ -347,7 +347,7 @@ async function loadOrders(){
   $("statDelivered").innerText=orders.filter(o=>o.status==="delivered").length;
 
   $("ordersList").innerHTML=orders.length?orders.map(o=>{
-    const items=(o.items||[]).map(i=>`${Number(i.quantity||0)} × ${escapeHTML(i.name)}`).join("<br>");
+    const items=(o.items||[]).map(i=>`${Number(i.quantity||0)} × ${escapeHTML(i.name)} (${escapeHTML(i.unit||"قطعة")})`).join("<br>");
     const next=allowedNextRestaurantStatuses(o.status);
     const canCancel=next.includes("canceled");
     const riderSelect=o.status==="ready"
