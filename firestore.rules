@@ -123,6 +123,17 @@ service cloud.firestore {
     && commissionAgreementData(projectId).acceptedVersion > 0;
   }
 
+  function trackingTemplateReady(projectId, templateType){
+   return (
+      templateType == "supermarket"
+      && supermarketPartnerReady(projectId)
+    )
+    || (
+      templateType == "restaurant"
+      && restaurantPartnerReady(projectId)
+    );
+  }
+
   function validSupermarketTransition(fromStatus, toStatus){
    return (fromStatus == "new" && toStatus in ["accepted","canceled"])
     || (fromStatus == "accepted" && toStatus in ["preparing","canceled"])
@@ -465,6 +476,8 @@ service cloud.firestore {
     && request.resource.data.commissionEligible == false
     && request.resource.data.commissionLocked == false
     && request.resource.data.commissionAmount == 0
+    && request.resource.data.trackingToken is string
+    && request.resource.data.trackingToken.size() >= 40
     && request.resource.data.keys().hasOnly([
       "projectId",
       "providerId",
@@ -485,6 +498,7 @@ service cloud.firestore {
       "commissionEligible",
       "commissionLocked",
       "commissionAmount",
+      "trackingToken",
       "createdAt"
     ]);
   }
@@ -1262,8 +1276,19 @@ service cloud.firestore {
     && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
       "name","contactName","phone","whatsapp","address","location","cuisine",
       "slogan","logo","coverImage","primaryColor","deliveryFee",
-      "isAcceptingOrders","updatedAt"
-    ]);
+      "isAcceptingOrders","menuCategories","menuItemCount","menuUpdatedAt","updatedAt"
+    ])
+    && (
+      !request.resource.data.diff(resource.data).affectedKeys().hasAny(["menuCategories"])
+      || request.resource.data.menuCategories is list
+    )
+    && (
+      !request.resource.data.diff(resource.data).affectedKeys().hasAny(["menuItemCount"])
+      || (
+        request.resource.data.menuItemCount is number
+        && request.resource.data.menuItemCount >= 0
+      )
+    );
 
    allow delete: if isAdmin();
 
@@ -1665,14 +1690,14 @@ service cloud.firestore {
 
   match /orderTracking/{trackingToken} {
    allow get: if resource.data.trackingToken == trackingToken
-    && resource.data.templateType == "supermarket"
-    && supermarketPartnerReady(resource.data.projectId);
+    && resource.data.templateType in ["supermarket","restaurant"]
+    && trackingTemplateReady(resource.data.projectId, resource.data.templateType);
 
    allow list: if false;
 
    allow create: if request.resource.data.trackingToken == trackingToken
     && trackingToken.size() >= 40
-    && request.resource.data.templateType == "supermarket"
+    && request.resource.data.templateType in ["supermarket","restaurant"]
     && request.resource.data.projectId is string
     && request.resource.data.orderId is string
     && request.resource.data.status == "new"
@@ -1693,11 +1718,14 @@ service cloud.firestore {
       "createdAt",
       "updatedAt"
     ])
-    && supermarketPartnerReady(request.resource.data.projectId)
+    && trackingTemplateReady(
+      request.resource.data.projectId,
+      request.resource.data.templateType
+    )
     && getAfter(orderPath(request.resource.data.orderId)).data.projectId
       == request.resource.data.projectId
     && getAfter(orderPath(request.resource.data.orderId)).data.templateType
-      == "supermarket"
+      == request.resource.data.templateType
     && getAfter(orderPath(request.resource.data.orderId)).data.trackingToken
       == trackingToken
     && getAfter(orderPath(request.resource.data.orderId)).data.status
