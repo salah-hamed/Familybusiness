@@ -1,5 +1,6 @@
 import db from "../core/firebase/firebase-db.js";
 import { protectPage } from "../core/auth/auth-guard.js";
+import { escapeHTML } from "../core/utils/helpers.js";
 import { createOrResumeRestaurantSetup, getRestaurantProjectBundle } from "../core/restaurant/restaurant-service.js";
 import { ensureOperatorInviteAccess, getOperatorInviteToken } from "../core/partners/partner-service.js";
 import { normalizeWhatsAppPhone } from "../core/whatsapp/dispatch-service.js";
@@ -74,7 +75,7 @@ function render(){
     ["الهاتف",restaurant.phone||operator.phone||"—"],
     ["واتساب",operator.whatsapp||restaurant.whatsapp||"—"],
     ["مصاريف التوصيل",money(restaurant.deliveryFee||0)]
-  ].map(([k,v])=>`<div class="metaItem"><b>${k}</b><div>${v}</div></div>`).join("");
+  ].map(([k,v])=>`<div class="metaItem"><b>${escapeHTML(k)}</b><div>${escapeHTML(v)}</div></div>`).join("");
 
   $("commissionMessage").innerText=pending&&agreement?.pendingAmount!=null
     ? `في انتظار موافقة المخبز على ${money(agreement.pendingAmount)} لكل طلب مكتمل.`
