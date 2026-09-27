@@ -9,6 +9,8 @@ import {
   getDocs,
   query,
   where,
+  orderBy,
+  startAfter,
   limit,
   writeBatch,
   onSnapshot,
@@ -308,19 +310,32 @@ export async function acceptRestaurantOrder({ projectId, orderId, actorUid, temp
   return { subtotal, deliveryFee, total };
 }
 
-export async function listRestaurantOrders(projectId, { pageSize = 50, templateType = "restaurant" } = {}) {
-  const snap = await getDocs(
-    query(
-      collection(db, "orders"),
-      where("projectId", "==", projectId),
-      where("templateType", "==", templateType),
-      limit(Math.max(1, Math.min(100, Number(pageSize) || 50)))
-    )
-  );
+export async function listRestaurantOrdersPage(
+  projectId,
+  { pageSize = 50, templateType = "restaurant", cursor = null } = {}
+) {
+  const size = Math.max(1, Math.min(100, Number(pageSize) || 50));
+  const constraints = [
+    where("projectId", "==", projectId),
+    where("templateType", "==", templateType),
+    orderBy("createdAt", "desc")
+  ];
 
-  return snap.docs
-    .map(item => ({ orderId: item.id, ...item.data() }))
-    .sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+  if (cursor) constraints.push(startAfter(cursor));
+  constraints.push(limit(size));
+
+  const snap = await getDocs(query(collection(db, "orders"), ...constraints));
+
+  return {
+    orders: snap.docs.map(item => ({ orderId: item.id, ...item.data() })),
+    nextCursor: snap.docs.length ? snap.docs[snap.docs.length - 1] : null,
+    hasMore: snap.docs.length === size
+  };
+}
+
+export async function listRestaurantOrders(projectId, options = {}) {
+  const page = await listRestaurantOrdersPage(projectId, options);
+  return page.orders;
 }
 
 export async function getRestaurantOrderTracking(trackingToken, templateType = "restaurant") {
