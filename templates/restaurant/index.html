@@ -17,7 +17,10 @@
         <p id="restaurantSlogan"></p>
         <small id="restaurantAddress"></small>
       </div>
-      <div id="deliveryBadge" class="deliveryBadge">التوصيل —</div>
+      <div class="customerHeaderActions">
+        <button id="myOrdersBtn" class="ordersBtn" type="button">📦 طلباتي</button>
+        <div id="deliveryBadge" class="deliveryBadge">التوصيل —</div>
+      </div>
     </div>
   </header>
 
@@ -31,6 +34,7 @@
     <div id="categories" class="categories"></div>
     <section id="menuGrid" class="menuGrid"></section>
     <p id="emptyMenu" class="empty hidden">لا توجد أصناف مطابقة.</p>
+    <button id="loadMoreMenuBtn" class="secondary loadMoreMenu hidden" type="button">عرض أصناف أكثر</button>
   </main>
 
   <button id="cartBar" class="cartBar hidden">
@@ -63,6 +67,14 @@
         <button id="submitOrder" class="primary">تأكيد الطلب</button>
         <p id="orderStatus" class="message"></p>
       </div>
+    </div>
+  </div>
+
+  <div id="ordersSheet" class="sheet hidden">
+    <div class="sheetPanel">
+      <div class="sheetHead"><h2>طلباتي</h2><button id="closeOrders" class="iconBtn">✕</button></div>
+      <p class="muted">الطلبات التي أرسلتها من هذا الجهاز.</p>
+      <div id="ordersList" class="myOrdersList"></div>
     </div>
   </div>
 
