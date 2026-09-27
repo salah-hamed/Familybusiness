@@ -598,7 +598,14 @@ service cloud.firestore {
     ]);
    allow get: if isAdmin() || (signedIn() && request.auth.uid == uid);
    allow list: if isAdmin();
-   allow update: if isAdmin() || (signedIn() && request.auth.uid == uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name"]));
+   allow update: if isAdmin() || (
+    signedIn()
+    && request.auth.uid == uid
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name"])
+    && request.resource.data.name is string
+    && request.resource.data.name.size() > 0
+    && request.resource.data.name.size() <= 100
+   );
    allow delete: if isAdmin();
   }
 
