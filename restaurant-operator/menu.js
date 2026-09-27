@@ -28,6 +28,44 @@ function escapeHTML(value){
     .replace(/'/g,"&#039;");
 }
 function money(v){return `${Number(v||0).toLocaleString("ar-EG")} جنيه`;}
+
+function safeImageUrl(value){
+  const raw=String(value||"").trim();
+  if(!raw)return "";
+  try{
+    const url=new URL(raw);
+    return ["https:","http:"].includes(url.protocol)?url.toString():"";
+  }catch{
+    return "";
+  }
+}
+
+function testImageUrl(value,timeout=8000){
+  const url=safeImageUrl(value);
+  if(!String(value||"").trim())return Promise.resolve(true);
+  if(!url)return Promise.resolve(false);
+
+  return new Promise(resolve=>{
+    const image=new Image();
+    const timer=setTimeout(()=>resolve(false),timeout);
+    image.onload=()=>{clearTimeout(timer);resolve(true);};
+    image.onerror=()=>{clearTimeout(timer);resolve(false);};
+    image.src=url;
+  });
+}
+
+function setImagePreview(node,url,fallback="🍽️"){
+  node.innerHTML="";
+  if(!url){node.textContent=fallback;return;}
+
+  const image=document.createElement("img");
+  image.src=url;
+  image.alt="";
+  image.referrerPolicy="no-referrer";
+  image.onerror=()=>{node.innerHTML="";node.textContent=fallback;};
+  node.appendChild(image);
+}
+
 function dashboardUrl(){
   const url=new URL("./",location.href);
   url.searchParams.set("project",projectId);
@@ -98,7 +136,10 @@ function renderMenu(){
 
   $("menuList").innerHTML=visible.length?visible.map(item=>`
     <article class="rowCard productManagerCard" data-item-id="${item.itemId}">
-      <div class="rowTop">
+      <div class="menuItemWithImage">
+        <div class="menuItemThumb">
+          ${item.image?`<img src="${escapeHTML(item.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.textContent='🍽️'">`:"🍽️"}
+        </div>
         <div>
           <b>${escapeHTML(item.name)}</b>
           <div class="muted">${escapeHTML(item.category||"أخرى")} · ${money(item.price)}</div>
@@ -129,12 +170,17 @@ function renderMenu(){
 
     card.querySelector(".saveItem").onclick=async()=>{
       try{
+        const image=card.querySelector(".editImage").value.trim();
+        if(!(await testImageUrl(image))){
+          throw new Error("رابط الصورة غير صالح أو الموقع يمنع عرض الصورة خارجيًا.");
+        }
+
         await updateRestaurantMenuItem(projectId,itemId,currentUser.uid,{
           name:card.querySelector(".editName").value,
           category:card.querySelector(".editCategory").value,
           price:card.querySelector(".editPrice").value,
           description:card.querySelector(".editDescription").value,
-          image:card.querySelector(".editImage").value
+          image
         });
         await loadMenu();
       }catch(e){alert(e.message);}
@@ -162,14 +208,19 @@ function renderMenu(){
 }
 
 $("addItemBtn").onclick=async()=>{
-  $("itemMessage").innerText="جاري الإضافة...";
+  $("itemMessage").innerText="جاري فحص الصورة وإضافة الصنف...";
   try{
+    const image=$("itemImage").value.trim();
+    if(!(await testImageUrl(image))){
+      throw new Error("رابط الصورة غير صالح أو الموقع يمنع عرض الصورة خارجيًا.");
+    }
+
     await addRestaurantMenuItem(projectId,currentUser.uid,{
       name:$("itemName").value,
       category:$("itemCategory").value,
       price:$("itemPrice").value,
       description:$("itemDescription").value,
-      image:$("itemImage").value
+      image
     });
     ["itemName","itemCategory","itemPrice","itemDescription","itemImage"].forEach(id=>$(id).value="");
     $("itemMessage").innerText="تمت إضافة الصنف ✅";
@@ -180,4 +231,9 @@ $("addItemBtn").onclick=async()=>{
 $("menuSearch").addEventListener("input",event=>{
   searchText=event.target.value;
   renderMenu();
+});
+
+
+$("itemImage").addEventListener("input",()=>{
+  setImagePreview($("newItemImagePreview"),safeImageUrl($("itemImage").value));
 });
