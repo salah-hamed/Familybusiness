@@ -35,6 +35,9 @@ function projectManagementUrl(templateId, projectDocId) {
   if (templateId === "restaurant") {
     return `../restaurant/?project=${encodeURIComponent(projectDocId)}`;
   }
+  if (templateId === "bakery") {
+    return `../bakery/?project=${encodeURIComponent(projectDocId)}`;
+  }
   return `../dashboard/?project=${encodeURIComponent(projectDocId)}`;
 }
 
