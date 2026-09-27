@@ -1,5 +1,6 @@
 import db from "../core/firebase/firebase-db.js";
 import { protectPage } from "../core/auth/auth-guard.js";
+import { escapeHTML } from "../core/utils/helpers.js";
 import { createOrResumeSupermarketSetup, getSupermarketProjectBundle } from "../core/supermarket/supermarket-service.js";
 import { ensureOperatorInviteAccess, getOperatorInviteToken } from "../core/partners/partner-service.js";
 import { normalizeWhatsAppPhone } from "../core/whatsapp/dispatch-service.js";
@@ -74,7 +75,7 @@ function render(){
     ["الهاتف",supermarket.phone||operator.phone||"—"],
     ["واتساب المسؤول",operator.whatsapp||supermarket.whatsapp||"—"],
     ["مصاريف التوصيل",money(supermarket.deliveryFee||0)]
-  ].map(([k,v])=>`<div class="metaItem"><b>${k}</b><div>${v}</div></div>`).join("");
+  ].map(([k,v])=>`<div class="metaItem"><b>${escapeHTML(k)}</b><div>${escapeHTML(v)}</div></div>`).join("");
 
   if(pending && agreement?.pendingAmount!=null){
     $("commissionMessage").innerText=`في انتظار موافقة السوبرماركت على ${money(agreement.pendingAmount)} لكل طلب مكتمل.`;
