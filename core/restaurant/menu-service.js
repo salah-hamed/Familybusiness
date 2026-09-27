@@ -29,6 +29,25 @@ function money(value) {
   return Math.round(n * 100) / 100;
 }
 
+async function syncRestaurantMenuMeta(projectId) {
+  const snap = await getDocs(menuCollection(projectId));
+  const items = snap.docs.map(item => item.data());
+  const categories = [...new Set(
+    items
+      .filter(item => item.isActive === true && item.isAvailable === true)
+      .map(item => clean(item.category || "أخرى"))
+      .filter(Boolean)
+  )].sort((a,b) => a.localeCompare(b, "ar"));
+
+  await updateDoc(doc(db, "restaurants", projectId), {
+    menuCategories: categories,
+    menuItemCount: items.length,
+    menuUpdatedAt: serverTimestamp()
+  });
+
+  return { categories, itemCount: items.length };
+}
+
 export async function listRestaurantMenu(projectId, { availableOnly = false } = {}) {
   const ref = menuCollection(projectId);
   const snap = availableOnly
@@ -105,6 +124,7 @@ export async function addRestaurantMenuItem(projectId, actorUid, data = {}) {
     updatedAt: serverTimestamp()
   });
 
+  await syncRestaurantMenuMeta(projectId);
   return ref.id;
 }
 
@@ -132,6 +152,7 @@ export async function updateRestaurantMenuItem(projectId, itemId, actorUid, upda
   next.updatedAt = serverTimestamp();
 
   await updateDoc(ref, next);
+  await syncRestaurantMenuMeta(projectId);
 }
 
 export async function deleteRestaurantMenuItem(projectId, itemId) {
@@ -141,4 +162,9 @@ export async function deleteRestaurantMenuItem(projectId, itemId) {
   if (!snap.exists()) throw new Error("MENU_ITEM_NOT_FOUND");
 
   await deleteDoc(ref);
+  await syncRestaurantMenuMeta(projectId);
+}
+
+export async function refreshRestaurantMenuMeta(projectId) {
+  return syncRestaurantMenuMeta(projectId);
 }
