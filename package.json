@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "test:safe-html": "node --test tests/safe-html.test.mjs",
-    "test:rules": "firebase emulators:exec --project family-business-rules-test --only firestore \"node --test tests/firestore.rules.test.mjs tests/order-query.test.mjs\"",
+    "test:rules": "firebase emulators:exec --project family-business-rules-test --only firestore \"node --test --test-concurrency=1 tests/firestore.rules.test.mjs tests/order-query.test.mjs\"",
     "test": "npm run test:safe-html && npm run test:source && npm run test:rules",
     "test:source": "node --test tests/source-regressions.test.mjs"
   },
