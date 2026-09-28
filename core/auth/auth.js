@@ -10,7 +10,8 @@ import {
 
 import {
   doc,
-  setDoc
+  setDoc,
+  serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 
@@ -19,10 +20,21 @@ export async function registerUser(name, email, password, referredByUserId = "")
 
   try {
 
+    const normalizedName = String(name || "").trim();
+    const normalizedEmail = String(email || "").trim();
+
+    if (!normalizedName || normalizedName.length > 100) {
+      return { success: false, error: "INVALID_NAME" };
+    }
+
+    if (!normalizedEmail || normalizedEmail.length > 254) {
+      return { success: false, error: "INVALID_EMAIL" };
+    }
+
     const userCredential =
       await createUserWithEmailAndPassword(
         auth,
-        email,
+        normalizedEmail,
         password
       );
 
@@ -35,8 +47,8 @@ export async function registerUser(name, email, password, referredByUserId = "")
     await setDoc(doc(db, "users", user.uid), {
 
       uid: user.uid,
-      name: name,
-      email: email,
+      name: normalizedName,
+      email: normalizedEmail,
       projectType: "",
       isActive: false,
       subscriptionStatus: "pending",
@@ -44,7 +56,7 @@ export async function registerUser(name, email, password, referredByUserId = "")
       billingCycle: "initial",
       referredByUserId: normalizedReferralId && normalizedReferralId !== user.uid ? normalizedReferralId : "",
       referralQualified: false,
-      createdAt: new Date()
+      createdAt: serverTimestamp()
 
     });
 

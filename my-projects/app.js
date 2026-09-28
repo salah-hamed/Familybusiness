@@ -1,5 +1,6 @@
 import auth from "../core/firebase/firebase-auth.js";
 import db from "../core/firebase/firebase-db.js";
+import { escapeHTML } from "../core/utils/helpers.js";
 import { getDiscoverableProjects } from "../templates/projects.js";
 
 import {
@@ -33,7 +34,7 @@ onAuthStateChanged(auth, async (user) => {
   const templates = getDiscoverableProjects();
 
   container.innerHTML = `
-    <h2>مرحباً ${data.name}</h2>
+    <h2>مرحباً ${escapeHTML(data.name)}</h2>
 
     <p>
       ترخيص المنصة:

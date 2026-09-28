@@ -16,11 +16,23 @@ service cloud.firestore {
   function userExists(uid){ return exists(userPath(uid)); }
   function userData(uid){ return get(userPath(uid)).data; }
   function isAdmin(){ return signedIn() && userExists(request.auth.uid) && userData(request.auth.uid).role == "admin"; }
-  function subscriptionActive(uid){ return userExists(uid) && userData(uid).isActive == true && userData(uid).subscriptionStatus == "active" && (!("subscriptionExpiresAt" in userData(uid)) || userData(uid).subscriptionExpiresAt > request.time); }
+  function subscriptionActive(uid){
+   let user = userData(uid);
+   return userExists(uid)
+    && user.isActive == true
+    && user.subscriptionStatus == "active"
+    && (!("subscriptionExpiresAt" in user) || user.subscriptionExpiresAt > request.time);
+  }
   function projectExists(projectId){ return exists(projectPath(projectId)); }
   function projectData(projectId){ return get(projectPath(projectId)).data; }
   function ownsProject(projectId){ return signedIn() && projectExists(projectId) && projectData(projectId).ownerId == request.auth.uid; }
-  function projectAvailable(projectId){ return projectExists(projectId) && projectData(projectId).isActive == true && projectData(projectId).status == "active" && subscriptionActive(projectData(projectId).ownerId); }
+  function projectAvailable(projectId){
+   let project = projectData(projectId);
+   return projectExists(projectId)
+    && project.isActive == true
+    && project.status == "active"
+    && subscriptionActive(project.ownerId);
+  }
   function carwashSubscriptionExists(subscriptionId){ return exists(carwashSubscriptionPath(subscriptionId)); }
   function carwashSubscriptionData(subscriptionId){ return get(carwashSubscriptionPath(subscriptionId)).data; }
   function operatorExists(operatorId){ return exists(operatorPath(operatorId)); }
@@ -87,40 +99,46 @@ service cloud.firestore {
     );
   }
   function supermarketPartnerReady(projectId){
+   let project = projectData(projectId);
+   let operator = operatorData(project.operatorId);
+   let agreement = commissionAgreementData(projectId);
    return projectAvailable(projectId)
-    && projectData(projectId).template == "supermarket"
-    && projectData(projectId).operatingModel == "partner_operated"
-    && projectData(projectId).operatorId is string
-    && projectData(projectId).operatorId.size() > 0
-    && operatorExists(projectData(projectId).operatorId)
-    && operatorData(projectData(projectId).operatorId).status == "active"
-    && operatorData(projectData(projectId).operatorId).agreementStatus == "accepted"
-    && operatorData(projectData(projectId).operatorId).isActive == true
+    && project.template == "supermarket"
+    && project.operatingModel == "partner_operated"
+    && project.operatorId is string
+    && project.operatorId.size() > 0
+    && operatorExists(project.operatorId)
+    && operator.status == "active"
+    && operator.agreementStatus == "accepted"
+    && operator.isActive == true
     && commissionAgreementExists(projectId)
-    && commissionAgreementData(projectId).status == "accepted"
-    && commissionAgreementData(projectId).currentAmount is number
-    && commissionAgreementData(projectId).currentAmount >= 0
-    && commissionAgreementData(projectId).acceptedVersion is number
-    && commissionAgreementData(projectId).acceptedVersion > 0;
+    && agreement.status == "accepted"
+    && agreement.currentAmount is number
+    && agreement.currentAmount >= 0
+    && agreement.acceptedVersion is number
+    && agreement.acceptedVersion > 0;
   }
 
 
   function restaurantPartnerReady(projectId){
+   let project = projectData(projectId);
+   let operator = operatorData(project.operatorId);
+   let agreement = commissionAgreementData(projectId);
    return projectAvailable(projectId)
-    && projectData(projectId).template in ["restaurant","bakery"]
-    && projectData(projectId).operatingModel == "partner_operated"
-    && projectData(projectId).operatorId is string
-    && projectData(projectId).operatorId.size() > 0
-    && operatorExists(projectData(projectId).operatorId)
-    && operatorData(projectData(projectId).operatorId).status == "active"
-    && operatorData(projectData(projectId).operatorId).agreementStatus == "accepted"
-    && operatorData(projectData(projectId).operatorId).isActive == true
+    && project.template in ["restaurant","bakery"]
+    && project.operatingModel == "partner_operated"
+    && project.operatorId is string
+    && project.operatorId.size() > 0
+    && operatorExists(project.operatorId)
+    && operator.status == "active"
+    && operator.agreementStatus == "accepted"
+    && operator.isActive == true
     && commissionAgreementExists(projectId)
-    && commissionAgreementData(projectId).status == "accepted"
-    && commissionAgreementData(projectId).currentAmount is number
-    && commissionAgreementData(projectId).currentAmount >= 0
-    && commissionAgreementData(projectId).acceptedVersion is number
-    && commissionAgreementData(projectId).acceptedVersion > 0;
+    && agreement.status == "accepted"
+    && agreement.currentAmount is number
+    && agreement.currentAmount >= 0
+    && agreement.acceptedVersion is number
+    && agreement.acceptedVersion > 0;
   }
 
   function trackingTemplateReady(projectId, templateType){
@@ -145,26 +163,30 @@ service cloud.firestore {
 
 
   function laundryPartnerReady(projectId){
+   let project = projectData(projectId);
+   let operator = operatorData(project.operatorId);
+   let agreement = commissionAgreementData(projectId);
    return projectAvailable(projectId)
-    && projectData(projectId).template == "laundry"
-    && projectData(projectId).operatingModel == "partner_operated"
-    && projectData(projectId).operatorId is string
-    && projectData(projectId).operatorId.size() > 0
-    && operatorExists(projectData(projectId).operatorId)
-    && operatorData(projectData(projectId).operatorId).status == "active"
-    && operatorData(projectData(projectId).operatorId).agreementStatus == "accepted"
-    && operatorData(projectData(projectId).operatorId).isActive == true
+    && project.template == "laundry"
+    && project.operatingModel == "partner_operated"
+    && project.operatorId is string
+    && project.operatorId.size() > 0
+    && operatorExists(project.operatorId)
+    && operator.status == "active"
+    && operator.agreementStatus == "accepted"
+    && operator.isActive == true
     && commissionAgreementExists(projectId)
-    && commissionAgreementData(projectId).status == "accepted"
-    && commissionAgreementData(projectId).currentAmount is number
-    && commissionAgreementData(projectId).currentAmount >= 0
-    && commissionAgreementData(projectId).acceptedVersion is number
-    && commissionAgreementData(projectId).acceptedVersion > 0;
+    && agreement.status == "accepted"
+    && agreement.currentAmount is number
+    && agreement.currentAmount >= 0
+    && agreement.acceptedVersion is number
+    && agreement.acceptedVersion > 0;
   }
   function laundryAcceptingOrders(projectId){
+   let laundry = laundryData(projectId);
    return laundryPartnerReady(projectId)
     && laundryExists(projectId)
-    && laundryData(projectId).isAcceptingOrders == true;
+    && laundry.isAcceptingOrders == true;
   }
 
   function validLaundryTransition(fromStatus, fromStage, toStatus, toStage){
@@ -226,14 +248,95 @@ service cloud.firestore {
   }
 
 
+  function validCustomerInput(){
+   return request.resource.data.customerName is string
+    && request.resource.data.customerName.size() > 0
+    && request.resource.data.customerName.size() <= 100
+    && request.resource.data.customerPhone is string
+    && request.resource.data.customerPhone.size() > 0
+    && request.resource.data.customerPhone.size() <= 30
+    && request.resource.data.customerAddress is string
+    && request.resource.data.customerAddress.size() > 0
+    && request.resource.data.customerAddress.size() <= 500
+    && request.resource.data.location is string
+    && request.resource.data.location.size() <= 500
+    && (!("notes" in request.resource.data)
+      || (request.resource.data.notes is string && request.resource.data.notes.size() <= 1000));
+  }
+
+  function validActiveProjectCreate(projectDocId){
+   let templateId = request.resource.data.projectId;
+   return templateId in ["supermarket","restaurant","bakery","laundry"]
+    && projectDocId == request.auth.uid + "_" + templateId
+    && request.resource.data.ownerId == request.auth.uid
+    && request.resource.data.template == templateId
+    && request.resource.data.operatingModel == "partner_operated"
+    && (
+      (templateId == "laundry" && request.resource.data.templateVersion == 3)
+      || (templateId in ["supermarket","restaurant","bakery"] && request.resource.data.templateVersion == 1)
+    )
+    && request.resource.data.operatorId == ""
+    && request.resource.data.partnerSetupStatus == "not_started"
+    && request.resource.data.businessName is string
+    && request.resource.data.businessName.size() > 0
+    && request.resource.data.businessName.size() <= 120
+    && request.resource.data.status == "active"
+    && request.resource.data.isActive == true
+    && request.resource.data.createdAt == request.time
+    && request.resource.data.whatsappNumber is string
+    && request.resource.data.whatsappNumber.size() <= 30
+    && request.resource.data.instapayLink is string
+    && request.resource.data.instapayLink.size() <= 500
+    && request.resource.data.logo is string
+    && request.resource.data.logo.size() <= 1000
+    && request.resource.data.coverImage is string
+    && request.resource.data.coverImage.size() <= 1000
+    && request.resource.data.primaryColor is string
+    && request.resource.data.primaryColor.size() <= 32
+    && request.resource.data.priceConfig is map
+    && request.resource.data.priceConfig.keys().hasOnly([])
+    && request.resource.data.keys().hasOnly([
+      "ownerId","projectId","template","operatingModel","templateVersion",
+      "operatorId","partnerSetupStatus","businessName","status","isActive",
+      "createdAt","whatsappNumber","instapayLink","logo","coverImage",
+      "primaryColor","priceConfig"
+    ]);
+  }
+
   function validOrderTemplate(projectId){
    return request.resource.data.templateType is string
     && projectData(projectId).template == request.resource.data.templateType;
   }
 
+  function validOrderEnvelope(projectId){
+   return request.resource.data.projectId is string
+    && request.resource.data.providerId == request.resource.data.projectId
+    && request.resource.data.status == "new"
+    && request.resource.data.createdAt == request.time
+    && validOrderTemplate(projectId);
+  }
+
+  function validOrderByTemplate(projectId, templateType){
+   return templateType == "supermarket"
+    ? validSupermarketOrder(projectId)
+    : templateType == "restaurant"
+      ? validRestaurantOrder(projectId)
+      : templateType == "bakery"
+        ? validRestaurantOrder(projectId)
+        : templateType == "laundry"
+          ? (laundryAcceptingOrders(projectId) && validLaundryOrder(projectId))
+          : templateType == "cleaning"
+            ? validCleaningOrder(projectId)
+            : templateType == "carwash"
+              ? validCarwashOrder(projectId)
+              : false;
+  }
+
   function validCleaningOrder(projectId){
    let config = projectData(projectId).priceConfig;
    return request.resource.data.templateType == "cleaning"
+    && projectAvailable(projectId)
+    && validCustomerInput()
     && request.resource.data.rooms is number
     && request.resource.data.rooms >= 0
     && request.resource.data.bathrooms is number
@@ -287,6 +390,8 @@ service cloud.firestore {
   function validCarwashOrder(projectId){
    let config = projectData(projectId).priceConfig;
    return request.resource.data.templateType == "carwash"
+    && projectAvailable(projectId)
+    && validCustomerInput()
     && request.resource.data.serviceType == "external_car_wash"
     && request.resource.data.planType == "monthly_new"
     && request.resource.data.subscriptionKey is string
@@ -325,6 +430,7 @@ service cloud.firestore {
    let items = request.resource.data.items;
 
    return request.resource.data.templateType == "laundry"
+    && validCustomerInput()
     && request.resource.data.serviceType == "laundry_per_piece"
     && items is list
     && items.size() == 7
@@ -394,6 +500,7 @@ service cloud.firestore {
   }
   function validSupermarketOrder(projectId){
    return request.resource.data.templateType == "supermarket"
+    && validCustomerInput()
     && request.resource.data.serviceType == "supermarket_delivery"
     && supermarketPartnerReady(projectId)
     && supermarketExists(projectId)
@@ -450,6 +557,7 @@ service cloud.firestore {
 
   function validRestaurantOrder(projectId){
    return request.resource.data.templateType in ["restaurant","bakery"]
+    && validCustomerInput()
     && request.resource.data.templateType == projectData(projectId).template
     && (
       (
@@ -515,17 +623,48 @@ service cloud.firestore {
 
 
   match /users/{uid} {
-   allow create: if signedIn() && request.auth.uid == uid && request.resource.data.uid == uid && request.resource.data.isActive == false && request.resource.data.subscriptionStatus == "pending" && request.resource.data.initialActivationPaid == false && request.resource.data.billingCycle == "initial" && request.resource.data.referralQualified == false && request.resource.data.referredByUserId is string && request.resource.data.referredByUserId != request.auth.uid && !("role" in request.resource.data);
+   allow create: if signedIn()
+    && request.auth.uid == uid
+    && request.resource.data.uid == uid
+    && request.resource.data.name is string
+    && request.resource.data.name.size() > 0
+    && request.resource.data.name.size() <= 100
+    && request.resource.data.email is string
+    && request.resource.data.email.size() > 0
+    && request.resource.data.email.size() <= 254
+    && request.resource.data.projectType == ""
+    && request.resource.data.isActive == false
+    && request.resource.data.subscriptionStatus == "pending"
+    && request.resource.data.initialActivationPaid == false
+    && request.resource.data.billingCycle == "initial"
+    && request.resource.data.referralQualified == false
+    && request.resource.data.referredByUserId is string
+    && request.resource.data.referredByUserId.size() <= 128
+    && request.resource.data.referredByUserId != request.auth.uid
+    && request.resource.data.createdAt == request.time
+    && !("role" in request.resource.data)
+    && request.resource.data.keys().hasOnly([
+      "uid","name","email","projectType","isActive","subscriptionStatus",
+      "initialActivationPaid","billingCycle","referredByUserId",
+      "referralQualified","createdAt"
+    ]);
    allow get: if isAdmin() || (signedIn() && request.auth.uid == uid);
    allow list: if isAdmin();
-   allow update: if isAdmin() || (signedIn() && request.auth.uid == uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name"]));
+   allow update: if isAdmin() || (
+    signedIn()
+    && request.auth.uid == uid
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name"])
+    && request.resource.data.name is string
+    && request.resource.data.name.size() > 0
+    && request.resource.data.name.size() <= 100
+   );
    allow delete: if isAdmin();
   }
 
   match /projects/{projectId} {
    allow get: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid) || (resource.data.isActive == true && resource.data.status == "active" && subscriptionActive(resource.data.ownerId));
    allow list: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid);
-   allow create: if signedIn() && request.resource.data.ownerId == request.auth.uid && request.resource.data.projectId is string && projectId == request.auth.uid + "_" + request.resource.data.projectId && subscriptionActive(request.auth.uid);
+   allow create: if signedIn() && subscriptionActive(request.auth.uid) && validActiveProjectCreate(projectId);
    allow update: if isAdmin() || (
     signedIn()
     && resource.data.ownerId == request.auth.uid
@@ -583,21 +722,14 @@ service cloud.firestore {
     && request.resource.data.operatorId == resource.data.operatorId
     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["priceConfig"])
    );
-   allow delete: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid);
+   allow delete: if isAdmin();
   }
 
   match /orders/{orderId} {
-   allow create: if request.resource.data.projectId is string
-    && request.resource.data.providerId == request.resource.data.projectId
-    && request.resource.data.status == "new"
-    && projectAvailable(request.resource.data.projectId)
-    && validOrderTemplate(request.resource.data.projectId)
-    && (
-     (request.resource.data.templateType == "cleaning" && validCleaningOrder(request.resource.data.projectId))
-     || (request.resource.data.templateType == "carwash" && validCarwashOrder(request.resource.data.projectId))
-     || (request.resource.data.templateType == "laundry" && laundryAcceptingOrders(request.resource.data.projectId) && validLaundryOrder(request.resource.data.projectId))
-     || (request.resource.data.templateType == "supermarket" && validSupermarketOrder(request.resource.data.projectId))
-     || (request.resource.data.templateType in ["restaurant","bakery"] && validRestaurantOrder(request.resource.data.projectId))
+   allow create: if validOrderEnvelope(request.resource.data.projectId)
+    && validOrderByTemplate(
+      request.resource.data.projectId,
+      request.resource.data.templateType
     );
 
    allow read: if isAdmin()
