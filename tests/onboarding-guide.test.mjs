@@ -26,6 +26,18 @@ test("inactive workspace stays on payment/activation before project creation", (
   assert.equal(journey.steps.find(step => step.id === "create-project").status, "pending");
 });
 
+test("expired previously activated account is guided to monthly renewal", () => {
+  const journey = buildWorkspaceGuide({
+    userData: { initialActivationPaid: true, subscriptionStatus: "inactive" },
+    projects: [],
+    subscriptionActive: false
+  });
+  const payment = journey.steps.find(step => step.id === "payment");
+  assert.equal(currentId(journey), "payment");
+  assert.equal(payment.title, "جدّد الاشتراك");
+  assert.match(payment.description, /٥٩|59/);
+});
+
 test("active workspace with no projects guides to create a project", () => {
   const journey = buildWorkspaceGuide({
     userData: { initialActivationPaid: true, subscriptionStatus: "active" },
