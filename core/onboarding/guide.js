@@ -191,8 +191,8 @@ export function createGuide(initialJourney, { autoOpen = true } = {}) {
     clearTarget();
   }
 
-  function maybeAutoOpen(force = false) {
-    if (!force && !autoOpen) return;
+  function maybeAutoOpen(force = false, enabled = autoOpen) {
+    if (!force && !enabled) return;
     const key = seenKey(journey);
     let alreadySeen = false;
     try {
@@ -236,7 +236,7 @@ export function createGuide(initialJourney, { autoOpen = true } = {}) {
       journey = nextJourney;
       activeIndex = firstCurrentIndex(journey);
       render();
-      if (shouldAutoOpen) maybeAutoOpen(false);
+      if (shouldAutoOpen) maybeAutoOpen(false, true);
     }
   };
 }
