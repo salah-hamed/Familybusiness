@@ -26,6 +26,8 @@ let category="الكل";
 let lastProductDoc=null;
 let hasMoreProducts=true;
 let loadingProducts=false;
+let searchTimer=null;
+let searchGeneration=0;
 let cart=new Map();
 let locationUrl="";
 const customerKey=`fb_supermarket_customer_${projectId}`;
@@ -160,6 +162,16 @@ async function loadProductsPage({reset=false}={}){
   }
 }
 
+function attachProductImageFallbacks(){
+  document.querySelectorAll(".productImage img").forEach(img=>{
+    img.addEventListener("error",()=>{
+      const span=document.createElement("span");
+      span.textContent=img.dataset.imageFallback||"🛍️";
+      img.replaceWith(span);
+    },{once:true});
+  });
+}
+
 function renderProducts(){
   const q=$("searchInput").value.trim().toLowerCase();
   const visible=products.filter(p=>
@@ -173,9 +185,10 @@ function renderProducts(){
   $("emptyProducts").classList.toggle("hidden",visible.length>0);
   $("productsGrid").innerHTML=visible.map(p=>{
     const qty=qtyFor(p.productId);
+    const fallback=categoryEmoji(p.category);
     const image=p.image
-      ?`<img src="${escapeHTML(p.image)}" alt="" loading="lazy">`
-      :`<span>${categoryEmoji(p.category)}</span>`;
+      ?`<img src="${escapeHTML(p.image)}" alt="" loading="lazy" data-image-fallback="${escapeHTML(fallback)}">`
+      :`<span>${fallback}</span>`;
     return `<article class="productCard">
       <div class="productImage">${image}</div>
       <h3>${escapeHTML(p.name)}</h3>
@@ -191,6 +204,7 @@ function renderProducts(){
 
   document.querySelectorAll("[data-plus]").forEach(btn=>btn.onclick=()=>changeQty(btn.dataset.plus,1));
   document.querySelectorAll("[data-minus]").forEach(btn=>btn.onclick=()=>changeQty(btn.dataset.minus,-1));
+  attachProductImageFallbacks();
 }
 
 function changeQty(id,delta){
@@ -272,7 +286,39 @@ function renderCart(){
   });
 }
 
-$("searchInput").addEventListener("input",renderProducts);
+async function completeSearchAcrossLoadedCategory(generation){
+  let pages=0;
+
+  while(hasMoreProducts&&generation===searchGeneration&&pages<100){
+    const before=lastProductDoc;
+    await loadProductsPage();
+    pages++;
+
+    if(lastProductDoc===before)break;
+  }
+}
+
+$("searchInput").addEventListener("input",()=>{
+  searchGeneration++;
+  const generation=searchGeneration;
+  clearTimeout(searchTimer);
+
+  searchTimer=setTimeout(async()=>{
+    const q=$("searchInput").value.trim();
+
+    if(q&&hasMoreProducts){
+      $("emptyProducts").classList.remove("hidden");
+      $("emptyProducts").innerText="جاري البحث في كل المنتجات...";
+      await completeSearchAcrossLoadedCategory(generation);
+    }
+
+    if(generation===searchGeneration){
+      $("emptyProducts").innerText="لا توجد منتجات مطابقة.";
+      renderProducts();
+    }
+  },250);
+});
+
 $("loadMoreProductsBtn").onclick=()=>loadProductsPage();
 $("cartBar").onclick=()=>{renderCart();$("cartSheet").classList.remove("hidden");};
 $("closeCart").onclick=()=>$("cartSheet").classList.add("hidden");
