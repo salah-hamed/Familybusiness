@@ -5,9 +5,8 @@ import {
   subscribeSupermarketOrderTracking
 } from "../../core/supermarket/order-service.js";
 import {
-  SUPERMARKET_MASTER_CATALOG,
   SUPERMARKET_DAILY_ESSENTIAL_MASTER_IDS
-} from "../../core/supermarket/master-catalog.js";
+} from "../../core/supermarket/daily-essentials.js";
 
 import {
   doc,
@@ -43,7 +42,12 @@ const DAILY_CATEGORY_ORDER=[
   "فطار وعسل ومربى وسبريد",
   "لحوم ودواجن"
 ];
-const masterById=new Map(SUPERMARKET_MASTER_CATALOG.map(item=>[item.masterId,item]));
+const dailyRankByMasterId=new Map(
+  SUPERMARKET_DAILY_ESSENTIAL_MASTER_IDS.map((id,index)=>[
+    id,
+    SUPERMARKET_DAILY_ESSENTIAL_MASTER_IDS.length-index
+  ])
+);
 let store=null;
 let products=[];
 const productCache=new Map();
@@ -154,7 +158,7 @@ function renderCategories(){
 }
 
 function dailyPriority(product){
-  return Number(masterById.get(String(product.masterId||""))?.dailyPriority||0);
+  return Number(dailyRankByMasterId.get(String(product.masterId||""))||0);
 }
 
 function diversifyDailyProducts(items,limit=DAILY_DISPLAY_LIMIT){
