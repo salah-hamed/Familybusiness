@@ -1,5 +1,9 @@
 import { getDiscoverableProjects } from "../templates/projects.js";
 import { PLATFORM_BILLING, formatEgp } from "../core/config/platform-config.js";
+import { createGuide } from "../core/onboarding/guide.js";
+import { buildMarketingGuide } from "../core/onboarding/guide-state.js";
+
+createGuide(buildMarketingGuide(), { autoOpen: true });
 
 const projectsContainer =
 document.getElementById("projectsContainer");
