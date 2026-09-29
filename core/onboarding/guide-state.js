@@ -130,6 +130,7 @@ export function buildWorkspaceGuide({
   }
 
   const hasProjects = projects.length > 0;
+  const initialPaid = userData.initialActivationPaid === true;
   const firstProject = projects[0];
   const projectSelector = firstProject?.projectId
     ? `.projectBtn[data-template-id="${firstProject.projectId}"]`
@@ -145,10 +146,12 @@ export function buildWorkspaceGuide({
       step("account", "إنشاء الحساب", "حسابك موجود بالفعل.", "done"),
       step(
         "payment",
-        "الدفع وإرسال إثبات التحويل",
-        userData.initialActivationPaid === true
-          ? "تم تسجيل أول دفعة على حسابك."
-          : `أكمل أول دفعة بقيمة ${formatEgp(PLATFORM_BILLING.initialActivationFee)} عبر InstaPay باستخدام بيانات الدفع الرسمية، ثم أرسل إثبات التحويل بالطريقة المعتمدة للمراجعة.`,
+        initialPaid ? "جدّد الاشتراك" : "الدفع وإرسال إثبات التحويل",
+        subscriptionActive
+          ? "الاشتراك الحالي مسجل كمفعّل."
+          : initialPaid
+            ? `جدّد الاشتراك بقيمة ${formatEgp(PLATFORM_BILLING.monthlyRenewalFee)} عبر طريقة الدفع الرسمية، ثم أرسل إثبات التحويل للمراجعة.`
+            : `أكمل أول دفعة بقيمة ${formatEgp(PLATFORM_BILLING.initialActivationFee)} عبر InstaPay باستخدام بيانات الدفع الرسمية، ثم أرسل إثبات التحويل بالطريقة المعتمدة للمراجعة.`,
         subscriptionActive ? "done" : "current",
         { selector: "#subscriptionStatus", actionLabel: "شوف حالة الاشتراك" }
       ),
