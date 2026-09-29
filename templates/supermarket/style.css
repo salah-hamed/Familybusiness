@@ -48,3 +48,8 @@
   .ordersBtn,.deliveryBadge{text-align:center}
   .trackingTimeline{overflow-x:auto;grid-template-columns:repeat(7,74px);justify-content:start;padding-bottom:6px}
 }
+
+.catalogIntro{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin:4px 0 14px}
+.catalogIntro h2{margin:3px 0 4px;font-size:20px;color:var(--deep)}
+.catalogIntro p{margin:0;color:var(--muted);font-size:12px;line-height:1.6}
+@media(max-width:620px){.catalogIntro h2{font-size:18px}}
