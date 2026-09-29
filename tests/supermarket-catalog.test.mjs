@@ -6,6 +6,11 @@ import {
   filterUnifiedCatalog,
   unifiedCatalogStats
 } from "../core/supermarket/catalog-view-model.js";
+import {
+  SUPERMARKET_MASTER_CATALOG,
+  SUPERMARKET_DAILY_ESSENTIAL_MASTER_IDS,
+  findMasterProduct
+} from "../core/supermarket/master-catalog.js";
 
 const masters = [
   {
@@ -195,4 +200,47 @@ test("all DOM ids referenced directly by operator catalog exist in products.html
   for (const id of new Set(ids)) {
     assert.equal(html.includes(`id="${id}"`), true, `missing DOM id: ${id}`);
   }
+});
+
+
+test("uploaded master catalog exposes exactly 2000 selectable products with unique ids and images", () => {
+  assert.equal(SUPERMARKET_MASTER_CATALOG.length, 2000);
+
+  const ids = SUPERMARKET_MASTER_CATALOG.map(item => item.masterId);
+  const images = SUPERMARKET_MASTER_CATALOG.map(item => String(item.image || "").trim());
+
+  assert.equal(new Set(ids).size, 2000);
+  assert.equal(images.filter(Boolean).length, 2000);
+  assert.equal(images.every(value => /^https?:\/\//i.test(value)), true);
+});
+
+test("daily essentials list points only to uploaded master products", () => {
+  assert.equal(SUPERMARKET_DAILY_ESSENTIAL_MASTER_IDS.length, 120);
+  assert.equal(new Set(SUPERMARKET_DAILY_ESSENTIAL_MASTER_IDS).size, 120);
+
+  const visibleIds = new Set(SUPERMARKET_MASTER_CATALOG.map(item => item.masterId));
+  assert.equal(
+    SUPERMARKET_DAILY_ESSENTIAL_MASTER_IDS.every(id => visibleIds.has(id)),
+    true
+  );
+});
+
+test("legacy master ids remain readable without appearing in the visible 2000-product library", () => {
+  assert.ok(findMasterProduct("pepsi-1l"));
+  assert.equal(
+    SUPERMARKET_MASTER_CATALOG.some(item => item.masterId === "pepsi-1l"),
+    false
+  );
+});
+
+test("customer supermarket opens on daily essentials and search can switch to the full catalog", () => {
+  const source = readFileSync("templates/supermarket/app.js", "utf8");
+  const html = readFileSync("templates/supermarket/index.html", "utf8");
+
+  assert.equal(source.includes('let category=DAILY_HOME'), true);
+  assert.equal(source.includes("loadDailyEssentials"), true);
+  assert.equal(source.includes('where(documentId(),"in",ids)'), true);
+  assert.equal(source.includes('category="الكل"'), true);
+  assert.equal(html.includes('id="catalogHeading"'), true);
+  assert.equal(html.includes("الأكثر طلبًا للبيت المصري"), true);
 });
