@@ -1,0 +1,31 @@
+name: FB-UX01 Validation
+
+on:
+  push:
+    branches:
+      - fb-ux01-interactive-guidance
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm install
+      - name: Syntax check guided surfaces
+        run: |
+          node --check core/onboarding/guide.js
+          node --check core/onboarding/guide-state.js
+          node --check app.js
+          node --check home/app.js
+          node --check workspace/app.js
+          node --check supermarket/app.js
+          node --check restaurant/app.js
+          node --check bakery/app.js
+          node --check laundry/app.js
+      - name: Run stabilization and guide tests
+        run: npm test
