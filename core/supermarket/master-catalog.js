@@ -1,11 +1,12 @@
-export const MASTER_PRICE_META = Object.freeze({
-  currency: "EGP",
-  priceAsOf: "2026-09-24",
-  source: "Carrefour Egypt category/product pages + Egyptian market reference",
-  note: "200 منتج عالي الدوران للسوق المصري. الأسعار استرشادية بتاريخ 2026-09-24 وقد تختلف حسب المنطقة والعروض"
-});
+import {
+  SHEET_MASTER_PRICE_META,
+  SHEET_SUPERMARKET_MASTER_CATALOG,
+  SHEET_DAILY_ESSENTIAL_MASTER_IDS
+} from "./master-catalog-data.js";
 
-export const SUPERMARKET_MASTER_CATALOG = Object.freeze([
+export const MASTER_PRICE_META = SHEET_MASTER_PRICE_META;
+
+const LEGACY_SUPERMARKET_MASTER_CATALOG = Object.freeze([
   { masterId:"nestle-water-600x20", brand:"Nestlé Pure Life", name:"نستله بيور لايف مياه شرب - 600 مل × 20", category:"مياه ومشروبات", size:"600 مل × 20", referencePrice:110.99, image:"" },
   { masterId:"nestle-water-15x12", brand:"Nestlé Pure Life", name:"نستله بيور لايف مياه شرب - 1.5 لتر × 12", category:"مياه ومشروبات", size:"1.5 لتر × 12", referencePrice:110.99, image:"" },
   { masterId:"aqua-delta-15x12", brand:"Aqua Delta", name:"أكوا دلتا مياه طبيعية - 1.5 لتر × 12", category:"مياه ومشروبات", size:"1.5 لتر × 12", referencePrice:118.99, image:"" },
@@ -209,6 +210,9 @@ export const SUPERMARKET_MASTER_CATALOG = Object.freeze([
 ]);
 
 
+export const SUPERMARKET_MASTER_CATALOG = SHEET_SUPERMARKET_MASTER_CATALOG;
+export const SUPERMARKET_DAILY_ESSENTIAL_MASTER_IDS = SHEET_DAILY_ESSENTIAL_MASTER_IDS;
+
 export const MASTER_ID_ALIASES = Object.freeze({
   "water-15l":"water-aquafina-15l",
   "cola-can":"pepsi-300ml",
@@ -269,5 +273,7 @@ export const SUPERMARKET_CATEGORIES = Object.freeze(
 
 export function findMasterProduct(masterId) {
   const canonical=canonicalMasterId(masterId);
-  return SUPERMARKET_MASTER_CATALOG.find(item => item.masterId === canonical) || null;
+  return SUPERMARKET_MASTER_CATALOG.find(item => item.masterId === canonical)
+    || LEGACY_SUPERMARKET_MASTER_CATALOG.find(item => item.masterId === canonical)
+    || null;
 }

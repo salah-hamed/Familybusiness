@@ -4,6 +4,9 @@ import {
   getSupermarketOrderTracking,
   subscribeSupermarketOrderTracking
 } from "../../core/supermarket/order-service.js";
+import {
+  SUPERMARKET_DAILY_ESSENTIAL_MASTER_IDS
+} from "../../core/supermarket/daily-essentials.js";
 
 import {
   doc,
@@ -13,16 +16,42 @@ import {
   query,
   where,
   limit,
-  startAfter
+  startAfter,
+  documentId
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const $=id=>document.getElementById(id);
 const projectId=new URLSearchParams(location.search).get("project")||"";
 const PAGE_SIZE=40;
+const DAILY_HOME="daily";
+const DAILY_DISPLAY_LIMIT=36;
+const DAILY_QUERY_BATCH=30;
+const DAILY_CATEGORY_ORDER=[
+  "مياه",
+  "ألبان وبيض",
+  "خبز ومخبوزات",
+  "أرز ومكرونة وبقوليات",
+  "جبن",
+  "زيوت وسمن",
+  "سكر ودقيق ومستلزمات خبز",
+  "خضروات وفواكه طازجة",
+  "قهوة وشاي وأعشاب",
+  "معلبات وأغذية محفوظة",
+  "توابل ومكونات طبخ",
+  "صلصات وتتبيلات",
+  "فطار وعسل ومربى وسبريد",
+  "لحوم ودواجن"
+];
+const dailyRankByMasterId=new Map(
+  SUPERMARKET_DAILY_ESSENTIAL_MASTER_IDS.map((id,index)=>[
+    id,
+    SUPERMARKET_DAILY_ESSENTIAL_MASTER_IDS.length-index
+  ])
+);
 let store=null;
 let products=[];
 const productCache=new Map();
-let category="الكل";
+let category=DAILY_HOME;
 let lastProductDoc=null;
 let hasMoreProducts=true;
 let loadingProducts=false;
@@ -76,7 +105,7 @@ async function init(){
 
     loadSavedCustomer();
     renderCategories();
-    await loadProductsPage({reset:true});
+    await loadDailyEssentials();
     refreshCart();
     refreshOrdersButton();
   }catch(e){
@@ -95,18 +124,138 @@ function availableCategories(){
 }
 
 function renderCategories(){
-  const cats=["الكل",...availableCategories()];
-  $("categories").innerHTML=cats.map(c=>`<button class="${c===category?"active":""}" data-category="${escapeHTML(c)}">${escapeHTML(c)}</button>`).join("");
+  const cats=[
+    {value:DAILY_HOME,label:"🔥 الأكثر طلبًا"},
+    {value:"الكل",label:"كل المنتجات"},
+    ...availableCategories().map(value=>({value,label:value}))
+  ];
+
+  $("categories").innerHTML=cats.map(item=>
+    `<button class="${item.value===category?"active":""}" data-category="${escapeHTML(item.value)}">${escapeHTML(item.label)}</button>`
+  ).join("");
+
   $("categories").querySelectorAll("button").forEach(btn=>btn.onclick=async()=>{
     const next=btn.dataset.category;
     if(next===category)return;
     category=next;
     renderCategories();
-    await loadProductsPage({reset:true});
+    if(category===DAILY_HOME)await loadDailyEssentials();
+    else await loadProductsPage({reset:true});
   });
+
+  if($("catalogHeading")){
+    $("catalogHeading").innerText=category===DAILY_HOME
+      ?"الأكثر طلبًا للبيت المصري"
+      :category==="الكل"
+        ?"كل منتجات السوبرماركت"
+        :category;
+  }
+  if($("catalogSubheading")){
+    $("catalogSubheading").innerText=category===DAILY_HOME
+      ?"اختيارات يومية أساسية من المنتجات المتاحة في هذا السوبرماركت."
+      :"اختار اللي محتاجه أو استخدم البحث للوصول لأي منتج.";
+  }
+}
+
+function dailyPriority(product){
+  return Number(dailyRankByMasterId.get(String(product.masterId||""))||0);
+}
+
+function diversifyDailyProducts(items,limit=DAILY_DISPLAY_LIMIT){
+  const groups=new Map();
+
+  items.forEach(product=>{
+    const key=product.category||"أخرى";
+    if(!groups.has(key))groups.set(key,[]);
+    groups.get(key).push(product);
+  });
+
+  groups.forEach(list=>list.sort((a,b)=>
+    dailyPriority(b)-dailyPriority(a)
+    ||String(a.name||"").localeCompare(String(b.name||""),"ar")
+  ));
+
+  const orderedCategories=[
+    ...DAILY_CATEGORY_ORDER.filter(key=>groups.has(key)),
+    ...[...groups.keys()].filter(key=>!DAILY_CATEGORY_ORDER.includes(key))
+  ];
+
+  const result=[];
+  let progressed=true;
+  while(result.length<limit&&progressed){
+    progressed=false;
+    for(const key of orderedCategories){
+      const next=groups.get(key)?.shift();
+      if(!next)continue;
+      result.push(next);
+      progressed=true;
+      if(result.length>=limit)break;
+    }
+  }
+
+  return result;
+}
+
+async function loadDailyEssentials(){
+  if(loadingProducts)return;
+
+  loadingProducts=true;
+  products=[];
+  lastProductDoc=null;
+  hasMoreProducts=false;
+  $("productsGrid").innerHTML='<p class="empty">جاري تجهيز المنتجات الأكثر طلبًا...</p>';
+  $("loadMoreProductsBtn").classList.add("hidden");
+
+  try{
+    const base=collection(db,"supermarkets",projectId,"products");
+    const wanted=SUPERMARKET_DAILY_ESSENTIAL_MASTER_IDS.map(id=>`master_${id}`);
+    const batches=[];
+
+    for(let start=0;start<wanted.length;start+=DAILY_QUERY_BATCH){
+      batches.push(wanted.slice(start,start+DAILY_QUERY_BATCH));
+    }
+
+    const snaps=await Promise.all(
+      batches.map(ids=>getDocs(query(base,where(documentId(),"in",ids))))
+    );
+
+    const found=[];
+    snaps.forEach(snap=>snap.docs.forEach(d=>{
+      const product={productId:d.id,...d.data()};
+      if(product.isActive===true&&product.inStock===true){
+        found.push(product);
+      }
+    }));
+
+    if(found.length<12){
+      const fallback=await getDocs(query(
+        base,
+        where("isActive","==",true),
+        where("inStock","==",true),
+        limit(PAGE_SIZE)
+      ));
+      fallback.docs.forEach(d=>{
+        if(found.some(item=>item.productId===d.id))return;
+        found.push({productId:d.id,...d.data()});
+      });
+    }
+
+    products=diversifyDailyProducts(found);
+    products.forEach(product=>productCache.set(product.productId,product));
+    renderCategories();
+    renderProducts();
+  }catch(e){
+    $("productsGrid").innerHTML=`<p class="closed">تعذر تحميل المنتجات الأكثر طلبًا: ${escapeHTML(e.message)}</p>`;
+  }finally{
+    loadingProducts=false;
+  }
 }
 
 async function loadProductsPage({reset=false}={}){
+  if(category===DAILY_HOME){
+    await loadDailyEssentials();
+    return;
+  }
   if(loadingProducts)return;
 
   if(reset){
@@ -175,7 +324,7 @@ function attachProductImageFallbacks(){
 function renderProducts(){
   const q=$("searchInput").value.trim().toLowerCase();
   const visible=products.filter(p=>
-    (category==="الكل"||(p.category||"أخرى")===category)
+    (category===DAILY_HOME||category==="الكل"||(p.category||"أخرى")===category)
     && (
       !q
       || [p.name,p.size,p.category]
@@ -305,6 +454,12 @@ $("searchInput").addEventListener("input",()=>{
 
   searchTimer=setTimeout(async()=>{
     const q=$("searchInput").value.trim();
+
+    if(q&&category===DAILY_HOME){
+      category="الكل";
+      renderCategories();
+      await loadProductsPage({reset:true});
+    }
 
     if(q&&hasMoreProducts){
       $("emptyProducts").classList.remove("hidden");
