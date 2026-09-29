@@ -56,3 +56,61 @@
   .productFilters{grid-template-columns:1fr}
   .bulkBar span{width:100%;margin:0}
 }
+
+
+/* FB-SM01 — unified supermarket catalog */
+.unifiedCatalogPanel{border:2px solid #b7dec3;background:#fbfffc}
+.catalogStats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:16px 0}
+.catalogStat{border:1px solid var(--line);background:#fff;border-radius:14px;padding:10px;display:grid;gap:3px;text-align:center;color:#274c32;cursor:pointer}
+.catalogStat strong{font-size:20px}
+.catalogStat span{font-size:11px;color:var(--muted)}
+.catalogStat.isActive{border-color:#4caf6b;background:#edf9f0;box-shadow:0 0 0 2px rgba(22,163,74,.08)}
+.catalogToolbar{display:grid;grid-template-columns:2fr repeat(3,minmax(150px,1fr));gap:10px;margin:14px 0}
+.catalogToolbar input,.catalogToolbar select{width:100%;padding:12px;border:1px solid #cad8ce;border-radius:12px;background:#fff;font:inherit}
+.unifiedCatalogGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.catalogProductCard{border:1px solid var(--line);border-radius:18px;padding:14px;background:#fff;display:grid;gap:12px;align-content:start}
+.catalogProductCard.status-not_added{border-style:dashed}
+.catalogProductCard.status-paused{background:#fafafa}
+.catalogCardTop{display:grid;grid-template-columns:auto 82px minmax(0,1fr);gap:10px;align-items:start}
+.catalogSelectBox{padding-top:4px}
+.catalogSelectBox input{width:18px;height:18px}
+.catalogProductImage{height:82px;border:1px solid var(--line);border-radius:14px;background:#f3f6f4;display:grid;place-items:center;overflow:hidden;font-size:34px}
+.catalogProductImage img{width:100%;height:100%;object-fit:contain;background:#fff}
+.catalogImageFallback{font-size:34px}
+.catalogProductIdentity{min-width:0}
+.catalogProductIdentity h3{margin:7px 0 4px;font-size:15px;line-height:1.45}
+.catalogProductIdentity p{margin:0;color:var(--muted);font-size:12px;line-height:1.5}
+.catalogProductIdentity small{display:block;margin-top:3px;color:#7b877f}
+.catalogBadges{display:flex;flex-wrap:wrap;gap:5px}
+.sourceBadge,.statusBadge{display:inline-flex;align-items:center;border-radius:999px;padding:4px 7px;font-size:10px;font-weight:900}
+.sourceBadge{background:#eef6f0;color:#245333}
+.statusBadge.status-active{background:#dcfce7;color:#166534}
+.statusBadge.status-paused{background:#f3f4f6;color:#4b5563}
+.statusBadge.status-not_added{background:#fff7db;color:#8a5a00}
+.catalogPriceBlock{display:grid;gap:7px;background:#f8faf8;border-radius:13px;padding:10px}
+.catalogPriceBlock label,.catalogQuickEdit label{display:grid;gap:5px;font-size:11px}
+.catalogPriceBlock input,.catalogQuickEdit input{width:100%;padding:10px;border:1px solid #cad8ce;border-radius:10px}
+.catalogQuickEdit{display:grid;grid-template-columns:minmax(100px,1fr) auto auto;gap:8px;align-items:end}
+.catalogAdvanced{border-top:1px dashed var(--line);padding-top:9px}
+.catalogAdvanced summary{cursor:pointer;font-weight:800;color:#245333}
+.catalogAdvanced .productEditGrid{grid-template-columns:1fr 1fr;margin-top:10px}
+.toolCard summary{cursor:pointer;list-style:none}
+.toolCard summary::-webkit-details-marker{display:none}
+.toolCard summary>span{display:grid;gap:4px}
+.toolCard summary small{color:var(--muted);font-weight:400}
+.toolBody{padding-top:16px}
+.emptyCatalog{grid-column:1/-1;padding:24px;text-align:center}
+@media(max-width:900px){
+  .catalogStats{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .catalogToolbar{grid-template-columns:1fr 1fr}
+  .unifiedCatalogGrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:620px){
+  .catalogStats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .catalogToolbar,.unifiedCatalogGrid{grid-template-columns:1fr}
+  .catalogCardTop{grid-template-columns:auto 64px minmax(0,1fr)}
+  .catalogProductImage{height:64px}
+  .catalogQuickEdit{grid-template-columns:1fr 1fr}
+  .catalogQuickEdit label{grid-column:1/-1}
+  .catalogAdvanced .productEditGrid{grid-template-columns:1fr}
+}
