@@ -7,894 +7,868 @@ import {
   addStoreProduct,
   bulkAddMasterProducts,
   deleteStoreProduct,
-  listStoreProductsPage,
+  listStoreProducts,
   updateStoreProduct,
   findStoreProductByBarcode,
   bulkImportStoreProducts,
   mergeDuplicateStoreProducts,
   bulkUpdateStoreProducts,
-  bulkDeleteStoreProducts
+  bulkDeleteStoreProducts,
+  refreshSupermarketCatalogMeta
 } from "../core/supermarket/catalog-service.js";
+import {
+  buildUnifiedCatalog,
+  filterUnifiedCatalog,
+  unifiedCatalogStats
+} from "../core/supermarket/catalog-view-model.js";
 
 import {
   signOut,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
-const $=id=>document.getElementById(id);
-const params=new URLSearchParams(location.search);
-const projectId=params.get("project")||"";
-const inviteToken=params.get("invite")||"";
-const inviteAuthEmail=buildOperatorAuthEmail(inviteToken);
+const $ = id => document.getElementById(id);
+const params = new URLSearchParams(location.search);
+const projectId = params.get("project") || "";
+const inviteToken = params.get("invite") || "";
+const inviteAuthEmail = buildOperatorAuthEmail(inviteToken);
 
-let currentUser=null;
-let operator=null;
-let agreement=null;
-let store=null;
-let products=[];
-let barcodeStream=null;
+let currentUser = null;
+let operator = null;
+let agreement = null;
+let store = null;
+let products = [];
+let barcodeStream = null;
+let renderLimit = 48;
+let searchText = "";
+let categoryFilter = "الكل";
+let statusFilter = "الكل";
+let imageFilter = "الكل";
 
-let masterSearchText="";
-let masterCategoryFilter="الكل";
-let masterRenderLimit=24;
+const selectedMasterIds = new Set();
+const selectedStoreIds = new Set();
+const masterPriceDrafts = new Map();
 
-let storeSearchText="";
-let storeCategoryFilter="الكل";
-let storeStatusFilter="الكل";
-let storeImageFilter="الكل";
-let storeCursor=null;
-let storeHasMore=true;
-let storeLoading=false;
-const selectedStoreProducts=new Set();
-
-function money(value){
-  return `${Number(value||0).toLocaleString("ar-EG")} جنيه`;
+function money(value) {
+  return \`\${Number(value || 0).toLocaleString("ar-EG")} جنيه\`;
 }
 
-function escapeHTML(value){
-  return String(value??"")
-    .replace(/&/g,"&amp;")
-    .replace(/</g,"&lt;")
-    .replace(/>/g,"&gt;")
-    .replace(/"/g,"&quot;")
-    .replace(/'/g,"&#039;");
+function escapeHTML(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
-function setVisible(id,visible){
-  $(id).classList.toggle("hidden",!visible);
-}
-
-function dashboardUrl(){
-  const url=new URL("./",location.href);
-  url.searchParams.set("project",projectId);
-  if(inviteToken)url.searchParams.set("invite",inviteToken);
-  return url.toString();
-}
-
-function normalizeLookup(value){
-  return String(value||"")
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g,"")
-    .toLowerCase()
-    .replace(/[أإآ]/g,"ا")
-    .replace(/ى/g,"ي")
-    .replace(/ة/g,"ه")
-    .replace(/[^a-z0-9\u0600-\u06ff.]+/g," ")
-    .replace(/\s+/g," ")
-    .trim();
-}
-
-function sizeKey(...values){
-  const text=normalizeLookup(values.filter(Boolean).join(" "))
-    .replace(/litres?|liters?|litre|liter|ltr/g," l ")
-    .replace(/millilitres?|milliliters?|millilitre|milliliter|ml/g," ml ")
-    .replace(/kilograms?|kilogram|kgs?|كجم/g," kg ")
-    .replace(/grams?|gram|gms?|جم/g," g ")
-    .replace(/لتر/g," l ")
-    .replace(/مل/g," ml ")
-    .replace(/×|x/gi," x ");
-
-  return [...text.matchAll(/(\d+(?:\.\d+)?)\s*(ml|l|kg|g|قطعه|قطع|عبوه|عبوات|رول|كيس|اكياس|pcs?)/g)]
-    .map(match=>`${match[1]}${match[2]}`)
-    .slice(0,3)
-    .join("x");
-}
-
-function categoryEmoji(category){
-  const value=String(category||"");
-  if(/مياه|مشروبات|عصائر/.test(value))return "🥤";
-  if(/ألبان|بيض|جبن/.test(value))return "🥛";
-  if(/أرز|مكرونة|بقول|دقيق|سكر/.test(value))return "🌾";
-  if(/زيوت|سمن/.test(value))return "🫗";
-  if(/سناكس|بسكويت|شوكولاتة|حلويات/.test(value))return "🍫";
-  if(/منظفات|منزل|ورقيات/.test(value))return "🧽";
-  if(/عناية/.test(value))return "🧴";
-  if(/مجمدات/.test(value))return "❄️";
+function categoryEmoji(category) {
+  const value = String(category || "");
+  if (/مياه|مشروبات|عصائر/.test(value)) return "🥤";
+  if (/ألبان|بيض|جبن/.test(value)) return "🥛";
+  if (/أرز|مكرونة|بقول|دقيق|سكر/.test(value)) return "🌾";
+  if (/زيوت|سمن/.test(value)) return "🫗";
+  if (/سناكس|بسكويت|شوكولاتة|حلويات/.test(value)) return "🍫";
+  if (/منظفات|منزل|ورقيات/.test(value)) return "🧽";
+  if (/عناية/.test(value)) return "🧴";
+  if (/مجمدات/.test(value)) return "❄️";
+  if (/لحوم|دواجن/.test(value)) return "🍗";
+  if (/أسماك/.test(value)) return "🐟";
+  if (/خضروات|فواكه/.test(value)) return "🥬";
   return "🛒";
 }
 
-function baseProductName(value){
-  return normalizeLookup(value)
-    .replace(/\b\d+(?:\.\d+)?\s*(ml|l|kg|g|مل|لتر|كجم|جم|قطعه|قطع|عبوه|عبوات|رول|كيس|اكياس|pcs?)\b/g," ")
-    .replace(/\s+/g," ")
-    .trim();
+function dashboardUrl() {
+  const url = new URL("./", location.href);
+  url.searchParams.set("project", projectId);
+  if (inviteToken) url.searchParams.set("invite", inviteToken);
+  return url.toString();
 }
 
-function nameSimilarity(a,b){
-  const compact=value=>baseProductName(value).replace(/\s+/g,"");
-  const left=compact(a);
-  const right=compact(b);
+function setVisible(id, visible) {
+  $(id).classList.toggle("hidden", !visible);
+}
 
-  if(!left||!right)return 0;
-  if(left===right)return 1;
+function normalizedProducts() {
+  return products.map(product => ({
+    ...product,
+    masterId: canonicalMasterId(product.masterId)
+  }));
+}
 
-  const pairs=value=>value.length<2?[value]:Array.from({length:value.length-1},(_,index)=>value.slice(index,index+2));
-  const aPairs=pairs(left);
-  const bPairs=pairs(right);
-  const counts=new Map();
+function unifiedEntries() {
+  return buildUnifiedCatalog(SUPERMARKET_MASTER_CATALOG, normalizedProducts());
+}
 
-  bPairs.forEach(pair=>counts.set(pair,(counts.get(pair)||0)+1));
+function entryByMasterId(masterId) {
+  return unifiedEntries().find(entry => entry.kind === "master" && entry.master.masterId === masterId) || null;
+}
 
-  let overlap=0;
-  aPairs.forEach(pair=>{
-    const count=counts.get(pair)||0;
-    if(!count)return;
-    overlap++;
-    counts.set(pair,count-1);
+function filteredEntries() {
+  return filterUnifiedCatalog(unifiedEntries(), {
+    search: searchText,
+    category: categoryFilter,
+    status: statusFilter,
+    image: imageFilter
   });
-
-  return (2*overlap)/(aPairs.length+bPairs.length);
 }
 
-function masterEquivalentProduct(item){
-  const direct=products.find(product=>
-    canonicalMasterId(product.masterId)===item.masterId
-  );
-  if(direct)return direct;
+function imageMarkup(entry) {
+  const fallback = categoryEmoji(entry.category);
+  if (!entry.image) {
+    return \`<span class="catalogImageFallback">\${fallback}</span>\`;
+  }
 
-  const wantedSize=sizeKey(item.size,item.name);
-  const brand=normalizeLookup(item.brand).replace(/\s+/g,"");
-  const ignored=new Set(["ml","kg","gm","ltr","liter","litre","water","milk","oil","gel"]);
-  const masterTokens=item.masterId
-    .split("-")
-    .map(token=>normalizeLookup(token).replace(/\s+/g,""))
-    .filter(token=>
-      token.length>2
-      && !/^\d/.test(token)
-      && !brand.includes(token)
-      && !ignored.has(token)
-    );
+  return \`<img src="\${escapeHTML(entry.image)}" alt="" loading="lazy" data-image-fallback="\${escapeHTML(fallback)}">\`;
+}
 
-  const candidates=products
-    .map(product=>{
-      const searchable=normalizeLookup([product.name,product.size].join(" "));
-      const compact=searchable.replace(/\s+/g,"");
-      const productSize=sizeKey(product.size,product.name);
-
-      if(brand&&brand!=="local"&&!compact.includes(brand))return null;
-      if(wantedSize&&productSize&&wantedSize!==productSize)return null;
-
-      const tokenScore=masterTokens.filter(token=>compact.includes(token)).length;
-      if(masterTokens.length&&tokenScore===0)return null;
-
-      return {product,score:100+tokenScore};
-    })
-    .filter(Boolean)
-    .sort((a,b)=>b.score-a.score);
-
-  if(candidates.length===1)return candidates[0].product;
-  if(candidates.length>1&&candidates[0].score>candidates[1].score)return candidates[0].product;
-
-  let fuzzyBest=null;
-  let fuzzyScore=0;
-  let fuzzyTie=false;
-
-  products.forEach(product=>{
-    const productSize=sizeKey(product.size,product.name);
-    if(wantedSize&&productSize&&wantedSize!==productSize)return;
-
-    const score=nameSimilarity(product.name,item.name);
-    if(score<0.9)return;
-
-    if(score>fuzzyScore){
-      fuzzyBest=product;
-      fuzzyScore=score;
-      fuzzyTie=false;
-    }else if(score===fuzzyScore){
-      fuzzyTie=true;
-    }
+function attachImageFallbacks() {
+  document.querySelectorAll(".catalogProductImage img").forEach(img => {
+    img.addEventListener("error", () => {
+      const span = document.createElement("span");
+      span.className = "catalogImageFallback";
+      span.textContent = img.dataset.imageFallback || "🛒";
+      img.replaceWith(span);
+    }, { once: true });
   });
-
-  return fuzzyTie?null:fuzzyBest;
 }
 
-function masterImageFor(item){
-  if(item.image)return item.image;
+async function authorize() {
+  if (!currentUser || !projectId || !inviteAuthEmail) return false;
 
-  const equivalent=masterEquivalentProduct(item);
-  if(equivalent?.image)return equivalent.image;
-
-  const wantedSize=sizeKey(item.size,item.name);
-  const brand=normalizeLookup(item.brand).replace(/\s+/g,"");
-  if(!brand||brand==="local")return "";
-
-  const candidates=products
-    .filter(product=>product.image)
-    .map(product=>{
-      const searchable=normalizeLookup([product.name,product.size].join(" "));
-      const compact=searchable.replace(/\s+/g,"");
-      const productSize=sizeKey(product.size,product.name);
-
-      if(!compact.includes(brand))return null;
-      if(wantedSize&&productSize&&wantedSize!==productSize)return null;
-
-      return product;
-    })
-    .filter(Boolean);
-
-  return candidates.length===1?candidates[0].image:"";
-}
-
-async function authorize(){
-  if(!currentUser||!projectId||!inviteAuthEmail)return false;
-
-  try{
-    await claimOperatorAccess(projectId,currentUser);
-  }catch(e){
-    if(e.message!=="OPERATOR_ALREADY_CLAIMED"){
-      $("pageStatus").innerText=`تعذر فتح المكتبة: ${e.message}`;
+  try {
+    await claimOperatorAccess(projectId, currentUser);
+  } catch (error) {
+    if (error.message !== "OPERATOR_ALREADY_CLAIMED") {
+      $("pageStatus").innerText = \`تعذر فتح الكتالوج: \${error.message}\`;
       return false;
     }
   }
 
-  [operator,agreement,store]=await Promise.all([
+  [operator, agreement, store] = await Promise.all([
     getOperator(projectId),
     getCommissionAgreement(projectId),
     getSupermarket(projectId)
   ]);
 
-  const canOperate=
+  const canOperate =
     operatorCanOperate(operator)
-    && agreement?.status==="accepted"
-    && agreement?.currentAmount!=null;
+    && agreement?.status === "accepted"
+    && agreement?.currentAmount != null;
 
-  if(!canOperate){
-    $("pageStatus").innerText="مكتبة المنتجات تتفعل بعد تفعيل حساب السوبرماركت وقبول العمولة.";
+  if (!canOperate) {
+    $("pageStatus").innerText = "كتالوج المنتجات يتفعل بعد تفعيل حساب السوبرماركت وقبول العمولة.";
     return false;
   }
 
-  $("pageStatus").innerText=`${store?.name||operator?.name||"السوبرماركت"} — إدارة المنتجات والتصنيفات والصور.`;
+  $("pageStatus").innerText = \`\${store?.name || operator?.name || "السوبرماركت"} — أضف وعدّل وفعّل المنتجات من كتالوج واحد.\`;
   return true;
 }
 
-onAuthStateChanged(auth,async user=>{
-  currentUser=user;
-  $("backToDashboard").href=dashboardUrl();
-
-  if(!projectId||!inviteAuthEmail){
-    $("pageStatus").innerText="رابط مكتبة المنتجات غير مكتمل.";
-    return;
-  }
-
-  if(user&&String(user.email||"").toLowerCase()!==inviteAuthEmail.toLowerCase()){
-    await signOut(auth);
-    return;
-  }
-
-  if(!user){
-    $("pageStatus").innerText="سجل دخولك من لوحة تشغيل السوبرماركت أولًا ثم افتح مكتبة المنتجات.";
-    return;
-  }
-
-  if(!await authorize())return;
-
-  setVisible("productsPanel",true);
-  initMasterCatalogFilters();
-  renderMasterCatalog();
-
-  try{
-    await loadProducts({reset:true});
-  }catch(e){
-    $("masterCatalogMessage").innerText=`المكتبة جاهزة، لكن تعذر تحميل منتجات المتجر: ${e.message}`;
-  }
-});
-
-function initMasterCatalogFilters(){
-  const categories=[...new Set(SUPERMARKET_MASTER_CATALOG.map(item=>item.category))]
-    .sort((a,b)=>a.localeCompare(b,"ar"));
-
-  $("masterCategoryFilter").innerHTML=
-    '<option value="الكل">كل التصنيفات</option>'
-    +categories.map(value=>`<option value="${escapeHTML(value)}">${escapeHTML(value)}</option>`).join("");
+async function syncCatalogMeta() {
+  const result = await refreshSupermarketCatalogMeta(projectId, products);
+  store = {
+    ...store,
+    catalogCategories: result.categories,
+    catalogProductCount: result.productCount
+  };
 }
 
-function refreshStoreCategoryFilter(){
-  const categories=[
-    ...new Set([
-      ...(Array.isArray(store?.catalogCategories)?store.catalogCategories:[]),
-      ...products.map(item=>item.category||"أخرى")
-    ].filter(Boolean))
-  ].sort((a,b)=>String(a).localeCompare(String(b),"ar"));
+async function loadProducts({ syncMeta = false } = {}) {
+  products = await listStoreProducts(projectId);
 
-  const previous=storeCategoryFilter;
-  $("storeCategoryFilter").innerHTML=
-    '<option value="الكل">كل التصنيفات</option>'
-    +categories.map(value=>`<option value="${escapeHTML(value)}">${escapeHTML(value)}</option>`).join("");
+  const validIds = new Set(products.map(product => product.productId));
+  for (const id of [...selectedStoreIds]) {
+    if (!validIds.has(id)) selectedStoreIds.delete(id);
+  }
 
-  if(previous==="الكل"||categories.includes(previous)){
-    $("storeCategoryFilter").value=previous;
-  }else{
-    storeCategoryFilter="الكل";
+  if (syncMeta) {
+    await syncCatalogMeta();
+  }
+
+  renderCatalog();
+}
+
+function refreshCategoryOptions(entries) {
+  const categories = [...new Set(entries.map(entry => entry.category).filter(Boolean))]
+    .sort((a, b) => String(a).localeCompare(String(b), "ar"));
+
+  const select = $("catalogCategoryFilter");
+  const previous = categoryFilter;
+  select.innerHTML = '<option value="الكل">كل التصنيفات</option>'
+    + categories.map(value => \`<option value="\${escapeHTML(value)}">\${escapeHTML(value)}</option>\`).join("");
+
+  if (previous === "الكل" || categories.includes(previous)) {
+    select.value = previous;
+  } else {
+    categoryFilter = "الكل";
+    select.value = "الكل";
   }
 }
 
-async function loadProducts({reset=false}={}){
-  if(storeLoading)return;
+function renderStats(entries) {
+  const stats = unifiedCatalogStats(entries);
+  $("statTotal").innerText = stats.total;
+  $("statActive").innerText = stats.active;
+  $("statPaused").innerText = stats.paused;
+  $("statNotAdded").innerText = stats.not_added;
+  $("statWithoutImage").innerText = stats.withoutImage;
 
-  if(reset){
-    products=[];
-    storeCursor=null;
-    storeHasMore=true;
-    selectedStoreProducts.clear();
+  document.querySelectorAll("[data-status-filter]").forEach(btn => {
+    btn.classList.toggle("isActive", btn.dataset.statusFilter === statusFilter);
+  });
+  document.querySelectorAll("[data-image-filter]").forEach(btn => {
+    btn.classList.toggle("isActive", btn.dataset.imageFilter === imageFilter);
+  });
+}
+
+function pruneSelections(entries) {
+  const masterIds = new Set(entries.filter(entry => entry.kind === "master" && !entry.added).map(entry => entry.master.masterId));
+  const storeIds = new Set(entries.filter(entry => entry.added && entry.product?.productId).map(entry => entry.product.productId));
+
+  for (const id of [...selectedMasterIds]) {
+    if (!masterIds.has(id)) selectedMasterIds.delete(id);
   }
+  for (const id of [...selectedStoreIds]) {
+    if (!storeIds.has(id)) selectedStoreIds.delete(id);
+  }
+}
 
-  if(!storeHasMore)return;
+function refreshSelectionBar() {
+  const total = selectedMasterIds.size + selectedStoreIds.size;
+  $("catalogSelectionCount").innerText = total
+    ? \`\${total} محدد · \${selectedMasterIds.size} غير مضاف · \${selectedStoreIds.size} من المتجر\`
+    : "0 محدد";
 
-  storeLoading=true;
-  $("loadMoreStoreBtn").disabled=true;
+  $("addSelectedBtn").disabled = selectedMasterIds.size === 0;
+  ["bulkActivateBtn", "bulkPauseBtn", "bulkCategoryBtn", "bulkDeleteBtn"]
+    .forEach(id => $(id).disabled = selectedStoreIds.size === 0);
+}
 
-  try{
-    const result=await listStoreProductsPage(projectId,{
-      pageSize:50,
-      cursor:storeCursor,
-      category:storeCategoryFilter
-    });
+function masterDraftPrice(master) {
+  if (!masterPriceDrafts.has(master.masterId)) {
+    masterPriceDrafts.set(master.masterId, Number(master.referencePrice || 0));
+  }
+  return masterPriceDrafts.get(master.masterId);
+}
 
-    storeCursor=result.cursor;
-    storeHasMore=result.hasMore;
+function renderNotAddedControls(entry) {
+  const master = entry.master;
+  const price = masterDraftPrice(master);
 
-    result.products.forEach(product=>{
-      if(!products.some(item=>item.productId===product.productId)){
-        products.push(product);
+  return \`
+    <div class="catalogPriceBlock">
+      <small>سعر استرشادي: <b>\${money(master.referencePrice)}</b></small>
+      <label>سعر متجرك
+        <input class="catalogPriceInput" data-master-price="\${escapeHTML(master.masterId)}" type="number" min="0" step="0.25" value="\${Number(price || 0)}">
+      </label>
+    </div>
+    <button class="primary addCatalogProduct" data-master-add="\${escapeHTML(master.masterId)}" type="button">+ إضافة للمتجر</button>
+  \`;
+}
+
+function renderAddedControls(entry) {
+  const product = entry.product;
+  const active = entry.status === "active";
+
+  return \`
+    <div class="catalogQuickEdit">
+      <label>السعر
+        <input class="quickPrice" type="number" min="0" step="0.25" value="\${Number(product.price || 0)}">
+      </label>
+      <button class="primary saveQuickPrice" type="button">حفظ السعر</button>
+      <button class="secondary toggleCatalogProduct" type="button">\${active ? "إيقاف" : "إعادة التفعيل"}</button>
+    </div>
+
+    <details class="catalogAdvanced">
+      <summary>تعديل التفاصيل</summary>
+      <div class="productEditGrid">
+        <label>اسم المنتج<input class="editName" value="\${escapeHTML(product.name || "")}"></label>
+        <label>التصنيف<input class="editCategory" value="\${escapeHTML(product.category || "أخرى")}"></label>
+        <label>الحجم<input class="editSize" value="\${escapeHTML(product.size || "")}"></label>
+        <label>رابط الصورة<input class="editImage" value="\${escapeHTML(product.image || "")}" placeholder="https://..."></label>
+      </div>
+      <div class="productControls">
+        <button class="primary saveProductDetails" type="button">حفظ التفاصيل</button>
+        <button class="danger deleteCatalogProduct" type="button">حذف من المتجر</button>
+      </div>
+    </details>
+  \`;
+}
+
+function renderEntry(entry) {
+  const isMasterNotAdded = entry.kind === "master" && !entry.added;
+  const selectType = isMasterNotAdded ? "master" : "store";
+  const selectId = isMasterNotAdded ? entry.master.masterId : entry.product.productId;
+  const selected = isMasterNotAdded
+    ? selectedMasterIds.has(selectId)
+    : selectedStoreIds.has(selectId);
+
+  const statusLabel = entry.status === "not_added"
+    ? "غير مضاف"
+    : entry.status === "active"
+      ? "متاح للعملاء"
+      : "متوقف";
+
+  const sourceLabel = entry.kind === "master"
+    ? "مكتبة Family Business"
+    : entry.source === "import"
+      ? "Excel / CSV"
+      : "منتج خاص بالمتجر";
+
+  return \`
+    <article class="catalogProductCard status-\${entry.status}" data-entry-key="\${escapeHTML(entry.key)}" data-product-id="\${escapeHTML(entry.product?.productId || "")}">
+      <div class="catalogCardTop">
+        <label class="catalogSelectBox" title="تحديد">
+          <input type="checkbox" data-select-type="\${selectType}" data-select-id="\${escapeHTML(selectId)}" \${selected ? "checked" : ""}>
+        </label>
+        <div class="catalogProductImage">\${imageMarkup(entry)}</div>
+        <div class="catalogProductIdentity">
+          <div class="catalogBadges">
+            <span class="sourceBadge">\${escapeHTML(sourceLabel)}</span>
+            <span class="statusBadge status-\${entry.status}">\${statusLabel}</span>
+          </div>
+          <h3>\${escapeHTML(entry.name)}</h3>
+          <p>\${escapeHTML(entry.category)}\${entry.size ? \` · \${escapeHTML(entry.size)}\` : ""}</p>
+          \${entry.brand ? \`<small>\${escapeHTML(entry.brand)}</small>\` : ""}
+        </div>
+      </div>
+
+      \${isMasterNotAdded ? renderNotAddedControls(entry) : renderAddedControls(entry)}
+    </article>
+  \`;
+}
+
+function bindCatalogCardEvents(visibleEntries) {
+  const byKey = new Map(visibleEntries.map(entry => [entry.key, entry]));
+
+  document.querySelectorAll("[data-select-type]").forEach(input => {
+    input.onchange = () => {
+      const set = input.dataset.selectType === "master" ? selectedMasterIds : selectedStoreIds;
+      if (input.checked) set.add(input.dataset.selectId);
+      else set.delete(input.dataset.selectId);
+      refreshSelectionBar();
+    };
+  });
+
+  document.querySelectorAll("[data-master-price]").forEach(input => {
+    input.oninput = () => {
+      masterPriceDrafts.set(input.dataset.masterPrice, Number(input.value || 0));
+    };
+  });
+
+  document.querySelectorAll("[data-master-add]").forEach(btn => {
+    btn.onclick = async () => {
+      const masterId = btn.dataset.masterAdd;
+      const entry = entryByMasterId(masterId);
+      if (!entry?.master) return;
+
+      btn.disabled = true;
+      $("catalogMessage").innerText = "جاري إضافة المنتج...";
+
+      try {
+        await addStoreProduct(projectId, currentUser.uid, {
+          masterId,
+          name: entry.master.name,
+          category: entry.master.category,
+          size: entry.master.size,
+          image: entry.image,
+          price: masterDraftPrice(entry.master)
+        });
+        selectedMasterIds.delete(masterId);
+        await loadProducts({ syncMeta: true });
+        $("catalogMessage").innerText = \`تمت إضافة \${entry.master.name} ✅\`;
+      } catch (error) {
+        $("catalogMessage").innerText = error.message === "PRODUCT_ALREADY_EXISTS"
+          ? "المنتج موجود بالفعل في متجرك."
+          : \`تعذر الإضافة: \${error.message}\`;
+        btn.disabled = false;
       }
-    });
+    };
+  });
 
-    for(const id of [...selectedStoreProducts]){
-      if(!products.some(item=>item.productId===id))selectedStoreProducts.delete(id);
+  document.querySelectorAll(".catalogProductCard[data-product-id]").forEach(card => {
+    const productId = card.dataset.productId;
+    if (!productId) return;
+
+    const entry = byKey.get(card.dataset.entryKey);
+    const product = entry?.product;
+    if (!product) return;
+
+    const quickSave = card.querySelector(".saveQuickPrice");
+    if (quickSave) {
+      quickSave.onclick = async () => {
+        quickSave.disabled = true;
+        try {
+          await updateStoreProduct(projectId, productId, currentUser.uid, {
+            price: card.querySelector(".quickPrice").value
+          });
+          await loadProducts();
+          $("catalogMessage").innerText = \`تم تحديث سعر \${product.name} ✅\`;
+        } catch (error) {
+          $("catalogMessage").innerText = \`تعذر حفظ السعر: \${error.message}\`;
+          quickSave.disabled = false;
+        }
+      };
     }
 
-    refreshStoreCategoryFilter();
-    renderStoreProducts();
-    renderMasterCatalog();
-  }finally{
-    storeLoading=false;
-    $("loadMoreStoreBtn").disabled=false;
+    const toggle = card.querySelector(".toggleCatalogProduct");
+    if (toggle) {
+      toggle.onclick = async () => {
+        const nextActive = !(product.isActive === true && product.inStock === true);
+        toggle.disabled = true;
+        try {
+          await updateStoreProduct(projectId, productId, currentUser.uid, {
+            isActive: nextActive,
+            inStock: nextActive
+          });
+          await loadProducts({ syncMeta: true });
+          $("catalogMessage").innerText = nextActive ? "تم تفعيل المنتج ✅" : "تم إيقاف المنتج مؤقتًا.";
+        } catch (error) {
+          $("catalogMessage").innerText = \`تعذر تغيير الحالة: \${error.message}\`;
+          toggle.disabled = false;
+        }
+      };
+    }
+
+    const saveDetails = card.querySelector(".saveProductDetails");
+    if (saveDetails) {
+      saveDetails.onclick = async () => {
+        saveDetails.disabled = true;
+        try {
+          await updateStoreProduct(projectId, productId, currentUser.uid, {
+            name: card.querySelector(".editName").value,
+            category: card.querySelector(".editCategory").value,
+            size: card.querySelector(".editSize").value,
+            image: card.querySelector(".editImage").value
+          });
+          await loadProducts({ syncMeta: true });
+          $("catalogMessage").innerText = "تم حفظ بيانات المنتج ✅";
+        } catch (error) {
+          $("catalogMessage").innerText = \`تعذر حفظ البيانات: \${error.message}\`;
+          saveDetails.disabled = false;
+        }
+      };
+    }
+
+    const remove = card.querySelector(".deleteCatalogProduct");
+    if (remove) {
+      remove.onclick = async () => {
+        if (!confirm(\`حذف "\${product.name}" من متجرك؟\`)) return;
+        try {
+          await deleteStoreProduct(projectId, productId);
+          selectedStoreIds.delete(productId);
+          await loadProducts({ syncMeta: true });
+          $("catalogMessage").innerText = "تم حذف المنتج من المتجر.";
+        } catch (error) {
+          $("catalogMessage").innerText = \`تعذر الحذف: \${error.message}\`;
+        }
+      };
+    }
+  });
+
+  attachImageFallbacks();
+}
+
+function renderCatalog() {
+  const entries = unifiedEntries();
+  pruneSelections(entries);
+  refreshCategoryOptions(entries);
+  renderStats(entries);
+
+  const filtered = filteredEntries();
+  const visible = filtered.slice(0, renderLimit);
+
+  $("catalogVisibleCount").innerText = filtered.length === entries.length
+    ? \`\${entries.length} منتج\`
+    : \`\${filtered.length} نتيجة من \${entries.length}\`;
+
+  $("unifiedCatalog").innerHTML = visible.length
+    ? visible.map(renderEntry).join("")
+    : '<p class="muted emptyCatalog">لا توجد منتجات مطابقة للفلاتر الحالية.</p>';
+
+  $("loadMoreCatalogBtn").classList.toggle("hidden", visible.length >= filtered.length);
+  refreshSelectionBar();
+  bindCatalogCardEvents(visible);
+}
+
+function resetCatalogWindow() {
+  renderLimit = 48;
+  renderCatalog();
+}
+
+$("catalogSearch").addEventListener("input", event => {
+  searchText = event.target.value;
+  resetCatalogWindow();
+});
+
+$("catalogCategoryFilter").addEventListener("change", event => {
+  categoryFilter = event.target.value;
+  resetCatalogWindow();
+});
+
+$("catalogStatusFilter").addEventListener("change", event => {
+  statusFilter = event.target.value;
+  resetCatalogWindow();
+});
+
+$("catalogImageFilter").addEventListener("change", event => {
+  imageFilter = event.target.value;
+  resetCatalogWindow();
+});
+
+document.querySelectorAll("[data-status-filter]").forEach(btn => {
+  btn.onclick = () => {
+    statusFilter = btn.dataset.statusFilter;
+    $("catalogStatusFilter").value = statusFilter;
+    resetCatalogWindow();
+  };
+});
+
+document.querySelectorAll("[data-image-filter]").forEach(btn => {
+  btn.onclick = () => {
+    imageFilter = btn.dataset.imageFilter;
+    $("catalogImageFilter").value = imageFilter;
+    resetCatalogWindow();
+  };
+});
+
+$("loadMoreCatalogBtn").onclick = () => {
+  renderLimit += 48;
+  renderCatalog();
+};
+
+$("selectVisibleBtn").onclick = () => {
+  filteredEntries().slice(0, renderLimit).forEach(entry => {
+    if (entry.kind === "master" && !entry.added) selectedMasterIds.add(entry.master.masterId);
+    else if (entry.product?.productId) selectedStoreIds.add(entry.product.productId);
+  });
+  renderCatalog();
+};
+
+$("clearSelectionBtn").onclick = () => {
+  selectedMasterIds.clear();
+  selectedStoreIds.clear();
+  renderCatalog();
+};
+
+$("addSelectedBtn").onclick = async () => {
+  if (!selectedMasterIds.size) return;
+
+  const selections = [...selectedMasterIds]
+    .map(masterId => entryByMasterId(masterId))
+    .filter(entry => entry?.master)
+    .map(entry => ({
+      masterId: entry.master.masterId,
+      price: masterDraftPrice(entry.master),
+      image: entry.image
+    }));
+
+  $("addSelectedBtn").disabled = true;
+  $("catalogMessage").innerText = \`جاري إضافة \${selections.length} منتج...\`;
+
+  try {
+    const result = await bulkAddMasterProducts(projectId, currentUser.uid, selections);
+    selectedMasterIds.clear();
+    await loadProducts({ syncMeta: true });
+    $("catalogMessage").innerText = \`تمت إضافة \${result.added} منتج ✅\${result.skipped ? \` — تم تخطي \${result.skipped} موجود بالفعل\` : ""}\`;
+  } catch (error) {
+    $("catalogMessage").innerText = \`تعذر الإضافة الجماعية: \${error.message}\`;
+    $("addSelectedBtn").disabled = false;
   }
-}
-
-function filteredStoreProducts(){
-  const q=normalizeLookup(storeSearchText);
-
-  return products.filter(product=>{
-    const searchable=normalizeLookup([product.name,product.size,product.category].join(" "));
-    const matchesSearch=!q||searchable.includes(q);
-    const matchesCategory=storeCategoryFilter==="الكل"||(product.category||"أخرى")===storeCategoryFilter;
-    const active=product.isActive===true&&product.inStock===true;
-    const matchesStatus=
-      storeStatusFilter==="الكل"
-      ||(storeStatusFilter==="active"&&active)
-      ||(storeStatusFilter==="paused"&&!active);
-    const hasImage=Boolean(String(product.image||"").trim());
-    const matchesImage=
-      storeImageFilter==="الكل"
-      ||(storeImageFilter==="with"&&hasImage)
-      ||(storeImageFilter==="without"&&!hasImage);
-
-    return matchesSearch&&matchesCategory&&matchesStatus&&matchesImage;
-  });
-}
-
-function refreshBulkSelection(){
-  $("bulkSelectionCount").innerText=`${selectedStoreProducts.size} محدد`;
-  const disabled=selectedStoreProducts.size===0;
-  ["bulkActivateBtn","bulkPauseBtn","bulkCategoryBtn","bulkDeleteBtn"]
-    .forEach(id=>$(id).disabled=disabled);
-}
-
-function renderStoreProducts(){
-  const visible=filteredStoreProducts();
-
-  const totalHint=Number(store?.catalogProductCount||0);
-  $("storeProductsCount").innerText=totalHint
-    ? `${visible.length} محمل من أصل ${totalHint} منتج`
-    : `${visible.length} منتج محمل`;
-  $("loadMoreStoreBtn").classList.toggle("hidden",!storeHasMore);
-
-  $("productsList").innerHTML=visible.length
-    ?visible.map(product=>{
-      const image=String(product.image||"").trim();
-      return `
-      <article class="rowCard productManagerCard" data-product-id="${product.productId}">
-        <div class="productManagerTop">
-          <label class="productSelect">
-            <input class="storeProductSelect" type="checkbox" ${selectedStoreProducts.has(product.productId)?"checked":""}>
-          </label>
-          <div class="storeProductThumb">
-            ${image?`<img src="${escapeHTML(image)}" alt="" loading="lazy">`:`<span>${categoryEmoji(product.category)}</span>`}
-          </div>
-          <div class="productManagerInfo">
-            <b>${escapeHTML(product.name)}</b>
-            <div class="muted">${escapeHTML(product.category||"أخرى")} · ${escapeHTML(product.size||"")}</div>
-            <small class="muted">${image?"✅ صورة متاحة":"⚠️ بدون صورة"} · ${escapeHTML(product.source||"manual")}</small>
-          </div>
-          <span class="pill">${product.inStock&&product.isActive?"متاح":"متوقف"}</span>
-        </div>
-
-        <div class="productEditGrid">
-          <label>اسم المنتج<input class="editName" value="${escapeHTML(product.name)}"></label>
-          <label>التصنيف<input class="editCategory" value="${escapeHTML(product.category||"أخرى")}"></label>
-          <label>الحجم<input class="editSize" value="${escapeHTML(product.size||"")}"></label>
-          <label>السعر<input class="editPrice" type="number" min="0" step="0.25" value="${Number(product.price||0)}"></label>
-          <label>رابط الصورة<input class="editImage" value="${escapeHTML(product.image||"")}" placeholder="https://..."></label>
-        </div>
-
-        <div class="productControls">
-          <button class="primary saveProduct">حفظ التعديلات</button>
-          <button class="secondary toggleProduct">${product.inStock&&product.isActive?"إيقاف مؤقت":"إعادة التفعيل"}</button>
-          <button class="danger deleteProduct">حذف نهائي</button>
-        </div>
-      </article>`;
-    }).join("")
-    :'<p class="muted">لا توجد منتجات مطابقة للفلاتر الحالية.</p>';
-
-  document.querySelectorAll("[data-product-id]").forEach(card=>{
-    const id=card.dataset.productId;
-    const product=products.find(item=>item.productId===id);
-
-    card.querySelector(".storeProductSelect").onchange=event=>{
-      if(event.target.checked)selectedStoreProducts.add(id);
-      else selectedStoreProducts.delete(id);
-      refreshBulkSelection();
-    };
-
-    card.querySelector(".saveProduct").onclick=async()=>{
-      const btn=card.querySelector(".saveProduct");
-      btn.disabled=true;
-
-      try{
-        await updateStoreProduct(projectId,id,currentUser.uid,{
-          name:card.querySelector(".editName").value,
-          category:card.querySelector(".editCategory").value,
-          size:card.querySelector(".editSize").value,
-          price:card.querySelector(".editPrice").value,
-          image:card.querySelector(".editImage").value
-        });
-        await loadProducts({reset:true});
-      }catch(e){
-        alert(e.message);
-      }finally{
-        btn.disabled=false;
-      }
-    };
-
-    card.querySelector(".toggleProduct").onclick=async()=>{
-      const active=!(product.inStock&&product.isActive);
-      try{
-        await updateStoreProduct(projectId,id,currentUser.uid,{
-          inStock:active,
-          isActive:active
-        });
-        await loadProducts({reset:true});
-      }catch(e){
-        alert(e.message);
-      }
-    };
-
-    card.querySelector(".deleteProduct").onclick=async()=>{
-      if(!confirm(`حذف "${product.name}" نهائيًا؟`))return;
-      try{
-        await deleteStoreProduct(projectId,id);
-        selectedStoreProducts.delete(id);
-        await loadProducts({reset:true});
-      }catch(e){
-        alert(e.message);
-      }
-    };
-  });
-
-  refreshBulkSelection();
-}
-
-function filteredMasterCatalog(){
-  const q=masterSearchText.trim().toLowerCase();
-
-  return SUPERMARKET_MASTER_CATALOG.filter(item=>{
-    const matchesCategory=masterCategoryFilter==="الكل"||item.category===masterCategoryFilter;
-    const matchesSearch=!q||[item.name,item.brand,item.category,item.size]
-      .some(value=>String(value||"").toLowerCase().includes(q));
-
-    return matchesCategory&&matchesSearch;
-  });
-}
-
-function refreshMasterSelectionCount(){
-  const available=[...document.querySelectorAll(".masterSelect:not(:disabled)")];
-  const selected=available.filter(input=>input.checked);
-  $("masterSelectionCount").innerText=`${selected.length} منتج محدد من ${available.length} ظاهر`;
-  $("addSelectedMasterBtn").disabled=selected.length===0;
-}
-
-function renderMasterCatalog(){
-  $("masterPriceMeta").innerText=
-    `${MASTER_PRICE_META.source} — تحديث ${MASTER_PRICE_META.priceAsOf}. ${MASTER_PRICE_META.note}.`;
-
-  const library=filteredMasterCatalog();
-  const visible=library.slice(0,masterRenderLimit);
-  $("loadMoreMasterBtn").classList.toggle("hidden",visible.length>=library.length);
-
-  $("masterCatalog").innerHTML=visible.length
-    ?visible.map(item=>{
-      const existing=masterEquivalentProduct(item);
-      const added=Boolean(existing);
-      const displayedPrice=added?Number(existing.price||0):Number(item.referencePrice||0);
-      const image=masterImageFor(item);
-
-      return `
-        <article class="catalogItem ${added?"catalogItemAdded":""}">
-          <div class="masterProductImage">
-            ${image?`<img src="${escapeHTML(image)}" alt="" loading="lazy">`:`<span>${categoryEmoji(item.category)}</span>`}
-          </div>
-          <label class="catalogSelect">
-            <input class="masterSelect" type="checkbox" data-master-id="${item.masterId}" ${added?"disabled":"checked"}>
-            <span>${added?"مضاف بالفعل":"اختيار"}</span>
-          </label>
-          <span class="pill">${escapeHTML(item.category)}</span>
-          <h4>${escapeHTML(item.name)}</h4>
-          <small class="muted">${escapeHTML(item.brand||"")} · ${escapeHTML(item.size||"")}</small>
-          <div class="muted">سعر استرشادي: <b>${money(item.referencePrice)}</b></div>
-          ${added?`<div class="currentStorePrice">سعر متجرك الحالي: <b>${money(existing.price)}</b></div>`:""}
-          <input type="number" min="0" step="0.25" value="${displayedPrice}" data-master-price="${item.masterId}" ${added?"disabled":""}>
-          <button class="secondary masterAdd" data-master-id="${item.masterId}" ${added?"disabled":""}>
-            ${added?"مضاف بالفعل":"إضافة المنتج"}
-          </button>
-        </article>`;
-    }).join("")
-    :'<p class="muted">لا توجد منتجات مطابقة للبحث.</p>';
-
-  document.querySelectorAll(".masterSelect").forEach(input=>{
-    input.addEventListener("change",refreshMasterSelectionCount);
-  });
-
-  document.querySelectorAll(".masterAdd").forEach(btn=>{
-    btn.onclick=async()=>{
-      const id=btn.dataset.masterId;
-      const item=SUPERMARKET_MASTER_CATALOG.find(entry=>entry.masterId===id);
-      const price=document.querySelector(`[data-master-price="${id}"]`).value;
-      btn.disabled=true;
-      $("masterCatalogMessage").innerText="جاري إضافة المنتج...";
-
-      try{
-        await addStoreProduct(projectId,currentUser.uid,{
-          masterId:id,
-          price,
-          name:item.name,
-          category:item.category,
-          size:item.size,
-          image:masterImageFor(item)
-        });
-        await loadProducts({reset:true});
-        $("masterCatalogMessage").innerText=`تمت إضافة ${item.name} ✅`;
-      }catch(e){
-        btn.disabled=false;
-        $("masterCatalogMessage").innerText=
-          e.message==="PRODUCT_ALREADY_EXISTS"
-            ?"المنتج موجود بالفعل في متجرك بنفس الاسم والحجم."
-            :e.message;
-      }
-    };
-  });
-
-  refreshMasterSelectionCount();
-}
-
-$("masterSearch").addEventListener("input",event=>{
-  masterSearchText=event.target.value;
-  masterRenderLimit=24;
-  renderMasterCatalog();
-});
-
-$("masterCategoryFilter").addEventListener("change",event=>{
-  masterCategoryFilter=event.target.value;
-  masterRenderLimit=24;
-  renderMasterCatalog();
-});
-
-$("loadMoreMasterBtn").onclick=()=>{
-  masterRenderLimit+=24;
-  renderMasterCatalog();
 };
 
-$("selectAllMasterBtn").onclick=()=>{
-  document.querySelectorAll(".masterSelect:not(:disabled)").forEach(input=>input.checked=true);
-  refreshMasterSelectionCount();
+$("bulkActivateBtn").onclick = async () => {
+  if (!selectedStoreIds.size) return;
+  try {
+    await bulkUpdateStoreProducts(projectId, [...selectedStoreIds], currentUser.uid, {
+      isActive: true,
+      inStock: true
+    });
+    selectedStoreIds.clear();
+    await loadProducts({ syncMeta: true });
+    $("catalogMessage").innerText = "تم تفعيل المنتجات المحددة ✅";
+  } catch (error) {
+    $("catalogMessage").innerText = \`تعذر التفعيل: \${error.message}\`;
+  }
 };
 
-$("clearMasterSelectionBtn").onclick=()=>{
-  document.querySelectorAll(".masterSelect:not(:disabled)").forEach(input=>input.checked=false);
-  refreshMasterSelectionCount();
+$("bulkPauseBtn").onclick = async () => {
+  if (!selectedStoreIds.size) return;
+  try {
+    await bulkUpdateStoreProducts(projectId, [...selectedStoreIds], currentUser.uid, {
+      isActive: false,
+      inStock: false
+    });
+    selectedStoreIds.clear();
+    await loadProducts({ syncMeta: true });
+    $("catalogMessage").innerText = "تم إيقاف المنتجات المحددة.";
+  } catch (error) {
+    $("catalogMessage").innerText = \`تعذر الإيقاف: \${error.message}\`;
+  }
 };
 
-$("addSelectedMasterBtn").onclick=async()=>{
-  const selections=[...document.querySelectorAll(".masterSelect:checked:not(:disabled)")].map(input=>{
-    const masterId=input.dataset.masterId;
-    const master=SUPERMARKET_MASTER_CATALOG.find(item=>item.masterId===masterId);
-    return {
-      masterId,
-      price:document.querySelector(`[data-master-price="${masterId}"]`).value,
-      image:master?masterImageFor(master):""
-    };
-  });
+$("bulkCategoryBtn").onclick = async () => {
+  if (!selectedStoreIds.size) return;
+  const category = prompt("اكتب التصنيف الجديد للمنتجات المحددة:");
+  if (!category?.trim()) return;
 
-  if(!selections.length){
-    $("masterCatalogMessage").innerText="اختار منتج واحد على الأقل.";
+  try {
+    await bulkUpdateStoreProducts(projectId, [...selectedStoreIds], currentUser.uid, { category });
+    selectedStoreIds.clear();
+    await loadProducts({ syncMeta: true });
+    $("catalogMessage").innerText = "تم تغيير التصنيف ✅";
+  } catch (error) {
+    $("catalogMessage").innerText = \`تعذر تغيير التصنيف: \${error.message}\`;
+  }
+};
+
+$("bulkDeleteBtn").onclick = async () => {
+  if (!selectedStoreIds.size) return;
+  if (!confirm(\`حذف \${selectedStoreIds.size} منتج من المتجر؟\`)) return;
+
+  try {
+    await bulkDeleteStoreProducts(projectId, [...selectedStoreIds]);
+    selectedStoreIds.clear();
+    await loadProducts({ syncMeta: true });
+    $("catalogMessage").innerText = "تم حذف المنتجات المحددة من المتجر.";
+  } catch (error) {
+    $("catalogMessage").innerText = \`تعذر الحذف: \${error.message}\`;
+  }
+};
+
+$("addProductBtn").onclick = async () => {
+  $("productMessage").innerText = "جاري الإضافة...";
+  try {
+    await addStoreProduct(projectId, currentUser.uid, {
+      name: $("productName").value,
+      category: $("productCategory").value,
+      price: $("productPrice").value,
+      barcode: $("productBarcode").value,
+      size: $("productSize").value,
+      image: $("productImage").value
+    });
+
+    ["productName", "productCategory", "productPrice", "productBarcode", "productSize", "productImage"]
+      .forEach(id => $(id).value = "");
+
+    await loadProducts({ syncMeta: true });
+    $("productMessage").innerText = "تمت إضافة المنتج داخل نفس الكتالوج ✅";
+  } catch (error) {
+    $("productMessage").innerText = error.message === "PRODUCT_ALREADY_EXISTS"
+      ? "المنتج موجود بالفعل بنفس الاسم والحجم."
+      : \`تعذر الإضافة: \${error.message}\`;
+  }
+};
+
+async function scanBarcode() {
+  const Detector = window.BarcodeDetector;
+
+  if (!Detector || !navigator.mediaDevices?.getUserMedia) {
+    const manual = prompt("ميزة الكاميرا غير متاحة على الجهاز. اكتب الباركود:");
+    if (manual) $("productBarcode").value = manual;
     return;
   }
 
-  $("addSelectedMasterBtn").disabled=true;
-  $("masterCatalogMessage").innerText=`جاري إضافة ${selections.length} منتج...`;
+  try {
+    const detector = new Detector({ formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128"] });
+    barcodeStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
 
-  try{
-    const result=await bulkAddMasterProducts(projectId,currentUser.uid,selections);
-    await loadProducts({reset:true});
-    $("masterCatalogMessage").innerText=
-      `تمت إضافة ${result.added} منتج للمحل ✅${result.skipped?` — تم تخطي ${result.skipped} مضافين بالفعل`:""}`;
-  }catch(e){
-    $("masterCatalogMessage").innerText=`تعذر إضافة المنتجات: ${e.message}`;
-    refreshMasterSelectionCount();
-  }
-};
-
-$("storeProductSearch").addEventListener("input",event=>{
-  storeSearchText=event.target.value;
-  renderStoreProducts();
-});
-
-$("storeCategoryFilter").addEventListener("change",async event=>{
-  storeCategoryFilter=event.target.value;
-  await loadProducts({reset:true});
-});
-
-$("storeStatusFilter").addEventListener("change",event=>{
-  storeStatusFilter=event.target.value;
-  renderStoreProducts();
-});
-
-$("storeImageFilter").addEventListener("change",event=>{
-  storeImageFilter=event.target.value;
-  renderStoreProducts();
-});
-
-$("loadMoreStoreBtn").onclick=()=>loadProducts();
-
-$("bulkActivateBtn").onclick=async()=>{
-  try{
-    await bulkUpdateStoreProducts(projectId,[...selectedStoreProducts],currentUser.uid,{isActive:true,inStock:true});
-    selectedStoreProducts.clear();
-    await loadProducts({reset:true});
-  }catch(e){alert(e.message);}
-};
-
-$("bulkPauseBtn").onclick=async()=>{
-  try{
-    await bulkUpdateStoreProducts(projectId,[...selectedStoreProducts],currentUser.uid,{isActive:false,inStock:false});
-    selectedStoreProducts.clear();
-    await loadProducts({reset:true});
-  }catch(e){alert(e.message);}
-};
-
-$("bulkCategoryBtn").onclick=async()=>{
-  const category=prompt("اكتب التصنيف الجديد للمنتجات المحددة:");
-  if(!category?.trim())return;
-
-  try{
-    await bulkUpdateStoreProducts(projectId,[...selectedStoreProducts],currentUser.uid,{category});
-    selectedStoreProducts.clear();
-    await loadProducts({reset:true});
-  }catch(e){alert(e.message);}
-};
-
-$("bulkDeleteBtn").onclick=async()=>{
-  if(!selectedStoreProducts.size)return;
-  if(!confirm(`حذف ${selectedStoreProducts.size} منتج نهائيًا؟`))return;
-
-  try{
-    await bulkDeleteStoreProducts(projectId,[...selectedStoreProducts]);
-    selectedStoreProducts.clear();
-    await loadProducts({reset:true});
-  }catch(e){alert(e.message);}
-};
-
-$("mergeDuplicatesBtn").onclick=async()=>{
-  $("mergeDuplicatesBtn").disabled=true;
-  $("duplicateMessage").innerText="جاري فحص المنتجات بالاسم والحجم...";
-
-  try{
-    const result=await mergeDuplicateStoreProducts(projectId,currentUser.uid);
-    await loadProducts({reset:true});
-
-    $("duplicateMessage").innerText=result.groups
-      ?`تم فحص الكتالوج ✅ تم دمج ${result.groups} مجموعة مكررة وحذف ${result.removed} نسخة زائدة، وإثراء ${result.enriched} منتج ببيانات ناقصة.`
-      :"تم الفحص ✅ لم نجد تكرارات مؤكدة بالاسم والحجم.";
-  }catch(e){
-    $("duplicateMessage").innerText=`تعذر فحص التكرارات: ${e.message}`;
-  }finally{
-    $("mergeDuplicatesBtn").disabled=false;
-  }
-};
-
-$("addProductBtn").onclick=async()=>{
-  $("productMessage").innerText="جاري الإضافة...";
-
-  try{
-    await addStoreProduct(projectId,currentUser.uid,{
-      name:$("productName").value,
-      category:$("productCategory").value,
-      price:$("productPrice").value,
-      barcode:$("productBarcode").value,
-      size:$("productSize").value,
-      image:$("productImage").value
-    });
-
-    $("productMessage").innerText="تمت إضافة المنتج ✅";
-    ["productName","productCategory","productPrice","productBarcode","productSize","productImage"]
-      .forEach(id=>$(id).value="");
-
-    await loadProducts({reset:true});
-  }catch(e){
-    $("productMessage").innerText=
-      e.message==="PRODUCT_ALREADY_EXISTS"
-        ?"المنتج موجود بالفعل بنفس الاسم والحجم."
-        :e.message;
-  }
-};
-
-async function scanBarcode(){
-  const Detector=window.BarcodeDetector;
-
-  if(!Detector||!navigator.mediaDevices?.getUserMedia){
-    const manual=prompt("ميزة الكاميرا غير متاحة على الجهاز. اكتب الباركود:");
-    if(manual)$("productBarcode").value=manual;
-    return;
-  }
-
-  try{
-    const detector=new Detector({
-      formats:["ean_13","ean_8","upc_a","upc_e","code_128"]
-    });
-
-    barcodeStream=await navigator.mediaDevices.getUserMedia({
-      video:{facingMode:"environment"}
-    });
-
-    const video=$("barcodeVideo");
-    video.srcObject=barcodeStream;
+    const video = $("barcodeVideo");
+    video.srcObject = barcodeStream;
     video.classList.remove("hidden");
     await video.play();
 
-    const started=Date.now();
+    const started = Date.now();
 
-    const detect=async()=>{
-      if(!barcodeStream)return;
-      const codes=await detector.detect(video);
+    const detect = async () => {
+      if (!barcodeStream) return;
+      const codes = await detector.detect(video);
 
-      if(codes.length){
-        const value=codes[0].rawValue;
-        $("productBarcode").value=value;
+      if (codes.length) {
+        const value = codes[0].rawValue;
+        $("productBarcode").value = value;
         stopBarcode();
 
-        const existing=await findStoreProductByBarcode(projectId,value);
-        $("productMessage").innerText=existing
-          ?`الباركود موجود بالفعل: ${existing.name}`
-          :"تم قراءة الباركود. الباركود مساعد فقط وليس أساس منع التكرار.";
+        const existing = await findStoreProductByBarcode(projectId, value);
+        $("productMessage").innerText = existing
+          ? \`الباركود موجود بالفعل: \${existing.name}\`
+          : "تم قراءة الباركود.";
         return;
       }
 
-      if(Date.now()-started>15000){
+      if (Date.now() - started > 15000) {
         stopBarcode();
-        $("productMessage").innerText="لم يتم التقاط باركود. تقدر تكمل بدونه.";
+        $("productMessage").innerText = "لم يتم التقاط باركود. تقدر تكمل بدونه.";
         return;
       }
 
-      setTimeout(detect,350);
+      setTimeout(detect, 350);
     };
 
     detect();
-  }catch(e){
+  } catch (error) {
     stopBarcode();
-    $("productMessage").innerText=`تعذر تشغيل الكاميرا: ${e.message}`;
+    $("productMessage").innerText = \`تعذر تشغيل الكاميرا: \${error.message}\`;
   }
 }
 
-function stopBarcode(){
-  if(barcodeStream){
-    barcodeStream.getTracks().forEach(track=>track.stop());
-    barcodeStream=null;
+function stopBarcode() {
+  if (barcodeStream) {
+    barcodeStream.getTracks().forEach(track => track.stop());
+    barcodeStream = null;
   }
   $("barcodeVideo").classList.add("hidden");
 }
 
-$("scanBarcodeBtn").onclick=scanBarcode;
+$("scanBarcodeBtn").onclick = scanBarcode;
 
-function normalizeImportHeader(value){
-  return String(value??"").trim().toLowerCase().replace(/\s+/g," ");
+function normalizeImportHeader(value) {
+  return String(value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-function findImportHeaderRow(rows){
-  const nameAliases=new Set(["name","product","اسم المنتج","المنتج","اسم الصنف"]);
-  const priceAliases=new Set(["price","السعر","السعر (ج.م)","سعر","السعر بالجنيه"]);
+function findImportHeaderRow(rows) {
+  const nameAliases = new Set(["name", "product", "اسم المنتج", "المنتج", "اسم الصنف"]);
+  const priceAliases = new Set(["price", "السعر", "السعر (ج.م)", "سعر", "السعر بالجنيه"]);
 
-  return rows.findIndex(row=>{
-    const headers=(Array.isArray(row)?row:[]).map(normalizeImportHeader);
-    return headers.some(value=>nameAliases.has(value))
-      && headers.some(value=>priceAliases.has(value));
+  return rows.findIndex(row => {
+    const headers = (Array.isArray(row) ? row : []).map(normalizeImportHeader);
+    return headers.some(value => nameAliases.has(value))
+      && headers.some(value => priceAliases.has(value));
   });
 }
 
-function matrixToImportRows(matrix){
-  if(!matrix.length)return[];
+function imageValueFromCell(cell, fallback = "") {
+  const direct = String(fallback ?? "").trim();
+  if (/^https?:\/\//i.test(direct)) return direct;
 
-  const headerIndex=findImportHeaderRow(matrix);
-  if(headerIndex<0)throw new Error("IMPORT_HEADERS_NOT_FOUND");
+  const hyperlink = String(cell?.l?.Target || "").trim();
+  if (/^https?:\/\//i.test(hyperlink)) return hyperlink;
 
-  const headers=matrix[headerIndex].map(value=>String(value??"").trim());
+  const formula = String(cell?.f || "").trim();
+  const match = formula.match(/^IMAGE\(\s*"([^"]+)"/i);
+  if (match && /^https?:\/\//i.test(match[1])) return match[1];
+
+  return direct;
+}
+
+function worksheetToImportRows(worksheet) {
+  const matrix = window.XLSX.utils.sheet_to_json(worksheet, {
+    header: 1,
+    defval: "",
+    raw: true
+  });
+
+  if (!matrix.length) return [];
+
+  const headerIndex = findImportHeaderRow(matrix);
+  if (headerIndex < 0) throw new Error("IMPORT_HEADERS_NOT_FOUND");
+
+  const headers = matrix[headerIndex].map(value => String(value ?? "").trim());
+  const imageAliases = new Set(["image", "الصورة", "رابط الصورة"]);
 
   return matrix
-    .slice(headerIndex+1)
-    .filter(row=>Array.isArray(row)&&row.some(value=>String(value??"").trim()!==""))
-    .map(row=>Object.fromEntries(headers.map((header,index)=>[header,row[index]??""])));
+    .slice(headerIndex + 1)
+    .map((row, offset) => {
+      const actualRow = headerIndex + 1 + offset;
+      return Object.fromEntries(headers.map((header, columnIndex) => {
+        const fallback = row?.[columnIndex] ?? "";
+        if (!imageAliases.has(normalizeImportHeader(header))) {
+          return [header, fallback];
+        }
+
+        const address = window.XLSX.utils.encode_cell({ r: actualRow, c: columnIndex });
+        return [header, imageValueFromCell(worksheet[address], fallback)];
+      }));
+    })
+    .filter(row => Object.values(row).some(value => String(value ?? "").trim() !== ""));
 }
 
-async function parseImportFile(file){
-  if(!window.XLSX)throw new Error("XLSX_LIBRARY_NOT_READY");
+async function parseImportFile(file) {
+  if (!window.XLSX) throw new Error("XLSX_LIBRARY_NOT_READY");
 
-  const ext=file.name.split(".").pop().toLowerCase();
+  const ext = file.name.split(".").pop().toLowerCase();
   let workbook;
 
-  if(ext==="csv"){
-    const text=await file.text();
-    workbook=window.XLSX.read(text,{type:"string"});
-  }else{
-    const data=await file.arrayBuffer();
-    workbook=window.XLSX.read(data,{type:"array"});
+  if (ext === "csv") {
+    const text = await file.text();
+    workbook = window.XLSX.read(text, { type: "string" });
+  } else {
+    const data = await file.arrayBuffer();
+    workbook = window.XLSX.read(data, { type: "array", cellFormula: true, cellHTML: false });
   }
 
-  const worksheet=workbook.Sheets[workbook.SheetNames[0]];
-  const matrix=window.XLSX.utils.sheet_to_json(worksheet,{
-    header:1,
-    defval:"",
-    raw:true
-  });
-
-  return matrixToImportRows(matrix);
+  const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+  return worksheetToImportRows(worksheet);
 }
 
-$("importBtn").onclick=async()=>{
-  const file=$("importFile").files[0];
-
-  if(!file){
-    $("importMessage").innerText="اختار ملف الأول.";
+$("importBtn").onclick = async () => {
+  const file = $("importFile").files[0];
+  if (!file) {
+    $("importMessage").innerText = "اختار ملف الأول.";
     return;
   }
 
-  $("importMessage").innerText="جاري الاستيراد وتنظيف التكرارات...";
+  $("importMessage").innerText = "جاري الاستيراد وربط الصور والمنتجات...";
 
-  try{
-    const rows=await parseImportFile(file);
-    const result=await bulkImportStoreProducts(projectId,currentUser.uid,rows);
-    $("importMessage").innerText=
-      `تمت معالجة ${result.imported} منتج ✅ — جديد: ${result.added} — موجود وتم إثراؤه: ${result.updated}`;
-    await loadProducts({reset:true});
-  }catch(e){
-    $("importMessage").innerText=`فشل الاستيراد: ${e.message}`;
+  try {
+    const rows = await parseImportFile(file);
+    const result = await bulkImportStoreProducts(projectId, currentUser.uid, rows);
+    await loadProducts({ syncMeta: true });
+
+    $("importMessage").innerText =
+      \`تمت معالجة \${result.imported} منتج ✅ — جديد: \${result.added} — موجود وتم إثراؤه: \${result.updated}. لو الصور داخل Excel كرسومات مضمّنة وليست روابط فلن يستطيع المتصفح استخراجها.\`;
+  } catch (error) {
+    $("importMessage").innerText = \`فشل الاستيراد: \${error.message}\`;
   }
 };
+
+$("mergeDuplicatesBtn").onclick = async () => {
+  $("mergeDuplicatesBtn").disabled = true;
+  $("duplicateMessage").innerText = "جاري فحص المنتجات بالاسم والحجم...";
+
+  try {
+    const result = await mergeDuplicateStoreProducts(projectId, currentUser.uid);
+    await loadProducts({ syncMeta: true });
+
+    $("duplicateMessage").innerText = result.groups
+      ? \`تم الدمج ✅ \${result.groups} مجموعة — حذف \${result.removed} نسخة زائدة — إثراء \${result.enriched} منتج.\`
+      : "تم الفحص ✅ لم نجد تكرارات مؤكدة.";
+  } catch (error) {
+    $("duplicateMessage").innerText = \`تعذر الفحص: \${error.message}\`;
+  } finally {
+    $("mergeDuplicatesBtn").disabled = false;
+  }
+};
+
+onAuthStateChanged(auth, async user => {
+  currentUser = user;
+  $("backToDashboard").href = dashboardUrl();
+
+  if (!projectId || !inviteAuthEmail) {
+    $("pageStatus").innerText = "رابط كتالوج المنتجات غير مكتمل.";
+    return;
+  }
+
+  if (user && String(user.email || "").toLowerCase() !== inviteAuthEmail.toLowerCase()) {
+    await signOut(auth);
+    return;
+  }
+
+  if (!user) {
+    $("pageStatus").innerText = "سجل دخولك من لوحة تشغيل السوبرماركت أولًا ثم افتح الكتالوج.";
+    return;
+  }
+
+  if (!await authorize()) return;
+
+  setVisible("productsPanel", true);
+  $("masterPriceMeta").innerText =
+    \`\${MASTER_PRICE_META.source} — تحديث \${MASTER_PRICE_META.priceAsOf}. الأسعار استرشادية ويمكن تعديلها قبل أو بعد الإضافة.\`;
+
+  try {
+    await loadProducts({ syncMeta: true });
+  } catch (error) {
+    $("catalogMessage").innerText = \`تعذر تحميل الكتالوج: \${error.message}\`;
+  }
+});
