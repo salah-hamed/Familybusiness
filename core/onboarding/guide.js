@@ -20,7 +20,9 @@ function seenKey(journey) {
 function isVisible(element) {
   if (!element) return false;
   const style = window.getComputedStyle(element);
-  return style.display !== "none" && style.visibility !== "hidden";
+  return style.display !== "none"
+    && style.visibility !== "hidden"
+    && element.getClientRects().length > 0;
 }
 
 function findTarget(selector) {
