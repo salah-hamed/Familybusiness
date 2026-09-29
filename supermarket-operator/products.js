@@ -50,7 +50,7 @@ const selectedStoreIds = new Set();
 const masterPriceDrafts = new Map();
 
 function money(value) {
-  return \`\${Number(value || 0).toLocaleString("ar-EG")} جنيه\`;
+  return `${Number(value || 0).toLocaleString("ar-EG")} جنيه`;
 }
 
 function escapeHTML(value) {
@@ -116,10 +116,10 @@ function filteredEntries() {
 function imageMarkup(entry) {
   const fallback = categoryEmoji(entry.category);
   if (!entry.image) {
-    return \`<span class="catalogImageFallback">\${fallback}</span>\`;
+    return `<span class="catalogImageFallback">${fallback}</span>`;
   }
 
-  return \`<img src="\${escapeHTML(entry.image)}" alt="" loading="lazy" data-image-fallback="\${escapeHTML(fallback)}">\`;
+  return `<img src="${escapeHTML(entry.image)}" alt="" loading="lazy" data-image-fallback="${escapeHTML(fallback)}">`;
 }
 
 function attachImageFallbacks() {
@@ -140,7 +140,7 @@ async function authorize() {
     await claimOperatorAccess(projectId, currentUser);
   } catch (error) {
     if (error.message !== "OPERATOR_ALREADY_CLAIMED") {
-      $("pageStatus").innerText = \`تعذر فتح الكتالوج: \${error.message}\`;
+      $("pageStatus").innerText = `تعذر فتح الكتالوج: ${error.message}`;
       return false;
     }
   }
@@ -161,7 +161,7 @@ async function authorize() {
     return false;
   }
 
-  $("pageStatus").innerText = \`\${store?.name || operator?.name || "السوبرماركت"} — أضف وعدّل وفعّل المنتجات من كتالوج واحد.\`;
+  $("pageStatus").innerText = `${store?.name || operator?.name || "السوبرماركت"} — أضف وعدّل وفعّل المنتجات من كتالوج واحد.`;
   return true;
 }
 
@@ -196,7 +196,7 @@ function refreshCategoryOptions(entries) {
   const select = $("catalogCategoryFilter");
   const previous = categoryFilter;
   select.innerHTML = '<option value="الكل">كل التصنيفات</option>'
-    + categories.map(value => \`<option value="\${escapeHTML(value)}">\${escapeHTML(value)}</option>\`).join("");
+    + categories.map(value => `<option value="${escapeHTML(value)}">${escapeHTML(value)}</option>`).join("");
 
   if (previous === "الكل" || categories.includes(previous)) {
     select.value = previous;
@@ -237,7 +237,7 @@ function pruneSelections(entries) {
 function refreshSelectionBar() {
   const total = selectedMasterIds.size + selectedStoreIds.size;
   $("catalogSelectionCount").innerText = total
-    ? \`\${total} محدد · \${selectedMasterIds.size} غير مضاف · \${selectedStoreIds.size} من المتجر\`
+    ? `${total} محدد · ${selectedMasterIds.size} غير مضاف · ${selectedStoreIds.size} من المتجر`
     : "0 محدد";
 
   $("addSelectedBtn").disabled = selectedMasterIds.size === 0;
@@ -256,44 +256,44 @@ function renderNotAddedControls(entry) {
   const master = entry.master;
   const price = masterDraftPrice(master);
 
-  return \`
+  return `
     <div class="catalogPriceBlock">
-      <small>سعر استرشادي: <b>\${money(master.referencePrice)}</b></small>
+      <small>سعر استرشادي: <b>${money(master.referencePrice)}</b></small>
       <label>سعر متجرك
-        <input class="catalogPriceInput" data-master-price="\${escapeHTML(master.masterId)}" type="number" min="0" step="0.25" value="\${Number(price || 0)}">
+        <input class="catalogPriceInput" data-master-price="${escapeHTML(master.masterId)}" type="number" min="0" step="0.25" value="${Number(price || 0)}">
       </label>
     </div>
-    <button class="primary addCatalogProduct" data-master-add="\${escapeHTML(master.masterId)}" type="button">+ إضافة للمتجر</button>
-  \`;
+    <button class="primary addCatalogProduct" data-master-add="${escapeHTML(master.masterId)}" type="button">+ إضافة للمتجر</button>
+  `;
 }
 
 function renderAddedControls(entry) {
   const product = entry.product;
   const active = entry.status === "active";
 
-  return \`
+  return `
     <div class="catalogQuickEdit">
       <label>السعر
-        <input class="quickPrice" type="number" min="0" step="0.25" value="\${Number(product.price || 0)}">
+        <input class="quickPrice" type="number" min="0" step="0.25" value="${Number(product.price || 0)}">
       </label>
       <button class="primary saveQuickPrice" type="button">حفظ السعر</button>
-      <button class="secondary toggleCatalogProduct" type="button">\${active ? "إيقاف" : "إعادة التفعيل"}</button>
+      <button class="secondary toggleCatalogProduct" type="button">${active ? "إيقاف" : "إعادة التفعيل"}</button>
     </div>
 
     <details class="catalogAdvanced">
       <summary>تعديل التفاصيل</summary>
       <div class="productEditGrid">
-        <label>اسم المنتج<input class="editName" value="\${escapeHTML(product.name || "")}"></label>
-        <label>التصنيف<input class="editCategory" value="\${escapeHTML(product.category || "أخرى")}"></label>
-        <label>الحجم<input class="editSize" value="\${escapeHTML(product.size || "")}"></label>
-        <label>رابط الصورة<input class="editImage" value="\${escapeHTML(product.image || "")}" placeholder="https://..."></label>
+        <label>اسم المنتج<input class="editName" value="${escapeHTML(product.name || "")}"></label>
+        <label>التصنيف<input class="editCategory" value="${escapeHTML(product.category || "أخرى")}"></label>
+        <label>الحجم<input class="editSize" value="${escapeHTML(product.size || "")}"></label>
+        <label>رابط الصورة<input class="editImage" value="${escapeHTML(product.image || "")}" placeholder="https://..."></label>
       </div>
       <div class="productControls">
         <button class="primary saveProductDetails" type="button">حفظ التفاصيل</button>
         <button class="danger deleteCatalogProduct" type="button">حذف من المتجر</button>
       </div>
     </details>
-  \`;
+  `;
 }
 
 function renderEntry(entry) {
@@ -316,27 +316,27 @@ function renderEntry(entry) {
       ? "Excel / CSV"
       : "منتج خاص بالمتجر";
 
-  return \`
-    <article class="catalogProductCard status-\${entry.status}" data-entry-key="\${escapeHTML(entry.key)}" data-product-id="\${escapeHTML(entry.product?.productId || "")}">
+  return `
+    <article class="catalogProductCard status-${entry.status}" data-entry-key="${escapeHTML(entry.key)}" data-product-id="${escapeHTML(entry.product?.productId || "")}">
       <div class="catalogCardTop">
         <label class="catalogSelectBox" title="تحديد">
-          <input type="checkbox" data-select-type="\${selectType}" data-select-id="\${escapeHTML(selectId)}" \${selected ? "checked" : ""}>
+          <input type="checkbox" data-select-type="${selectType}" data-select-id="${escapeHTML(selectId)}" ${selected ? "checked" : ""}>
         </label>
-        <div class="catalogProductImage">\${imageMarkup(entry)}</div>
+        <div class="catalogProductImage">${imageMarkup(entry)}</div>
         <div class="catalogProductIdentity">
           <div class="catalogBadges">
-            <span class="sourceBadge">\${escapeHTML(sourceLabel)}</span>
-            <span class="statusBadge status-\${entry.status}">\${statusLabel}</span>
+            <span class="sourceBadge">${escapeHTML(sourceLabel)}</span>
+            <span class="statusBadge status-${entry.status}">${statusLabel}</span>
           </div>
-          <h3>\${escapeHTML(entry.name)}</h3>
-          <p>\${escapeHTML(entry.category)}\${entry.size ? \` · \${escapeHTML(entry.size)}\` : ""}</p>
-          \${entry.brand ? \`<small>\${escapeHTML(entry.brand)}</small>\` : ""}
+          <h3>${escapeHTML(entry.name)}</h3>
+          <p>${escapeHTML(entry.category)}${entry.size ? ` · ${escapeHTML(entry.size)}` : ""}</p>
+          ${entry.brand ? `<small>${escapeHTML(entry.brand)}</small>` : ""}
         </div>
       </div>
 
-      \${isMasterNotAdded ? renderNotAddedControls(entry) : renderAddedControls(entry)}
+      ${isMasterNotAdded ? renderNotAddedControls(entry) : renderAddedControls(entry)}
     </article>
-  \`;
+  `;
 }
 
 function bindCatalogCardEvents(visibleEntries) {
@@ -377,11 +377,11 @@ function bindCatalogCardEvents(visibleEntries) {
         });
         selectedMasterIds.delete(masterId);
         await loadProducts({ syncMeta: true });
-        $("catalogMessage").innerText = \`تمت إضافة \${entry.master.name} ✅\`;
+        $("catalogMessage").innerText = `تمت إضافة ${entry.master.name} ✅`;
       } catch (error) {
         $("catalogMessage").innerText = error.message === "PRODUCT_ALREADY_EXISTS"
           ? "المنتج موجود بالفعل في متجرك."
-          : \`تعذر الإضافة: \${error.message}\`;
+          : `تعذر الإضافة: ${error.message}`;
         btn.disabled = false;
       }
     };
@@ -404,9 +404,9 @@ function bindCatalogCardEvents(visibleEntries) {
             price: card.querySelector(".quickPrice").value
           });
           await loadProducts();
-          $("catalogMessage").innerText = \`تم تحديث سعر \${product.name} ✅\`;
+          $("catalogMessage").innerText = `تم تحديث سعر ${product.name} ✅`;
         } catch (error) {
-          $("catalogMessage").innerText = \`تعذر حفظ السعر: \${error.message}\`;
+          $("catalogMessage").innerText = `تعذر حفظ السعر: ${error.message}`;
           quickSave.disabled = false;
         }
       };
@@ -425,7 +425,7 @@ function bindCatalogCardEvents(visibleEntries) {
           await loadProducts({ syncMeta: true });
           $("catalogMessage").innerText = nextActive ? "تم تفعيل المنتج ✅" : "تم إيقاف المنتج مؤقتًا.";
         } catch (error) {
-          $("catalogMessage").innerText = \`تعذر تغيير الحالة: \${error.message}\`;
+          $("catalogMessage").innerText = `تعذر تغيير الحالة: ${error.message}`;
           toggle.disabled = false;
         }
       };
@@ -445,7 +445,7 @@ function bindCatalogCardEvents(visibleEntries) {
           await loadProducts({ syncMeta: true });
           $("catalogMessage").innerText = "تم حفظ بيانات المنتج ✅";
         } catch (error) {
-          $("catalogMessage").innerText = \`تعذر حفظ البيانات: \${error.message}\`;
+          $("catalogMessage").innerText = `تعذر حفظ البيانات: ${error.message}`;
           saveDetails.disabled = false;
         }
       };
@@ -454,14 +454,14 @@ function bindCatalogCardEvents(visibleEntries) {
     const remove = card.querySelector(".deleteCatalogProduct");
     if (remove) {
       remove.onclick = async () => {
-        if (!confirm(\`حذف "\${product.name}" من متجرك؟\`)) return;
+        if (!confirm(`حذف "${product.name}" من متجرك؟`)) return;
         try {
           await deleteStoreProduct(projectId, productId);
           selectedStoreIds.delete(productId);
           await loadProducts({ syncMeta: true });
           $("catalogMessage").innerText = "تم حذف المنتج من المتجر.";
         } catch (error) {
-          $("catalogMessage").innerText = \`تعذر الحذف: \${error.message}\`;
+          $("catalogMessage").innerText = `تعذر الحذف: ${error.message}`;
         }
       };
     }
@@ -480,8 +480,8 @@ function renderCatalog() {
   const visible = filtered.slice(0, renderLimit);
 
   $("catalogVisibleCount").innerText = filtered.length === entries.length
-    ? \`\${entries.length} منتج\`
-    : \`\${filtered.length} نتيجة من \${entries.length}\`;
+    ? `${entries.length} منتج`
+    : `${filtered.length} نتيجة من ${entries.length}`;
 
   $("unifiedCatalog").innerHTML = visible.length
     ? visible.map(renderEntry).join("")
@@ -565,15 +565,15 @@ $("addSelectedBtn").onclick = async () => {
     }));
 
   $("addSelectedBtn").disabled = true;
-  $("catalogMessage").innerText = \`جاري إضافة \${selections.length} منتج...\`;
+  $("catalogMessage").innerText = `جاري إضافة ${selections.length} منتج...`;
 
   try {
     const result = await bulkAddMasterProducts(projectId, currentUser.uid, selections);
     selectedMasterIds.clear();
     await loadProducts({ syncMeta: true });
-    $("catalogMessage").innerText = \`تمت إضافة \${result.added} منتج ✅\${result.skipped ? \` — تم تخطي \${result.skipped} موجود بالفعل\` : ""}\`;
+    $("catalogMessage").innerText = `تمت إضافة ${result.added} منتج ✅${result.skipped ? ` — تم تخطي ${result.skipped} موجود بالفعل` : ""}`;
   } catch (error) {
-    $("catalogMessage").innerText = \`تعذر الإضافة الجماعية: \${error.message}\`;
+    $("catalogMessage").innerText = `تعذر الإضافة الجماعية: ${error.message}`;
     $("addSelectedBtn").disabled = false;
   }
 };
@@ -589,7 +589,7 @@ $("bulkActivateBtn").onclick = async () => {
     await loadProducts({ syncMeta: true });
     $("catalogMessage").innerText = "تم تفعيل المنتجات المحددة ✅";
   } catch (error) {
-    $("catalogMessage").innerText = \`تعذر التفعيل: \${error.message}\`;
+    $("catalogMessage").innerText = `تعذر التفعيل: ${error.message}`;
   }
 };
 
@@ -604,7 +604,7 @@ $("bulkPauseBtn").onclick = async () => {
     await loadProducts({ syncMeta: true });
     $("catalogMessage").innerText = "تم إيقاف المنتجات المحددة.";
   } catch (error) {
-    $("catalogMessage").innerText = \`تعذر الإيقاف: \${error.message}\`;
+    $("catalogMessage").innerText = `تعذر الإيقاف: ${error.message}`;
   }
 };
 
@@ -619,13 +619,13 @@ $("bulkCategoryBtn").onclick = async () => {
     await loadProducts({ syncMeta: true });
     $("catalogMessage").innerText = "تم تغيير التصنيف ✅";
   } catch (error) {
-    $("catalogMessage").innerText = \`تعذر تغيير التصنيف: \${error.message}\`;
+    $("catalogMessage").innerText = `تعذر تغيير التصنيف: ${error.message}`;
   }
 };
 
 $("bulkDeleteBtn").onclick = async () => {
   if (!selectedStoreIds.size) return;
-  if (!confirm(\`حذف \${selectedStoreIds.size} منتج من المتجر؟\`)) return;
+  if (!confirm(`حذف ${selectedStoreIds.size} منتج من المتجر؟`)) return;
 
   try {
     await bulkDeleteStoreProducts(projectId, [...selectedStoreIds]);
@@ -633,7 +633,7 @@ $("bulkDeleteBtn").onclick = async () => {
     await loadProducts({ syncMeta: true });
     $("catalogMessage").innerText = "تم حذف المنتجات المحددة من المتجر.";
   } catch (error) {
-    $("catalogMessage").innerText = \`تعذر الحذف: \${error.message}\`;
+    $("catalogMessage").innerText = `تعذر الحذف: ${error.message}`;
   }
 };
 
@@ -657,7 +657,7 @@ $("addProductBtn").onclick = async () => {
   } catch (error) {
     $("productMessage").innerText = error.message === "PRODUCT_ALREADY_EXISTS"
       ? "المنتج موجود بالفعل بنفس الاسم والحجم."
-      : \`تعذر الإضافة: \${error.message}\`;
+      : `تعذر الإضافة: ${error.message}`;
   }
 };
 
@@ -692,7 +692,7 @@ async function scanBarcode() {
 
         const existing = await findStoreProductByBarcode(projectId, value);
         $("productMessage").innerText = existing
-          ? \`الباركود موجود بالفعل: \${existing.name}\`
+          ? `الباركود موجود بالفعل: ${existing.name}`
           : "تم قراءة الباركود.";
         return;
       }
@@ -709,7 +709,7 @@ async function scanBarcode() {
     detect();
   } catch (error) {
     stopBarcode();
-    $("productMessage").innerText = \`تعذر تشغيل الكاميرا: \${error.message}\`;
+    $("productMessage").innerText = `تعذر تشغيل الكاميرا: ${error.message}`;
   }
 }
 
@@ -817,9 +817,9 @@ $("importBtn").onclick = async () => {
     await loadProducts({ syncMeta: true });
 
     $("importMessage").innerText =
-      \`تمت معالجة \${result.imported} منتج ✅ — جديد: \${result.added} — موجود وتم إثراؤه: \${result.updated}. لو الصور داخل Excel كرسومات مضمّنة وليست روابط فلن يستطيع المتصفح استخراجها.\`;
+      `تمت معالجة ${result.imported} منتج ✅ — جديد: ${result.added} — موجود وتم إثراؤه: ${result.updated}. لو الصور داخل Excel كرسومات مضمّنة وليست روابط فلن يستطيع المتصفح استخراجها.`;
   } catch (error) {
-    $("importMessage").innerText = \`فشل الاستيراد: \${error.message}\`;
+    $("importMessage").innerText = `فشل الاستيراد: ${error.message}`;
   }
 };
 
@@ -832,10 +832,10 @@ $("mergeDuplicatesBtn").onclick = async () => {
     await loadProducts({ syncMeta: true });
 
     $("duplicateMessage").innerText = result.groups
-      ? \`تم الدمج ✅ \${result.groups} مجموعة — حذف \${result.removed} نسخة زائدة — إثراء \${result.enriched} منتج.\`
+      ? `تم الدمج ✅ ${result.groups} مجموعة — حذف ${result.removed} نسخة زائدة — إثراء ${result.enriched} منتج.`
       : "تم الفحص ✅ لم نجد تكرارات مؤكدة.";
   } catch (error) {
-    $("duplicateMessage").innerText = \`تعذر الفحص: \${error.message}\`;
+    $("duplicateMessage").innerText = `تعذر الفحص: ${error.message}`;
   } finally {
     $("mergeDuplicatesBtn").disabled = false;
   }
@@ -864,11 +864,11 @@ onAuthStateChanged(auth, async user => {
 
   setVisible("productsPanel", true);
   $("masterPriceMeta").innerText =
-    \`\${MASTER_PRICE_META.source} — تحديث \${MASTER_PRICE_META.priceAsOf}. الأسعار استرشادية ويمكن تعديلها قبل أو بعد الإضافة.\`;
+    `${MASTER_PRICE_META.source} — تحديث ${MASTER_PRICE_META.priceAsOf}. الأسعار استرشادية ويمكن تعديلها قبل أو بعد الإضافة.`;
 
   try {
     await loadProducts({ syncMeta: true });
   } catch (error) {
-    $("catalogMessage").innerText = \`تعذر تحميل الكتالوج: \${error.message}\`;
+    $("catalogMessage").innerText = `تعذر تحميل الكتالوج: ${error.message}`;
   }
 });
