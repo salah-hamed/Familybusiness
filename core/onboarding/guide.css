@@ -1,82 +1,263 @@
 .fbGuideRoot,
-.fbGuideRoot * { box-sizing: border-box; }
+.fbGuideRoot * {
+  box-sizing: border-box;
+}
 
-.fbGuideLauncher {
-  position: fixed; left: 16px; bottom: 16px; z-index: 2147483000;
-  display: inline-flex; align-items: center; gap: 8px; min-height: 46px;
-  padding: 0 16px; border: 0; border-radius: 999px; background: #111827;
-  color: #fff; font: inherit; font-weight: 800; cursor: pointer;
-  box-shadow: 0 12px 35px rgba(17, 24, 39, .22);
+.fbGuideRoot {
+  width: 100%;
+  margin: 14px 0 18px;
+  direction: rtl;
 }
-.fbGuideLauncherDot { width: 9px; height: 9px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 5px rgba(34, 197, 94, .16); }
-.fbGuidePanel {
-  position: fixed; left: 16px; bottom: 74px; z-index: 2147483001;
-  width: min(390px, calc(100vw - 32px)); max-height: min(720px, calc(100vh - 100px));
-  overflow: auto; direction: rtl; background: #fff; color: #111827;
-  border: 1px solid #e5e7eb; border-radius: 22px; box-shadow: 0 22px 60px rgba(15, 23, 42, .22);
-  padding: 18px; transform: translateY(16px); opacity: 0; visibility: hidden;
-  transition: opacity .18s ease, transform .18s ease, visibility .18s ease;
+
+.fbGuideInline {
+  width: 100%;
+  padding: 16px;
+  border: 1px solid #dbe3ff;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #f8faff 0%, #ffffff 72%);
+  color: #111827;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, .06);
 }
-.fbGuidePanel.is-open { transform: translateY(0); opacity: 1; visibility: visible; }
-.fbGuideHeader { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
-.fbGuideEyebrow { display: block; color: #4f46e5; font-size: 12px; font-weight: 900; margin-bottom: 4px; }
-.fbGuideTitle { margin: 0; font-size: 20px; line-height: 1.35; }
-.fbGuideClose {
-  width: 36px; height: 36px; flex: 0 0 auto; border: 0; border-radius: 10px;
-  background: #f3f4f6; color: #374151; font-size: 25px; line-height: 1; cursor: pointer;
+
+.fbGuideTopline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
 }
-.fbGuideIntro { margin: 10px 0 14px; color: #4b5563; line-height: 1.7; font-size: 14px; }
-.fbGuideProgress { margin-bottom: 14px; }
-.fbGuideProgressText { display: block; margin-bottom: 7px; color: #374151; font-size: 12px; font-weight: 800; }
-.fbGuideProgressTrack { height: 7px; border-radius: 999px; background: #eef2ff; overflow: hidden; }
-.fbGuideProgressBar { display: block; height: 100%; border-radius: inherit; background: #4f46e5; transition: width .2s ease; }
-.fbGuideSteps { display: grid; gap: 8px; }
-.fbGuideStep {
-  width: 100%; display: flex; align-items: center; gap: 10px; text-align: right;
-  border: 1px solid #e5e7eb; border-radius: 14px; background: #fff;
-  padding: 10px; color: inherit; font: inherit; cursor: pointer;
+
+.fbGuideEyebrow {
+  color: #4f46e5;
+  font-size: 12px;
+  font-weight: 900;
 }
-.fbGuideStep.is-selected { border-color: #818cf8; background: #f5f7ff; }
-.fbGuideStep.status-done .fbGuideStepMarker { background: #dcfce7; color: #15803d; }
-.fbGuideStep.status-current .fbGuideStepMarker { background: #4f46e5; color: #fff; }
-.fbGuideStepMarker {
-  width: 30px; height: 30px; display: grid; place-items: center; flex: 0 0 auto;
-  border-radius: 50%; background: #f3f4f6; color: #6b7280; font-size: 12px; font-weight: 900;
+
+.fbGuideProgressText {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
 }
-.fbGuideStepCopy { display: grid; gap: 2px; }
-.fbGuideStepCopy strong { font-size: 13px; }
-.fbGuideStepCopy small { color: #6b7280; font-size: 11px; }
-.fbGuideFocusCard {
-  display: grid; grid-template-columns: 34px 1fr; gap: 10px; margin-top: 14px;
-  padding: 13px; border-radius: 16px; background: #f9fafb;
+
+.fbGuideProgressTrack {
+  height: 6px;
+  margin-bottom: 14px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e9edff;
 }
-.fbGuideFocusNumber {
-  width: 34px; height: 34px; display: grid; place-items: center; border-radius: 11px;
-  background: #111827; color: #fff; font-weight: 900;
+
+.fbGuideProgressBar {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #4f46e5;
+  transition: width .2s ease;
 }
-.fbGuideFocusTitle { display: block; margin-bottom: 4px; font-size: 14px; }
-.fbGuideFocusDescription { margin: 0; color: #4b5563; line-height: 1.65; font-size: 13px; }
-.fbGuideActions { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; margin-top: 12px; }
+
+.fbGuideMain {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 11px;
+  align-items: flex-start;
+}
+
+.fbGuideStepNumber {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: #111827;
+  color: #fff;
+  font-weight: 900;
+}
+
+.fbGuideTitle {
+  margin: 0 0 5px;
+  font-size: 17px;
+  line-height: 1.4;
+}
+
+.fbGuideDescription {
+  margin: 0;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.75;
+}
+
+.fbGuideActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 13px;
+}
+
+.fbGuideActions button,
+.fbGuideHelp {
+  border: 1px solid #d1d5db;
+  border-radius: 11px;
+  background: #fff;
+  color: #111827;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
 .fbGuideActions button {
-  min-height: 40px; border-radius: 11px; border: 1px solid #d1d5db; background: #fff;
-  padding: 0 11px; color: #111827; font: inherit; font-size: 12px; font-weight: 800; cursor: pointer;
+  min-height: 38px;
+  padding: 0 11px;
 }
-.fbGuideActions button:disabled { opacity: .4; cursor: default; }
-.fbGuideActions .fbGuideAction { border-color: #4f46e5; background: #4f46e5; color: #fff; }
-.fbGuidePrivacy { margin: 12px 0 0; color: #6b7280; font-size: 10px; line-height: 1.5; text-align: center; }
+
+.fbGuideActions .fbGuideAction {
+  border-color: #4f46e5;
+  background: #4f46e5;
+  color: #fff;
+}
+
+.fbGuideDismiss {
+  margin-inline-start: auto;
+  color: #64748b !important;
+}
+
+.fbGuideRoadmap {
+  margin-top: 14px;
+  padding-top: 13px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.fbGuideIntro {
+  margin: 0 0 10px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.fbGuideSteps {
+  display: grid;
+  gap: 7px;
+}
+
+.fbGuideStep {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 9px;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.fbGuideStep.status-current {
+  background: #eef2ff;
+}
+
+.fbGuideStepMarker {
+  width: 27px;
+  height: 27px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #e5e7eb;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.fbGuideStep.status-done .fbGuideStepMarker {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.fbGuideStep.status-current .fbGuideStepMarker {
+  background: #4f46e5;
+  color: #fff;
+}
+
+.fbGuideStepCopy {
+  display: grid;
+  gap: 1px;
+}
+
+.fbGuideStepCopy strong {
+  font-size: 12px;
+}
+
+.fbGuideStepCopy small {
+  color: #64748b;
+  font-size: 10px;
+}
+
+.fbGuidePrivacy {
+  margin: 11px 0 0;
+  color: #94a3b8;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.fbGuideHelp {
+  position: fixed;
+  left: 12px;
+  bottom: 12px;
+  z-index: 50;
+  min-height: 38px;
+  padding: 0 12px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, .12);
+}
+
 .fbGuideTarget {
-  position: relative !important; z-index: 2147482999 !important;
-  outline: 4px solid rgba(79, 70, 229, .72) !important; outline-offset: 5px !important;
-  border-radius: 12px; animation: fbGuidePulse 1.35s ease-in-out infinite alternate;
+  outline: 3px solid rgba(79, 70, 229, .55) !important;
+  outline-offset: 4px !important;
+  border-radius: 12px;
+  scroll-margin-top: 24px;
+  animation: fbGuidePulse 1.25s ease-in-out 3 alternate;
 }
+
 @keyframes fbGuidePulse {
-  from { box-shadow: 0 0 0 0 rgba(79, 70, 229, .12); }
-  to { box-shadow: 0 0 0 12px rgba(79, 70, 229, .06); }
+  from {
+    box-shadow: 0 0 0 0 rgba(79, 70, 229, .08);
+  }
+  to {
+    box-shadow: 0 0 0 9px rgba(79, 70, 229, .04);
+  }
 }
+
 @media (max-width: 520px) {
-  .fbGuideLauncher { left: 12px; bottom: 12px; }
-  .fbGuidePanel { left: 10px; right: 10px; bottom: 68px; width: auto; max-height: calc(100vh - 86px); }
+  .fbGuideInline {
+    padding: 14px;
+    border-radius: 16px;
+  }
+
+  .fbGuideTopline {
+    align-items: flex-start;
+  }
+
+  .fbGuideProgressText {
+    white-space: normal;
+    text-align: left;
+  }
+
+  .fbGuideActions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .fbGuideActions .fbGuideAction {
+    grid-column: 1 / -1;
+  }
+
+  .fbGuideDismiss {
+    margin-inline-start: 0;
+  }
 }
+
 @media (prefers-reduced-motion: reduce) {
-  .fbGuidePanel, .fbGuideProgressBar, .fbGuideTarget { transition: none; animation: none; scroll-behavior: auto; }
+  .fbGuideProgressBar,
+  .fbGuideTarget {
+    transition: none;
+    animation: none;
+    scroll-behavior: auto;
+  }
 }

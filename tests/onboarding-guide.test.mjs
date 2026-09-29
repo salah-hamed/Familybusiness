@@ -91,3 +91,29 @@ test("guide UI has no Firebase writes or AI/network API calls", () => {
     assert.equal(source.includes(forbidden), false, `guide must not contain ${forbidden}`);
   }
 });
+
+
+test("guide renders inline guidance instead of a blocking panel", () => {
+  const source = readFileSync("core/onboarding/guide.js", "utf8");
+  const styles = readFileSync("core/onboarding/guide.css", "utf8");
+
+  assert.equal(source.includes("fbGuidePanel"), false);
+  assert.equal(source.includes("fbGuideInline"), true);
+  assert.equal(styles.includes(".fbGuideInline"), true);
+  assert.equal(styles.includes(".fbGuidePanel"), false);
+});
+
+test("embedded guide keeps only the small help control fixed", () => {
+  const styles = readFileSync("core/onboarding/guide.css", "utf8");
+  const inlineBlock = styles.slice(
+    styles.indexOf(".fbGuideInline"),
+    styles.indexOf(".fbGuideTopline")
+  );
+  const helpBlock = styles.slice(
+    styles.indexOf(".fbGuideHelp"),
+    styles.indexOf(".fbGuideTarget")
+  );
+
+  assert.equal(inlineBlock.includes("position: fixed"), false);
+  assert.equal(helpBlock.includes("position: fixed"), true);
+});

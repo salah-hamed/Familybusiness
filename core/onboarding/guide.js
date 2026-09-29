@@ -12,9 +12,15 @@ function firstCurrentIndex(journey) {
   return index >= 0 ? index : 0;
 }
 
-function seenKey(journey) {
-  const current = journey.steps.find(step => step.status === "current");
-  return current ? `fb-guide-seen:${journey.id}:${current.id}` : `fb-guide-seen:${journey.id}`;
+function currentStep(journey) {
+  return journey.steps[firstCurrentIndex(journey)] || journey.steps[0] || null;
+}
+
+function dismissalKey(journey) {
+  const step = currentStep(journey);
+  return step
+    ? "fb-guide-dismissed:" + journey.id + ":" + step.id
+    : "fb-guide-dismissed:" + journey.id;
 }
 
 function isVisible(element) {
@@ -30,122 +36,139 @@ function findTarget(selector) {
   return [...document.querySelectorAll(selector)].find(isVisible) || null;
 }
 
+function targetAnchor(target) {
+  if (!target) return null;
+
+  if (target.matches("button, input, select, textarea, a")) {
+    return target.closest(
+      ".linkBox, .projectCard, .subscriptionCard, .referralCard, .auth-card, label, section, .card"
+    ) || target.parentElement || target;
+  }
+
+  return target;
+}
+
+function fallbackHost() {
+  return document.querySelector("main, .container, .auth-card, .shell") || document.body;
+}
+
 export function createGuide(initialJourney, { autoOpen = true } = {}) {
   ensureGuideStyles();
 
   let journey = initialJourney;
-  let activeIndex = firstCurrentIndex(journey);
   let activeTarget = null;
+  let enabled = autoOpen;
 
   const root = document.createElement("div");
   root.className = "fbGuideRoot";
-  root.innerHTML = `
-    <button class="fbGuideLauncher" type="button" aria-expanded="false">
-      <span class="fbGuideLauncherDot"></span>
-      <span>إيه الخطوة الجاية؟</span>
-    </button>
-    <aside class="fbGuidePanel" aria-hidden="true" aria-label="دليل استخدام Family Business">
-      <div class="fbGuideHeader">
-        <div>
-          <span class="fbGuideEyebrow">Family Business Guide</span>
-          <h2 class="fbGuideTitle"></h2>
-        </div>
-        <button class="fbGuideClose" type="button" aria-label="إغلاق الدليل">×</button>
-      </div>
-      <p class="fbGuideIntro"></p>
-      <div class="fbGuideProgress">
-        <span class="fbGuideProgressText"></span>
-        <div class="fbGuideProgressTrack"><span class="fbGuideProgressBar"></span></div>
-      </div>
-      <div class="fbGuideSteps" role="list"></div>
-      <div class="fbGuideFocusCard">
-        <span class="fbGuideFocusNumber"></span>
-        <div>
-          <strong class="fbGuideFocusTitle"></strong>
-          <p class="fbGuideFocusDescription"></p>
-        </div>
-      </div>
-      <div class="fbGuideActions">
-        <button class="fbGuidePrev" type="button">السابق</button>
-        <button class="fbGuideAction" type="button"></button>
-        <button class="fbGuideNext" type="button">التالي</button>
-      </div>
-      <p class="fbGuidePrivacy">التوجيه يعمل من حالة حسابك الحالية فقط — بدون AI وبدون إرسال بيانات إضافية.</p>
-    </aside>
-  `;
-  document.body.appendChild(root);
+  root.innerHTML = [
+    '<section class="fbGuideInline" aria-live="polite">',
+      '<div class="fbGuideTopline">',
+        '<span class="fbGuideEyebrow">خطوتك الحالية</span>',
+        '<span class="fbGuideProgressText"></span>',
+      '</div>',
+      '<div class="fbGuideProgressTrack"><span class="fbGuideProgressBar"></span></div>',
+      '<div class="fbGuideMain">',
+        '<span class="fbGuideStepNumber"></span>',
+        '<div class="fbGuideCopy">',
+          '<h2 class="fbGuideTitle"></h2>',
+          '<p class="fbGuideDescription"></p>',
+        '</div>',
+      '</div>',
+      '<div class="fbGuideActions">',
+        '<button class="fbGuideAction" type="button"></button>',
+        '<button class="fbGuideRoadmapToggle" type="button" aria-expanded="false">عرض الرحلة كاملة</button>',
+        '<button class="fbGuideDismiss" type="button">إخفاء التوجيه</button>',
+      '</div>',
+      '<div class="fbGuideRoadmap" hidden>',
+        '<p class="fbGuideIntro"></p>',
+        '<div class="fbGuideSteps" role="list"></div>',
+        '<p class="fbGuidePrivacy">التوجيه مبني على حالة حسابك ومشروعك الحالية — بدون AI وبدون إرسال بيانات إضافية.</p>',
+      '</div>',
+    '</section>'
+  ].join("");
 
-  const launcher = root.querySelector(".fbGuideLauncher");
-  const panel = root.querySelector(".fbGuidePanel");
-  const closeBtn = root.querySelector(".fbGuideClose");
-  const title = root.querySelector(".fbGuideTitle");
-  const intro = root.querySelector(".fbGuideIntro");
+  const helpButton = document.createElement("button");
+  helpButton.type = "button";
+  helpButton.className = "fbGuideHelp";
+  helpButton.textContent = "؟ مساعدة";
+  helpButton.hidden = true;
+  document.body.appendChild(helpButton);
+
+  const inline = root.querySelector(".fbGuideInline");
+  const eyebrow = root.querySelector(".fbGuideEyebrow");
   const progressText = root.querySelector(".fbGuideProgressText");
   const progressBar = root.querySelector(".fbGuideProgressBar");
-  const stepsBox = root.querySelector(".fbGuideSteps");
-  const focusNumber = root.querySelector(".fbGuideFocusNumber");
-  const focusTitle = root.querySelector(".fbGuideFocusTitle");
-  const focusDescription = root.querySelector(".fbGuideFocusDescription");
-  const prevBtn = root.querySelector(".fbGuidePrev");
-  const nextBtn = root.querySelector(".fbGuideNext");
+  const stepNumber = root.querySelector(".fbGuideStepNumber");
+  const title = root.querySelector(".fbGuideTitle");
+  const description = root.querySelector(".fbGuideDescription");
   const actionBtn = root.querySelector(".fbGuideAction");
+  const roadmapToggle = root.querySelector(".fbGuideRoadmapToggle");
+  const dismissBtn = root.querySelector(".fbGuideDismiss");
+  const roadmap = root.querySelector(".fbGuideRoadmap");
+  const intro = root.querySelector(".fbGuideIntro");
+  const stepsBox = root.querySelector(".fbGuideSteps");
 
   function clearTarget() {
     if (activeTarget) activeTarget.classList.remove("fbGuideTarget");
     activeTarget = null;
   }
 
-  function focusTarget(step) {
+  function highlightTarget(step, { scroll = false } = {}) {
     clearTarget();
-    const target = findTarget(step.selector);
+    const target = findTarget(step?.selector || "");
     if (!target) return false;
+
     activeTarget = target;
     target.classList.add("fbGuideTarget");
-    target.scrollIntoView({ behavior: "smooth", block: "center" });
+
+    if (scroll) {
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+
     return true;
   }
 
-  function executeAction(step) {
-    if (step.href) {
-      window.location.href = step.href;
+  function mountNearStep(step) {
+    const target = findTarget(step?.selector || "");
+    const anchor = targetAnchor(target);
+
+    if (anchor && anchor.parentNode && anchor !== root && !root.contains(anchor)) {
+      anchor.parentNode.insertBefore(root, anchor);
       return;
     }
-    focusTarget(step);
+
+    const host = fallbackHost();
+    if (host === root || root.contains(host)) return;
+
+    if (host.firstChild) host.insertBefore(root, host.firstChild);
+    else host.appendChild(root);
   }
 
-  function renderFocus() {
-    const step = journey.steps[activeIndex] || journey.steps[0];
-    if (!step) return;
-    focusNumber.textContent = `${activeIndex + 1}`;
-    focusTitle.textContent = step.title;
-    focusDescription.textContent = step.description;
-    prevBtn.disabled = activeIndex <= 0;
-    nextBtn.disabled = activeIndex >= journey.steps.length - 1;
-
-    const hasAction = Boolean(step.href || step.selector);
-    actionBtn.hidden = !hasAction;
-    actionBtn.textContent = step.actionLabel || (step.href ? "كمّل الخطوة" : "ورّيني مكانها");
-
-    [...stepsBox.querySelectorAll(".fbGuideStep")].forEach((button, index) => {
-      button.classList.toggle("is-selected", index === activeIndex);
-    });
+  function isDismissed() {
+    try {
+      return localStorage.getItem(dismissalKey(journey)) === "1";
+    } catch {
+      return false;
+    }
   }
 
-  function render() {
-    title.textContent = journey.title;
-    intro.textContent = journey.intro || "";
+  function setDismissed(value) {
+    try {
+      if (value) localStorage.setItem(dismissalKey(journey), "1");
+      else localStorage.removeItem(dismissalKey(journey));
+    } catch {
+      // Local storage is optional. The guide still works without persistence.
+    }
+  }
 
-    const doneCount = journey.steps.filter(step => step.status === "done").length;
-    const total = Math.max(1, journey.steps.length);
-    progressText.textContent = `${doneCount} من ${total} خطوات مكتملة`;
-    progressBar.style.width = `${Math.round((doneCount / total) * 100)}%`;
-
+  function renderRoadmap() {
     stepsBox.replaceChildren();
+
     journey.steps.forEach((step, index) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = `fbGuideStep status-${step.status || "pending"}`;
-      button.setAttribute("role", "listitem");
+      const row = document.createElement("div");
+      row.className = "fbGuideStep status-" + (step.status || "pending");
+      row.setAttribute("role", "listitem");
 
       const marker = document.createElement("span");
       marker.className = "fbGuideStepMarker";
@@ -156,89 +179,120 @@ export function createGuide(initialJourney, { autoOpen = true } = {}) {
 
       const heading = document.createElement("strong");
       heading.textContent = step.title;
+
       const state = document.createElement("small");
       state.textContent = step.status === "done"
         ? "تم"
         : step.status === "current"
-          ? "الخطوة الحالية"
+          ? "أنت هنا"
           : "بعدها";
 
       copy.append(heading, state);
-      button.append(marker, copy);
-      button.addEventListener("click", () => {
-        activeIndex = index;
-        renderFocus();
-        if (step.selector) focusTarget(step);
-      });
-      stepsBox.appendChild(button);
+      row.append(marker, copy);
+      stepsBox.appendChild(row);
     });
-
-    renderFocus();
   }
 
-  function open({ focusCurrent = false } = {}) {
-    panel.classList.add("is-open");
-    panel.setAttribute("aria-hidden", "false");
-    launcher.setAttribute("aria-expanded", "true");
-    if (focusCurrent) {
-      const step = journey.steps[activeIndex];
-      if (step?.selector) focusTarget(step);
+  function executeAction(step) {
+    if (!step) return;
+
+    if (step.href) {
+      window.location.href = step.href;
+      return;
+    }
+
+    highlightTarget(step, { scroll: true });
+  }
+
+  function show({ scroll = false, clearDismissal = false } = {}) {
+    const step = currentStep(journey);
+    if (!step) return;
+
+    if (clearDismissal) setDismissed(false);
+
+    root.hidden = false;
+    helpButton.hidden = true;
+    mountNearStep(step);
+    highlightTarget(step, { scroll });
+
+    if (scroll) {
+      root.scrollIntoView({ behavior: "smooth", block: "center" });
     }
   }
 
-  function close() {
-    panel.classList.remove("is-open");
-    panel.setAttribute("aria-hidden", "true");
-    launcher.setAttribute("aria-expanded", "false");
+  function hide({ remember = true } = {}) {
+    if (remember) setDismissed(true);
+    root.hidden = true;
+    helpButton.hidden = false;
     clearTarget();
   }
 
-  function maybeAutoOpen(force = false, enabled = autoOpen) {
-    if (!force && !enabled) return;
-    const key = seenKey(journey);
-    let alreadySeen = false;
-    try {
-      alreadySeen = localStorage.getItem(key) === "1";
-      if (!alreadySeen) localStorage.setItem(key, "1");
-    } catch {
-      alreadySeen = false;
+  function render({ reveal = enabled } = {}) {
+    const step = currentStep(journey);
+    if (!step) {
+      root.hidden = true;
+      helpButton.hidden = true;
+      clearTarget();
+      return;
     }
-    if (!alreadySeen || force) {
-      requestAnimationFrame(() => open());
+
+    const currentIndex = firstCurrentIndex(journey);
+    const doneCount = journey.steps.filter(item => item.status === "done").length;
+    const total = Math.max(1, journey.steps.length);
+
+    eyebrow.textContent = step.status === "current" ? "خطوتك الحالية" : "دليل الاستخدام";
+    progressText.textContent = "خطوة " + (currentIndex + 1) + " من " + total + " • " + doneCount + " مكتملة";
+    progressBar.style.width = Math.round((doneCount / total) * 100) + "%";
+    stepNumber.textContent = String(currentIndex + 1);
+    title.textContent = step.title;
+    description.textContent = step.description;
+    intro.textContent = journey.intro || "";
+
+    const hasAction = Boolean(step.href || step.selector);
+    actionBtn.hidden = !hasAction;
+    actionBtn.textContent = step.actionLabel || (step.href ? "كمّل الخطوة" : "روح للجزء المطلوب");
+
+    renderRoadmap();
+    mountNearStep(step);
+
+    if (reveal && !isDismissed()) {
+      show();
+    } else {
+      root.hidden = true;
+      helpButton.hidden = !reveal;
+      clearTarget();
     }
   }
 
-  launcher.addEventListener("click", () => {
-    if (panel.classList.contains("is-open")) close();
-    else open();
-  });
-  closeBtn.addEventListener("click", close);
-  prevBtn.addEventListener("click", () => {
-    activeIndex = Math.max(0, activeIndex - 1);
-    renderFocus();
-  });
-  nextBtn.addEventListener("click", () => {
-    activeIndex = Math.min(journey.steps.length - 1, activeIndex + 1);
-    renderFocus();
-  });
-  actionBtn.addEventListener("click", () => executeAction(journey.steps[activeIndex]));
-
-  document.addEventListener("keydown", event => {
-    if (event.key === "Escape") close();
+  roadmapToggle.addEventListener("click", () => {
+    const expanded = roadmap.hidden;
+    roadmap.hidden = !expanded;
+    roadmapToggle.setAttribute("aria-expanded", String(expanded));
+    roadmapToggle.textContent = expanded ? "إخفاء تفاصيل الرحلة" : "عرض الرحلة كاملة";
   });
 
-  render();
-  maybeAutoOpen(false);
+  actionBtn.addEventListener("click", () => executeAction(currentStep(journey)));
+  dismissBtn.addEventListener("click", () => hide({ remember: true }));
+  helpButton.addEventListener("click", () => show({ scroll: true, clearDismissal: true }));
+
+  render({ reveal: enabled });
 
   return {
-    open,
-    close,
+    open() {
+      enabled = true;
+      show({ scroll: true, clearDismissal: true });
+    },
+    close() {
+      hide({ remember: true });
+    },
     update(nextJourney, { autoOpen: shouldAutoOpen = true } = {}) {
       clearTarget();
       journey = nextJourney;
-      activeIndex = firstCurrentIndex(journey);
-      render();
-      if (shouldAutoOpen) maybeAutoOpen(false, true);
+      enabled = shouldAutoOpen;
+      roadmap.hidden = true;
+      roadmapToggle.setAttribute("aria-expanded", "false");
+      roadmapToggle.textContent = "عرض الرحلة كاملة";
+      render({ reveal: shouldAutoOpen });
     }
   };
 }
