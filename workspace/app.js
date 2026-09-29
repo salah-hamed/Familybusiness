@@ -15,6 +15,8 @@ import {
 } from "../core/projects/project-service.js";
 import { REFERRAL_CONFIG, formatEgp } from "../core/config/platform-config.js";
 import { isSubscriptionActive, subscriptionExpiryDate } from "../core/subscriptions/subscription-service.js";
+import { createGuide } from "../core/onboarding/guide.js";
+import { buildWorkspaceGuide } from "../core/onboarding/guide-state.js";
 const userName =
 document.getElementById("userName");
 
@@ -25,6 +27,7 @@ document.getElementById("templatesContainer");
 const referralLink = document.getElementById("referralLink");
 const copyReferralBtn = document.getElementById("copyReferralBtn");
 const referralStatus = document.getElementById("referralStatus");
+const guideController = createGuide(buildWorkspaceGuide({ loading: true }), { autoOpen: false });
 function projectManagementUrl(templateId, projectDocId) {
   if (templateId === "supermarket") {
     return `../supermarket/?project=${encodeURIComponent(projectDocId)}`;
@@ -64,6 +67,11 @@ protectPage(async (user) => {
     userSnap.data();
     const subscriptionActive = isSubscriptionActive(data);
     const myProjects = await loadUserProjects(user.uid);
+
+    guideController.update(
+      buildWorkspaceGuide({ userData: data, projects: myProjects, subscriptionActive }),
+      { autoOpen: true }
+    );
 
     if (referralLink) {
       const referralUrl = new URL("../", window.location.href);

@@ -5,6 +5,8 @@ import { createOrResumeRestaurantSetup, getRestaurantProjectBundle } from "../co
 import { ensureOperatorInviteAccess, getOperatorInviteToken } from "../core/partners/partner-service.js";
 import { normalizeWhatsAppPhone } from "../core/whatsapp/dispatch-service.js";
 import { proposeCommission } from "../core/commissions/commission-service.js";
+import { createGuide } from "../core/onboarding/guide.js";
+import { buildPartnerProjectGuide } from "../core/onboarding/guide-state.js";
 
 import {
   doc,
@@ -20,6 +22,11 @@ const projectId=new URLSearchParams(location.search).get("project")||"";
 let currentUser=null;
 let currentProject=null;
 let bundle=null;
+
+const guideController = createGuide(
+  buildPartnerProjectGuide({ templateId: "bakery", bundle: null }),
+  { autoOpen: false }
+);
 
 function money(value){return `${Number(value||0).toLocaleString("ar-EG")} جنيه`;}
 function statusText(status){
@@ -46,6 +53,7 @@ async function loadEarnings(){
 function render(){
   const {restaurant,operator,agreement}=bundle;
   const configured=Boolean(restaurant&&operator);
+  guideController.update(buildPartnerProjectGuide({ templateId: "bakery", bundle }), { autoOpen: true });
 
   $("setupSection").classList.toggle("hidden",configured);
   $("projectSection").classList.toggle("hidden",!configured);

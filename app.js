@@ -4,6 +4,8 @@
       logoutUser,
       observeAuth
     } from './core/auth/auth.js';
+import { createGuide } from './core/onboarding/guide.js';
+import { buildAuthGuide } from './core/onboarding/guide-state.js';
 
     const nameInput =
       document.getElementById("name");
@@ -37,6 +39,7 @@ const switchMode =
   document.querySelector(".switch-mode");
 const referralUserId = new URLSearchParams(window.location.search).get("ref") || "";
 let currentMode = "register";
+const guideController = createGuide(buildAuthGuide({ mode: currentMode }), { autoOpen: true });
 
 function updatePage() {
 
@@ -61,6 +64,8 @@ function updatePage() {
         registerBtn.innerText = "🔐 تسجيل الدخول";
 
     }
+
+    guideController.update(buildAuthGuide({ mode: currentMode }), { autoOpen: true });
 
 }
 // Main Button (Register / Login)
@@ -93,6 +98,9 @@ registerBtn.addEventListener("click", async () => {
       status.innerText = referralUserId
         ? "✅ تم إنشاء الحساب وربط الإحالة بنجاح. في انتظار تفعيل الاشتراك."
         : "✅ تم إنشاء الحساب بنجاح. في انتظار تفعيل الاشتراك.";
+
+      guideController.update(buildAuthGuide({ mode: "registered" }), { autoOpen: true });
+      guideController.open();
 
     } else {
 

@@ -4,12 +4,19 @@ import { createOrResumeLaundrySetup, getLaundryBundle, migrateLegacyLaundryProje
 import { proposeCommission } from "../core/commissions/commission-service.js";
 import { ensureOperatorInviteAccess, getOperatorInviteToken } from "../core/partners/partner-service.js";
 import { normalizeWhatsAppPhone } from "../core/whatsapp/dispatch-service.js";
+import { createGuide } from "../core/onboarding/guide.js";
+import { buildPartnerProjectGuide } from "../core/onboarding/guide-state.js";
 
 import {doc,getDoc,collection,getDocs,query,where} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const $=id=>document.getElementById(id);
 const projectId=new URLSearchParams(location.search).get("project")||"";
 let user=null,project=null,bundle=null;
+
+const guideController = createGuide(
+  buildPartnerProjectGuide({ templateId: "laundry", bundle: null }),
+  { autoOpen: false }
+);
 const money=v=>`${Number(v||0).toLocaleString("ar-EG")} جنيه`;
 const esc=v=>String(v??"")
   .replace(/&/g,"&amp;")
@@ -35,6 +42,7 @@ async function loadEarnings(){
 function render(){
   const {laundry,operator,agreement}=bundle;
   const configured=!!(laundry&&operator);
+  guideController.update(buildPartnerProjectGuide({ templateId: "laundry", bundle }), { autoOpen: true });
   $("setupSection").classList.toggle("hidden",configured);
   $("projectSection").classList.toggle("hidden",!configured);
   if(!configured){$("statusBanner").innerText="ابدأ بربط مغسلة واحدة بالمشروع وتحديد العمولة المقترحة.";return;}
