@@ -287,8 +287,14 @@ function renderCart(){
 }
 
 async function completeSearchAcrossLoadedCategory(generation){
-  while(hasMoreProducts&&generation===searchGeneration){
+  let pages=0;
+
+  while(hasMoreProducts&&generation===searchGeneration&&pages<100){
+    const before=lastProductDoc;
     await loadProductsPage();
+    pages++;
+
+    if(lastProductDoc===before)break;
   }
 }
 
