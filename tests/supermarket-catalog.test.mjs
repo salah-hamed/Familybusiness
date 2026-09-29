@@ -244,3 +244,10 @@ test("customer supermarket opens on daily essentials and search can switch to th
   assert.equal(html.includes('id="catalogHeading"'), true);
   assert.equal(html.includes("الأكثر طلبًا للبيت المصري"), true);
 });
+
+
+test("customer daily home stays lightweight and does not import the 2000-product dataset", () => {
+  const source = readFileSync("templates/supermarket/app.js", "utf8");
+  assert.equal(source.includes("../../core/supermarket/daily-essentials.js"), true);
+  assert.equal(source.includes("../../core/supermarket/master-catalog.js"), false);
+});
