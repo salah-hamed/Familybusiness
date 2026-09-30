@@ -440,3 +440,14 @@ test("missing-index fallback preserves active orders, history pagination, and de
     assert.equal(source.includes("getCountFromServer"), true, path);
   }
 });
+
+
+test("operator missing-index fallback constrains templateType so Firestore Rules can authorize the query", () => {
+  const supermarket = readFileSync("core/supermarket/order-service.js", "utf8");
+  const restaurant = readFileSync("core/restaurant/order-service.js", "utf8");
+  const laundry = readFileSync("core/laundry/order-service.js", "utf8");
+
+  assert.equal(supermarket.includes('where("templateType", "==", "supermarket")'), true);
+  assert.equal(restaurant.includes('where("templateType", "==", templateType)'), true);
+  assert.equal(laundry.includes('where("templateType","==","laundry")'), true);
+});

@@ -7,12 +7,16 @@ import {
   initializeTestEnvironment
 } from "@firebase/rules-unit-testing";
 import {
+  collection,
   deleteDoc,
   doc,
   getDoc,
+  getDocs,
+  query,
   serverTimestamp,
   setDoc,
-  updateDoc
+  updateDoc,
+  where
 } from "firebase/firestore";
 
 const PROJECT_ID = "family-business-rules-test";
@@ -832,4 +836,36 @@ test("project-order ledger rejects amount or accepted-version mismatches", async
       })
     );
   }
+});
+
+
+test("operator fallback query must constrain both projectId and templateType", async () => {
+  const { projectId } = await seedPartnerRuntime("restaurant", "fallback_query");
+
+  await testEnv.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), "orders", "fallback_order"), {
+      projectId,
+      providerId: projectId,
+      templateType: "restaurant",
+      status: "new",
+      createdAt: serverTimestamp()
+    });
+  });
+
+  const db = testEnv.authenticatedContext("operator_restaurant").firestore();
+
+  await assertFails(
+    getDocs(query(
+      collection(db, "orders"),
+      where("projectId", "==", projectId)
+    ))
+  );
+
+  await assertSucceeds(
+    getDocs(query(
+      collection(db, "orders"),
+      where("projectId", "==", projectId),
+      where("templateType", "==", "restaurant")
+    ))
+  );
 });

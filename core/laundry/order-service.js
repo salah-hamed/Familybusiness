@@ -32,7 +32,8 @@ function orderCreatedAtMillis(docSnap){
 async function loadLaundryOrderDocsWithoutCompositeIndex(projectId){
   const snap=await getDocs(query(
     collection(db,"orders"),
-    where("projectId","==",projectId)
+    where("projectId","==",projectId),
+    where("templateType","==","laundry")
   ));
   return snap.docs
     .filter(item=>item.data().templateType==="laundry")
