@@ -35,3 +35,14 @@ These fields describe the project's own operational state. Admin subscription ac
 ## Security boundary
 
 These are application-level checks. Firestore Security Rules remain the authoritative future enforcement layer and are intentionally outside FB-004.
+
+
+## Current commercial values
+
+The application reads these values from `core/config/platform-config.js`.
+
+- Initial account activation + first subscription period: **350 EGP**
+- Monthly renewal: **59 EGP**
+- Qualified referral reward after the referred user's first paid activation: **50 EGP**
+
+The initial activation and referral reward are recorded only on the first qualified activation. Renewal does not create a second referral reward.
