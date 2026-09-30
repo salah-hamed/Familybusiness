@@ -4,7 +4,7 @@ import { acceptPendingCommission, rejectPendingCommission, getCommissionAgreemen
 import { getSupermarket, updateSupermarketSettings } from "../core/supermarket/supermarket-service.js";
 import { WORKER_ROLES, createWorker, listProjectWorkers, setWorkerActive } from "../core/workers/worker-service.js";
 import { assignWorkerAndPrepareWhatsApp } from "../core/workers/worker-dispatch-service.js";
-import { allowedNextSupermarketStatuses, listSupermarketOrders, acceptSupermarketOrder, changeSupermarketOrderStatus } from "../core/supermarket/order-service.js";
+import { allowedNextSupermarketStatuses, listSupermarketOperationalOrders, listSupermarketHistoryPage, countSupermarketDeliveredOrders, acceptSupermarketOrder, changeSupermarketOrderStatus } from "../core/supermarket/order-service.js";
 
 import {
   createUserWithEmailAndPassword,
@@ -24,6 +24,10 @@ let currentAgreement=null;
 let currentStore=null;
 let riders=[];
 let orders=[];
+let operationalOrders=[];
+let historyOrders=[];
+let historyCursor=null;
+let historyHasMore=false;
 
 function money(v){return `${Number(v||0).toLocaleString("ar-EG")} جنيه`;}
 function escapeHTML(v){return String(v??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;");}
@@ -222,12 +226,41 @@ function activeRiderOptions(selected=""){
   return riders.filter(r=>r.isActive).map(r=>`<option value="${r.workerId}" ${r.workerId===selected?"selected":""}>${escapeHTML(r.name)}</option>`).join("");
 }
 
-async function loadOrders(){
-  orders=await listSupermarketOrders(projectId);
-  const active=orders.filter(o=>!["new","delivered","canceled"].includes(o.status)).length;
-  $("statNew").innerText=orders.filter(o=>o.status==="new").length;
+function orderTime(order){
+  if(typeof order.createdAt?.toMillis==="function")return order.createdAt.toMillis();
+  return Number(order.createdAt?.seconds||0)*1000;
+}
+function mergeVisibleOrders(){
+  const map=new Map();
+  [...operationalOrders,...historyOrders].forEach(order=>map.set(order.orderId,order));
+  return [...map.values()].sort((a,b)=>orderTime(b)-orderTime(a));
+}
+
+async function loadOrders({appendHistory=false}={}){
+  if(appendHistory){
+    const page=await listSupermarketHistoryPage(projectId,{pageSize:50,cursor:historyCursor});
+    const known=new Set(historyOrders.map(order=>order.orderId));
+    historyOrders.push(...page.orders.filter(order=>!known.has(order.orderId)));
+    historyCursor=page.nextCursor;
+    historyHasMore=page.hasMore;
+  }else{
+    const [active,page,deliveredCount]=await Promise.all([
+      listSupermarketOperationalOrders(projectId),
+      listSupermarketHistoryPage(projectId,{pageSize:50}),
+      countSupermarketDeliveredOrders(projectId)
+    ]);
+    operationalOrders=active;
+    historyOrders=page.orders;
+    historyCursor=page.nextCursor;
+    historyHasMore=page.hasMore;
+    $("statDelivered").innerText=deliveredCount;
+  }
+
+  orders=mergeVisibleOrders();
+  const active=operationalOrders.filter(o=>o.status!=="new").length;
+  $("statNew").innerText=operationalOrders.filter(o=>o.status==="new").length;
   $("statActive").innerText=active;
-  $("statDelivered").innerText=orders.filter(o=>o.status==="delivered").length;
+  $("loadOlderOrdersBtn").classList.toggle("hidden",!historyHasMore);
 
   $("ordersList").innerHTML=orders.length?orders.map(o=>{
     const items=(o.items||[]).map(i=>`${Number(i.quantity||0)} × ${escapeHTML(i.name)}`).join("<br>");
@@ -284,6 +317,7 @@ async function loadOrders(){
     });
   });
 }
-$("refreshOrdersBtn").onclick=loadOrders;
+$("refreshOrdersBtn").onclick=()=>loadOrders();
+$("loadOlderOrdersBtn").onclick=async()=>{const btn=$("loadOlderOrdersBtn");btn.disabled=true;try{await loadOrders({appendHistory:true});}finally{btn.disabled=false;}};
 
 document.querySelectorAll(".tabs button").forEach(btn=>btn.onclick=()=>document.getElementById(btn.dataset.target)?.scrollIntoView({behavior:"smooth",block:"start"}));
