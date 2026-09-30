@@ -10,13 +10,16 @@ import {
   collection,
   doc,
   getDocs,
+  getAggregateFromServer,
   limit,
   orderBy,
   query,
   setDoc,
   startAfter,
   Timestamp,
-  where
+  where,
+  sum,
+  count
 } from "firebase/firestore";
 
 const PROJECT_ID = "family-business-rules-test";
@@ -37,7 +40,7 @@ after(async () => {
   await testEnv.cleanup();
 });
 
-async function seedLedger(userId, count = 55) {
+async function seedLedger(userId, count = 101) {
   await testEnv.withSecurityRulesDisabled(async context => {
     const db = context.firestore();
     await setDoc(doc(db, "users", userId), {
@@ -63,40 +66,71 @@ async function seedLedger(userId, count = 55) {
   });
 }
 
-test("ledger owner can page through 55 entries without gaps or duplicates", async () => {
+test("ledger owner can page through 101 entries without gaps or duplicates", async () => {
   const userId = "ledger_owner";
-  await seedLedger(userId, 55);
+  await seedLedger(userId, 101);
   const db = testEnv.authenticatedContext(userId).firestore();
 
   const first = await assertSucceeds(getDocs(query(
     collection(db, "commissionLedger"),
     where("userId", "==", userId),
     orderBy("createdAt", "desc"),
-    limit(25)
+    limit(50)
   )));
-  assert.equal(first.size, 25);
+  assert.equal(first.size, 50);
 
   const second = await assertSucceeds(getDocs(query(
     collection(db, "commissionLedger"),
     where("userId", "==", userId),
     orderBy("createdAt", "desc"),
     startAfter(first.docs[first.docs.length - 1]),
-    limit(25)
+    limit(50)
   )));
-  assert.equal(second.size, 25);
+  assert.equal(second.size, 50);
 
   const third = await assertSucceeds(getDocs(query(
     collection(db, "commissionLedger"),
     where("userId", "==", userId),
     orderBy("createdAt", "desc"),
     startAfter(second.docs[second.docs.length - 1]),
-    limit(25)
+    limit(50)
   )));
-  assert.equal(third.size, 5);
+  assert.equal(third.size, 1);
 
   const ids = [...first.docs, ...second.docs, ...third.docs].map(d => d.id);
-  assert.equal(ids.length, 55);
-  assert.equal(new Set(ids).size, 55);
+  assert.equal(first.docs[0].id, "entry_101");
+  assert.equal(third.docs[0].id, "entry_001");
+  assert.equal(ids.length, 101);
+  assert.equal(new Set(ids).size, 101);
+});
+
+test("ledger aggregates return exact all/project/referral totals without loading history pages", async () => {
+  const userId = "ledger_totals";
+  await seedLedger(userId, 4);
+  const db = testEnv.authenticatedContext(userId).firestore();
+  const base = collection(db, "commissionLedger");
+
+  const [all, projectOrders, referrals] = await Promise.all([
+    assertSucceeds(getAggregateFromServer(
+      query(base, where("userId", "==", userId)),
+      { totalAmount: sum("amount"), entryCount: count() }
+    )),
+    assertSucceeds(getAggregateFromServer(
+      query(base, where("userId", "==", userId), where("sourceType", "==", "project_order")),
+      { totalAmount: sum("amount"), entryCount: count() }
+    )),
+    assertSucceeds(getAggregateFromServer(
+      query(base, where("userId", "==", userId), where("sourceType", "==", "referral")),
+      { totalAmount: sum("amount"), entryCount: count() }
+    ))
+  ]);
+
+  assert.equal(all.data().totalAmount, 10);
+  assert.equal(all.data().entryCount, 4);
+  assert.equal(projectOrders.data().totalAmount, 4);
+  assert.equal(projectOrders.data().entryCount, 2);
+  assert.equal(referrals.data().totalAmount, 6);
+  assert.equal(referrals.data().entryCount, 2);
 });
 
 test("another user cannot list someone else's commission ledger", async () => {
@@ -108,6 +142,6 @@ test("another user cannot list someone else's commission ledger", async () => {
     collection(db, "commissionLedger"),
     where("userId", "==", ownerId),
     orderBy("createdAt", "desc"),
-    limit(25)
+    limit(50)
   )));
 });
