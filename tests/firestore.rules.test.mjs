@@ -1,4 +1,5 @@
 import test, { after, before, beforeEach } from "node:test";
+import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   assertFails,
@@ -8,8 +9,10 @@ import {
 import {
   deleteDoc,
   doc,
+  getDoc,
   serverTimestamp,
-  setDoc
+  setDoc,
+  updateDoc
 } from "firebase/firestore";
 
 const PROJECT_ID = "family-business-rules-test";
@@ -423,5 +426,152 @@ test("valid public laundry order passes partner readiness and input bounds", asy
       doc(db, "orders", "valid_laundry_order"),
       laundryOrder(projectId)
     )
+  );
+});
+
+
+async function seedClaimedOperatorRecoveryFixture(suffix = "recovery") {
+  const ownerId = `owner_operator_${suffix}`;
+  const projectId = `${ownerId}_supermarket`;
+  const oldAuthUid = `operator_old_${suffix}`;
+  const oldEmail = `operator.old.${suffix}@familybusiness.local`;
+
+  await testEnv.withSecurityRulesDisabled(async context => {
+    const db = context.firestore();
+    await setDoc(doc(db, "users", ownerId), {
+      uid: ownerId,
+      name: "Owner",
+      email: `${ownerId}@example.com`,
+      isActive: true,
+      subscriptionStatus: "active"
+    });
+    await setDoc(doc(db, "projects", projectId), {
+      ownerId,
+      projectId: "supermarket",
+      template: "supermarket",
+      operatingModel: "partner_operated",
+      templateVersion: 1,
+      operatorId: projectId,
+      partnerSetupStatus: "active",
+      businessName: "Recovery Store",
+      status: "active",
+      isActive: true,
+      priceConfig: {}
+    });
+    await setDoc(doc(db, "operators", projectId), {
+      operatorId: projectId,
+      projectId,
+      ownerId,
+      templateId: "supermarket",
+      name: "Recovery Store",
+      contactName: "Operator",
+      phone: "01000000000",
+      whatsapp: "01000000000",
+      email: "",
+      authLoginEmail: oldEmail,
+      authUid: oldAuthUid,
+      status: "active",
+      agreementStatus: "accepted",
+      isActive: true,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+  });
+
+  return { ownerId, projectId, oldAuthUid, oldEmail };
+}
+
+test("project owner can rotate claimed operator access without changing business state", async () => {
+  const { ownerId, projectId } = await seedClaimedOperatorRecoveryFixture("owner_reset");
+  const db = testEnv.authenticatedContext(ownerId).firestore();
+  const newEmail = "operator.new.owner-reset@familybusiness.local";
+
+  await assertSucceeds(
+    updateDoc(doc(db, "operators", projectId), {
+      authLoginEmail: newEmail,
+      authUid: "",
+      updatedAt: serverTimestamp()
+    })
+  );
+
+  const snap = await getDoc(doc(db, "operators", projectId));
+  assert.equal(snap.data().authUid, "");
+  assert.equal(snap.data().authLoginEmail, newEmail);
+  assert.equal(snap.data().status, "active");
+  assert.equal(snap.data().agreementStatus, "accepted");
+  assert.equal(snap.data().isActive, true);
+});
+
+test("non-owner cannot rotate operator access", async () => {
+  const { projectId } = await seedClaimedOperatorRecoveryFixture("stranger_reset");
+  const db = testEnv.authenticatedContext("stranger_user").firestore();
+
+  await assertFails(
+    updateDoc(doc(db, "operators", projectId), {
+      authLoginEmail: "operator.new.stranger@familybusiness.local",
+      authUid: "",
+      updatedAt: serverTimestamp()
+    })
+  );
+});
+
+test("old operator loses access immediately after owner rotates invite", async () => {
+  const { ownerId, projectId, oldAuthUid, oldEmail } = await seedClaimedOperatorRecoveryFixture("old_revoked");
+  const ownerDb = testEnv.authenticatedContext(ownerId).firestore();
+  const newEmail = "operator.new.old-revoked@familybusiness.local";
+
+  await assertSucceeds(
+    updateDoc(doc(ownerDb, "operators", projectId), {
+      authLoginEmail: newEmail,
+      authUid: "",
+      updatedAt: serverTimestamp()
+    })
+  );
+
+  const oldDb = testEnv.authenticatedContext(oldAuthUid, {
+    email: oldEmail,
+    email_verified: false
+  }).firestore();
+
+  await assertFails(getDoc(doc(oldDb, "operators", projectId)));
+});
+
+test("new rotated invite can claim once and a second uid cannot take over", async () => {
+  const { ownerId, projectId } = await seedClaimedOperatorRecoveryFixture("new_claim");
+  const ownerDb = testEnv.authenticatedContext(ownerId).firestore();
+  const newEmail = "operator.new.claim@familybusiness.local";
+
+  await assertSucceeds(
+    updateDoc(doc(ownerDb, "operators", projectId), {
+      authLoginEmail: newEmail,
+      authUid: "",
+      updatedAt: serverTimestamp()
+    })
+  );
+
+  const newDb = testEnv.authenticatedContext("operator_new_claim", {
+    email: newEmail,
+    email_verified: false
+  }).firestore();
+
+  await assertSucceeds(
+    updateDoc(doc(newDb, "operators", projectId), {
+      authUid: "operator_new_claim",
+      status: "active",
+      updatedAt: serverTimestamp()
+    })
+  );
+
+  const takeoverDb = testEnv.authenticatedContext("operator_takeover", {
+    email: newEmail,
+    email_verified: false
+  }).firestore();
+
+  await assertFails(
+    updateDoc(doc(takeoverDb, "operators", projectId), {
+      authUid: "operator_takeover",
+      status: "active",
+      updatedAt: serverTimestamp()
+    })
   );
 });

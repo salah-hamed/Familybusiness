@@ -82,10 +82,12 @@ async function authorize(){
   try{
     await claimOperatorAccess(projectId,currentUser);
   }catch(e){
-    if(e.message!=="OPERATOR_ALREADY_CLAIMED"){
-      $("pageStatus").innerText=`تعذر فتح قائمة المنتجات: ${e.message}`;
-      return false;
-    }
+    const code=String(e?.code||"");
+    const message=String(e?.message||"");
+    $("pageStatus").innerText=code.includes("permission-denied")||["OPERATOR_ALREADY_CLAIMED","OPERATOR_INVITE_MISMATCH"].includes(message)
+      ?"رابط الدخول ده اتلغى أو تم استبداله. اطلب رابط دخول جديد من صاحب المشروع."
+      :`تعذر فتح قائمة المنتجات: ${message||"UNKNOWN_ERROR"}`;
+    return false;
   }
 
   const [operator,agreement,restaurant]=await Promise.all([
