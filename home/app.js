@@ -15,7 +15,7 @@ const projects = getDiscoverableProjects().filter(project =>
 
 if (container) {
   container.innerHTML = projects.map(project => `
-    <article class="projectCard">
+    <article class="projectCard project-${project.id}">
       <div class="projectIcon">${project.icon}</div>
       <h3>${project.title}</h3>
       <p>${projectCopy[project.id] || project.description || ""}</p>

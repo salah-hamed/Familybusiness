@@ -302,3 +302,28 @@ test("FINAL02 marketing page uses live platform prices and exactly the four laun
   }
   assert.equal(source.includes("getDiscoverableProjects"), true);
 });
+
+
+test("FINAL03 marketing page clearly explains the product the subscriber receives", () => {
+  const html = readFileSync("home/index.html", "utf8");
+  assert.equal(html.includes('id="magic"'), true);
+  assert.equal(html.includes("إنت بتاخد إيه لما تشترك؟"), true);
+  assert.equal(html.includes("زرار سحري"), true);
+  assert.equal(html.includes("دخل رقم صاحبه"), true);
+  assert.equal(html.includes("هو يستلم تطبيقه"), true);
+  assert.equal(html.includes("إنت تابع العداد"), true);
+  assert.equal(html.includes("عدادك إنت"), true);
+  assert.equal(html.includes("عمولتك محسوبة"), true);
+});
+
+test("FINAL03 marketing page adds lively project-specific color language without changing business logic", () => {
+  const css = readFileSync("home/style.css", "utf8");
+  const source = readFileSync("home/app.js", "utf8");
+  for (const token of ["--green:", "--orange:", "--gold:", "--blue:", "--purple:"]) {
+    assert.equal(css.includes(token), true, token);
+  }
+  for (const project of ["supermarket", "restaurant", "bakery", "laundry"]) {
+    assert.equal(css.includes(`.project-${project}`), true, project);
+  }
+  assert.equal(source.includes('projectCard project-${project.id}'), true);
+});
