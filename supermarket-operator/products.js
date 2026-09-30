@@ -7,6 +7,7 @@ import {
   addStoreProduct,
   bulkAddMasterProducts,
   deleteStoreProduct,
+  getStoreProduct,
   listStoreProducts,
   updateStoreProduct,
   findStoreProductByBarcode,
@@ -193,6 +194,42 @@ async function loadProducts({ syncMeta = false } = {}) {
   renderCatalog();
 }
 
+function sortLocalProducts(items = products) {
+  return [...items].sort((a, b) =>
+    String(a.name || "").localeCompare(String(b.name || ""), "ar")
+  );
+}
+
+function upsertLocalProduct(product) {
+  if (!product?.productId) return;
+  const index = products.findIndex(item => item.productId === product.productId);
+  if (index >= 0) products[index] = { ...products[index], ...product };
+  else products.push(product);
+}
+
+function patchLocalProducts(productIds, patch = {}) {
+  const ids = new Set(productIds || []);
+  products = products.map(product =>
+    ids.has(product.productId) ? { ...product, ...patch } : product
+  );
+}
+
+function removeLocalProducts(productIds) {
+  const ids = new Set(productIds || []);
+  products = products.filter(product => !ids.has(product.productId));
+  for (const id of ids) selectedStoreIds.delete(id);
+}
+
+async function refreshLocalCatalog({ syncMeta = false } = {}) {
+  products = sortLocalProducts();
+
+  if (syncMeta) {
+    await syncCatalogMeta();
+  }
+
+  renderCatalog();
+}
+
 function refreshCategoryOptions(entries) {
   const categories = [...new Set(entries.map(entry => entry.category).filter(Boolean))]
     .sort((a, b) => String(a).localeCompare(String(b), "ar"));
@@ -371,7 +408,7 @@ function bindCatalogCardEvents(visibleEntries) {
       $("catalogMessage").innerText = "جاري إضافة المنتج...";
 
       try {
-        await addStoreProduct(projectId, currentUser.uid, {
+        const productId = await addStoreProduct(projectId, currentUser.uid, {
           masterId,
           name: entry.master.name,
           category: entry.master.category,
@@ -379,8 +416,10 @@ function bindCatalogCardEvents(visibleEntries) {
           image: entry.image,
           price: masterDraftPrice(entry.master)
         });
+        const addedProduct = await getStoreProduct(projectId, productId);
+        if (addedProduct) upsertLocalProduct(addedProduct);
         selectedMasterIds.delete(masterId);
-        await loadProducts({ syncMeta: true });
+        await refreshLocalCatalog({ syncMeta: true });
         $("catalogMessage").innerText = `تمت إضافة ${entry.master.name} ✅`;
       } catch (error) {
         $("catalogMessage").innerText = error.message === "PRODUCT_ALREADY_EXISTS"
@@ -404,10 +443,12 @@ function bindCatalogCardEvents(visibleEntries) {
       quickSave.onclick = async () => {
         quickSave.disabled = true;
         try {
+          const nextPrice = Number(card.querySelector(".quickPrice").value || 0);
           await updateStoreProduct(projectId, productId, currentUser.uid, {
-            price: card.querySelector(".quickPrice").value
+            price: nextPrice
           });
-          await loadProducts();
+          patchLocalProducts([productId], { price: nextPrice });
+          await refreshLocalCatalog();
           $("catalogMessage").innerText = `تم تحديث سعر ${product.name} ✅`;
         } catch (error) {
           $("catalogMessage").innerText = `تعذر حفظ السعر: ${error.message}`;
@@ -426,7 +467,11 @@ function bindCatalogCardEvents(visibleEntries) {
             isActive: nextActive,
             inStock: nextActive
           });
-          await loadProducts({ syncMeta: true });
+          patchLocalProducts([productId], {
+            isActive: nextActive,
+            inStock: nextActive
+          });
+          await refreshLocalCatalog({ syncMeta: true });
           $("catalogMessage").innerText = nextActive ? "تم تفعيل المنتج ✅" : "تم إيقاف المنتج مؤقتًا.";
         } catch (error) {
           $("catalogMessage").innerText = `تعذر تغيير الحالة: ${error.message}`;
@@ -440,13 +485,15 @@ function bindCatalogCardEvents(visibleEntries) {
       saveDetails.onclick = async () => {
         saveDetails.disabled = true;
         try {
-          await updateStoreProduct(projectId, productId, currentUser.uid, {
-            name: card.querySelector(".editName").value,
-            category: card.querySelector(".editCategory").value,
-            size: card.querySelector(".editSize").value,
-            image: card.querySelector(".editImage").value
-          });
-          await loadProducts({ syncMeta: true });
+          const patch = {
+            name: card.querySelector(".editName").value.trim(),
+            category: card.querySelector(".editCategory").value.trim(),
+            size: card.querySelector(".editSize").value.trim(),
+            image: card.querySelector(".editImage").value.trim()
+          };
+          await updateStoreProduct(projectId, productId, currentUser.uid, patch);
+          patchLocalProducts([productId], patch);
+          await refreshLocalCatalog({ syncMeta: true });
           $("catalogMessage").innerText = "تم حفظ بيانات المنتج ✅";
         } catch (error) {
           $("catalogMessage").innerText = `تعذر حفظ البيانات: ${error.message}`;
@@ -461,8 +508,8 @@ function bindCatalogCardEvents(visibleEntries) {
         if (!confirm(`حذف "${product.name}" من متجرك؟`)) return;
         try {
           await deleteStoreProduct(projectId, productId);
-          selectedStoreIds.delete(productId);
-          await loadProducts({ syncMeta: true });
+          removeLocalProducts([productId]);
+          await refreshLocalCatalog({ syncMeta: true });
           $("catalogMessage").innerText = "تم حذف المنتج من المتجر.";
         } catch (error) {
           $("catalogMessage").innerText = `تعذر الحذف: ${error.message}`;
@@ -573,8 +620,9 @@ $("addSelectedBtn").onclick = async () => {
 
   try {
     const result = await bulkAddMasterProducts(projectId, currentUser.uid, selections);
+    (result.addedProducts || []).forEach(upsertLocalProduct);
     selectedMasterIds.clear();
-    await loadProducts({ syncMeta: true });
+    await refreshLocalCatalog({ syncMeta: true });
     $("catalogMessage").innerText = `تمت إضافة ${result.added} منتج ✅${result.skipped ? ` — تم تخطي ${result.skipped} موجود بالفعل` : ""}`;
   } catch (error) {
     $("catalogMessage").innerText = `تعذر الإضافة الجماعية: ${error.message}`;
@@ -585,12 +633,14 @@ $("addSelectedBtn").onclick = async () => {
 $("bulkActivateBtn").onclick = async () => {
   if (!selectedStoreIds.size) return;
   try {
-    await bulkUpdateStoreProducts(projectId, [...selectedStoreIds], currentUser.uid, {
+    const ids = [...selectedStoreIds];
+    await bulkUpdateStoreProducts(projectId, ids, currentUser.uid, {
       isActive: true,
       inStock: true
     });
+    patchLocalProducts(ids, { isActive: true, inStock: true });
     selectedStoreIds.clear();
-    await loadProducts({ syncMeta: true });
+    await refreshLocalCatalog({ syncMeta: true });
     $("catalogMessage").innerText = "تم تفعيل المنتجات المحددة ✅";
   } catch (error) {
     $("catalogMessage").innerText = `تعذر التفعيل: ${error.message}`;
@@ -600,12 +650,14 @@ $("bulkActivateBtn").onclick = async () => {
 $("bulkPauseBtn").onclick = async () => {
   if (!selectedStoreIds.size) return;
   try {
-    await bulkUpdateStoreProducts(projectId, [...selectedStoreIds], currentUser.uid, {
+    const ids = [...selectedStoreIds];
+    await bulkUpdateStoreProducts(projectId, ids, currentUser.uid, {
       isActive: false,
       inStock: false
     });
+    patchLocalProducts(ids, { isActive: false, inStock: false });
     selectedStoreIds.clear();
-    await loadProducts({ syncMeta: true });
+    await refreshLocalCatalog({ syncMeta: true });
     $("catalogMessage").innerText = "تم إيقاف المنتجات المحددة.";
   } catch (error) {
     $("catalogMessage").innerText = `تعذر الإيقاف: ${error.message}`;
@@ -618,9 +670,12 @@ $("bulkCategoryBtn").onclick = async () => {
   if (!category?.trim()) return;
 
   try {
-    await bulkUpdateStoreProducts(projectId, [...selectedStoreIds], currentUser.uid, { category });
+    const ids = [...selectedStoreIds];
+    const nextCategory = category.trim();
+    await bulkUpdateStoreProducts(projectId, ids, currentUser.uid, { category: nextCategory });
+    patchLocalProducts(ids, { category: nextCategory });
     selectedStoreIds.clear();
-    await loadProducts({ syncMeta: true });
+    await refreshLocalCatalog({ syncMeta: true });
     $("catalogMessage").innerText = "تم تغيير التصنيف ✅";
   } catch (error) {
     $("catalogMessage").innerText = `تعذر تغيير التصنيف: ${error.message}`;
@@ -632,9 +687,11 @@ $("bulkDeleteBtn").onclick = async () => {
   if (!confirm(`حذف ${selectedStoreIds.size} منتج من المتجر؟`)) return;
 
   try {
-    await bulkDeleteStoreProducts(projectId, [...selectedStoreIds]);
+    const ids = [...selectedStoreIds];
+    await bulkDeleteStoreProducts(projectId, ids);
+    removeLocalProducts(ids);
     selectedStoreIds.clear();
-    await loadProducts({ syncMeta: true });
+    await refreshLocalCatalog({ syncMeta: true });
     $("catalogMessage").innerText = "تم حذف المنتجات المحددة من المتجر.";
   } catch (error) {
     $("catalogMessage").innerText = `تعذر الحذف: ${error.message}`;
@@ -644,7 +701,7 @@ $("bulkDeleteBtn").onclick = async () => {
 $("addProductBtn").onclick = async () => {
   $("productMessage").innerText = "جاري الإضافة...";
   try {
-    await addStoreProduct(projectId, currentUser.uid, {
+    const productId = await addStoreProduct(projectId, currentUser.uid, {
       name: $("productName").value,
       category: $("productCategory").value,
       price: $("productPrice").value,
@@ -652,11 +709,13 @@ $("addProductBtn").onclick = async () => {
       size: $("productSize").value,
       image: $("productImage").value
     });
+    const addedProduct = await getStoreProduct(projectId, productId);
+    if (addedProduct) upsertLocalProduct(addedProduct);
 
     ["productName", "productCategory", "productPrice", "productBarcode", "productSize", "productImage"]
       .forEach(id => $(id).value = "");
 
-    await loadProducts({ syncMeta: true });
+    await refreshLocalCatalog({ syncMeta: true });
     $("productMessage").innerText = "تمت إضافة المنتج داخل نفس الكتالوج ✅";
   } catch (error) {
     $("productMessage").innerText = error.message === "PRODUCT_ALREADY_EXISTS"
@@ -817,8 +876,9 @@ $("importBtn").onclick = async () => {
 
   try {
     const rows = await parseImportFile(file);
-    const result = await bulkImportStoreProducts(projectId, currentUser.uid, rows);
-    await loadProducts({ syncMeta: true });
+    const result = await bulkImportStoreProducts(projectId, currentUser.uid, rows, products);
+    products = Array.isArray(result.products) ? result.products : products;
+    await refreshLocalCatalog({ syncMeta: true });
 
     $("importMessage").innerText =
       `تمت معالجة ${result.imported} منتج ✅ — جديد: ${result.added} — موجود وتم إثراؤه: ${result.updated}. لو الصور داخل Excel كرسومات مضمّنة وليست روابط فلن يستطيع المتصفح استخراجها.`;
@@ -832,8 +892,9 @@ $("mergeDuplicatesBtn").onclick = async () => {
   $("duplicateMessage").innerText = "جاري فحص المنتجات بالاسم والحجم...";
 
   try {
-    const result = await mergeDuplicateStoreProducts(projectId, currentUser.uid);
-    await loadProducts({ syncMeta: true });
+    const result = await mergeDuplicateStoreProducts(projectId, currentUser.uid, products);
+    products = Array.isArray(result.products) ? result.products : products;
+    await refreshLocalCatalog({ syncMeta: true });
 
     $("duplicateMessage").innerText = result.groups
       ? `تم الدمج ✅ ${result.groups} مجموعة — حذف ${result.removed} نسخة زائدة — إثراء ${result.enriched} منتج.`
