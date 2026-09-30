@@ -1615,23 +1615,6 @@ service cloud.firestore {
     || (signedIn() && resource.data.authUid == request.auth.uid)
     || (
       signedIn()
-      && ownsProject(resource.data.projectId)
-      && resource.data.ownerId == request.auth.uid
-      && request.resource.data.operatorId == resource.data.operatorId
-      && request.resource.data.projectId == resource.data.projectId
-      && request.resource.data.ownerId == resource.data.ownerId
-      && request.resource.data.templateId == resource.data.templateId
-      && request.resource.data.authUid == ""
-      && request.resource.data.authLoginEmail is string
-      && request.resource.data.authLoginEmail.size() > 0
-      && request.resource.data.authLoginEmail != resource.data.authLoginEmail
-      && request.resource.data.status == resource.data.status
-      && request.resource.data.agreementStatus == resource.data.agreementStatus
-      && request.resource.data.isActive == resource.data.isActive
-      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["authLoginEmail","authUid","updatedAt"])
-    )
-    || (
-      signedIn()
       && resource.data.authUid == ""
       && (
         (
@@ -1697,6 +1680,23 @@ service cloud.firestore {
           && request.resource.data.agreementStatus == "pending"
         )
       )
+    )
+    || (
+      signedIn()
+      && ownsProject(resource.data.projectId)
+      && resource.data.ownerId == request.auth.uid
+      && request.resource.data.operatorId == resource.data.operatorId
+      && request.resource.data.projectId == resource.data.projectId
+      && request.resource.data.ownerId == resource.data.ownerId
+      && request.resource.data.templateId == resource.data.templateId
+      && request.resource.data.authUid == ""
+      && request.resource.data.authLoginEmail is string
+      && request.resource.data.authLoginEmail.size() > 0
+      && request.resource.data.authLoginEmail != resource.data.authLoginEmail
+      && request.resource.data.status == resource.data.status
+      && request.resource.data.agreementStatus == resource.data.agreementStatus
+      && request.resource.data.isActive == resource.data.isActive
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["authLoginEmail","authUid","updatedAt"])
     )
     || (
       signedIn()
