@@ -29,6 +29,18 @@ function money(v){return `${Number(v||0).toLocaleString("ar-EG")} جنيه`;}
 function escapeHTML(v){return String(v??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;");}
 function statusLabel(s){return ({new:"جديد",accepted:"مقبول",preparing:"جاري التحضير",ready:"جاهز",assigned:"تم تعيين مندوب",out_for_delivery:"خرج للتوصيل",delivered:"تم التوصيل",canceled:"ملغي"})[s]||s;}
 function setVisible(id,visible){$(id).classList.toggle("hidden",!visible);}
+function operatorAccessErrorMessage(error){
+  const code=String(error?.code||"");
+  const message=String(error?.message||"");
+  if(
+    code.includes("permission-denied")
+    || message==="OPERATOR_ALREADY_CLAIMED"
+    || message==="OPERATOR_INVITE_MISMATCH"
+  ){
+    return "رابط الدخول ده اتلغى أو تم استبداله. اطلب رابط دخول جديد من صاحب المشروع.";
+  }
+  return `تعذر ربط الحساب: ${message||"UNKNOWN_ERROR"}`;
+}
 
 async function refreshAccount(){
   if(!currentUser)return;
@@ -42,10 +54,9 @@ async function refreshAccount(){
   try{
     await claimOperatorAccess(projectId,currentUser);
   }catch(e){
-    if(!["OPERATOR_ALREADY_CLAIMED"].includes(e.message)){
-      $("pageStatus").innerText=`تعذر ربط الحساب: ${e.message}`;
-      return;
-    }
+    $("pageStatus").innerText=operatorAccessErrorMessage(e);
+    setVisible("operationsPanel",false);
+    return;
   }
 
   currentOperator=await getOperator(projectId);
