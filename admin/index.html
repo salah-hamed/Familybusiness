@@ -8,7 +8,7 @@
     *{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f6f8f7;color:#17211a}
     main{max-width:1100px;margin:auto;padding:20px}.topbar{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:18px}
     .summary{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:16px;background:#fff;border:1px solid #dde6df;border-radius:16px}
-    .controls{display:grid;grid-template-columns:2fr 1fr auto;gap:10px;margin:16px 0}
+    .controls{display:grid;grid-template-columns:2fr 1fr;gap:10px;margin:16px 0}
     .controls input,.controls select,.controls button{padding:12px;border:1px solid #ccd8cf;border-radius:12px;font:inherit;background:#fff}
     .controls button{cursor:pointer;font-weight:700}.message{min-height:24px;color:#5d6d62}.hidden{display:none!important}
     .userCard{background:#fff;border:1px solid #dde6df;border-radius:16px;padding:16px;margin:12px 0}
@@ -46,7 +46,6 @@
       <option value="inactive">غير نشط</option>
       <option value="pending">في انتظار التفعيل</option>
     </select>
-    <button id="loadMoreUsersBtn" class="hidden" type="button">عرض المزيد</button>
   </section>
 
   <p id="usersMessage" class="message"></p>
