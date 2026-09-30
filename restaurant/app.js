@@ -2,7 +2,7 @@ import db from "../core/firebase/firebase-db.js";
 import { protectPage } from "../core/auth/auth-guard.js";
 import { escapeHTML } from "../core/utils/helpers.js";
 import { createOrResumeRestaurantSetup, getRestaurantProjectBundle } from "../core/restaurant/restaurant-service.js";
-import { ensureOperatorInviteAccess, getOperatorInviteToken } from "../core/partners/partner-service.js";
+import { ensureOperatorInviteAccess, getOperatorInviteToken, rotateOperatorInviteAccess } from "../core/partners/partner-service.js";
 import { normalizeWhatsAppPhone } from "../core/whatsapp/dispatch-service.js";
 import { proposeCommission } from "../core/commissions/commission-service.js";
 import { createGuide } from "../core/onboarding/guide.js";
@@ -172,6 +172,23 @@ $("proposeCommissionBtn").onclick=async()=>{
     await refresh();
   }catch(e){
     $("commissionMessage").innerText=`تعذر إرسال التعديل: ${e.message}`;
+  }
+};
+
+$("resetOperatorAccessBtn").onclick=async()=>{
+  if(!bundle?.operator)return;
+  const confirmed=confirm("إصدار رابط دخول جديد سيُلغي وصول الحساب القديم فورًا. بيانات المشروع والعمولة والطلبات لن تتغير. متابعة؟");
+  if(!confirmed)return;
+  const btn=$("resetOperatorAccessBtn");
+  btn.disabled=true;
+  try{
+    await rotateOperatorInviteAccess(projectId,currentUser.uid);
+    await refresh();
+    $("linksHint").innerText="تم إصدار رابط دخول جديد ✅ الرابط القديم لم يعد صالحًا. ابعت الرابط الجديد لمسؤول المطعم.";
+  }catch(e){
+    $("linksHint").innerText=`تعذر إصدار رابط جديد: ${e.message}`;
+  }finally{
+    btn.disabled=false;
   }
 };
 
