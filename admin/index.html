@@ -1,38 +1,59 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
-  <title>Admin Panel</title>
+  <title>لوحة إدارة Family Business</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f6f8f7;color:#17211a}
+    main{max-width:1100px;margin:auto;padding:20px}.topbar{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:18px}
+    .summary{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:16px;background:#fff;border:1px solid #dde6df;border-radius:16px}
+    .controls{display:grid;grid-template-columns:2fr 1fr auto;gap:10px;margin:16px 0}
+    .controls input,.controls select,.controls button{padding:12px;border:1px solid #ccd8cf;border-radius:12px;font:inherit;background:#fff}
+    .controls button{cursor:pointer;font-weight:700}.message{min-height:24px;color:#5d6d62}.hidden{display:none!important}
+    .userCard{background:#fff;border:1px solid #dde6df;border-radius:16px;padding:16px;margin:12px 0}
+    .userCardHead{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.userCardHead h3{margin:0 0 5px}.userCardHead p{margin:0;color:#66756b}
+    .statusPill{background:#eef5ef;padding:5px 9px;border-radius:999px;font-size:12px;font-weight:700}
+    .userMeta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:14px 0}
+    .userMeta span{background:#f8faf8;padding:9px;border-radius:10px}.userActions{display:flex;gap:8px;flex-wrap:wrap}
+    .userActions button,.loadMore{padding:10px 14px;border:0;border-radius:10px;cursor:pointer;background:#176a38;color:#fff;font-weight:700}
+    .userActions .secondaryBtn{background:#e9eeea;color:#29372e}.loadMore{display:block;margin:16px auto;background:#245c35}
+    @media(max-width:650px){.summary,.topbar{align-items:stretch;flex-direction:column}.controls{grid-template-columns:1fr}.userMeta{grid-template-columns:1fr}}
+  </style>
 </head>
 <body>
+<main>
+  <header class="topbar">
+    <div>
+      <h1>Family Business Admin</h1>
+      <p>إدارة المستخدمين والاشتراكات</p>
+    </div>
+  </header>
 
-  <h1>Family Business Admin</h1>
+  <section class="summary">
+    <div>
+      <h3 style="margin:0;">لوحة إدارة المنصة</h3>
+      <small>تحميل تدريجي للمستخدمين بدل قراءة القاعدة بالكامل</small>
+    </div>
+    <div id="usersCount">إجمالي المستخدمين: ...</div>
+  </section>
 
-<div style="
-display:flex;
-justify-content:space-between;
-align-items:center;
-margin:20px 0;
-padding:15px;
-background:#f5f5f5;
-border-radius:12px;
-">
+  <section id="usersControls" class="controls hidden">
+    <input id="usersSearch" type="search" placeholder="ابحث بالاسم أو البريد الإلكتروني...">
+    <select id="usersStatusFilter">
+      <option value="all">كل الحالات</option>
+      <option value="active">نشط</option>
+      <option value="inactive">غير نشط</option>
+      <option value="pending">في انتظار التفعيل</option>
+    </select>
+    <button id="loadMoreUsersBtn" class="hidden" type="button">عرض المزيد</button>
+  </section>
 
-  <div>
-    <h3 style="margin:0;">لوحة إدارة المنصة</h3>
-    <small>إدارة المستخدمين والاشتراكات</small>
-  </div>
-
-  <div id="usersCount">
-    إجمالي المستخدمين: ...
-  </div>
-
-</div>
-
+  <p id="usersMessage" class="message"></p>
   <div id="usersContainer"></div>
+  <button id="loadMoreUsersBtn" class="loadMore hidden" type="button">عرض 50 مستخدم إضافي</button>
 
   <script type="module" src="./admin.js"></script>
-
+</main>
 </body>
 </html>
