@@ -388,3 +388,48 @@ test("FINAL04 removes internal or incorrect owner-facing copy", () => {
   assert.equal(bakery.includes("دعوة التشغيل للمطعم"), false);
   assert.equal(bakery.includes("دعوة التشغيل للمخبز"), true);
 });
+
+
+test("operator order services fall back only when Firestore reports a missing composite index", () => {
+  for (const path of [
+    "core/supermarket/order-service.js",
+    "core/restaurant/order-service.js",
+    "core/laundry/order-service.js"
+  ]) {
+    const source = readFileSync(path, "utf8");
+    assert.equal(source.includes("isMissingCompositeIndexError"), true, path);
+    assert.equal(source.includes('code.includes("failed-precondition")'), true, path);
+    assert.equal(source.includes('message.includes("index")'), true, path);
+  }
+});
+
+test("missing-index fallback uses a projectId-only Firestore query and keeps template filtering client-side", () => {
+  const supermarket = readFileSync("core/supermarket/order-service.js", "utf8");
+  const restaurant = readFileSync("core/restaurant/order-service.js", "utf8");
+  const laundry = readFileSync("core/laundry/order-service.js", "utf8");
+
+  assert.equal(supermarket.includes("loadProjectOrderDocsWithoutCompositeIndex"), true);
+  assert.equal(supermarket.includes('where("projectId", "==", projectId)'), true);
+  assert.equal(supermarket.includes('item.data().templateType === "supermarket"'), true);
+
+  assert.equal(restaurant.includes("loadProjectOrderDocsWithoutCompositeIndex(projectId, templateType)"), true);
+  assert.equal(restaurant.includes("item.data().templateType === templateType"), true);
+
+  assert.equal(laundry.includes("loadLaundryOrderDocsWithoutCompositeIndex"), true);
+  assert.equal(laundry.includes('where("projectId","==",projectId)'), true);
+  assert.equal(laundry.includes('item.data().templateType==="laundry"'), true);
+});
+
+test("missing-index fallback preserves active orders, history pagination, and delivered counts", () => {
+  for (const path of [
+    "core/supermarket/order-service.js",
+    "core/restaurant/order-service.js",
+    "core/laundry/order-service.js"
+  ]) {
+    const source = readFileSync(path, "utf8");
+    assert.equal(source.includes("activeStatuses"), true, path);
+    assert.equal(source.includes("historyStatuses"), true, path);
+    assert.equal(source.includes("cursorIndex"), true, path);
+    assert.equal(source.includes("getCountFromServer"), true, path);
+  }
+});
