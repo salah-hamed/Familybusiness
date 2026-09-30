@@ -19,6 +19,14 @@ let user=null,operator=null,agreement=null,laundry=null,workers=[],orders=[];
 const money=v=>`${Number(v||0).toLocaleString("ar-EG")} جنيه`;
 const esc=v=>String(v??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;");
 const setVisible=(id,on)=>$(id).classList.toggle("hidden",!on);
+const operatorAccessErrorMessage=error=>{
+  const code=String(error?.code||"");
+  const message=String(error?.message||"");
+  if(code.includes("permission-denied")||["OPERATOR_ALREADY_CLAIMED","OPERATOR_INVITE_MISMATCH"].includes(message)){
+    return "رابط الدخول ده اتلغى أو تم استبداله. اطلب رابط دخول جديد من صاحب المشروع.";
+  }
+  return `تعذر ربط الحساب: ${message||"UNKNOWN_ERROR"}`;
+};
 const stageLabel=s=>({new:"جديد",accepted:"مقبول",pickup_assigned:"تم تعيين الاستلام",picked_up:"تم الاستلام",processing:"جاري التجهيز",ready_delivery:"جاهز للتوصيل",out_for_delivery:"خرج للتوصيل",delivered:"تم التوصيل",canceled:"ملغي"})[s]||s;
 
 const pricing=[
@@ -35,7 +43,7 @@ function renderPricing(config={}){
 async function refreshAccount(){
   if(!user)return;
   if(!projectId){$("pageStatus").innerText="الرابط غير مكتمل.";return;}
-  try{await claimOperatorAccess(projectId,user);}catch(e){if(e.message!=="OPERATOR_ALREADY_CLAIMED"){$("pageStatus").innerText=`تعذر ربط الحساب: ${e.message}`;return;}}
+  try{await claimOperatorAccess(projectId,user);}catch(e){$("pageStatus").innerText=operatorAccessErrorMessage(e);setVisible("operationsPanel",false);return;}
   operator=await getOperator(projectId);agreement=await getCommissionAgreement(projectId);laundry=await getLaundry(projectId);
   setVisible("authPanel",false);$("logoutBtn").classList.remove("hidden");
   const pending=agreement?.pendingStatus==="pending"&&agreement?.pendingAmount!=null;
