@@ -209,39 +209,87 @@ export async function claimOperatorAccess(operatorId, authUser) {
   }
 
   const operatorRef = doc(db, "operators", operatorId);
-  const operatorSnap = await getDoc(operatorRef);
-
-  if (!operatorSnap.exists()) {
-    throw new Error("OPERATOR_NOT_FOUND");
-  }
-
-  const operator = operatorSnap.data();
   const actualEmail = String(authUser.email || "").trim().toLowerCase();
-  const inviteLoginEmail = String(operator.authLoginEmail || "").trim().toLowerCase();
-  const legacyEmail = String(operator.email || "").trim().toLowerCase();
-  const expectedEmail = inviteLoginEmail || legacyEmail;
 
-  if (!expectedEmail || expectedEmail !== actualEmail) {
-    throw new Error("OPERATOR_INVITE_MISMATCH");
-  }
+  await runTransaction(db, async transaction => {
+    const operatorSnap = await transaction.get(operatorRef);
 
-  if (!inviteLoginEmail && authUser.emailVerified !== true) {
-    throw new Error("VERIFIED_OPERATOR_EMAIL_REQUIRED");
-  }
+    if (!operatorSnap.exists()) {
+      throw new Error("OPERATOR_NOT_FOUND");
+    }
 
-  if (operator.authUid && operator.authUid !== authUser.uid) {
-    throw new Error("OPERATOR_ALREADY_CLAIMED");
-  }
+    const operator = operatorSnap.data();
+    const inviteLoginEmail = String(operator.authLoginEmail || "").trim().toLowerCase();
+    const legacyEmail = String(operator.email || "").trim().toLowerCase();
+    const expectedEmail = inviteLoginEmail || legacyEmail;
 
-  if (operator.authUid === authUser.uid) {
-    return;
-  }
+    if (!expectedEmail || expectedEmail !== actualEmail) {
+      throw new Error("OPERATOR_INVITE_MISMATCH");
+    }
 
-  await updateDoc(operatorRef, {
-    authUid: authUser.uid,
-    status: operator.agreementStatus === "accepted" ? "active" : "pending_agreement",
-    updatedAt: serverTimestamp()
+    if (!inviteLoginEmail && authUser.emailVerified !== true) {
+      throw new Error("VERIFIED_OPERATOR_EMAIL_REQUIRED");
+    }
+
+    if (operator.authUid && operator.authUid !== authUser.uid) {
+      throw new Error("OPERATOR_ALREADY_CLAIMED");
+    }
+
+    if (operator.authUid === authUser.uid) {
+      return;
+    }
+
+    transaction.update(operatorRef, {
+      authUid: authUser.uid,
+      status: operator.agreementStatus === "accepted" ? "active" : "pending_agreement",
+      updatedAt: serverTimestamp()
+    });
   });
+}
+
+export async function rotateOperatorInviteAccess(operatorId, ownerId) {
+  const operatorRef = doc(db, "operators", operatorId);
+  const projectRef = doc(db, "projects", operatorId);
+  const authLoginEmail = buildOperatorAuthEmail(createInviteToken());
+
+  await runTransaction(db, async transaction => {
+    const [operatorSnap, projectSnap] = await Promise.all([
+      transaction.get(operatorRef),
+      transaction.get(projectRef)
+    ]);
+
+    if (!operatorSnap.exists()) {
+      throw new Error("OPERATOR_NOT_FOUND");
+    }
+
+    if (!projectSnap.exists()) {
+      throw new Error("PROJECT_NOT_FOUND");
+    }
+
+    const operator = operatorSnap.data();
+    const project = projectSnap.data();
+
+    if (
+      operator.ownerId !== ownerId
+      || project.ownerId !== ownerId
+      || operator.projectId !== operatorId
+      || project.operatorId !== operatorId
+    ) {
+      throw new Error("OPERATOR_OWNER_MISMATCH");
+    }
+
+    transaction.update(operatorRef, {
+      authLoginEmail,
+      authUid: "",
+      updatedAt: serverTimestamp()
+    });
+  });
+
+  const refreshed = await getDoc(operatorRef);
+  return {
+    operatorId,
+    ...refreshed.data()
+  };
 }
 
 export function operatorCanOperate(operator = {}) {
