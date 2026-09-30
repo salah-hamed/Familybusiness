@@ -447,7 +447,7 @@ function bindCatalogCardEvents(visibleEntries) {
           await updateStoreProduct(projectId, productId, currentUser.uid, {
             price: nextPrice
           });
-          patchLocalProducts([productId], { price: nextPrice });
+          patchLocalProducts([productId], { price: Math.round(nextPrice * 100) / 100 });
           await refreshLocalCatalog();
           $("catalogMessage").innerText = `تم تحديث سعر ${product.name} ✅`;
         } catch (error) {
@@ -876,7 +876,7 @@ $("importBtn").onclick = async () => {
 
   try {
     const rows = await parseImportFile(file);
-    const result = await bulkImportStoreProducts(projectId, currentUser.uid, rows, products);
+    const result = await bulkImportStoreProducts(projectId, currentUser.uid, rows);
     products = Array.isArray(result.products) ? result.products : products;
     await refreshLocalCatalog({ syncMeta: true });
 
@@ -892,7 +892,7 @@ $("mergeDuplicatesBtn").onclick = async () => {
   $("duplicateMessage").innerText = "جاري فحص المنتجات بالاسم والحجم...";
 
   try {
-    const result = await mergeDuplicateStoreProducts(projectId, currentUser.uid, products);
+    const result = await mergeDuplicateStoreProducts(projectId, currentUser.uid);
     products = Array.isArray(result.products) ? result.products : products;
     await refreshLocalCatalog({ syncMeta: true });
 

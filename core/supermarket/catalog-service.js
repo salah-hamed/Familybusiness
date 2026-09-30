@@ -553,7 +553,7 @@ export async function findStoreProductByBarcode(projectId, barcode) {
   return { productId: first.id, ...first.data() };
 }
 
-export async function bulkImportStoreProducts(projectId, actorUid, rows = [], suppliedProducts = null) {
+export async function bulkImportStoreProducts(projectId, actorUid, rows = []) {
   const validRows = rows
     .map(row => ({
       name: clean(
@@ -602,9 +602,7 @@ export async function bulkImportStoreProducts(projectId, actorUid, rows = [], su
     }))
     .filter(row => row.name && Number.isFinite(row.price) && row.price >= 0);
 
-  const current = Array.isArray(suppliedProducts)
-    ? [...suppliedProducts]
-    : await listStoreProducts(projectId);
+  const current = await listStoreProducts(projectId);
   const byProductId = new Map(current.map(item => [item.productId, item]));
   const byIdentity = new Map();
 
@@ -712,10 +710,8 @@ export async function bulkImportStoreProducts(projectId, actorUid, rows = [], su
   };
 }
 
-export async function mergeDuplicateStoreProducts(projectId, actorUid, suppliedProducts = null) {
-  const current = Array.isArray(suppliedProducts)
-    ? [...suppliedProducts]
-    : await listStoreProducts(projectId);
+export async function mergeDuplicateStoreProducts(projectId, actorUid) {
+  const current = await listStoreProducts(projectId);
   const duplicateGroups = [];
   const buckets = new Map();
 
