@@ -8,6 +8,9 @@ import {
   getDocs,
   query,
   where,
+  orderBy,
+  startAfter,
+  limit,
   writeBatch,
   runTransaction,
   onSnapshot,
@@ -361,6 +364,44 @@ export async function acceptSupermarketOrder({
   return { subtotal, deliveryFee, total };
 }
 
+export async function listSupermarketOrdersPage(
+  projectId,
+  { pageSize = 50, cursor = null } = {}
+) {
+  const size = Math.max(1, Math.min(100, Number(pageSize) || 50));
+  const constraints = [
+    where("projectId", "==", projectId),
+    where("templateType", "==", "supermarket"),
+    orderBy("createdAt", "desc")
+  ];
+
+  if (cursor) constraints.push(startAfter(cursor));
+  constraints.push(limit(size));
+
+  const snap = await getDocs(query(collection(db, "orders"), ...constraints));
+
+  return {
+    orders: snap.docs.map(item => ({ orderId: item.id, ...item.data() })),
+    nextCursor: snap.docs.length ? snap.docs[snap.docs.length - 1] : null,
+    hasMore: snap.docs.length === size
+  };
+}
+
+export async function listSupermarketOperationalOrders(projectId) {
+  const snap = await getDocs(
+    query(
+      collection(db, "orders"),
+      where("projectId", "==", projectId),
+      where("templateType", "==", "supermarket")
+    )
+  );
+
+  return snap.docs
+    .map(item => ({ orderId: item.id, ...item.data() }))
+    .filter(order => !["delivered","canceled"].includes(order.status))
+    .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+}
+
 export async function listSupermarketOrders(projectId) {
   const snap = await getDocs(
     query(
@@ -372,11 +413,7 @@ export async function listSupermarketOrders(projectId) {
 
   return snap.docs
     .map(item => ({ orderId: item.id, ...item.data() }))
-    .sort((a, b) => {
-      const at = a.createdAt?.seconds || 0;
-      const bt = b.createdAt?.seconds || 0;
-      return bt - at;
-    });
+    .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
 }
 
 export async function changeSupermarketOrderStatus({
