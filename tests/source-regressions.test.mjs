@@ -94,14 +94,17 @@ test("PF01 operator dashboards load active orders separately from 50-order histo
   }
 });
 
-test("PF01 active-order services filter terminal history on Firestore instead of client side", () => {
+test("PF01 active-order services keep server-side status filters as the primary path", () => {
   const supermarket = readFileSync("core/supermarket/order-service.js", "utf8");
   const restaurant = readFileSync("core/restaurant/order-service.js", "utf8");
   const laundry = readFileSync("core/laundry/order-service.js", "utf8");
 
-  assert.match(supermarket, /where\("status",\s*"in",\s*\["new","accepted","preparing","ready","assigned","out_for_delivery"\]\)/);
-  assert.match(restaurant, /where\("status",\s*"in",\s*\["new","accepted","preparing","ready","assigned","out_for_delivery"\]\)/);
-  assert.match(laundry, /where\("status","in",\["new","accepted"\]\)/);
+  for (const source of [supermarket, restaurant]) {
+    assert.equal(source.includes('const activeStatuses = ["new","accepted","preparing","ready","assigned","out_for_delivery"]'), true);
+    assert.equal(source.includes('where("status", "in", activeStatuses)'), true);
+  }
+  assert.equal(laundry.includes('const activeStatuses=["new","accepted"]'), true);
+  assert.equal(laundry.includes('where("status","in",activeStatuses)'), true);
 
   for (const source of [supermarket, restaurant, laundry]) {
     assert.equal(source.includes("getCountFromServer"), true);
@@ -137,16 +140,20 @@ test("PF01 all operator pages expose an older-orders pagination control", () => 
 });
 
 
-test("PF01 active and history services use server-side status filters", () => {
+test("PF01 active and history services keep server-side status filters before any index fallback", () => {
   const supermarket = readFileSync("core/supermarket/order-service.js","utf8");
   const restaurant = readFileSync("core/restaurant/order-service.js","utf8");
   const laundry = readFileSync("core/laundry/order-service.js","utf8");
-  assert.equal(supermarket.includes('where("status", "in", ["new","accepted","preparing","ready","assigned","out_for_delivery"])'), true);
-  assert.equal(supermarket.includes('where("status", "in", ["delivered","canceled"])'), true);
-  assert.equal(restaurant.includes('where("status", "in", ["new","accepted","preparing","ready","assigned","out_for_delivery"])'), true);
-  assert.equal(restaurant.includes('where("status", "in", ["delivered","canceled"])'), true);
-  assert.equal(laundry.includes('where("status","in",["new","accepted"])'), true);
-  assert.equal(laundry.includes('where("status","in",["done","canceled"])'), true);
+
+  for (const source of [supermarket, restaurant]) {
+    assert.equal(source.includes('where("status", "in", activeStatuses)'), true);
+    assert.equal(source.includes('const historyStatuses = ["delivered","canceled"]'), true);
+    assert.equal(source.includes('where("status", "in", historyStatuses)'), true);
+  }
+  assert.equal(laundry.includes('where("status","in",activeStatuses)'), true);
+  assert.equal(laundry.includes('const historyStatuses=["done","canceled"]'), true);
+  assert.equal(laundry.includes('where("status","in",historyStatuses)'), true);
+
   assert.equal(supermarket.includes("getCountFromServer"), true);
   assert.equal(restaurant.includes("getCountFromServer"), true);
   assert.equal(laundry.includes("getCountFromServer"), true);
