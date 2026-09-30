@@ -11,10 +11,11 @@ test("commercial values are 350 initial, 59 monthly, and 50 referral", () => {
 
 test("home pricing copy no longer exposes the old 220 EGP value", () => {
   const html = readFileSync("home/index.html", "utf8");
+  const source = readFileSync("home/app.js", "utf8");
   assert.equal(html.includes("220 جنيه"), false);
-  assert.equal(html.includes("350 جنيه"), true);
-  assert.equal(html.includes("59 جنيه"), true);
-  assert.equal(html.includes("50 جنيه عمولة إحالة"), true);
+  assert.equal(source.includes("PLATFORM_BILLING.initialActivationFee"), true);
+  assert.equal(source.includes("PLATFORM_BILLING.monthlyRenewalFee"), true);
+  assert.equal(source.includes("REFERRAL_CONFIG.qualifiedReferralReward"), true);
 });
 
 test("onboarding and admin use the central billing config", () => {
