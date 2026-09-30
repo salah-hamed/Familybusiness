@@ -1,4 +1,5 @@
 import test, { after, before, beforeEach } from "node:test";
+import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   assertFails,
