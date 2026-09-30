@@ -1,0 +1,32 @@
+name: FB-PF01 Validation
+
+on:
+  push:
+    branches:
+      - fb-pf01-orders-pagination-performance
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - run: npm install
+      - name: Syntax check PF01
+        run: |
+          node --check core/supermarket/order-service.js
+          node --check core/restaurant/order-service.js
+          node --check core/laundry/order-service.js
+          node --check supermarket-operator/app.js
+          node --check restaurant-operator/app.js
+          node --check bakery-operator/app.js
+          node --check laundry-operator/app.js
+      - name: Run full test suite
+        run: npm test
