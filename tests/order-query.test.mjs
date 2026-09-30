@@ -186,3 +186,48 @@ test("order queries isolate both project and template", async () => {
     assert.equal(ids.includes("wrong_project"), false);
   });
 });
+
+
+test("PF01 status partition keeps operational orders separate from terminal history", async () => {
+  await testEnv.withSecurityRulesDisabled(async context => {
+    const db = context.firestore();
+    const rows = [
+      ["pf_active_1","new",1000],
+      ["pf_active_2","accepted",2000],
+      ["pf_active_3","preparing",3000],
+      ["pf_history_1","delivered",4000],
+      ["pf_history_2","canceled",5000]
+    ];
+
+    for (const row of rows) {
+      await setDoc(doc(db, "orders", row[0]), {
+        projectId: PROJECT_DOC_ID,
+        templateType: "restaurant",
+        status: row[1],
+        createdAt: Timestamp.fromMillis(row[2])
+      });
+    }
+
+    const activeSnap = await getDocs(query(
+      collection(db, "orders"),
+      where("projectId", "==", PROJECT_DOC_ID),
+      where("templateType", "==", "restaurant"),
+      where("status", "in", ["new","accepted","preparing","ready","assigned","out_for_delivery"]),
+      orderBy("createdAt", "desc")
+    ));
+
+    const historySnap = await getDocs(query(
+      collection(db, "orders"),
+      where("projectId", "==", PROJECT_DOC_ID),
+      where("templateType", "==", "restaurant"),
+      where("status", "in", ["delivered","canceled"]),
+      orderBy("createdAt", "desc"),
+      limit(50)
+    ));
+
+    assert.equal(activeSnap.size, 3);
+    assert.equal(historySnap.size, 2);
+    assert.deepEqual(activeSnap.docs.map(d => d.data().status), ["preparing","accepted","new"]);
+    assert.deepEqual(historySnap.docs.map(d => d.data().status), ["canceled","delivered"]);
+  });
+});
