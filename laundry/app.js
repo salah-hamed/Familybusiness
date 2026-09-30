@@ -46,10 +46,11 @@ function render(){
   guideController.update(buildPartnerProjectGuide({ templateId: "laundry", bundle }), { autoOpen: true });
   $("setupSection").classList.toggle("hidden",configured);
   $("projectSection").classList.toggle("hidden",!configured);
-  if(!configured){$("statusBanner").innerText="ابدأ بربط مغسلة واحدة بالمشروع وتحديد العمولة المقترحة.";return;}
+  if(!configured){document.body.dataset.projectStage="setup";$("statusBanner").innerText="ابدأ بربط مغسلة واحدة بالمشروع وتحديد العمولة المقترحة.";return;}
 
   const accepted=agreement?.status==="accepted"&&agreement?.currentAmount!=null;
   const pending=agreement?.pendingStatus==="pending";
+  document.body.dataset.projectStage=accepted&&operator.isActive?"live":"activate";
   $("statusBanner").innerText=accepted?"المغسلة مرتبطة بالمشروع. التشغيل عند المغسلة وأنت تتابع العمولة.":"المشروع في انتظار اعتماد اتفاق العمولة.";
   $("linkedLaundryName").innerText=laundry.name||operator.name||"المغسلة";
   $("operatorState").innerText=operator.isActive?"نشطة":"بانتظار التفعيل";
