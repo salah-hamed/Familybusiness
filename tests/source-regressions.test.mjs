@@ -327,3 +327,64 @@ test("FINAL03 marketing page adds lively project-specific color language without
   }
   assert.equal(source.includes('projectCard project-${project.id}'), true);
 });
+
+
+test("FINAL04 workspace presents the operating journey instead of a plain service list", () => {
+  const html = readFileSync("workspace/index.html", "utf8");
+  const source = readFileSync("workspace/app.js", "utf8");
+  assert.equal(html.includes("أداتك السريعة جاهزة"), true);
+  assert.equal(html.includes("اختار النشاط"), true);
+  assert.equal(html.includes("اربط صاحبه"), true);
+  assert.equal(html.includes("تابع العداد"), true);
+  assert.equal(html.includes('id="logoutBtn"'), true);
+  assert.equal(html.includes('id="projectCount"'), true);
+  assert.equal(source.includes('import { logoutUser }'), true);
+  assert.equal(source.includes("await logoutUser()"), true);
+  assert.equal(source.includes('window.location.href = projectManagementUrl(templateId, projectDocId)'), true);
+});
+
+test("FINAL04 workspace gives each active project a clear launch state and project-specific visual identity", () => {
+  const source = readFileSync("workspace/app.js", "utf8");
+  const css = readFileSync("workspace/style.css", "utf8");
+  for (const id of ["supermarket", "restaurant", "bakery", "laundry"]) {
+    assert.equal(source.includes(`${id}:`), true, id);
+    assert.equal(css.includes(`.project-${id}`), true, id);
+  }
+  assert.equal(source.includes("جاهز للربط"), true);
+  assert.equal(source.includes("مضاف لحسابك"), true);
+  assert.equal(source.includes("شغّل المشروع"), true);
+});
+
+test("FINAL04 all active owner project pages expose the same three-stage operating journey", () => {
+  for (const path of [
+    "supermarket/index.html",
+    "restaurant/index.html",
+    "bakery/index.html",
+    "laundry/index.html"
+  ]) {
+    const html = readFileSync(path, "utf8");
+    assert.equal(html.includes('class="ownerJourney"'), true, path);
+    assert.equal(html.includes("اربط النشاط"), true, path);
+    assert.equal(html.includes("فعّل التشغيل"), true, path);
+    assert.equal(html.includes("تابع عمولتك"), true, path);
+  }
+
+  for (const path of [
+    "supermarket/app.js",
+    "restaurant/app.js",
+    "bakery/app.js",
+    "laundry/app.js"
+  ]) {
+    const source = readFileSync(path, "utf8");
+    assert.equal(source.includes('document.body.dataset.projectStage="setup"'), true, path);
+    assert.equal(source.includes('accepted&&operator.isActive?"live":"activate"'), true, path);
+  }
+});
+
+test("FINAL04 removes internal or incorrect owner-facing copy", () => {
+  const laundry = readFileSync("laundry/index.html", "utf8");
+  const bakery = readFileSync("bakery/index.html", "utf8");
+  assert.equal(laundry.includes("Laundry 2.0"), false);
+  assert.equal(bakery.includes("دعوة التشغيل للمطعم"), false);
+  assert.equal(bakery.includes("دعوة التشغيل للمخبز"), true);
+});

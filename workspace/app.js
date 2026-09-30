@@ -1,5 +1,6 @@
 import db from "../core/firebase/firebase-db.js";
 import { protectPage } from "../core/auth/auth-guard.js";
+import { logoutUser } from "../core/auth/auth.js";
 
 import {
   doc,
@@ -27,6 +28,36 @@ document.getElementById("templatesContainer");
 const referralLink = document.getElementById("referralLink");
 const copyReferralBtn = document.getElementById("copyReferralBtn");
 const referralStatus = document.getElementById("referralStatus");
+const logoutBtn = document.getElementById("logoutBtn");
+const projectCount = document.getElementById("projectCount");
+const workspaceAccountState = document.getElementById("workspaceAccountState");
+const subscriptionHint = document.getElementById("subscriptionHint");
+
+const projectCopy = {
+  supermarket: "حوّل سوبرماركت شغال بالفعل لقناة طلبات أونلاين وتابع عمولتك على الأوردرات المكتملة.",
+  restaurant: "اربط مطعم قائم عنده زباينه ومنيوه، وخليه يستقبل الطلبات من تطبيق جاهز.",
+  bakery: "اربط مخبز أو فرن قائم، وخليه يعرض منتجاته ويستقبل الطلبات من عملائه.",
+  laundry: "اربط مغسلة شغالة بالفعل، وخليها تدير الاستلام والتشغيل والتوصيل من تطبيقها."
+};
+
+const projectClass = {
+  supermarket: "project-supermarket",
+  restaurant: "project-restaurant",
+  bakery: "project-bakery",
+  laundry: "project-laundry"
+};
+
+if (logoutBtn) {
+  logoutBtn.onclick = async () => {
+    logoutBtn.disabled = true;
+    try {
+      await logoutUser();
+      window.location.href = "../";
+    } finally {
+      logoutBtn.disabled = false;
+    }
+  };
+}
 const guideController = createGuide(buildWorkspaceGuide({ loading: true }), { autoOpen: false });
 function projectManagementUrl(templateId, projectDocId) {
   if (templateId === "supermarket") {
@@ -111,41 +142,35 @@ getDiscoverableProjects().forEach(project => {
 
   templatesContainer.innerHTML += `
 
-    <div class="projectCard ${available ? "" : "comingSoon"}">
-
-      <div class="projectIcon">
-        ${project.icon}
+    <article class="projectCard ${projectClass[project.id] || ""} ${available ? "" : "comingSoon"}">
+      <div class="projectCardTop">
+        <div class="projectIcon">${project.icon}</div>
+        <span class="projectState">${created ? "مضاف لحسابك" : creationEnabled ? "جاهز للربط" : "قريبًا"}</span>
       </div>
 
       <div class="projectInfo">
-
         <h3>${project.title}</h3>
-
-        ${!creationEnabled && !created ? '<div class="comingSoonBadge">قريبًا للتشغيل</div>' : ""}
+        <p>${projectCopy[project.id] || project.description || ""}</p>
 
         <button
           class="projectBtn"
           data-template-id="${project.id}"
           data-project-doc-id="${projectDocId}"
+          data-created="${created}"
           data-available="${available}"
           ${disabled ? "disabled" : ""}>
-
           ${
             !subscriptionActive
-              ? "الاشتراك غير مفعل"
+              ? "فعّل الاشتراك أولاً"
               : created
-                ? "إدارة المشروع"
+                ? "افتح المشروع"
                 : creationEnabled
-                  ? "إنشاء المشروع"
+                  ? "شغّل المشروع"
                   : "قريبًا للتشغيل"
           }
-
         </button>
-
       </div>
-
-    </div>
-
+    </article>
   `;
 
 });
@@ -158,7 +183,7 @@ getDiscoverableProjects().forEach(project => {
     const templateId = btn.dataset.templateId;
     let projectDocId = btn.dataset.projectDocId;
 
-    if (btn.innerText.trim() === "إدارة المشروع") {
+    if (btn.dataset.created === "true") {
 
       window.location.href =
         projectManagementUrl(templateId, projectDocId);
@@ -183,18 +208,26 @@ getDiscoverableProjects().forEach(project => {
     }
 
     btn.dataset.projectDocId = projectDocId;
-    btn.innerText = "إدارة المشروع";
+    btn.dataset.created = "true";
+    window.location.href = projectManagementUrl(templateId, projectDocId);
 
   };
 
 });
-    userName.innerText =
-    `أهلاً ${data.name}`;
+    userName.innerText = `أهلاً ${data.name} 👋`;
+    if (projectCount) projectCount.innerText = `${myProjects.length} / 4`;
+    if (workspaceAccountState) workspaceAccountState.innerText = subscriptionActive ? "جاهز للتشغيل" : "بانتظار التفعيل";
 
     const expiry = subscriptionExpiryDate(data);
     subscriptionStatus.innerText = subscriptionActive
       ? `✅ الاشتراك مفعل${expiry ? ` حتى ${expiry.toLocaleDateString("ar-EG")}` : ""}`
       : "⏳ الاشتراك قيد المراجعة أو غير مفعل";
+
+    if (subscriptionHint) {
+      subscriptionHint.innerText = subscriptionActive
+        ? "أداتك جاهزة. اختار مشروع من تحت وابدأ ربط أول نشاط شغال حواليك."
+        : "بعد تفعيل الاشتراك تقدر تشغّل المشاريع الأربعة وتبدأ ربط الأنشطة.";
+    }
 
   }
 

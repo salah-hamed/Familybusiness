@@ -52,13 +52,14 @@ function render(){
   $("setupSection").classList.toggle("hidden",configured);
   $("projectSection").classList.toggle("hidden",!configured);
 
-  if(!configured){
+  if(!configured){document.body.dataset.projectStage="setup";
     $("statusBanner").innerText="ابدأ بربط مخبز أو محل مخبوزات بالمشروع وتحديد العمولة المقترحة.";
     return;
   }
 
   const accepted=agreement?.status==="accepted"&&agreement?.currentAmount!=null;
   const pending=agreement?.pendingStatus==="pending";
+  document.body.dataset.projectStage=accepted&&operator.isActive?"live":"activate";
 
   $("statusBanner").innerText=accepted
     ?"المشروع مرتبط. المخبز يقدر يدير هويته والمنيو والطلبات، وأنت تتابع العمولة."

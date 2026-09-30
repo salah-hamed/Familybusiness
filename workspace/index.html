@@ -1,80 +1,84 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
-
 <head>
-
-<meta charset="UTF-8">
-
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<title>مساحة العمل</title>
-
-<link rel="stylesheet" href="../core/ui/theme.css">
-<link rel="stylesheet" href="./style.css">
-
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <meta name="theme-color" content="#16a34a">
+  <title>مساحة العمل | Family Business</title>
+  <link rel="stylesheet" href="../core/ui/theme.css">
+  <link rel="stylesheet" href="./style.css">
 </head>
-
 <body>
+  <main class="workspaceShell">
+    <header class="workspaceTop">
+      <a class="workspaceBrand" href="../home/">
+        <span class="brandMark">FB</span>
+        <span><b>Family Business</b><small>مساحة تشغيل مشاريعك</small></span>
+      </a>
+      <button id="logoutBtn" class="logoutBtn" type="button">تسجيل الخروج</button>
+    </header>
 
-<div class="container">
+    <section class="workspaceHero">
+      <div>
+        <span class="eyebrow">أداتك السريعة جاهزة</span>
+        <h1 id="userName">جاري التحميل...</h1>
+        <p>اختار نشاط شغال حواليك، اربطه بحسابك، وابعت لصاحبه دعوة التشغيل. هو يدير التطبيق والطلبات، وإنت تتابع الأوردرات والعمولات.</p>
+      </div>
+      <div class="heroStats">
+        <article><span>مشاريعك</span><strong id="projectCount">—</strong></article>
+        <article><span>حالة الحساب</span><strong id="workspaceAccountState">—</strong></article>
+      </div>
+    </section>
 
-<header>
+    <section class="quickJourney" aria-label="طريقة التشغيل">
+      <article><span>1</span><div><b>اختار النشاط</b><small>سوبرماركت، مطعم، مخبز أو مغسلة</small></div></article>
+      <i>←</i>
+      <article><span>2</span><div><b>اربط صاحبه</b><small>دخل بياناته وابعت دعوة التشغيل</small></div></article>
+      <i>←</i>
+      <article><span>3</span><div><b>تابع العداد</b><small>طلبات مكتملة وعمولاتك في مكان واحد</small></div></article>
+    </section>
 
-<h1>👋 أهلاً بك</h1>
+    <section class="subscriptionCard">
+      <div>
+        <span class="cardEyebrow">حالة الاشتراك</span>
+        <h2>حساب Family Business</h2>
+        <p id="subscriptionStatus">جاري التحقق...</p>
+        <small id="subscriptionHint">بعد التفعيل تقدر تشغّل أي مشروع من المشاريع المتاحة.</small>
+      </div>
+      <div class="subscriptionIcon">⚡</div>
+    </section>
 
-<p id="userName">
-جاري التحميل...
-</p>
+    <section class="projectsSection">
+      <div class="sectionHeading">
+        <div>
+          <span class="cardEyebrow">ابدأ من هنا</span>
+          <h2>اختار أول نشاط هتربطه</h2>
+          <p>مش لازم تشغّل الأربعة مرة واحدة. ابدأ بالأسهل حواليك، وبعدها زوّد مصادر عمولتك.</p>
+        </div>
+      </div>
 
-</header>
+      <div id="templatesContainer" class="projectsGrid">جاري تحميل المشاريع...</div>
+    </section>
 
-<section class="subscriptionCard">
+    <section class="referralCard">
+      <div class="referralIntro">
+        <span class="referralIcon">🔗</span>
+        <div>
+          <span class="cardEyebrow">المصدر الخامس</span>
+          <h2>رابط الإحالة بتاعك</h2>
+          <p>شارك رابطك، وبعد أول تفعيل مدفوع ومؤهل للمستخدم الجديد تحصل على عمولة الإحالة.</p>
+        </div>
+      </div>
 
-<h2>اشتراكك</h2>
+      <div class="referralLinkRow">
+        <input id="referralLink" type="text" readonly value="جاري تجهيز رابط الإحالة...">
+        <button id="copyReferralBtn" type="button">نسخ الرابط</button>
+      </div>
 
-<p id="subscriptionStatus">
+      <p id="referralStatus" class="referralStatus"></p>
+    </section>
+  </main>
 
-جاري التحقق...
-
-</p>
-
-</section>
-
-<section class="referralCard">
-
-<h2>برنامج الإحالة</h2>
-
-<p>شارك رابطك، وبعد تفعيل المستخدم الجديد تحصل على 50 جنيه عمولة إحالة.</p>
-
-<div class="referralLinkRow">
-<input id="referralLink" type="text" readonly value="جاري تجهيز رابط الإحالة...">
-<button id="copyReferralBtn" type="button">نسخ الرابط</button>
-</div>
-
-<p id="referralStatus"></p>
-
-</section>
-
-<section>
-
-<h2>
-
-🚀 الخدمات المتاحة
-
-</h2>
-
-<div id="templatesContainer">
-
-جاري تحميل الخدمات...
-
-</div>
-
-</section>
-
-</div>
-
-<script type="module" src="./app.js"></script>
-
+  <script type="module" src="./app.js"></script>
 </body>
-
 </html>
