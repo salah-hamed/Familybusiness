@@ -2,7 +2,7 @@ import db from "../core/firebase/firebase-db.js";
 import { protectPage } from "../core/auth/auth-guard.js";
 import { createOrResumeLaundrySetup, getLaundryBundle, migrateLegacyLaundryProject } from "../core/laundry/laundry-service.js";
 import { proposeCommission } from "../core/commissions/commission-service.js";
-import { ensureOperatorInviteAccess, getOperatorInviteToken } from "../core/partners/partner-service.js";
+import { ensureOperatorInviteAccess, getOperatorInviteToken, rotateOperatorInviteAccess } from "../core/partners/partner-service.js";
 import { normalizeWhatsAppPhone } from "../core/whatsapp/dispatch-service.js";
 import { createGuide } from "../core/onboarding/guide.js";
 import { buildPartnerProjectGuide } from "../core/onboarding/guide-state.js";
@@ -103,6 +103,23 @@ $("proposeCommissionBtn").onclick=async()=>{
   if(!user||!bundle?.operator)return;$("commissionMessage").innerText="جاري إرسال التعديل...";
   try{await proposeCommission({projectDocId:projectId,ownerId:user.uid,operatorId:projectId,templateId:"laundry",amount:$("newCommissionAmount").value});$("newCommissionAmount").value="";await refresh();}
   catch(e){$("commissionMessage").innerText=e.message;}
+};
+
+$("resetOperatorAccessBtn").onclick=async()=>{
+  if(!bundle?.operator)return;
+  const confirmed=confirm("إصدار رابط دخول جديد سيُلغي وصول الحساب القديم فورًا. بيانات المشروع والعمولة والطلبات لن تتغير. متابعة؟");
+  if(!confirmed)return;
+  const btn=$("resetOperatorAccessBtn");
+  btn.disabled=true;
+  try{
+    await rotateOperatorInviteAccess(projectId,user.uid);
+    await refresh();
+    $("linksHint").innerText="تم إصدار رابط دخول جديد ✅ الرابط القديم لم يعد صالحًا. ابعت الرابط الجديد لمسؤول المغسلة.";
+  }catch(e){
+    $("linksHint").innerText=`تعذر إصدار رابط جديد: ${e.message}`;
+  }finally{
+    btn.disabled=false;
+  }
 };
 
 $("sendOperatorWhatsappBtn").onclick=()=>{
