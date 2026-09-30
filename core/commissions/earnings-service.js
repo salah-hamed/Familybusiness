@@ -85,3 +85,41 @@ export async function getUserEarningsSummary(userId) {
     referralCount: referrals.entryCount
   };
 }
+
+export async function getProjectCommissionSummary(userId, projectId) {
+  const uid = String(userId || "").trim();
+  const pid = String(projectId || "").trim();
+  if (!uid) throw new Error("USER_ID_REQUIRED");
+  if (!pid) throw new Error("PROJECT_ID_REQUIRED");
+
+  const base = collection(db, "commissionLedger");
+  const projectScope = [
+    where("userId", "==", uid),
+    where("sourceType", "==", "project_order"),
+    where("projectId", "==", pid)
+  ];
+
+  const [all, paidByStatus, paidByTimestamp, paidOverlap] = await Promise.all([
+    aggregateLedger(query(base, ...projectScope)),
+    aggregateLedger(query(base, ...projectScope, where("status", "==", "paid"))),
+    aggregateLedger(query(base, ...projectScope, where("paidAt", "!=", null))),
+    aggregateLedger(query(
+      base,
+      ...projectScope,
+      where("status", "==", "paid"),
+      where("paidAt", "!=", null)
+    ))
+  ]);
+
+  const paidAmount = Math.max(
+    0,
+    paidByStatus.totalAmount + paidByTimestamp.totalAmount - paidOverlap.totalAmount
+  );
+
+  return {
+    completedOrderCount: all.entryCount,
+    earnedAmount: all.totalAmount,
+    paidAmount,
+    outstandingAmount: Math.max(0, all.totalAmount - paidAmount)
+  };
+}

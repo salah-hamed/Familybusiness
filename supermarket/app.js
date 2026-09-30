@@ -5,16 +5,13 @@ import { createOrResumeSupermarketSetup, getSupermarketProjectBundle } from "../
 import { ensureOperatorInviteAccess, getOperatorInviteToken, rotateOperatorInviteAccess } from "../core/partners/partner-service.js";
 import { normalizeWhatsAppPhone } from "../core/whatsapp/dispatch-service.js";
 import { proposeCommission } from "../core/commissions/commission-service.js";
+import { getProjectCommissionSummary } from "../core/commissions/earnings-service.js";
 import { createGuide } from "../core/onboarding/guide.js";
 import { buildPartnerProjectGuide } from "../core/onboarding/guide-state.js";
 
 import {
   doc,
-  getDoc,
-  collection,
-  getDocs,
-  query,
-  where
+  getDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const $ = id => document.getElementById(id);
@@ -41,14 +38,11 @@ async function copyValue(id){
 document.querySelectorAll("[data-copy]").forEach(btn=>btn.onclick=()=>copyValue(btn.dataset.copy));
 
 async function loadEarnings(){
-  const snap=await getDocs(query(collection(db,"commissionLedger"),where("userId","==",currentUser.uid)));
-  const entries=snap.docs.map(d=>d.data()).filter(x=>x.sourceType==="project_order"&&x.projectId===projectId);
-  const earned=entries.reduce((s,x)=>s+Number(x.amount||0),0);
-  const paid=entries.filter(x=>x.status==="paid"||x.paidAt).reduce((s,x)=>s+Number(x.amount||0),0);
-  $("completedOrders").innerText=entries.length;
-  $("earnedCommission").innerText=money(earned);
-  $("paidCommission").innerText=money(paid);
-  $("outstandingCommission").innerText=money(Math.max(0,earned-paid));
+  const summary=await getProjectCommissionSummary(currentUser.uid,projectId);
+  $("completedOrders").innerText=summary.completedOrderCount;
+  $("earnedCommission").innerText=money(summary.earnedAmount);
+  $("paidCommission").innerText=money(summary.paidAmount);
+  $("outstandingCommission").innerText=money(summary.outstandingAmount);
 }
 
 function render(){

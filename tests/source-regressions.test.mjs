@@ -214,3 +214,45 @@ test("PF03 ledger pagination index is version controlled", () => {
   );
   assert.equal(found, true);
 });
+
+test("PF04 active owner project pages use server aggregates instead of loading the full commission ledger", () => {
+  for (const path of [
+    "supermarket/app.js",
+    "restaurant/app.js",
+    "bakery/app.js",
+    "laundry/app.js"
+  ]) {
+    const source = readFileSync(path, "utf8");
+    assert.equal(source.includes("getProjectCommissionSummary"), true, path);
+    assert.equal(source.includes('collection(db,"commissionLedger")'), false, path);
+    assert.equal(source.includes('collection(db, "commissionLedger")'), false, path);
+  }
+});
+
+test("PF04 project earnings aggregate keeps project isolation and paid compatibility", () => {
+  const source = readFileSync("core/commissions/earnings-service.js", "utf8");
+  assert.equal(source.includes('where("sourceType", "==", "project_order")'), true);
+  assert.equal(source.includes('where("projectId", "==", pid)'), true);
+  assert.equal(source.includes('where("status", "==", "paid")'), true);
+  assert.equal(source.includes('where("paidAt", "!=", null)'), true);
+  assert.equal(source.includes("paidByStatus.totalAmount + paidByTimestamp.totalAmount - paidOverlap.totalAmount"), true);
+});
+
+test("PF04 project earnings indexes are version controlled", () => {
+  const config = JSON.parse(readFileSync("firestore.indexes.json", "utf8"));
+  const expected = [
+    ["userId","sourceType","projectId","status"],
+    ["userId","sourceType","projectId","paidAt"],
+    ["userId","sourceType","projectId","status","paidAt"]
+  ];
+  for (const fields of expected) {
+    const found = config.indexes.some(index =>
+      index.collectionGroup === "commissionLedger"
+      && index.queryScope === "COLLECTION"
+      && JSON.stringify(index.fields) === JSON.stringify(
+        fields.map(fieldPath => ({ fieldPath, order: "ASCENDING" }))
+      )
+    );
+    assert.equal(found, true, fields.join(","));
+  }
+});
