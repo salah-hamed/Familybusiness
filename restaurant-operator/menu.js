@@ -2,7 +2,7 @@ import auth from "../core/firebase/firebase-auth.js";
 import { claimOperatorAccess, getOperator, operatorCanOperate, buildOperatorAuthEmail } from "../core/partners/partner-service.js";
 import { getCommissionAgreement } from "../core/commissions/commission-service.js";
 import { getRestaurant } from "../core/restaurant/restaurant-service.js";
-import { addRestaurantMenuItem, listRestaurantMenu, updateRestaurantMenuItem, deleteRestaurantMenuItem } from "../core/restaurant/menu-service.js";
+import { addRestaurantMenuItem, getRestaurantMenuItem, listRestaurantMenu, updateRestaurantMenuItem, deleteRestaurantMenuItem } from "../core/restaurant/menu-service.js";
 
 import {
   signOut,
@@ -132,6 +132,25 @@ async function loadMenu(){
   renderMenu();
 }
 
+function sortLocalMenu(){
+  menu=[...menu].sort((a,b)=>{
+    const categoryOrder=String(a.category||"").localeCompare(String(b.category||""),"ar");
+    return categoryOrder||String(a.name||"").localeCompare(String(b.name||""),"ar");
+  });
+}
+
+function upsertLocalMenuItem(item){
+  if(!item?.itemId)return;
+  const index=menu.findIndex(entry=>entry.itemId===item.itemId);
+  if(index>=0)menu[index]={...menu[index],...item};
+  else menu.push(item);
+  sortLocalMenu();
+}
+
+function removeLocalMenuItem(itemId){
+  menu=menu.filter(item=>item.itemId!==itemId);
+}
+
 function renderMenu(){
   const q=searchText.trim().toLowerCase();
   const visible=menu.filter(item=>!q||[item.name,item.category,item.description].some(v=>String(v||"").toLowerCase().includes(q)));
@@ -177,25 +196,27 @@ function renderMenu(){
           throw new Error("رابط الصورة غير صالح أو الموقع يمنع عرض الصورة خارجيًا.");
         }
 
-        await updateRestaurantMenuItem(projectId,itemId,currentUser.uid,{
+        const updated=await updateRestaurantMenuItem(projectId,itemId,currentUser.uid,{
           name:card.querySelector(".editName").value,
           category:card.querySelector(".editCategory").value,
           price:card.querySelector(".editPrice").value,
           description:card.querySelector(".editDescription").value,
           image
         });
-        await loadMenu();
+        upsertLocalMenuItem(updated);
+        renderMenu();
       }catch(e){alert(e.message);}
     };
 
     card.querySelector(".toggleItem").onclick=async()=>{
       const active=!(item.isActive&&item.isAvailable);
       try{
-        await updateRestaurantMenuItem(projectId,itemId,currentUser.uid,{
+        const updated=await updateRestaurantMenuItem(projectId,itemId,currentUser.uid,{
           isActive:active,
           isAvailable:active
         });
-        await loadMenu();
+        upsertLocalMenuItem(updated);
+        renderMenu();
       }catch(e){alert(e.message);}
     };
 
@@ -203,7 +224,8 @@ function renderMenu(){
       if(!confirm(`حذف "${item.name}" نهائيًا من المنيو؟`))return;
       try{
         await deleteRestaurantMenuItem(projectId,itemId);
-        await loadMenu();
+        removeLocalMenuItem(itemId);
+        renderMenu();
       }catch(e){alert(e.message);}
     };
   });
@@ -217,16 +239,18 @@ $("addItemBtn").onclick=async()=>{
       throw new Error("رابط الصورة غير صالح أو الموقع يمنع عرض الصورة خارجيًا.");
     }
 
-    await addRestaurantMenuItem(projectId,currentUser.uid,{
+    const itemId=await addRestaurantMenuItem(projectId,currentUser.uid,{
       name:$("itemName").value,
       category:$("itemCategory").value,
       price:$("itemPrice").value,
       description:$("itemDescription").value,
       image
     });
+    const added=await getRestaurantMenuItem(projectId,itemId);
+    if(added)upsertLocalMenuItem(added);
     ["itemName","itemCategory","itemPrice","itemDescription","itemImage"].forEach(id=>$(id).value="");
     $("itemMessage").innerText="تمت إضافة الصنف ✅";
-    await loadMenu();
+    renderMenu();
   }catch(e){$("itemMessage").innerText=e.message;}
 };
 

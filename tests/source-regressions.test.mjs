@@ -256,3 +256,28 @@ test("PF04 project earnings indexes are version controlled", () => {
     assert.equal(found, true, fields.join(","));
   }
 });
+
+test("PF06 restaurant and bakery menus keep one exhaustive initial load and update local state after mutations", () => {
+  for (const path of [
+    "restaurant-operator/menu.js",
+    "bakery-operator/menu.js"
+  ]) {
+    const source = readFileSync(path, "utf8");
+    assert.equal(source.includes("menu=await listRestaurantMenu(projectId)"), true, path);
+    assert.equal((source.match(/await loadMenu\(\)/g) || []).length, 1, path);
+    assert.equal(source.includes("upsertLocalMenuItem"), true, path);
+    assert.equal(source.includes("removeLocalMenuItem"), true, path);
+    assert.equal(source.includes("getRestaurantMenuItem(projectId,itemId)"), true, path);
+  }
+});
+
+test("PF06 menu service skips full metadata scans for non-structural edits", () => {
+  const source = readFileSync("core/restaurant/menu-service.js", "utf8");
+  assert.equal(source.includes("export async function getRestaurantMenuItem"), true);
+  assert.equal(source.includes("const metadataChanged ="), true);
+  assert.equal(source.includes('("category" in next'), true);
+  assert.equal(source.includes('("isActive" in next'), true);
+  assert.equal(source.includes('("isAvailable" in next'), true);
+  assert.equal(source.includes("if (metadataChanged)"), true);
+  assert.equal(source.includes("return {\n    itemId,\n    ...current,\n    ...next,"), true);
+});
