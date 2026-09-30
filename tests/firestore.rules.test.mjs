@@ -575,3 +575,261 @@ test("new rotated invite can claim once and a second uid cannot take over", asyn
     })
   );
 });
+
+
+async function seedCommissionIntegrityFixture(suffix = "integrity") {
+  const ownerId = "owner_commission_" + suffix;
+  const operatorUid = "operator_commission_" + suffix;
+  const projectId = ownerId + "_supermarket";
+
+  await testEnv.withSecurityRulesDisabled(async context => {
+    const db = context.firestore();
+
+    await setDoc(doc(db, "projects", projectId), {
+      ownerId,
+      projectId: "supermarket",
+      template: "supermarket",
+      operatingModel: "partner_operated",
+      templateVersion: 1,
+      operatorId: projectId,
+      partnerSetupStatus: "active",
+      businessName: "Commission Store",
+      status: "active",
+      isActive: true,
+      priceConfig: {}
+    });
+
+    await setDoc(doc(db, "operators", projectId), {
+      operatorId: projectId,
+      projectId,
+      ownerId,
+      templateId: "supermarket",
+      authUid: operatorUid,
+      status: "active",
+      agreementStatus: "accepted",
+      isActive: true
+    });
+
+    await setDoc(doc(db, "commissionAgreements", projectId), {
+      agreementId: projectId,
+      projectId,
+      ownerId,
+      operatorId: projectId,
+      templateId: "supermarket",
+      currency: "EGP",
+      unit: "per_completed_order",
+      currentAmount: 5,
+      acceptedVersion: 1,
+      pendingAmount: null,
+      status: "accepted",
+      pendingStatus: "none",
+      proposedBy: ownerId,
+      proposedAt: serverTimestamp(),
+      acceptedAt: serverTimestamp(),
+      acceptedBy: operatorUid,
+      rejectedAt: null,
+      lastDecision: "accepted",
+      version: 1,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+  });
+
+  return { ownerId, operatorUid, projectId };
+}
+
+test("pending commission proposal preserves the previously accepted amount and version", async () => {
+  const { ownerId, projectId } = await seedCommissionIntegrityFixture("pending_keeps_old");
+  const db = testEnv.authenticatedContext(ownerId).firestore();
+
+  await assertSucceeds(
+    updateDoc(doc(db, "commissionAgreements", projectId), {
+      pendingAmount: 7,
+      pendingStatus: "pending",
+      status: "accepted",
+      proposedAt: serverTimestamp(),
+      proposedBy: ownerId,
+      rejectedAt: null,
+      updatedAt: serverTimestamp(),
+      version: 2
+    })
+  );
+
+  const snap = await getDoc(doc(db, "commissionAgreements", projectId));
+  assert.equal(snap.data().currentAmount, 5);
+  assert.equal(snap.data().acceptedVersion, 1);
+  assert.equal(snap.data().pendingAmount, 7);
+  assert.equal(snap.data().pendingStatus, "pending");
+  assert.equal(snap.data().version, 2);
+});
+
+test("only operator acceptance promotes pending commission to the effective snapshot", async () => {
+  const { ownerId, operatorUid, projectId } = await seedCommissionIntegrityFixture("accept_promotes");
+  const ownerDb = testEnv.authenticatedContext(ownerId).firestore();
+
+  await assertSucceeds(
+    updateDoc(doc(ownerDb, "commissionAgreements", projectId), {
+      pendingAmount: 7,
+      pendingStatus: "pending",
+      status: "accepted",
+      proposedAt: serverTimestamp(),
+      proposedBy: ownerId,
+      rejectedAt: null,
+      updatedAt: serverTimestamp(),
+      version: 2
+    })
+  );
+
+  const operatorDb = testEnv.authenticatedContext(operatorUid).firestore();
+
+  await assertSucceeds(
+    updateDoc(doc(operatorDb, "commissionAgreements", projectId), {
+      currentAmount: 7,
+      acceptedVersion: 2,
+      pendingAmount: null,
+      status: "accepted",
+      pendingStatus: "none",
+      lastDecision: "accepted",
+      acceptedAt: serverTimestamp(),
+      acceptedBy: operatorUid,
+      rejectedAt: null,
+      updatedAt: serverTimestamp()
+    })
+  );
+
+  const snap = await getDoc(doc(operatorDb, "commissionAgreements", projectId));
+  assert.equal(snap.data().currentAmount, 7);
+  assert.equal(snap.data().acceptedVersion, 2);
+  assert.equal(snap.data().pendingAmount, null);
+  assert.equal(snap.data().pendingStatus, "none");
+});
+
+test("rejected commission change leaves the old accepted snapshot active", async () => {
+  const { ownerId, operatorUid, projectId } = await seedCommissionIntegrityFixture("reject_keeps_old");
+  const ownerDb = testEnv.authenticatedContext(ownerId).firestore();
+
+  await assertSucceeds(
+    updateDoc(doc(ownerDb, "commissionAgreements", projectId), {
+      pendingAmount: 9,
+      pendingStatus: "pending",
+      status: "accepted",
+      proposedAt: serverTimestamp(),
+      proposedBy: ownerId,
+      rejectedAt: null,
+      updatedAt: serverTimestamp(),
+      version: 2
+    })
+  );
+
+  const operatorDb = testEnv.authenticatedContext(operatorUid).firestore();
+
+  await assertSucceeds(
+    updateDoc(doc(operatorDb, "commissionAgreements", projectId), {
+      pendingAmount: null,
+      status: "accepted",
+      pendingStatus: "none",
+      lastDecision: "rejected",
+      rejectedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    })
+  );
+
+  const snap = await getDoc(doc(operatorDb, "commissionAgreements", projectId));
+  assert.equal(snap.data().currentAmount, 5);
+  assert.equal(snap.data().acceptedVersion, 1);
+  assert.equal(snap.data().pendingAmount, null);
+  assert.equal(snap.data().lastDecision, "rejected");
+});
+
+test("project owner cannot directly rewrite the accepted commission amount or version", async () => {
+  const { ownerId, projectId } = await seedCommissionIntegrityFixture("owner_cannot_accept");
+  const db = testEnv.authenticatedContext(ownerId).firestore();
+
+  await assertFails(
+    updateDoc(doc(db, "commissionAgreements", projectId), {
+      currentAmount: 99,
+      acceptedVersion: 99,
+      updatedAt: serverTimestamp()
+    })
+  );
+});
+
+test("project-order ledger can be created once by the operator and cannot be overwritten", async () => {
+  const { ownerId, operatorUid, projectId } = await seedCommissionIntegrityFixture("ledger_once");
+  const orderId = "delivered_order_once";
+  const ledgerId = "project_order_" + orderId;
+
+  await testEnv.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), "orders", orderId), {
+      projectId,
+      providerId: projectId,
+      templateType: "supermarket",
+      status: "delivered",
+      commissionEligible: true,
+      commissionLocked: true,
+      commissionAmount: 5,
+      commissionAgreementVersion: 1
+    });
+  });
+
+  const db = testEnv.authenticatedContext(operatorUid).firestore();
+  const entry = {
+    userId: ownerId,
+    projectId,
+    orderId,
+    sourceType: "project_order",
+    sourceId: orderId,
+    agreementId: projectId,
+    agreementVersion: 1,
+    amount: 5,
+    currency: "EGP",
+    status: "earned",
+    createdAt: serverTimestamp(),
+    paidAt: null
+  };
+
+  await assertSucceeds(setDoc(doc(db, "commissionLedger", ledgerId), entry));
+  await assertFails(setDoc(doc(db, "commissionLedger", ledgerId), entry));
+});
+
+test("project-order ledger rejects amount or accepted-version mismatches", async () => {
+  const { ownerId, operatorUid, projectId } = await seedCommissionIntegrityFixture("ledger_mismatch");
+  const db = testEnv.authenticatedContext(operatorUid).firestore();
+
+  const cases = [
+    ["wrong_amount", 6, 1],
+    ["wrong_version", 5, 2]
+  ];
+
+  for (const [orderId, amount, agreementVersion] of cases) {
+    await testEnv.withSecurityRulesDisabled(async context => {
+      await setDoc(doc(context.firestore(), "orders", orderId), {
+        projectId,
+        providerId: projectId,
+        templateType: "supermarket",
+        status: "delivered",
+        commissionEligible: true,
+        commissionLocked: true,
+        commissionAmount: 5,
+        commissionAgreementVersion: 1
+      });
+    });
+
+    await assertFails(
+      setDoc(doc(db, "commissionLedger", "project_order_" + orderId), {
+        userId: ownerId,
+        projectId,
+        orderId,
+        sourceType: "project_order",
+        sourceId: orderId,
+        agreementId: projectId,
+        agreementVersion,
+        amount,
+        currency: "EGP",
+        status: "earned",
+        createdAt: serverTimestamp(),
+        paidAt: null
+      })
+    );
+  }
+});
