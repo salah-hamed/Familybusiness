@@ -333,6 +333,24 @@ export async function listRestaurantOrdersPage(
   };
 }
 
+export async function listRestaurantOperationalOrders(
+  projectId,
+  { templateType = "restaurant" } = {}
+) {
+  const snap = await getDocs(
+    query(
+      collection(db, "orders"),
+      where("projectId", "==", projectId),
+      where("templateType", "==", templateType)
+    )
+  );
+
+  return snap.docs
+    .map(item => ({ orderId: item.id, ...item.data() }))
+    .filter(order => !["delivered","canceled"].includes(order.status))
+    .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+}
+
 export async function listRestaurantOrders(projectId, options = {}) {
   const page = await listRestaurantOrdersPage(projectId, options);
   return page.orders;
