@@ -13,18 +13,18 @@ import {
   count
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-function normalizePageSize(value, fallback = 25) {
+function normalizePageSize(value, fallback = 50) {
   return Math.max(1, Math.min(100, Number(value) || fallback));
 }
 
 export async function listUserCommissionLedgerPage(
   userId,
-  { pageSize = 25, cursor = null } = {}
+  { pageSize = 50, cursor = null } = {}
 ) {
   const uid = String(userId || "").trim();
   if (!uid) throw new Error("USER_ID_REQUIRED");
 
-  const size = normalizePageSize(pageSize, 25);
+  const size = normalizePageSize(pageSize, 50);
   const constraints = [
     where("userId", "==", uid),
     orderBy("createdAt", "desc")

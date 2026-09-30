@@ -184,26 +184,22 @@ test("PF03 earnings service paginates commission ledger by user and createdAt", 
   assert.equal(source.includes('orderBy("createdAt", "desc")'), true);
   assert.equal(source.includes("startAfter(cursor)"), true);
   assert.equal(source.includes("limit(size)"), true);
+  assert.equal(source.includes("fallback = 50"), true);
+  assert.equal(source.includes("{ pageSize = 50, cursor = null } = {}"), true);
+  assert.equal(source.includes("normalizePageSize(pageSize, 50)"), true);
   assert.equal(source.includes("getAggregateFromServer"), true);
   assert.equal(source.includes('sum("amount")'), true);
   assert.equal(source.includes("count()"), true);
 });
 
-test("PF03 workspace exposes earnings totals and paged ledger history", () => {
+test("PF03 does not invent an earnings screen when none existed before the task", () => {
   const html = readFileSync("workspace/index.html", "utf8");
   const source = readFileSync("workspace/app.js", "utf8");
 
-  for (const id of [
-    "earningsTotal","earningsProjects","earningsReferrals",
-    "earningsCount","earningsList","loadMoreEarningsBtn"
-  ]) {
-    assert.equal(html.includes(`id="${id}"`), true, id);
-  }
-
-  assert.equal(source.includes("getUserEarningsSummary"), true);
-  assert.equal(source.includes("listUserCommissionLedgerPage"), true);
-  assert.equal(source.includes("pageSize:25"), true);
-  assert.equal(source.includes("append:true"), true);
+  assert.equal(html.includes('id="earningsList"'), false);
+  assert.equal(html.includes('class="earningsCard"'), false);
+  assert.equal(source.includes("earnings-service.js"), false);
+  assert.equal(source.includes("listUserCommissionLedgerPage"), false);
 });
 
 test("PF03 ledger pagination index is version controlled", () => {
