@@ -5,7 +5,7 @@ import { acceptPendingCommission,rejectPendingCommission,getCommissionAgreement 
 import { getLaundry,updateLaundrySettings } from "../core/laundry/laundry-service.js";
 import { WORKER_ROLES,createWorker,listProjectWorkers,setWorkerActive } from "../core/workers/worker-service.js";
 import { assignWorkerAndPrepareWhatsApp } from "../core/workers/worker-dispatch-service.js";
-import { listLaundryOrders,currentLaundryStage,allowedLaundryNextStages,changeLaundryStage } from "../core/laundry/order-service.js";
+import { listLaundryOperationalOrders,listLaundryHistoryPage,countLaundryDeliveredOrders,currentLaundryStage,allowedLaundryNextStages,changeLaundryStage } from "../core/laundry/order-service.js";
 
 import {createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut,onAuthStateChanged} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {doc,getDoc,updateDoc} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -16,6 +16,7 @@ const projectId=params.get("project")||"";
 const inviteToken=params.get("invite")||"";
 const inviteAuthEmail=buildOperatorAuthEmail(inviteToken);
 let user=null,operator=null,agreement=null,laundry=null,workers=[],orders=[];
+let operationalOrders=[],historyOrders=[],historyCursor=null,historyHasMore=false;
 const money=v=>`${Number(v||0).toLocaleString("ar-EG")} جنيه`;
 const esc=v=>String(v??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;");
 const setVisible=(id,on)=>$(id).classList.toggle("hidden",!on);
@@ -92,11 +93,41 @@ async function assignAndDispatch(order,role,nextStage){
   }catch(e){alert(e.message);}
 }
 
-async function loadOrders(){
-  orders=await listLaundryOrders(projectId);
-  let newCount=0,activeCount=0,doneCount=0;
-  orders.forEach(o=>{const s=currentLaundryStage(o);if(s==="new")newCount++;else if(s==="delivered")doneCount++;else if(s!=="canceled")activeCount++;});
-  $("statNew").innerText=newCount;$("statActive").innerText=activeCount;$("statDone").innerText=doneCount;
+function orderTime(order){
+  if(typeof order.createdAt?.toMillis==="function")return order.createdAt.toMillis();
+  return Number(order.createdAt?.seconds||0)*1000;
+}
+function mergeVisibleOrders(){
+  const map=new Map();
+  [...operationalOrders,...historyOrders].forEach(order=>map.set(order.orderId,order));
+  return [...map.values()].sort((a,b)=>orderTime(b)-orderTime(a));
+}
+
+async function loadOrders({appendHistory=false}={}){
+  if(appendHistory){
+    const page=await listLaundryHistoryPage(projectId,{pageSize:50,cursor:historyCursor});
+    const known=new Set(historyOrders.map(order=>order.orderId));
+    historyOrders.push(...page.orders.filter(order=>!known.has(order.orderId)));
+    historyCursor=page.nextCursor;
+    historyHasMore=page.hasMore;
+  }else{
+    const [active,page,deliveredCount]=await Promise.all([
+      listLaundryOperationalOrders(projectId),
+      listLaundryHistoryPage(projectId,{pageSize:50}),
+      countLaundryDeliveredOrders(projectId)
+    ]);
+    operationalOrders=active;
+    historyOrders=page.orders;
+    historyCursor=page.nextCursor;
+    historyHasMore=page.hasMore;
+    $("statDone").innerText=deliveredCount;
+  }
+
+  orders=mergeVisibleOrders();
+  let newCount=0,activeCount=0;
+  operationalOrders.forEach(o=>{const s=currentLaundryStage(o);if(s==="new")newCount++;else if(s!=="canceled")activeCount++;});
+  $("statNew").innerText=newCount;$("statActive").innerText=activeCount;
+  $("loadOlderOrdersBtn").classList.toggle("hidden",!historyHasMore);
   $("ordersList").innerHTML=orders.length?orders.map(order=>{
     const stage=currentLaundryStage(order),next=allowedLaundryNextStages(order);let controls="";
     if(stage==="new")controls+='<button class="primary stageBtn" data-stage="accepted">قبول الطلب</button>';
@@ -117,4 +148,5 @@ async function loadOrders(){
     card.querySelector(".deliveryBtn")?.addEventListener("click",()=>assignAndDispatch(order,"delivery_agent","out_for_delivery"));
   });
 }
-$("refreshOrdersBtn").onclick=loadOrders;
+$("refreshOrdersBtn").onclick=()=>loadOrders();
+$("loadOlderOrdersBtn").onclick=async()=>{const btn=$("loadOlderOrdersBtn");btn.disabled=true;try{await loadOrders({appendHistory:true});}finally{btn.disabled=false;}};
