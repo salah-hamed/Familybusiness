@@ -135,3 +135,19 @@ test("PF01 all operator pages expose an older-orders pagination control", () => 
     assert.equal(html.includes("عرض طلبات أقدم"), true, path);
   }
 });
+
+
+test("PF01 active and history services use server-side status filters", () => {
+  const supermarket = readFileSync("core/supermarket/order-service.js","utf8");
+  const restaurant = readFileSync("core/restaurant/order-service.js","utf8");
+  const laundry = readFileSync("core/laundry/order-service.js","utf8");
+  assert.equal(supermarket.includes('where("status", "in", ["new","accepted","preparing","ready","assigned","out_for_delivery"])'), true);
+  assert.equal(supermarket.includes('where("status", "in", ["delivered","canceled"])'), true);
+  assert.equal(restaurant.includes('where("status", "in", ["new","accepted","preparing","ready","assigned","out_for_delivery"])'), true);
+  assert.equal(restaurant.includes('where("status", "in", ["delivered","canceled"])'), true);
+  assert.equal(laundry.includes('where("status","in",["new","accepted"])'), true);
+  assert.equal(laundry.includes('where("status","in",["done","canceled"])'), true);
+  assert.equal(supermarket.includes("getCountFromServer"), true);
+  assert.equal(restaurant.includes("getCountFromServer"), true);
+  assert.equal(laundry.includes("getCountFromServer"), true);
+});
