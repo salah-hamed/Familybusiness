@@ -139,10 +139,14 @@ async function authorize() {
   try {
     await claimOperatorAccess(projectId, currentUser);
   } catch (error) {
-    if (error.message !== "OPERATOR_ALREADY_CLAIMED") {
-      $("pageStatus").innerText = `تعذر فتح الكتالوج: ${error.message}`;
-      return false;
-    }
+    const code = String(error?.code || "");
+    const message = String(error?.message || "");
+    $("pageStatus").innerText =
+      code.includes("permission-denied")
+      || ["OPERATOR_ALREADY_CLAIMED","OPERATOR_INVITE_MISMATCH"].includes(message)
+        ? "رابط الدخول ده اتلغى أو تم استبداله. اطلب رابط دخول جديد من صاحب المشروع."
+        : `تعذر فتح الكتالوج: ${message || "UNKNOWN_ERROR"}`;
+    return false;
   }
 
   [operator, agreement, store] = await Promise.all([
