@@ -60,6 +60,50 @@ function trackingPatchFromOrder(order = {}, overrides = {}) {
   };
 }
 
+
+function isMissingCompositeIndexError(error) {
+  const code = String(error?.code || "").toLowerCase();
+  const message = String(error?.message || "").toLowerCase();
+  return code.includes("failed-precondition") && message.includes("index");
+}
+
+function orderCreatedAtMillis(docSnap) {
+  const value = docSnap.data()?.createdAt;
+  if (typeof value?.toMillis === "function") return value.toMillis();
+  return Number(value?.seconds || 0) * 1000;
+}
+
+async function loadProjectOrderDocsWithoutCompositeIndex(projectId) {
+  const snap = await getDocs(
+    query(
+      collection(db, "orders"),
+      where("projectId", "==", projectId)
+    )
+  );
+
+  return snap.docs
+    .filter(item => item.data().templateType === "supermarket")
+    .sort((a, b) => orderCreatedAtMillis(b) - orderCreatedAtMillis(a));
+}
+
+function fallbackPageFromDocs(docs, { size, cursor = null, statuses = null } = {}) {
+  const filtered = statuses
+    ? docs.filter(item => statuses.includes(item.data().status))
+    : docs;
+
+  const cursorIndex = cursor
+    ? filtered.findIndex(item => item.id === cursor.id)
+    : -1;
+  const start = cursor ? (cursorIndex >= 0 ? cursorIndex + 1 : filtered.length) : 0;
+  const pageDocs = filtered.slice(start, start + size);
+
+  return {
+    orders: pageDocs.map(item => ({ orderId: item.id, ...item.data() })),
+    nextCursor: pageDocs.length ? pageDocs[pageDocs.length - 1] : null,
+    hasMore: start + pageDocs.length < filtered.length
+  };
+}
+
 export function allowedNextSupermarketStatuses(status) {
   return STATUS_FLOW[status] || [];
 }
@@ -379,27 +423,43 @@ export async function listSupermarketOrdersPage(
   if (cursor) constraints.push(startAfter(cursor));
   constraints.push(limit(size));
 
-  const snap = await getDocs(query(collection(db, "orders"), ...constraints));
+  try {
+    const snap = await getDocs(query(collection(db, "orders"), ...constraints));
 
-  return {
-    orders: snap.docs.map(item => ({ orderId: item.id, ...item.data() })),
-    nextCursor: snap.docs.length ? snap.docs[snap.docs.length - 1] : null,
-    hasMore: snap.docs.length === size
-  };
+    return {
+      orders: snap.docs.map(item => ({ orderId: item.id, ...item.data() })),
+      nextCursor: snap.docs.length ? snap.docs[snap.docs.length - 1] : null,
+      hasMore: snap.docs.length === size
+    };
+  } catch (error) {
+    if (!isMissingCompositeIndexError(error)) throw error;
+    const docs = await loadProjectOrderDocsWithoutCompositeIndex(projectId);
+    return fallbackPageFromDocs(docs, { size, cursor });
+  }
 }
 
 export async function listSupermarketOperationalOrders(projectId) {
-  const snap = await getDocs(
-    query(
-      collection(db, "orders"),
-      where("projectId", "==", projectId),
-      where("templateType", "==", "supermarket"),
-      where("status", "in", ["new","accepted","preparing","ready","assigned","out_for_delivery"]),
-      orderBy("createdAt", "desc")
-    )
-  );
+  const activeStatuses = ["new","accepted","preparing","ready","assigned","out_for_delivery"];
 
-  return snap.docs.map(item => ({ orderId: item.id, ...item.data() }));
+  try {
+    const snap = await getDocs(
+      query(
+        collection(db, "orders"),
+        where("projectId", "==", projectId),
+        where("templateType", "==", "supermarket"),
+        where("status", "in", activeStatuses),
+        orderBy("createdAt", "desc")
+      )
+    );
+
+    return snap.docs.map(item => ({ orderId: item.id, ...item.data() }));
+  } catch (error) {
+    if (!isMissingCompositeIndexError(error)) throw error;
+    const docs = await loadProjectOrderDocsWithoutCompositeIndex(projectId);
+    return docs
+      .filter(item => activeStatuses.includes(item.data().status))
+      .map(item => ({ orderId: item.id, ...item.data() }));
+  }
 }
 
 export async function listSupermarketHistoryPage(
@@ -407,35 +467,48 @@ export async function listSupermarketHistoryPage(
   { pageSize = 50, cursor = null } = {}
 ) {
   const size = Math.max(1, Math.min(100, Number(pageSize) || 50));
+  const historyStatuses = ["delivered","canceled"];
   const constraints = [
     where("projectId", "==", projectId),
     where("templateType", "==", "supermarket"),
-    where("status", "in", ["delivered","canceled"]),
+    where("status", "in", historyStatuses),
     orderBy("createdAt", "desc")
   ];
 
   if (cursor) constraints.push(startAfter(cursor));
   constraints.push(limit(size));
 
-  const snap = await getDocs(query(collection(db, "orders"), ...constraints));
+  try {
+    const snap = await getDocs(query(collection(db, "orders"), ...constraints));
 
-  return {
-    orders: snap.docs.map(item => ({ orderId: item.id, ...item.data() })),
-    nextCursor: snap.docs.length ? snap.docs[snap.docs.length - 1] : null,
-    hasMore: snap.docs.length === size
-  };
+    return {
+      orders: snap.docs.map(item => ({ orderId: item.id, ...item.data() })),
+      nextCursor: snap.docs.length ? snap.docs[snap.docs.length - 1] : null,
+      hasMore: snap.docs.length === size
+    };
+  } catch (error) {
+    if (!isMissingCompositeIndexError(error)) throw error;
+    const docs = await loadProjectOrderDocsWithoutCompositeIndex(projectId);
+    return fallbackPageFromDocs(docs, { size, cursor, statuses: historyStatuses });
+  }
 }
 
 export async function countSupermarketDeliveredOrders(projectId) {
-  const snap = await getCountFromServer(
-    query(
-      collection(db, "orders"),
-      where("projectId", "==", projectId),
-      where("templateType", "==", "supermarket"),
-      where("status", "==", "delivered")
-    )
-  );
-  return snap.data().count;
+  try {
+    const snap = await getCountFromServer(
+      query(
+        collection(db, "orders"),
+        where("projectId", "==", projectId),
+        where("templateType", "==", "supermarket"),
+        where("status", "==", "delivered")
+      )
+    );
+    return snap.data().count;
+  } catch (error) {
+    if (!isMissingCompositeIndexError(error)) throw error;
+    const docs = await loadProjectOrderDocsWithoutCompositeIndex(projectId);
+    return docs.filter(item => item.data().status === "delivered").length;
+  }
 }
 
 export async function listSupermarketOrders(projectId) {
