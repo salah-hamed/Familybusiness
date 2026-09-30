@@ -10,6 +10,13 @@ import { escapeHTML } from "../core/utils/helpers.js";
 import {
   collection,
   getDocs,
+  getCountFromServer,
+  query,
+  where,
+  orderBy,
+  startAfter,
+  limit,
+  documentId,
   doc,
   updateDoc,
   runTransaction,
@@ -17,14 +24,25 @@ import {
   Timestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-const usersContainer =
-  document.getElementById("usersContainer");
+const usersContainer = document.getElementById("usersContainer");
+const usersCount = document.getElementById("usersCount");
+const usersSearch = document.getElementById("usersSearch");
+const usersStatusFilter = document.getElementById("usersStatusFilter");
+const usersMessage = document.getElementById("usersMessage");
+const loadMoreUsersBtn = document.getElementById("loadMoreUsersBtn");
 
-const usersCount =
-  document.getElementById("usersCount");
+const USERS_PAGE_SIZE = 50;
+const USERS_SEARCH_PAGE_SIZE = 100;
+
+let users = [];
+let usersCursor = null;
+let usersHasMore = false;
+let usersLoading = false;
+let searchTimer = null;
+let currentSearch = "";
+let currentStatus = "all";
 
 protectAdmin(async (session) => {
-
   if (!session.authorized) {
     usersCount.innerText = "غير مصرح بالدخول";
     usersContainer.innerHTML = `
@@ -36,8 +54,8 @@ protectAdmin(async (session) => {
     return;
   }
 
+  document.getElementById("usersControls")?.classList.remove("hidden");
   await loadUsers();
-
 });
 
 function hasPaidInitialActivation(data = {}) {
@@ -51,10 +69,100 @@ function formatDate(value) {
   return date.toLocaleDateString("ar-EG");
 }
 
+function normalizeSearch(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[أإآ]/g, "ا")
+    .replace(/ى/g, "ي")
+    .replace(/ة/g, "ه")
+    .replace(/\s+/g, " ");
+}
+
+function matchesSearch(user, term) {
+  const q = normalizeSearch(term);
+  if (!q) return true;
+
+  return normalizeSearch([
+    user.uid,
+    user.name,
+    user.email
+  ].filter(Boolean).join(" ")).includes(q);
+}
+
+function userQueryConstraints({
+  status = "all",
+  cursor = null,
+  pageSize = USERS_PAGE_SIZE
+} = {}) {
+  const constraints = [];
+
+  if (status !== "all") {
+    constraints.push(where("subscriptionStatus", "==", status));
+  }
+
+  constraints.push(orderBy(documentId()));
+
+  if (cursor) {
+    constraints.push(startAfter(cursor));
+  }
+
+  constraints.push(limit(pageSize));
+  return constraints;
+}
+
+async function listUsersPage(options = {}) {
+  const snap = await getDocs(
+    query(collection(db, "users"), ...userQueryConstraints(options))
+  );
+
+  return {
+    users: snap.docs.map(item => ({ uid: item.id, ...item.data() })),
+    nextCursor: snap.docs.length ? snap.docs[snap.docs.length - 1] : null,
+    hasMore: snap.docs.length === Math.max(
+      1,
+      Math.min(100, Number(options.pageSize) || USERS_PAGE_SIZE)
+    )
+  };
+}
+
+async function countUsers(status = "all") {
+  const constraints = [];
+  if (status !== "all") {
+    constraints.push(where("subscriptionStatus", "==", status));
+  }
+
+  const snap = await getCountFromServer(
+    query(collection(db, "users"), ...constraints)
+  );
+
+  return snap.data().count;
+}
+
+async function searchAllUsers(term, status = "all") {
+  const matches = [];
+  let cursor = null;
+  while (true) {
+    const page = await listUsersPage({
+      status,
+      cursor,
+      pageSize: USERS_SEARCH_PAGE_SIZE
+    });
+
+    matches.push(...page.users.filter(user => matchesSearch(user, term)));
+    if (!page.hasMore || !page.nextCursor) break;
+    if (cursor && page.nextCursor.id === cursor.id) {
+      throw new Error("USERS_PAGINATION_STALLED");
+    }
+
+    cursor = page.nextCursor;
+  }
+
+  return matches;
+}
+
 async function activateOrRenewUser(uid) {
-
   await runTransaction(db, async (transaction) => {
-
     const userRef = doc(db, "users", uid);
     const userSnap = await transaction.get(userRef);
 
@@ -152,91 +260,161 @@ async function activateOrRenewUser(uid) {
         referralQualified: true
       });
     }
-
   });
-
 }
 
-async function loadUsers() {
+function renderUsers() {
+  if (!users.length) {
+    usersContainer.innerHTML = '<p style="padding:20px;text-align:center;">لا توجد نتائج مطابقة.</p>';
+    return;
+  }
 
-  const snapshot =
-    await getDocs(collection(db, "users"));
-
-  usersCount.innerText =
-    `إجمالي المستخدمين: ${snapshot.size}`;
-
-  usersContainer.innerHTML = "";
-
-  snapshot.forEach((userDoc) => {
-
-    const data = userDoc.data();
-    const uid = userDoc.id;
-    const initialAlreadyPaid = hasPaidInitialActivation(data);
+  usersContainer.innerHTML = users.map(user => {
+    const initialAlreadyPaid = hasPaidInitialActivation(user);
     const nextAmount = initialAlreadyPaid
       ? PLATFORM_BILLING.monthlyRenewalFee
       : PLATFORM_BILLING.initialActivationFee;
 
-    const card = document.createElement("div");
-
-    card.style.border = "1px solid #ddd";
-    card.style.padding = "14px";
-    card.style.margin = "12px 0";
-    card.style.borderRadius = "12px";
-
-    card.innerHTML = `
-      <p><b>${escapeHTML(data.name || "بدون اسم")}</b></p>
-      <p>${escapeHTML(data.email || "")}</p>
-      <p>الحالة: <b>${escapeHTML(data.subscriptionStatus || "pending")}</b></p>
-      <p>أول اشتراك: ${initialAlreadyPaid ? "تم" : "لم يتم"}</p>
-      <p>انتهاء الاشتراك: ${formatDate(data.subscriptionExpiresAt)}</p>
-      <p>الإحالة: ${data.referredByUserId ? "موجودة" : "لا يوجد"}</p>
-      <p>المبلغ المطلوب عند التأكيد الحالي: <b>${formatEgp(nextAmount)}</b></p>
-
-      <button id="activate-${uid}">
-        ${initialAlreadyPaid
-          ? `تأكيد تجديد ${formatEgp(PLATFORM_BILLING.monthlyRenewalFee)}`
-          : `تفعيل أول مرة ${formatEgp(PLATFORM_BILLING.initialActivationFee)}`}
-      </button>
-
-      <button id="deactivate-${uid}" style="margin-right:8px;">
-        إيقاف الاشتراك
-      </button>
+    return `
+      <article class="userCard" data-user="${escapeHTML(user.uid)}">
+        <div class="userCardHead">
+          <div>
+            <h3>${escapeHTML(user.name || "بدون اسم")}</h3>
+            <p>${escapeHTML(user.email || "")}</p>
+          </div>
+          <span class="statusPill">${escapeHTML(user.subscriptionStatus || "pending")}</span>
+        </div>
+        <div class="userMeta">
+          <span>أول اشتراك: <b>${initialAlreadyPaid ? "تم" : "لم يتم"}</b></span>
+          <span>انتهاء الاشتراك: <b>${formatDate(user.subscriptionExpiresAt)}</b></span>
+          <span>الإحالة: <b>${user.referredByUserId ? "موجودة" : "لا يوجد"}</b></span>
+          <span>المبلغ المطلوب الآن: <b>${formatEgp(nextAmount)}</b></span>
+        </div>
+        <div class="userActions">
+          <button data-action="activate" data-uid="${escapeHTML(user.uid)}">
+            ${initialAlreadyPaid
+              ? `تأكيد تجديد ${formatEgp(PLATFORM_BILLING.monthlyRenewalFee)}`
+              : `تفعيل أول مرة ${formatEgp(PLATFORM_BILLING.initialActivationFee)}`}
+          </button>
+          <button data-action="deactivate" data-uid="${escapeHTML(user.uid)}" class="secondaryBtn">
+            إيقاف الاشتراك
+          </button>
+        </div>
+      </article>
     `;
-
-    usersContainer.appendChild(card);
-
-    document
-      .getElementById(`activate-${uid}`)
-      .addEventListener("click", async () => {
-
-        try {
-          await activateOrRenewUser(uid);
-          alert("تم تحديث الاشتراك بنجاح");
-          await loadUsers();
-        } catch (error) {
-          console.error(error);
-          alert("تعذر تحديث الاشتراك");
-        }
-
-      });
-
-    document
-      .getElementById(`deactivate-${uid}`)
-      .addEventListener("click", async () => {
-
-        await updateDoc(
-          doc(db, "users", uid),
-          {
-            isActive: false,
-            subscriptionStatus: "inactive"
-          }
-        );
-
-        alert("تم إيقاف الاشتراك");
-        await loadUsers();
-
-      });
-
-  });
-
+  }).join("");
 }
+
+async function loadUsers({ append = false } = {}) {
+  if (usersLoading) return;
+
+  const search = currentSearch.trim();
+  if (search && search.length < 2) {
+    usersMessage.innerText = "اكتب حرفين على الأقل للبحث في كل المستخدمين.";
+    users = [];
+    usersCursor = null;
+    usersHasMore = false;
+    loadMoreUsersBtn.classList.add("hidden");
+    renderUsers();
+    return;
+  }
+
+  usersLoading = true;
+  loadMoreUsersBtn.disabled = true;
+  usersMessage.innerText = search
+    ? "جاري البحث في كل المستخدمين..."
+    : (append ? "جاري تحميل المزيد..." : "جاري تحميل المستخدمين...");
+
+  try {
+    const total = await countUsers(currentStatus);
+
+    if (search) {
+      users = await searchAllUsers(search, currentStatus);
+      usersCursor = null;
+      usersHasMore = false;
+      usersCount.innerText = `نتائج البحث: ${users.length} من ${total}`;
+    } else {
+      const page = await listUsersPage({
+        status: currentStatus,
+        cursor: append ? usersCursor : null,
+        pageSize: USERS_PAGE_SIZE
+      });
+
+      if (append) {
+        const known = new Set(users.map(user => user.uid));
+        users.push(...page.users.filter(user => !known.has(user.uid)));
+      } else {
+        users = page.users;
+      }
+
+      usersCursor = page.nextCursor;
+      usersHasMore = page.hasMore;
+      usersCount.innerText = currentStatus === "all"
+        ? `إجمالي المستخدمين: ${total}`
+        : `إجمالي الحالة المحددة: ${total}`;
+    }
+
+    renderUsers();
+    usersMessage.innerText = users.length
+      ? `المعروض الآن: ${users.length}`
+      : "لا توجد نتائج مطابقة.";
+    loadMoreUsersBtn.classList.toggle("hidden", !usersHasMore || Boolean(search));
+  } catch (error) {
+    console.error(error);
+    usersMessage.innerText = `تعذر تحميل المستخدمين: ${error.message}`;
+  } finally {
+    usersLoading = false;
+    loadMoreUsersBtn.disabled = false;
+  }
+}
+
+usersSearch?.addEventListener("input", event => {
+  currentSearch = event.target.value;
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => loadUsers(), 300);
+});
+
+usersStatusFilter?.addEventListener("change", event => {
+  currentStatus = event.target.value;
+  usersCursor = null;
+  usersHasMore = false;
+  loadUsers();
+});
+
+loadMoreUsersBtn?.addEventListener("click", () => {
+  loadUsers({ append: true });
+});
+
+usersContainer?.addEventListener("click", async event => {
+  const button = event.target.closest("[data-action][data-uid]");
+  if (!button) return;
+
+  const uid = button.dataset.uid;
+  const action = button.dataset.action;
+  button.disabled = true;
+
+  try {
+    if (action === "activate") {
+      await activateOrRenewUser(uid);
+      alert("تم تحديث الاشتراك بنجاح");
+    }
+
+    if (action === "deactivate") {
+      await updateDoc(
+        doc(db, "users", uid),
+        {
+          isActive: false,
+          subscriptionStatus: "inactive"
+        }
+      );
+      alert("تم إيقاف الاشتراك");
+    }
+
+    await loadUsers();
+  } catch (error) {
+    console.error(error);
+    alert(action === "activate" ? "تعذر تحديث الاشتراك" : "تعذر إيقاف الاشتراك");
+  } finally {
+    button.disabled = false;
+  }
+});

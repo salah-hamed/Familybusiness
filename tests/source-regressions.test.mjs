@@ -151,3 +151,28 @@ test("PF01 active and history services use server-side status filters", () => {
   assert.equal(restaurant.includes("getCountFromServer"), true);
   assert.equal(laundry.includes("getCountFromServer"), true);
 });
+
+
+test("PF02 admin defaults to paged users instead of reading the whole collection", () => {
+  const source = readFileSync("admin/admin.js", "utf8");
+  assert.equal(source.includes('getDocs(collection(db, "users"))'), false);
+  assert.equal(source.includes("listUsersPage"), true);
+  assert.equal(source.includes("startAfter(cursor)"), true);
+  assert.equal(source.includes("limit(pageSize)"), true);
+  assert.equal(source.includes("getCountFromServer"), true);
+});
+
+test("PF02 admin search is exhaustive only when a search term is present", () => {
+  const source = readFileSync("admin/admin.js", "utf8");
+  assert.equal(source.includes("searchAllUsers"), true);
+  assert.equal(source.includes("if (search)"), true);
+  assert.equal(source.includes("USERS_PAGINATION_STALLED"), true);
+});
+
+test("PF02 admin has one pagination control and server-side subscription filter", () => {
+  const html = readFileSync("admin/index.html", "utf8");
+  const source = readFileSync("admin/admin.js", "utf8");
+  assert.equal((html.match(/id="loadMoreUsersBtn"/g) || []).length, 1);
+  assert.equal(html.includes('id="usersStatusFilter"'), true);
+  assert.equal(source.includes('where("subscriptionStatus", "==", status)'), true);
+});
