@@ -142,9 +142,7 @@ async function countUsers(status = "all") {
 async function searchAllUsers(term, status = "all") {
   const matches = [];
   let cursor = null;
-  let pages = 0;
-
-  while (pages < 1000) {
+  while (true) {
     const page = await listUsersPage({
       status,
       cursor,
@@ -152,8 +150,6 @@ async function searchAllUsers(term, status = "all") {
     });
 
     matches.push(...page.users.filter(user => matchesSearch(user, term)));
-    pages += 1;
-
     if (!page.hasMore || !page.nextCursor) break;
     if (cursor && page.nextCursor.id === cursor.id) {
       throw new Error("USERS_PAGINATION_STALLED");
