@@ -283,6 +283,14 @@ export async function listStoreProducts(projectId, { activeOnly = false } = {}) 
     .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "ar"));
 }
 
+export async function getStoreProduct(projectId, productId) {
+  const id = clean(productId);
+  if (!id) return null;
+
+  const snap = await getDoc(doc(db, "supermarkets", projectId, "products", id));
+  return snap.exists() ? { productId: snap.id, ...snap.data() } : null;
+}
+
 export async function listStoreProductsPage(
   projectId,
   {
@@ -443,7 +451,25 @@ export async function bulkAddMasterProducts(projectId, actorUid, selections = []
 
   return {
     added: rows.length,
-    skipped
+    skipped,
+    addedProducts: rows.map(({ master, price, image }) => ({
+      productId: `master_${master.masterId}`,
+      projectId,
+      name: clean(master.name),
+      category: clean(master.category || "أخرى"),
+      size: clean(master.size),
+      barcode: "",
+      image: clean(image || master.image),
+      price,
+      inStock: true,
+      isActive: true,
+      source: "master_catalog",
+      masterId: master.masterId,
+      createdBy: actorUid,
+      createdAt: null,
+      updatedBy: actorUid,
+      updatedAt: null
+    }))
   };
 }
 
@@ -678,7 +704,9 @@ export async function bulkImportStoreProducts(projectId, actorUid, rows = []) {
     imported: validRows.length,
     added,
     updated,
-    duplicateRows
+    duplicateRows,
+    products: [...byProductId.values()]
+      .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "ar"))
   };
 }
 
@@ -730,6 +758,7 @@ export async function mergeDuplicateStoreProducts(projectId, actorUid) {
     });
   });
   const operations = [];
+  const resultById = new Map(current.map(item => [item.productId, item]));
   let removed = 0;
   let enriched = 0;
 
@@ -766,6 +795,7 @@ export async function mergeDuplicateStoreProducts(projectId, actorUid) {
         ref: doc(db, "supermarkets", projectId, "products", keeper.productId),
         data: patch
       });
+      resultById.set(keeper.productId, { ...keeper, ...patch });
       enriched++;
     }
 
@@ -774,6 +804,7 @@ export async function mergeDuplicateStoreProducts(projectId, actorUid) {
         type: "delete",
         ref: doc(db, "supermarkets", projectId, "products", item.productId)
       });
+      resultById.delete(item.productId);
       removed++;
     });
   });
@@ -791,7 +822,9 @@ export async function mergeDuplicateStoreProducts(projectId, actorUid) {
   return {
     groups: duplicateGroups.length,
     removed,
-    enriched
+    enriched,
+    products: [...resultById.values()]
+      .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "ar"))
   };
 }
 

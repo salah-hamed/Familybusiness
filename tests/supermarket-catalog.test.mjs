@@ -171,11 +171,33 @@ test("operator page exposes one unified catalog instead of split master/store se
   assert.equal(html.includes("إدارة منتجات السوبرماركت"), false);
 });
 
-test("operator catalog loads complete store product set and refreshes catalog metadata", () => {
+test("operator catalog keeps one exhaustive initial store snapshot for correct unified states", () => {
   const source = readFileSync("supermarket-operator/products.js", "utf8");
-  assert.equal(source.includes("listStoreProducts(projectId)"), true);
+  assert.equal(source.includes("products = await listStoreProducts(projectId)"), true);
   assert.equal(source.includes("listStoreProductsPage"), false);
   assert.equal(source.includes("refreshSupermarketCatalogMeta(projectId, products)"), true);
+  assert.equal((source.match(/loadProducts\(/g) || []).length, 2);
+});
+
+test("PF05 catalog mutations refresh local state instead of re-reading the whole store collection", () => {
+  const source = readFileSync("supermarket-operator/products.js", "utf8");
+
+  assert.equal(source.includes("refreshLocalCatalog"), true);
+  assert.equal(source.includes("patchLocalProducts"), true);
+  assert.equal(source.includes("removeLocalProducts"), true);
+  assert.equal(source.includes("getStoreProduct(projectId, productId)"), true);
+  assert.equal(source.includes("bulkImportStoreProducts(projectId, currentUser.uid, rows)"), true);
+  assert.equal(source.includes("mergeDuplicateStoreProducts(projectId, currentUser.uid)"), true);
+});
+
+test("PF05 heavy import and duplicate merge keep a fresh server snapshot but avoid a second full reload", () => {
+  const source = readFileSync("core/supermarket/catalog-service.js", "utf8");
+
+  assert.equal(source.includes("addedProducts:"), true);
+  assert.equal(source.includes("products: [...byProductId.values()]"), true);
+  assert.equal(source.includes("products: [...resultById.values()]"), true);
+  assert.equal(source.includes("export async function bulkImportStoreProducts(projectId, actorUid, rows = [])"), true);
+  assert.equal(source.includes("export async function mergeDuplicateStoreProducts(projectId, actorUid)"), true);
 });
 
 test("customer search exhausts remaining pages and broken images have a fallback", () => {
