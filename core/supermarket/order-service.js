@@ -6,6 +6,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  getCountFromServer,
   query,
   where,
   orderBy,
@@ -392,14 +393,49 @@ export async function listSupermarketOperationalOrders(projectId) {
     query(
       collection(db, "orders"),
       where("projectId", "==", projectId),
-      where("templateType", "==", "supermarket")
+      where("templateType", "==", "supermarket"),
+      where("status", "in", ["new","accepted","preparing","ready","assigned","out_for_delivery"]),
+      orderBy("createdAt", "desc")
     )
   );
 
-  return snap.docs
-    .map(item => ({ orderId: item.id, ...item.data() }))
-    .filter(order => !["delivered","canceled"].includes(order.status))
-    .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+  return snap.docs.map(item => ({ orderId: item.id, ...item.data() }));
+}
+
+export async function listSupermarketHistoryPage(
+  projectId,
+  { pageSize = 50, cursor = null } = {}
+) {
+  const size = Math.max(1, Math.min(100, Number(pageSize) || 50));
+  const constraints = [
+    where("projectId", "==", projectId),
+    where("templateType", "==", "supermarket"),
+    where("status", "in", ["delivered","canceled"]),
+    orderBy("createdAt", "desc")
+  ];
+
+  if (cursor) constraints.push(startAfter(cursor));
+  constraints.push(limit(size));
+
+  const snap = await getDocs(query(collection(db, "orders"), ...constraints));
+
+  return {
+    orders: snap.docs.map(item => ({ orderId: item.id, ...item.data() })),
+    nextCursor: snap.docs.length ? snap.docs[snap.docs.length - 1] : null,
+    hasMore: snap.docs.length === size
+  };
+}
+
+export async function countSupermarketDeliveredOrders(projectId) {
+  const snap = await getCountFromServer(
+    query(
+      collection(db, "orders"),
+      where("projectId", "==", projectId),
+      where("templateType", "==", "supermarket"),
+      where("status", "==", "delivered")
+    )
+  );
+  return snap.data().count;
 }
 
 export async function listSupermarketOrders(projectId) {
