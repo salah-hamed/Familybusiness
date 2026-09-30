@@ -2,12 +2,13 @@ import db from "../core/firebase/firebase-db.js";
 import { protectPage } from "../core/auth/auth-guard.js";
 import { createOrResumeLaundrySetup, getLaundryBundle, migrateLegacyLaundryProject } from "../core/laundry/laundry-service.js";
 import { proposeCommission } from "../core/commissions/commission-service.js";
+import { getProjectCommissionSummary } from "../core/commissions/earnings-service.js";
 import { ensureOperatorInviteAccess, getOperatorInviteToken, rotateOperatorInviteAccess } from "../core/partners/partner-service.js";
 import { normalizeWhatsAppPhone } from "../core/whatsapp/dispatch-service.js";
 import { createGuide } from "../core/onboarding/guide.js";
 import { buildPartnerProjectGuide } from "../core/onboarding/guide-state.js";
 
-import {doc,getDoc,collection,getDocs,query,where} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import {doc,getDoc} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const $=id=>document.getElementById(id);
 const projectId=new URLSearchParams(location.search).get("project")||"";
@@ -32,11 +33,11 @@ document.querySelectorAll("[data-copy]").forEach(btn=>btn.onclick=async()=>{
 });
 
 async function loadEarnings(){
-  const snap=await getDocs(query(collection(db,"commissionLedger"),where("userId","==",user.uid)));
-  const rows=snap.docs.map(d=>d.data()).filter(x=>x.sourceType==="project_order"&&x.projectId===projectId);
-  const earned=rows.reduce((s,x)=>s+Number(x.amount||0),0);
-  const paid=rows.filter(x=>x.status==="paid"||x.paidAt).reduce((s,x)=>s+Number(x.amount||0),0);
-  $("completedOrders").innerText=rows.length;$("earnedCommission").innerText=money(earned);$("paidCommission").innerText=money(paid);$("outstandingCommission").innerText=money(Math.max(0,earned-paid));
+  const summary=await getProjectCommissionSummary(user.uid,projectId);
+  $("completedOrders").innerText=summary.completedOrderCount;
+  $("earnedCommission").innerText=money(summary.earnedAmount);
+  $("paidCommission").innerText=money(summary.paidAmount);
+  $("outstandingCommission").innerText=money(summary.outstandingAmount);
 }
 
 function render(){

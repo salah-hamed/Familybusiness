@@ -145,3 +145,84 @@ test("another user cannot list someone else's commission ledger", async () => {
     limit(50)
   )));
 });
+
+test("project earnings aggregates stay project-scoped and preserve paid status/paidAt semantics", async () => {
+  const userId = "project_earnings_owner";
+  const projectId = "project_earnings_owner_supermarket";
+  const otherProjectId = "project_earnings_owner_restaurant";
+
+  await testEnv.withSecurityRulesDisabled(async context => {
+    const db = context.firestore();
+    await setDoc(doc(db, "users", userId), {
+      uid: userId,
+      name: "Project Earnings Owner",
+      email: userId + "@example.com",
+      isActive: true,
+      subscriptionStatus: "active"
+    });
+
+    const entries = [
+      ["p1_earned", projectId, "project_order", 10, "earned", null],
+      ["p1_paid_status", projectId, "project_order", 20, "paid", null],
+      ["p1_paid_timestamp", projectId, "project_order", 30, "earned", Timestamp.fromMillis(5000)],
+      ["p1_paid_both", projectId, "project_order", 40, "paid", Timestamp.fromMillis(6000)],
+      ["p2_paid", otherProjectId, "project_order", 100, "paid", Timestamp.fromMillis(7000)],
+      ["referral", null, "referral", 50, "earned", null]
+    ];
+
+    for (const [id, pid, sourceType, amount, status, paidAt] of entries) {
+      await setDoc(doc(db, "commissionLedger", id), {
+        userId,
+        sourceType,
+        sourceId: id,
+        ...(pid ? { projectId: pid } : {}),
+        amount,
+        currency: "EGP",
+        status,
+        createdAt: Timestamp.fromMillis(1000 + amount),
+        paidAt
+      });
+    }
+  });
+
+  const db = testEnv.authenticatedContext(userId).firestore();
+  const base = collection(db, "commissionLedger");
+  const scope = [
+    where("userId", "==", userId),
+    where("sourceType", "==", "project_order"),
+    where("projectId", "==", projectId)
+  ];
+  const aggregate = async constraints => {
+    const snap = await assertSucceeds(getAggregateFromServer(
+      query(base, ...constraints),
+      { totalAmount: sum("amount"), entryCount: count() }
+    ));
+    return snap.data();
+  };
+
+  const [all, paidByStatus, paidByTimestamp, paidOverlap] = await Promise.all([
+    aggregate(scope),
+    aggregate([...scope, where("status", "==", "paid")]),
+    aggregate([...scope, where("paidAt", "!=", null)]),
+    aggregate([...scope, where("status", "==", "paid"), where("paidAt", "!=", null)])
+  ]);
+
+  const paidAmount =
+    paidByStatus.totalAmount + paidByTimestamp.totalAmount - paidOverlap.totalAmount;
+
+  assert.equal(all.entryCount, 4);
+  assert.equal(all.totalAmount, 100);
+  assert.equal(paidAmount, 90);
+  assert.equal(all.totalAmount - paidAmount, 10);
+});
+
+test("another user cannot aggregate someone else's project commission ledger", async () => {
+  const ownerId = "project_aggregate_owner";
+  await seedLedger(ownerId, 3);
+  const db = testEnv.authenticatedContext("project_aggregate_stranger").firestore();
+
+  await assertFails(getAggregateFromServer(
+    query(collection(db, "commissionLedger"), where("userId", "==", ownerId)),
+    { totalAmount: sum("amount"), entryCount: count() }
+  ));
+});
