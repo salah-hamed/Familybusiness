@@ -4,7 +4,7 @@ import { acceptPendingCommission, rejectPendingCommission, getCommissionAgreemen
 import { getRestaurant, updateRestaurantSettings } from "../core/restaurant/restaurant-service.js";
 import { WORKER_ROLES, createWorker, listProjectWorkers, setWorkerActive } from "../core/workers/worker-service.js";
 import { assignWorkerAndPrepareWhatsApp } from "../core/workers/worker-dispatch-service.js";
-import { allowedNextRestaurantStatuses, listRestaurantOrders, acceptRestaurantOrder, changeRestaurantOrderStatus } from "../core/restaurant/order-service.js";
+import { allowedNextRestaurantStatuses, listRestaurantOperationalOrders, listRestaurantHistoryPage, countRestaurantDeliveredOrders, acceptRestaurantOrder, changeRestaurantOrderStatus } from "../core/restaurant/order-service.js";
 
 import {
   createUserWithEmailAndPassword,
@@ -25,6 +25,10 @@ let currentAgreement=null;
 let currentRestaurant=null;
 let riders=[];
 let orders=[];
+let operationalOrders=[];
+let historyOrders=[];
+let historyCursor=null;
+let historyHasMore=false;
 
 function money(v){return `${Number(v||0).toLocaleString("ar-EG")} جنيه`;}
 function escapeHTML(v){return String(v??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;");}
@@ -350,12 +354,41 @@ function activeRiderOptions(){
   return riders.filter(r=>r.isActive).map(r=>`<option value="${r.workerId}">${escapeHTML(r.name)}</option>`).join("");
 }
 
-async function loadOrders(){
+function orderTime(order){
+  if(typeof order.createdAt?.toMillis==="function")return order.createdAt.toMillis();
+  return Number(order.createdAt?.seconds||0)*1000;
+}
+function mergeVisibleOrders(){
+  const map=new Map();
+  [...operationalOrders,...historyOrders].forEach(order=>map.set(order.orderId,order));
+  return [...map.values()].sort((a,b)=>orderTime(b)-orderTime(a));
+}
+
+async function loadOrders({appendHistory=false}={}){
   $("ordersMessage").innerText="";
-  orders=await listRestaurantOrders(projectId,{pageSize:50,templateType:"bakery"});
-  $("statNew").innerText=orders.filter(o=>o.status==="new").length;
-  $("statActive").innerText=orders.filter(o=>!["new","delivered","canceled"].includes(o.status)).length;
-  $("statDelivered").innerText=orders.filter(o=>o.status==="delivered").length;
+  if(appendHistory){
+    const page=await listRestaurantHistoryPage(projectId,{pageSize:50,templateType:"bakery",cursor:historyCursor});
+    const known=new Set(historyOrders.map(order=>order.orderId));
+    historyOrders.push(...page.orders.filter(order=>!known.has(order.orderId)));
+    historyCursor=page.nextCursor;
+    historyHasMore=page.hasMore;
+  }else{
+    const [active,page,deliveredCount]=await Promise.all([
+      listRestaurantOperationalOrders(projectId,{templateType:"bakery"}),
+      listRestaurantHistoryPage(projectId,{pageSize:50,templateType:"bakery"}),
+      countRestaurantDeliveredOrders(projectId,{templateType:"bakery"})
+    ]);
+    operationalOrders=active;
+    historyOrders=page.orders;
+    historyCursor=page.nextCursor;
+    historyHasMore=page.hasMore;
+    $("statDelivered").innerText=deliveredCount;
+  }
+
+  orders=mergeVisibleOrders();
+  $("statNew").innerText=operationalOrders.filter(o=>o.status==="new").length;
+  $("statActive").innerText=operationalOrders.filter(o=>o.status!=="new").length;
+  $("loadOlderOrdersBtn").classList.toggle("hidden",!historyHasMore);
 
   $("ordersList").innerHTML=orders.length?orders.map(o=>{
     const items=(o.items||[]).map(i=>`${Number(i.quantity||0)} × ${escapeHTML(i.name)} (${escapeHTML(i.unit||"قطعة")})`).join("<br>");
@@ -414,5 +447,11 @@ $("refreshOrdersBtn").onclick=async()=>{
   }catch(e){
     $("ordersMessage").innerText=`تعذر تحديث الطلبات: ${e.message}`;
   }
+};
+$("loadOlderOrdersBtn").onclick=async()=>{
+  const btn=$("loadOlderOrdersBtn");
+  btn.disabled=true;
+  $("ordersMessage").innerText="جاري تحميل طلبات أقدم...";
+  try{await loadOrders({appendHistory:true});}catch(e){$("ordersMessage").innerText=`تعذر تحميل المزيد: ${e.message}`;}finally{btn.disabled=false;}
 };
 document.querySelectorAll(".tabs button").forEach(btn=>btn.onclick=()=>document.getElementById(btn.dataset.target)?.scrollIntoView({behavior:"smooth",block:"start"}));
