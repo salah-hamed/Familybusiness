@@ -281,3 +281,24 @@ test("PF06 menu service skips full metadata scans for non-structural edits", () 
   assert.equal(source.includes("if (metadataChanged)"), true);
   assert.equal(source.includes("return {\n    itemId,\n    ...current,\n    ...next,"), true);
 });
+
+
+test("FINAL02 marketing page leads with the existing-business commission story", () => {
+  const html = readFileSync("home/index.html", "utf8");
+  assert.equal(html.includes("بدوسة زرار… يبقى عندك"), true);
+  assert.equal(html.includes("المحل موجود. الزباين موجودين. التشغيل موجود."), true);
+  assert.equal(html.includes("5 مصادر فلوس"), true);
+  assert.equal(html.includes("الإحالات حلوة… بس العمولات هي اللعبة الكبيرة."), true);
+  assert.equal(html.includes('href="/register/"'), false);
+  assert.equal(html.includes('href="/login/"'), false);
+});
+
+test("FINAL02 marketing page uses live platform prices and exactly the four launch projects", () => {
+  const source = readFileSync("home/app.js", "utf8");
+  assert.equal(source.includes("PLATFORM_BILLING"), true);
+  assert.equal(source.includes("REFERRAL_CONFIG"), true);
+  for (const id of ["supermarket", "restaurant", "bakery", "laundry"]) {
+    assert.equal(source.includes(`"${id}"`), true, id);
+  }
+  assert.equal(source.includes("getDiscoverableProjects"), true);
+});
