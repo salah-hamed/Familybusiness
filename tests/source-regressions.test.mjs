@@ -73,3 +73,65 @@ test("supermarket and laundry expose newest-first cursor page helpers for the ne
     assert.ok(source.includes("limit("), path);
   }
 });
+
+
+test("PF01 operator dashboards load active orders separately from 50-order history pages", () => {
+  const cases = [
+    ["supermarket-operator/app.js", "listSupermarketOperationalOrders", "listSupermarketHistoryPage", "countSupermarketDeliveredOrders", "listSupermarketOrders("],
+    ["restaurant-operator/app.js", "listRestaurantOperationalOrders", "listRestaurantHistoryPage", "countRestaurantDeliveredOrders", "listRestaurantOrders("],
+    ["bakery-operator/app.js", "listRestaurantOperationalOrders", "listRestaurantHistoryPage", "countRestaurantDeliveredOrders", "listRestaurantOrders("],
+    ["laundry-operator/app.js", "listLaundryOperationalOrders", "listLaundryHistoryPage", "countLaundryDeliveredOrders", "listLaundryOrders("]
+  ];
+
+  for (const [path, activeFn, historyFn, countFn, forbiddenLegacyCall] of cases) {
+    const source = readFileSync(path, "utf8");
+    assert.equal(source.includes(activeFn), true, path);
+    assert.equal(source.includes(historyFn), true, path);
+    assert.equal(source.includes(countFn), true, path);
+    assert.equal(source.includes("pageSize:50"), true, path);
+    assert.equal(source.includes("appendHistory:true"), true, path);
+    assert.equal(source.includes(forbiddenLegacyCall), false, path);
+  }
+});
+
+test("PF01 active-order services filter terminal history on Firestore instead of client side", () => {
+  const supermarket = readFileSync("core/supermarket/order-service.js", "utf8");
+  const restaurant = readFileSync("core/restaurant/order-service.js", "utf8");
+  const laundry = readFileSync("core/laundry/order-service.js", "utf8");
+
+  assert.match(supermarket, /where\("status",\s*"in",\s*\["new","accepted","preparing","ready","assigned","out_for_delivery"\]\)/);
+  assert.match(restaurant, /where\("status",\s*"in",\s*\["new","accepted","preparing","ready","assigned","out_for_delivery"\]\)/);
+  assert.match(laundry, /where\("status","in",\["new","accepted"\]\)/);
+
+  for (const source of [supermarket, restaurant, laundry]) {
+    assert.equal(source.includes("getCountFromServer"), true);
+  }
+});
+
+test("PF01 status-aware order query has a version-controlled composite index", () => {
+  const config = JSON.parse(readFileSync("firestore.indexes.json", "utf8"));
+  const found = config.indexes.some(index =>
+    index.collectionGroup === "orders"
+    && index.queryScope === "COLLECTION"
+    && JSON.stringify(index.fields) === JSON.stringify([
+      { fieldPath: "projectId", order: "ASCENDING" },
+      { fieldPath: "templateType", order: "ASCENDING" },
+      { fieldPath: "status", order: "ASCENDING" },
+      { fieldPath: "createdAt", order: "DESCENDING" }
+    ])
+  );
+  assert.equal(found, true);
+});
+
+test("PF01 all operator pages expose an older-orders pagination control", () => {
+  for (const path of [
+    "supermarket-operator/index.html",
+    "restaurant-operator/index.html",
+    "bakery-operator/index.html",
+    "laundry-operator/index.html"
+  ]) {
+    const html = readFileSync(path, "utf8");
+    assert.equal(html.includes('id="loadOlderOrdersBtn"'), true, path);
+    assert.equal(html.includes("عرض طلبات أقدم"), true, path);
+  }
+});
