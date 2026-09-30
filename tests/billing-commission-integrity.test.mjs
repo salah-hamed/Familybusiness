@@ -45,8 +45,8 @@ test("all partner order services lock the accepted commission snapshot and deter
     const source = readFileSync(path, "utf8");
     assert.equal(source.includes("getEffectiveCommissionSnapshot"), true, path);
     assert.equal(source.includes("getProjectCommissionLedgerId"), true, path);
-    assert.equal(source.includes("commissionAgreementVersion: commission.version"), true, path);
-    assert.equal(source.includes("amount: commission.amount"), true, path);
+    assert.equal(/commissionAgreementVersion\s*:\s*commission\.version/.test(source), true, path);
+    assert.equal(/amount\s*:\s*commission\.amount/.test(source), true, path);
     assert.equal(source.includes("acceptedVersion ||"), false, path);
   }
 });
