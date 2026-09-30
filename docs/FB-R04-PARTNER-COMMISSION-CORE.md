@@ -174,13 +174,20 @@ The subscriber can submit a new proposal later.
 
 ## Commission locking
 
-The commission service exposes a builder for immutable project-order ledger entries.
+Completed partner-operated orders now lock one accepted commission snapshot:
 
-When a future partner-operated order becomes completed, the order flow must lock the currently accepted commission into that order and create a ledger entry.
+```text
+commissionAmount = current accepted amount
+commissionAgreementVersion = acceptedVersion
+```
 
-A later commission change must never change an older completed order's commission.
+The order and ledger entry are written in the same transaction. The ledger document ID is deterministic:
 
-This actual order-completion integration belongs to the Supermarket / Laundry implementation tasks, not FB-R04.
+```text
+project_order_{orderId}
+```
+
+This makes the commission immutable per completed order and prevents a later accepted commission change from rewriting older completed orders. Operator retries cannot create a second ledger entry for the same order.
 
 ## Collections
 
