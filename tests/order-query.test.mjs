@@ -116,3 +116,73 @@ test("cursor pagination continues without duplicates or gaps", async () => {
     assert.equal(sequences[100], 1);
   });
 });
+
+
+async function collectAllNewestPages(db, { projectId = PROJECT_DOC_ID, templateType = "restaurant", pageSize = 50 } = {}) {
+  const collected = [];
+  let cursor = null;
+
+  while (true) {
+    const constraints = [
+      where("projectId", "==", projectId),
+      where("templateType", "==", templateType),
+      orderBy("createdAt", "desc")
+    ];
+    if (cursor) constraints.push(startAfter(cursor));
+    constraints.push(limit(pageSize));
+
+    const snap = await getDocs(query(collection(db, "orders"), ...constraints));
+    collected.push(...snap.docs);
+
+    if (snap.size < pageSize || snap.empty) break;
+
+    const next = snap.docs[snap.docs.length - 1];
+    if (cursor && next.id === cursor.id) throw new Error("ORDER_PAGINATION_STALLED");
+    cursor = next;
+  }
+
+  return collected;
+}
+
+test("exhaustive paging exposes all 101 orders without duplicates or gaps", async () => {
+  await seedOrders(101);
+
+  await testEnv.withSecurityRulesDisabled(async context => {
+    const docs = await collectAllNewestPages(context.firestore());
+    const sequences = docs.map(d => d.data().sequence);
+
+    assert.equal(docs.length, 101);
+    assert.equal(new Set(docs.map(d => d.id)).size, 101);
+    assert.equal(sequences[0], 101);
+    assert.equal(sequences[100], 1);
+  });
+});
+
+test("order queries isolate both project and template", async () => {
+  await seedOrders(3);
+
+  await testEnv.withSecurityRulesDisabled(async context => {
+    const db = context.firestore();
+
+    await setDoc(doc(db, "orders", "wrong_template"), {
+      projectId: PROJECT_DOC_ID,
+      templateType: "bakery",
+      createdAt: Timestamp.fromMillis(999000),
+      sequence: 999
+    });
+
+    await setDoc(doc(db, "orders", "wrong_project"), {
+      projectId: "someone_else_restaurant",
+      templateType: "restaurant",
+      createdAt: Timestamp.fromMillis(1000000),
+      sequence: 1000
+    });
+
+    const docs = await collectAllNewestPages(db);
+    const ids = docs.map(d => d.id);
+
+    assert.equal(docs.length, 3);
+    assert.equal(ids.includes("wrong_template"), false);
+    assert.equal(ids.includes("wrong_project"), false);
+  });
+});
