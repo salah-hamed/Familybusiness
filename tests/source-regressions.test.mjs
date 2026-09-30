@@ -31,3 +31,45 @@ test("ordered food-order query has a version-controlled composite index", () => 
 
   assert.equal(found, true);
 });
+
+
+test("Restaurant/Bakery order listing exhausts every cursor page instead of stopping at 50", () => {
+  const source = readFileSync("core/restaurant/order-service.js", "utf8");
+  const start = source.indexOf("export async function listRestaurantOrders(projectId");
+  const end = source.indexOf("export async function getRestaurantOrderTracking", start);
+  const body = source.slice(start, end);
+
+  assert.ok(body.includes("while (true)"));
+  assert.ok(body.includes("listRestaurantOrdersPage"));
+  assert.ok(body.includes("all.push(...page.orders)"));
+  assert.ok(body.includes("ORDER_PAGINATION_STALLED"));
+});
+
+test("all active partner order services constrain server reads by project and template", () => {
+  for (const [path, templateType] of [
+    ["core/supermarket/order-service.js", "supermarket"],
+    ["core/restaurant/order-service.js", "templateType"],
+    ["core/laundry/order-service.js", "laundry"]
+  ]) {
+    const source = readFileSync(path, "utf8");
+    assert.ok(source.includes('where("projectId"'), path);
+    assert.ok(
+      templateType === "templateType"
+        ? source.includes('where("templateType", "==", templateType)')
+        : source.includes(`where("templateType", "==", "${templateType}")`),
+      path
+    );
+  }
+});
+
+test("supermarket and laundry expose newest-first cursor page helpers for the next performance phase", () => {
+  for (const path of [
+    "core/supermarket/order-service.js",
+    "core/laundry/order-service.js"
+  ]) {
+    const source = readFileSync(path, "utf8");
+    assert.ok(source.includes('orderBy("createdAt","desc")') || source.includes('orderBy("createdAt", "desc")'), path);
+    assert.ok(source.includes("startAfter("), path);
+    assert.ok(source.includes("limit("), path);
+  }
+});
