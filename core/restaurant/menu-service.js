@@ -63,6 +63,14 @@ async function syncRestaurantMenuMeta(projectId) {
   };
 }
 
+export async function getRestaurantMenuItem(projectId, itemId) {
+  const id = clean(itemId);
+  if (!id) return null;
+
+  const snap = await getDoc(doc(db, "restaurants", projectId, "menu", id));
+  return snap.exists() ? { itemId: snap.id, ...snap.data() } : null;
+}
+
 export async function listRestaurantMenu(projectId, { availableOnly = false } = {}) {
   const ref = menuCollection(projectId);
   const snap = availableOnly
@@ -150,6 +158,7 @@ export async function updateRestaurantMenuItem(projectId, itemId, actorUid, upda
 
   if (!snap.exists()) throw new Error("MENU_ITEM_NOT_FOUND");
 
+  const current = snap.data();
   const next = {};
 
   if ("name" in updates) {
@@ -165,11 +174,26 @@ export async function updateRestaurantMenuItem(projectId, itemId, actorUid, upda
   if ("isAvailable" in updates) next.isAvailable = updates.isAvailable === true;
   if ("isActive" in updates) next.isActive = updates.isActive === true;
 
+  const metadataChanged =
+    ("category" in next && next.category !== clean(current.category || "أخرى"))
+    || ("isActive" in next && next.isActive !== (current.isActive === true))
+    || ("isAvailable" in next && next.isAvailable !== (current.isAvailable === true));
+
   next.updatedBy = actorUid;
   next.updatedAt = serverTimestamp();
 
   await updateDoc(ref, next);
-  await syncRestaurantMenuMeta(projectId);
+
+  if (metadataChanged) {
+    await syncRestaurantMenuMeta(projectId);
+  }
+
+  return {
+    itemId,
+    ...current,
+    ...next,
+    updatedAt: current.updatedAt || null
+  };
 }
 
 export async function deleteRestaurantMenuItem(projectId, itemId) {
