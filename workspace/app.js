@@ -17,6 +17,7 @@ import { REFERRAL_CONFIG, formatEgp } from "../core/config/platform-config.js";
 import { isSubscriptionActive, subscriptionExpiryDate } from "../core/subscriptions/subscription-service.js";
 import { createGuide } from "../core/onboarding/guide.js";
 import { buildWorkspaceGuide } from "../core/onboarding/guide-state.js";
+import { listUserCommissionLedgerPage, getUserEarningsSummary } from "../core/commissions/earnings-service.js";
 const userName =
 document.getElementById("userName");
 
@@ -27,7 +28,65 @@ document.getElementById("templatesContainer");
 const referralLink = document.getElementById("referralLink");
 const copyReferralBtn = document.getElementById("copyReferralBtn");
 const referralStatus = document.getElementById("referralStatus");
+const earningsTotal = document.getElementById("earningsTotal");
+const earningsProjects = document.getElementById("earningsProjects");
+const earningsReferrals = document.getElementById("earningsReferrals");
+const earningsCount = document.getElementById("earningsCount");
+const earningsList = document.getElementById("earningsList");
+const earningsMessage = document.getElementById("earningsMessage");
+const loadMoreEarningsBtn = document.getElementById("loadMoreEarningsBtn");
+let earningsEntries = [];
+let earningsCursor = null;
+let earningsHasMore = false;
+let earningsUserId = "";
 const guideController = createGuide(buildWorkspaceGuide({ loading: true }), { autoOpen: false });
+
+function earningDate(value){
+  if(!value)return "—";
+  const date=typeof value.toDate==="function"?value.toDate():new Date(value);
+  return Number.isNaN(date.getTime())?"—":date.toLocaleDateString("ar-EG");
+}
+function earningLabel(entry){
+  return entry.sourceType==="referral"?"عمولة إحالة":"عمولة طلب";
+}
+function renderEarnings(){
+  earningsList.innerHTML=earningsEntries.length
+    ? earningsEntries.map(entry=>`<div class="earningRow"><div><b>${earningLabel(entry)}</b><br><small>${earningDate(entry.createdAt||entry.earnedAt)}</small></div><strong>${formatEgp(entry.amount)}</strong></div>`).join("")
+    : "<p>لا توجد أرباح مسجلة حتى الآن.</p>";
+  loadMoreEarningsBtn?.classList.toggle("hidden",!earningsHasMore);
+}
+async function loadEarnings({append=false}={}){
+  if(!earningsUserId)return;
+  earningsMessage.innerText=append?"جاري تحميل حركات أقدم...":"جاري تحميل الأرباح...";
+  try{
+    if(!append){
+      const [summary,page]=await Promise.all([
+        getUserEarningsSummary(earningsUserId),
+        listUserCommissionLedgerPage(earningsUserId,{pageSize:25})
+      ]);
+      earningsTotal.innerText=formatEgp(summary.totalAmount);
+      earningsProjects.innerText=formatEgp(summary.projectOrderAmount);
+      earningsReferrals.innerText=formatEgp(summary.referralAmount);
+      earningsCount.innerText=String(summary.entryCount);
+      earningsEntries=page.entries;
+      earningsCursor=page.nextCursor;
+      earningsHasMore=page.hasMore;
+    }else{
+      const page=await listUserCommissionLedgerPage(earningsUserId,{pageSize:25,cursor:earningsCursor});
+      const known=new Set(earningsEntries.map(entry=>entry.entryId));
+      earningsEntries.push(...page.entries.filter(entry=>!known.has(entry.entryId)));
+      earningsCursor=page.nextCursor;
+      earningsHasMore=page.hasMore;
+    }
+    renderEarnings();
+    earningsMessage.innerText=earningsEntries.length?`المعروض: ${earningsEntries.length} حركة`:"لا توجد أرباح مسجلة حتى الآن.";
+  }catch(error){
+    console.error(error);
+    earningsMessage.innerText=`تعذر تحميل الأرباح: ${error.message}`;
+  }
+}
+loadMoreEarningsBtn?.addEventListener("click",()=>loadEarnings({append:true}));
+
 function projectManagementUrl(templateId, projectDocId) {
   if (templateId === "supermarket") {
     return `../supermarket/?project=${encodeURIComponent(projectDocId)}`;
@@ -66,7 +125,9 @@ protectPage(async (user) => {
     const data =
     userSnap.data();
     const subscriptionActive = isSubscriptionActive(data);
+    earningsUserId = user.uid;
     const myProjects = await loadUserProjects(user.uid);
+    await loadEarnings();
 
     guideController.update(
       buildWorkspaceGuide({ userData: data, projects: myProjects, subscriptionActive }),

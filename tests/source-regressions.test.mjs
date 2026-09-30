@@ -176,3 +176,45 @@ test("PF02 admin has one pagination control and server-side subscription filter"
   assert.equal(html.includes('id="usersStatusFilter"'), true);
   assert.equal(source.includes('where("subscriptionStatus", "==", status)'), true);
 });
+
+
+test("PF03 earnings service paginates commission ledger by user and createdAt", () => {
+  const source = readFileSync("core/commissions/earnings-service.js", "utf8");
+  assert.equal(source.includes('where("userId", "==", uid)'), true);
+  assert.equal(source.includes('orderBy("createdAt", "desc")'), true);
+  assert.equal(source.includes("startAfter(cursor)"), true);
+  assert.equal(source.includes("limit(size)"), true);
+  assert.equal(source.includes("getAggregateFromServer"), true);
+  assert.equal(source.includes('sum("amount")'), true);
+  assert.equal(source.includes("count()"), true);
+});
+
+test("PF03 workspace exposes earnings totals and paged ledger history", () => {
+  const html = readFileSync("workspace/index.html", "utf8");
+  const source = readFileSync("workspace/app.js", "utf8");
+
+  for (const id of [
+    "earningsTotal","earningsProjects","earningsReferrals",
+    "earningsCount","earningsList","loadMoreEarningsBtn"
+  ]) {
+    assert.equal(html.includes(`id="${id}"`), true, id);
+  }
+
+  assert.equal(source.includes("getUserEarningsSummary"), true);
+  assert.equal(source.includes("listUserCommissionLedgerPage"), true);
+  assert.equal(source.includes("pageSize:25"), true);
+  assert.equal(source.includes("append:true"), true);
+});
+
+test("PF03 ledger pagination index is version controlled", () => {
+  const config = JSON.parse(readFileSync("firestore.indexes.json", "utf8"));
+  const found = config.indexes.some(index =>
+    index.collectionGroup === "commissionLedger"
+    && index.queryScope === "COLLECTION"
+    && JSON.stringify(index.fields) === JSON.stringify([
+      { fieldPath: "userId", order: "ASCENDING" },
+      { fieldPath: "createdAt", order: "DESCENDING" }
+    ])
+  );
+  assert.equal(found, true);
+});
