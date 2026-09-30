@@ -333,9 +333,48 @@ export async function listRestaurantOrdersPage(
   };
 }
 
+export async function listRestaurantOperationalOrders(
+  projectId,
+  { templateType = "restaurant" } = {}
+) {
+  const snap = await getDocs(
+    query(
+      collection(db, "orders"),
+      where("projectId", "==", projectId),
+      where("templateType", "==", templateType)
+    )
+  );
+
+  return snap.docs
+    .map(item => ({ orderId: item.id, ...item.data() }))
+    .filter(order => !["delivered","canceled"].includes(order.status))
+    .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+}
+
 export async function listRestaurantOrders(projectId, options = {}) {
-  const page = await listRestaurantOrdersPage(projectId, options);
-  return page.orders;
+  const all = [];
+  let cursor = options.cursor || null;
+
+  while (true) {
+    const page = await listRestaurantOrdersPage(projectId, {
+      ...options,
+      cursor
+    });
+
+    all.push(...page.orders);
+
+    if (!page.hasMore || !page.nextCursor) {
+      break;
+    }
+
+    if (cursor && page.nextCursor.id === cursor.id) {
+      throw new Error("ORDER_PAGINATION_STALLED");
+    }
+
+    cursor = page.nextCursor;
+  }
+
+  return all;
 }
 
 export async function getRestaurantOrderTracking(trackingToken, templateType = "restaurant") {
