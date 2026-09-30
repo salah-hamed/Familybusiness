@@ -1,6 +1,6 @@
 export const PLATFORM_BILLING = Object.freeze({
   currency: "EGP",
-  initialActivationFee: 220,
+  initialActivationFee: 350,
   monthlyRenewalFee: 59,
   subscriptionDays: 30
 });

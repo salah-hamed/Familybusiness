@@ -1,5 +1,5 @@
 import db from "../firebase/firebase-db.js";
-import { getCommissionAgreement, getEffectiveCommissionAmount } from "../commissions/commission-service.js";
+import { getCommissionAgreement, getEffectiveCommissionSnapshot, getProjectCommissionLedgerId } from "../commissions/commission-service.js";
 
 import {
   collection,
@@ -445,10 +445,10 @@ export async function changeRestaurantOrderStatus({ projectId, orderId, actorUid
   if (!order.assignedWorkerId) throw new Error("RIDER_REQUIRED_BEFORE_DELIVERY");
 
   const agreement = await getCommissionAgreement(projectId);
-  const effectiveAmount = getEffectiveCommissionAmount(agreement || {});
-  if (effectiveAmount == null) throw new Error("COMMISSION_AGREEMENT_NOT_ACTIVE");
+  const effectiveCommission = getEffectiveCommissionSnapshot(agreement || {});
+  if (!effectiveCommission) throw new Error("COMMISSION_AGREEMENT_NOT_ACTIVE");
 
-  const ledgerRef = doc(db, "commissionLedger", `project_order_${orderId}`);
+  const ledgerRef = doc(db, "commissionLedger", getProjectCommissionLedgerId(orderId));
   const agreementRef = doc(db, "commissionAgreements", projectId);
 
   await runTransaction(db, async transaction => {
@@ -460,7 +460,7 @@ export async function changeRestaurantOrderStatus({ projectId, orderId, actorUid
 
     const freshOrder = freshOrderSnap.data();
     const freshAgreement = agreementSnap.data();
-    const amount = getEffectiveCommissionAmount(freshAgreement);
+    const commission = getEffectiveCommissionSnapshot(freshAgreement);
 
     if (freshOrder.projectId !== projectId || freshOrder.templateType !== templateType) {
       throw new Error("ORDER_PROJECT_MISMATCH");
@@ -469,7 +469,7 @@ export async function changeRestaurantOrderStatus({ projectId, orderId, actorUid
       throw new Error("INVALID_STATUS_TRANSITION");
     }
     if (!freshOrder.assignedWorkerId) throw new Error("RIDER_REQUIRED_BEFORE_DELIVERY");
-    if (amount == null) throw new Error("COMMISSION_AGREEMENT_NOT_ACTIVE");
+    if (!commission) throw new Error("COMMISSION_AGREEMENT_NOT_ACTIVE");
 
     transaction.update(orderRef, {
       status: "delivered",
@@ -478,8 +478,8 @@ export async function changeRestaurantOrderStatus({ projectId, orderId, actorUid
       deliveredAt: serverTimestamp(),
       commissionEligible: true,
       commissionLocked: true,
-      commissionAmount: amount,
-      commissionAgreementVersion: Number(freshAgreement.acceptedVersion || freshAgreement.version || 1)
+      commissionAmount: commission.amount,
+      commissionAgreementVersion: commission.version
     });
 
     if (freshOrder.trackingToken) {
@@ -496,8 +496,8 @@ export async function changeRestaurantOrderStatus({ projectId, orderId, actorUid
       sourceType: "project_order",
       sourceId: orderId,
       agreementId: projectId,
-      agreementVersion: Number(freshAgreement.acceptedVersion || freshAgreement.version || 1),
-      amount,
+      agreementVersion: commission.version,
+      amount: commission.amount,
       currency: "EGP",
       status: "earned",
       earnedAt: serverTimestamp(),

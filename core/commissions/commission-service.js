@@ -223,15 +223,30 @@ export async function rejectPendingCommission({
   });
 }
 
-export function getEffectiveCommissionAmount(agreement = {}) {
+export function getEffectiveCommissionSnapshot(agreement = {}) {
   if (
-    agreement.status !== "accepted" ||
-    agreement.currentAmount == null
+    agreement.status !== "accepted"
+    || agreement.currentAmount == null
+    || !Number.isFinite(Number(agreement.acceptedVersion))
+    || Number(agreement.acceptedVersion) <= 0
   ) {
     return null;
   }
 
-  return normalizeCommissionAmount(agreement.currentAmount);
+  return {
+    amount: normalizeCommissionAmount(agreement.currentAmount),
+    version: Number(agreement.acceptedVersion)
+  };
+}
+
+export function getEffectiveCommissionAmount(agreement = {}) {
+  return getEffectiveCommissionSnapshot(agreement)?.amount ?? null;
+}
+
+export function getProjectCommissionLedgerId(orderId) {
+  const value = String(orderId || "").trim();
+  if (!value) throw new Error("ORDER_ID_REQUIRED");
+  return `project_order_${value}`;
 }
 
 export function buildProjectCommissionLedgerEntry({
@@ -239,9 +254,15 @@ export function buildProjectCommissionLedgerEntry({
   projectId,
   orderId,
   agreementId,
+  agreementVersion,
   amount
 }) {
   const lockedAmount = normalizeCommissionAmount(amount);
+  const version = Number(agreementVersion);
+
+  if (!Number.isFinite(version) || version <= 0) {
+    throw new Error("INVALID_COMMISSION_VERSION");
+  }
 
   return {
     userId: ownerId,
@@ -250,6 +271,7 @@ export function buildProjectCommissionLedgerEntry({
     sourceType: "project_order",
     sourceId: orderId,
     agreementId,
+    agreementVersion: version,
     amount: lockedAmount,
     currency: "EGP",
     status: "earned",

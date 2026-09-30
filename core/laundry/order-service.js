@@ -1,5 +1,5 @@
 import db from "../firebase/firebase-db.js";
-import { getEffectiveCommissionAmount } from "../commissions/commission-service.js";
+import { getEffectiveCommissionSnapshot, getProjectCommissionLedgerId } from "../commissions/commission-service.js";
 
 import {
   collection,query,where,orderBy,startAfter,limit,getDocs,doc,getDoc,updateDoc,runTransaction,serverTimestamp
@@ -89,7 +89,7 @@ export async function changeLaundryStage({projectId,orderId,actorUid,nextStage})
   }
 
   const agreementRef=doc(db,"commissionAgreements",projectId);
-  const ledgerRef=doc(db,"commissionLedger",`project_order_${orderId}`);
+  const ledgerRef=doc(db,"commissionLedger",getProjectCommissionLedgerId(orderId));
 
   await runTransaction(db,async transaction=>{
     const freshOrderSnap=await transaction.get(ref);
@@ -97,20 +97,20 @@ export async function changeLaundryStage({projectId,orderId,actorUid,nextStage})
     if(!freshOrderSnap.exists()||!agreementSnap.exists())throw new Error("ORDER_OR_AGREEMENT_NOT_FOUND");
     const fresh=freshOrderSnap.data(),agreement=agreementSnap.data();
     if(!allowedLaundryNextStages(fresh).includes("delivered"))throw new Error("INVALID_LAUNDRY_TRANSITION");
-    const amount=getEffectiveCommissionAmount(agreement);
-    if(amount==null)throw new Error("COMMISSION_AGREEMENT_NOT_ACTIVE");
+    const commission=getEffectiveCommissionSnapshot(agreement);
+    if(!commission)throw new Error("COMMISSION_AGREEMENT_NOT_ACTIVE");
 
     transaction.update(ref,{
       status:"done",laundryStage:"delivered",deliveredAt:serverTimestamp(),
       statusUpdatedAt:serverTimestamp(),statusUpdatedBy:actorUid,
-      commissionEligible:true,commissionLocked:true,commissionAmount:amount,
-      commissionAgreementVersion:Number(agreement.acceptedVersion||agreement.version||1)
+      commissionEligible:true,commissionLocked:true,commissionAmount:commission.amount,
+      commissionAgreementVersion:commission.version
     });
 
     transaction.set(ledgerRef,{
       userId:agreement.ownerId,projectId,orderId,sourceType:"project_order",sourceId:orderId,
-      agreementId:projectId,agreementVersion:Number(agreement.acceptedVersion||agreement.version||1),
-      amount,currency:"EGP",status:"earned",createdAt:serverTimestamp(),paidAt:null
+      agreementId:projectId,agreementVersion:commission.version,
+      amount:commission.amount,currency:"EGP",status:"earned",createdAt:serverTimestamp(),paidAt:null
     });
   });
 }
