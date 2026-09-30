@@ -2,7 +2,7 @@ import db from "../firebase/firebase-db.js";
 import { getEffectiveCommissionAmount } from "../commissions/commission-service.js";
 
 import {
-  collection,query,where,getDocs,doc,getDoc,updateDoc,runTransaction,serverTimestamp
+  collection,query,where,orderBy,startAfter,limit,getDocs,doc,getDoc,updateDoc,runTransaction,serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const FLOW=Object.freeze({
@@ -27,10 +27,41 @@ export function allowedLaundryNextStages(order={}){
   return FLOW[currentLaundryStage(order)]||[];
 }
 
-export async function listLaundryOrders(projectId){
-  const snap=await getDocs(query(collection(db,"orders"),where("projectId","==",projectId)));
+export async function listLaundryOrdersPage(projectId,{pageSize=50,cursor=null}={}){
+  const size=Math.max(1,Math.min(100,Number(pageSize)||50));
+  const constraints=[
+    where("projectId","==",projectId),
+    where("templateType","==","laundry"),
+    orderBy("createdAt","desc")
+  ];
+  if(cursor)constraints.push(startAfter(cursor));
+  constraints.push(limit(size));
+  const snap=await getDocs(query(collection(db,"orders"),...constraints));
+  return {
+    orders:snap.docs.map(d=>({orderId:d.id,...d.data()})),
+    nextCursor:snap.docs.length?snap.docs[snap.docs.length-1]:null,
+    hasMore:snap.docs.length===size
+  };
+}
+
+export async function listLaundryOperationalOrders(projectId){
+  const snap=await getDocs(query(
+    collection(db,"orders"),
+    where("projectId","==",projectId),
+    where("templateType","==","laundry")
+  ));
   return snap.docs.map(d=>({orderId:d.id,...d.data()}))
-    .filter(x=>x.templateType==="laundry")
+    .filter(order=>!["done","canceled"].includes(order.status)&&order.laundryStage!=="delivered")
+    .sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
+}
+
+export async function listLaundryOrders(projectId){
+  const snap=await getDocs(query(
+    collection(db,"orders"),
+    where("projectId","==",projectId),
+    where("templateType","==","laundry")
+  ));
+  return snap.docs.map(d=>({orderId:d.id,...d.data()}))
     .sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
 }
 
