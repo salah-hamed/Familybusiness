@@ -52,11 +52,11 @@ test("all active partner order services constrain server reads by project and te
     ["core/laundry/order-service.js", "laundry"]
   ]) {
     const source = readFileSync(path, "utf8");
-    assert.ok(source.includes('where("projectId"'), path);
+    assert.ok(/where\("projectId"\s*,\s*"=="\s*,/.test(source), path);
     assert.ok(
       templateType === "templateType"
-        ? source.includes('where("templateType", "==", templateType)')
-        : source.includes(`where("templateType", "==", "${templateType}")`),
+        ? /where\("templateType"\s*,\s*"=="\s*,\s*templateType\)/.test(source)
+        : new RegExp(`where\\("templateType"\\s*,\\s*"=="\\s*,\\s*"${templateType}"\\)`).test(source),
       path
     );
   }
