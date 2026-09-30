@@ -77,7 +77,8 @@ async function loadProjectOrderDocsWithoutCompositeIndex(projectId) {
   const snap = await getDocs(
     query(
       collection(db, "orders"),
-      where("projectId", "==", projectId)
+      where("projectId", "==", projectId),
+      where("templateType", "==", "supermarket")
     )
   );
 
