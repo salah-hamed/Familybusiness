@@ -866,8 +866,23 @@ service cloud.firestore {
     && request.resource.data.paymentReference is string
     && request.resource.data.paymentReference.size() >= 4
     && request.resource.data.paymentReference.size() <= 120
-    && request.resource.data.proofPath is string
-    && request.resource.data.proofPath.matches('^subscription-proofs/' + request.auth.uid + '/[^/]+\\.(jpg|png|webp)
+    && request.resource.data.proofPath == "subscription-proofs/" + request.auth.uid + "/" + paymentId
+    && request.resource.data.status == "pending_review"
+    && request.resource.data.submittedAt == request.time
+    && request.resource.data.reviewedAt == null
+    && request.resource.data.reviewedBy == ""
+    && request.resource.data.rejectionReason == ""
+    && request.resource.data.keys().hasOnly([
+      "paymentId","userId","userEmail","paymentType","amount","currency",
+      "paymentMethod","paymentReference","proofPath","status","submittedAt",
+      "reviewedAt","reviewedBy","rejectionReason"
+    ]);
+   allow get, list: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
+   allow update: if isAdmin();
+   allow delete: if false;
+  }
+
+  match /projects/{projectId} {
    allow get: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid) || (resource.data.isActive == true && resource.data.status == "active" && subscriptionActive(resource.data.ownerId));
    allow list: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid);
    allow create: if signedIn() && subscriptionActive(request.auth.uid) && validActiveProjectCreate(projectId);
