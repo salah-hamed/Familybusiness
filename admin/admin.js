@@ -189,10 +189,11 @@ async function loadOverview() {
 
 function userQueryConstraints({ status = "all", cursor = null, pageSize = USERS_PAGE_SIZE } = {}) {
   const constraints = [];
+  pageSize = Math.max(1, Math.min(100, Number(pageSize) || USERS_PAGE_SIZE));
   if (status !== "all") constraints.push(where("subscriptionStatus", "==", status));
   constraints.push(orderBy(documentId()));
   if (cursor) constraints.push(startAfter(cursor));
-  constraints.push(limit(Math.max(1, Math.min(100, Number(pageSize) || USERS_PAGE_SIZE))));
+  constraints.push(limit(pageSize));
   return constraints;
 }
 
