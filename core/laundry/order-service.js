@@ -174,6 +174,74 @@ export async function changeLaundryStage({projectId,orderId,actorUid,nextStage})
     return;
   }
 
+  if(nextStage==="out_for_delivery"){
+    const agreementRef=doc(db,"commissionAgreements",projectId);
+    const ledgerRef=doc(db,"commissionLedger",getProjectCommissionLedgerId(orderId));
+
+    try{
+      await runTransaction(db,async transaction=>{
+        const freshOrderSnap=await transaction.get(ref);
+        const agreementSnap=await transaction.get(agreementRef);
+        if(!freshOrderSnap.exists()||!agreementSnap.exists())throw new Error("ORDER_OR_AGREEMENT_NOT_FOUND");
+
+        const fresh=freshOrderSnap.data();
+        const commission=getEffectiveCommissionSnapshot(agreementSnap.data());
+
+        if(fresh.projectId!==projectId||fresh.templateType!=="laundry")throw new Error("ORDER_PROJECT_MISMATCH");
+        if(fresh.status!=="accepted"||fresh.laundryStage!=="ready_delivery"||!fresh.assignedWorkerId){
+          throw new Error("ORDER_NOT_READY_FOR_DELIVERY_ASSIGNMENT");
+        }
+        if(fresh.assignedWorkerRole!=="delivery_agent")throw new Error("DELIVERY_AGENT_REQUIRED");
+        if(!commission)throw new Error("COMMISSION_AGREEMENT_NOT_ACTIVE");
+
+        const earnedAt=serverTimestamp();
+
+        transaction.update(ref,{
+          status:"accepted",
+          laundryStage:"out_for_delivery",
+          statusUpdatedAt:earnedAt,
+          statusUpdatedBy:actorUid,
+          commissionEligible:true,
+          commissionLocked:true,
+          commissionAmount:commission.amount,
+          commissionAgreementVersion:commission.version,
+          commissionTrigger:"delivery_assignment",
+          commissionEarnedAt:earnedAt
+        });
+
+        transaction.set(ledgerRef,{
+          userId:agreementSnap.data().ownerId,
+          projectId,
+          orderId,
+          sourceType:"project_order",
+          sourceId:orderId,
+          agreementId:projectId,
+          agreementVersion:commission.version,
+          amount:commission.amount,
+          currency:"EGP",
+          status:"earned",
+          trigger:"delivery_assignment",
+          createdAt:earnedAt,
+          earnedAt,
+          paidAt:null
+        });
+      });
+
+      return;
+    }catch(error){
+      if(String(error?.code||"").toLowerCase()!=="permission-denied")throw error;
+
+      // Production compatibility until the new Firestore Rules are deployed.
+      await updateDoc(ref,{
+        status:"accepted",
+        laundryStage:"out_for_delivery",
+        statusUpdatedAt:serverTimestamp(),
+        statusUpdatedBy:actorUid
+      });
+      return;
+    }
+  }
+
   if(nextStage!=="delivered"){
     await updateDoc(ref,{
       status:"accepted",laundryStage:nextStage,statusUpdatedAt:serverTimestamp(),statusUpdatedBy:actorUid
@@ -181,6 +249,18 @@ export async function changeLaundryStage({projectId,orderId,actorUid,nextStage})
     return;
   }
 
+  if(order.commissionLocked===true){
+    await updateDoc(ref,{
+      status:"done",
+      laundryStage:"delivered",
+      deliveredAt:serverTimestamp(),
+      statusUpdatedAt:serverTimestamp(),
+      statusUpdatedBy:actorUid
+    });
+    return;
+  }
+
+  // Legacy compatibility for orders already in flight before FB-LAUNCH01.
   const agreementRef=doc(db,"commissionAgreements",projectId);
   const ledgerRef=doc(db,"commissionLedger",getProjectCommissionLedgerId(orderId));
 
@@ -188,22 +268,42 @@ export async function changeLaundryStage({projectId,orderId,actorUid,nextStage})
     const freshOrderSnap=await transaction.get(ref);
     const agreementSnap=await transaction.get(agreementRef);
     if(!freshOrderSnap.exists()||!agreementSnap.exists())throw new Error("ORDER_OR_AGREEMENT_NOT_FOUND");
-    const fresh=freshOrderSnap.data(),agreement=agreementSnap.data();
+
+    const fresh=freshOrderSnap.data();
+    const commission=getEffectiveCommissionSnapshot(agreementSnap.data());
+
     if(!allowedLaundryNextStages(fresh).includes("delivered"))throw new Error("INVALID_LAUNDRY_TRANSITION");
-    const commission=getEffectiveCommissionSnapshot(agreement);
     if(!commission)throw new Error("COMMISSION_AGREEMENT_NOT_ACTIVE");
 
+    const earnedAt=serverTimestamp();
+
     transaction.update(ref,{
-      status:"done",laundryStage:"delivered",deliveredAt:serverTimestamp(),
-      statusUpdatedAt:serverTimestamp(),statusUpdatedBy:actorUid,
-      commissionEligible:true,commissionLocked:true,commissionAmount:commission.amount,
+      status:"done",
+      laundryStage:"delivered",
+      deliveredAt:earnedAt,
+      statusUpdatedAt:earnedAt,
+      statusUpdatedBy:actorUid,
+      commissionEligible:true,
+      commissionLocked:true,
+      commissionAmount:commission.amount,
       commissionAgreementVersion:commission.version
     });
 
     transaction.set(ledgerRef,{
-      userId:agreement.ownerId,projectId,orderId,sourceType:"project_order",sourceId:orderId,
-      agreementId:projectId,agreementVersion:commission.version,
-      amount:commission.amount,currency:"EGP",status:"earned",createdAt:serverTimestamp(),paidAt:null
+      userId:agreementSnap.data().ownerId,
+      projectId,
+      orderId,
+      sourceType:"project_order",
+      sourceId:orderId,
+      agreementId:projectId,
+      agreementVersion:commission.version,
+      amount:commission.amount,
+      currency:"EGP",
+      status:"earned",
+      trigger: "legacy_delivery",
+      createdAt:earnedAt,
+      earnedAt,
+      paidAt:null
     });
   });
 }

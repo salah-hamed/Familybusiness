@@ -51,3 +51,26 @@ test("all partner order services lock the accepted commission snapshot and deter
     assert.equal(source.includes("acceptedVersion ||"), false, path);
   }
 });
+
+
+test("FB-LAUNCH01 locks project commission at delivery assignment, not normal delivery completion", () => {
+  const supermarket = readFileSync("core/supermarket/order-service.js", "utf8");
+  const restaurant = readFileSync("core/restaurant/order-service.js", "utf8");
+  const laundry = readFileSync("core/laundry/order-service.js", "utf8");
+
+  for (const source of [supermarket, restaurant]) {
+    assert.equal(source.includes('nextStatus === "assigned"'), true);
+    assert.equal(source.includes('commissionTrigger: "delivery_assignment"'), true);
+    assert.equal(source.includes('status: "assigned"'), true);
+  }
+
+  assert.equal(laundry.includes('nextStage==="out_for_delivery"'), true);
+  assert.equal(laundry.includes('commissionTrigger:"delivery_assignment"'), true);
+
+  for (const source of [supermarket, restaurant, laundry]) {
+    assert.equal(source.includes('trigger: "delivery_assignment"') || source.includes('trigger:"delivery_assignment"'), true);
+    assert.equal(source.includes("createdAt"), true);
+    assert.equal(source.includes("earnedAt"), true);
+    assert.equal(source.includes("legacy_delivery"), true);
+  }
+});

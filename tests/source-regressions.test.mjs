@@ -451,3 +451,18 @@ test("operator missing-index fallback constrains templateType so Firestore Rules
   assert.equal(restaurant.includes('where("templateType", "==", templateType)'), true);
   assert.equal(laundry.includes('where("templateType","==","laundry")'), true);
 });
+
+
+test("FB-LAUNCH01 owner dashboards use neutral commission-count wording", () => {
+  for (const path of [
+    "supermarket/index.html",
+    "restaurant/index.html",
+    "bakery/index.html",
+    "laundry/index.html"
+  ]) {
+    const html = readFileSync(path, "utf8");
+    assert.equal(html.includes("قيمة العمولة المتفق عليها لكل طلب"), true, path);
+    assert.equal(html.includes("عمولتك لكل طلب مكتمل"), false, path);
+    assert.equal(html.includes("الطلبات المحتسبة"), true, path);
+  }
+});

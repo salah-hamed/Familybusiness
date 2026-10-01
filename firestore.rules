@@ -44,6 +44,192 @@ service cloud.firestore {
   function orderData(orderId){ return get(orderPath(orderId)).data; }
   function commissionAgreementExists(agreementId){ return exists(commissionAgreementPath(agreementId)); }
   function commissionAgreementData(agreementId){ return get(commissionAgreementPath(agreementId)).data; }
+  function projectOrderLedgerAfterMatches(orderId, projectId, amount, version){
+   let ledger = getAfter(commissionLedgerPath("project_order_" + orderId)).data;
+   return ledger.orderId == orderId
+    && ledger.projectId == projectId
+    && ledger.amount == amount
+    && ledger.agreementVersion == version;
+  }
+  function projectOrderLedgerExistsMatches(orderId, projectId, amount, version){
+   return exists(commissionLedgerPath("project_order_" + orderId))
+    && get(commissionLedgerPath("project_order_" + orderId)).data.orderId == orderId
+    && get(commissionLedgerPath("project_order_" + orderId)).data.projectId == projectId
+    && get(commissionLedgerPath("project_order_" + orderId)).data.amount == amount
+    && get(commissionLedgerPath("project_order_" + orderId)).data.agreementVersion == version;
+  }
+  function validCommissionTriggerState(order){
+   return (
+      order.templateType in ["supermarket","restaurant","bakery"]
+      && (
+        (order.status == "assigned" && order.assignedWorkerRole == "rider")
+        || order.status == "delivered"
+      )
+    )
+    || (
+      order.templateType == "laundry"
+      && (
+        (
+          order.status == "accepted"
+          && order.laundryStage == "out_for_delivery"
+          && order.assignedWorkerRole == "delivery_agent"
+        )
+        || (
+          order.status == "done"
+          && order.laundryStage == "delivered"
+        )
+      )
+    );
+  }
+  function validProjectOrderLedgerCreate(entryId){
+   let ledger = request.resource.data;
+   let order = getAfter(orderPath(ledger.orderId)).data;
+   return signedIn()
+    && ledger.sourceType == "project_order"
+    && ledger.projectId is string
+    && ledger.orderId is string
+    && entryId == "project_order_" + ledger.orderId
+    && ledger.sourceId == ledger.orderId
+    && ledger.agreementId == ledger.projectId
+    && ledger.currency == "EGP"
+    && ledger.status == "earned"
+    && ledger.paidAt == null
+    && projectExists(ledger.projectId)
+    && commissionAgreementExists(ledger.projectId)
+    && isProjectOperator(ledger.projectId)
+    && projectData(ledger.projectId).template in ["supermarket","laundry","restaurant","bakery"]
+    && commissionAgreementData(ledger.projectId).status == "accepted"
+    && commissionAgreementData(ledger.projectId).currentAmount is number
+    && ledger.userId == projectData(ledger.projectId).ownerId
+    && ledger.amount == commissionAgreementData(ledger.projectId).currentAmount
+    && ledger.agreementVersion == commissionAgreementData(ledger.projectId).acceptedVersion
+    && order.projectId == ledger.projectId
+    && validCommissionTriggerState(order)
+    && order.commissionLocked == true
+    && order.commissionAmount == ledger.amount
+    && order.commissionAgreementVersion == ledger.agreementVersion;
+  }
+  function validDispatchCommissionUpdate(orderId){
+   let before = resource.data;
+   let after = request.resource.data;
+   return signedIn()
+    && (isAdmin() || isProjectOperator(before.projectId))
+    && after.projectId == before.projectId
+    && after.providerId == before.providerId
+    && after.statusUpdatedBy == request.auth.uid
+    && after.commissionEligible == true
+    && after.commissionLocked == true
+    && after.commissionAmount is number
+    && after.commissionAgreementVersion is number
+    && after.commissionTrigger == "delivery_assignment"
+    && after.commissionEarnedAt == request.time
+    && projectOrderLedgerAfterMatches(
+      orderId,
+      before.projectId,
+      after.commissionAmount,
+      after.commissionAgreementVersion
+    )
+    && (
+      (
+        before.templateType in ["supermarket","restaurant","bakery"]
+        && before.status == "ready"
+        && after.status == "assigned"
+        && before.pricingLocked == true
+        && after.assignedWorkerId is string
+        && after.assignedWorkerId.size() > 0
+        && after.assignedWorkerRole == "rider"
+        && workerExists(after.assignedWorkerId)
+        && workerData(after.assignedWorkerId).projectId == before.projectId
+        && workerData(after.assignedWorkerId).role == "rider"
+        && after.diff(before).affectedKeys().hasOnly([
+          "status",
+          "statusUpdatedAt",
+          "statusUpdatedBy",
+          "commissionEligible",
+          "commissionLocked",
+          "commissionAmount",
+          "commissionAgreementVersion",
+          "commissionTrigger",
+          "commissionEarnedAt"
+        ])
+      )
+      ||
+      (
+        before.templateType == "laundry"
+        && before.status == "accepted"
+        && before.laundryStage == "ready_delivery"
+        && after.status == "accepted"
+        && after.laundryStage == "out_for_delivery"
+        && after.assignedWorkerId is string
+        && after.assignedWorkerId.size() > 0
+        && after.assignedWorkerRole == "delivery_agent"
+        && workerExists(after.assignedWorkerId)
+        && workerData(after.assignedWorkerId).projectId == before.projectId
+        && workerData(after.assignedWorkerId).role == "delivery_agent"
+        && after.diff(before).affectedKeys().hasOnly([
+          "status",
+          "laundryStage",
+          "statusUpdatedAt",
+          "statusUpdatedBy",
+          "commissionEligible",
+          "commissionLocked",
+          "commissionAmount",
+          "commissionAgreementVersion",
+          "commissionTrigger",
+          "commissionEarnedAt"
+        ])
+      )
+    );
+  }
+  function validLockedCommissionDeliveryUpdate(orderId){
+   let before = resource.data;
+   let after = request.resource.data;
+   return signedIn()
+    && (isAdmin() || isProjectOperator(before.projectId))
+    && after.projectId == before.projectId
+    && after.providerId == before.providerId
+    && after.statusUpdatedBy == request.auth.uid
+    && before.commissionEligible == true
+    && before.commissionLocked == true
+    && before.commissionAmount is number
+    && before.commissionAgreementVersion is number
+    && after.commissionEligible == before.commissionEligible
+    && after.commissionLocked == before.commissionLocked
+    && after.commissionAmount == before.commissionAmount
+    && after.commissionAgreementVersion == before.commissionAgreementVersion
+    && projectOrderLedgerExistsMatches(
+      orderId,
+      before.projectId,
+      before.commissionAmount,
+      before.commissionAgreementVersion
+    )
+    && (
+      (
+        before.templateType in ["supermarket","restaurant","bakery"]
+        && before.status == "out_for_delivery"
+        && after.status == "delivered"
+        && before.pricingLocked == true
+        && before.assignedWorkerId is string
+        && before.assignedWorkerId.size() > 0
+        && after.diff(before).affectedKeys().hasOnly([
+          "status","statusUpdatedAt","statusUpdatedBy","deliveredAt"
+        ])
+      )
+      ||
+      (
+        before.templateType == "laundry"
+        && before.status == "accepted"
+        && before.laundryStage == "out_for_delivery"
+        && after.status == "done"
+        && after.laundryStage == "delivered"
+        && before.assignedWorkerId is string
+        && before.assignedWorkerId.size() > 0
+        && after.diff(before).affectedKeys().hasOnly([
+          "status","laundryStage","statusUpdatedAt","statusUpdatedBy","deliveredAt"
+        ])
+      )
+    );
+  }
   function supermarketExists(projectId){ return exists(supermarketPath(projectId)); }
   function supermarketData(projectId){ return get(supermarketPath(projectId)).data; }
   function restaurantExists(projectId){ return exists(restaurantPath(projectId)); }
@@ -742,6 +928,9 @@ service cloud.firestore {
       && ownsProject(resource.data.projectId)
     );
 
+   allow update: if validDispatchCommissionUpdate(orderId);
+   allow update: if validLockedCommissionDeliveryUpdate(orderId);
+
    allow update: if (
     (
       !(resource.data.templateType in ["supermarket","laundry","restaurant","bakery"])
@@ -854,6 +1043,10 @@ service cloud.firestore {
       && (
         (
           request.resource.data.status != "done"
+          && (
+            request.resource.data.status == "canceled"
+            || request.resource.data.laundryStage != "out_for_delivery"
+          )
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             "status",
             "laundryStage",
@@ -942,6 +1135,7 @@ service cloud.firestore {
         ||
         (
           request.resource.data.status != "accepted"
+          && request.resource.data.status != "assigned"
           && request.resource.data.status != "delivered"
           && (
             request.resource.data.status == "canceled"
@@ -1036,6 +1230,7 @@ service cloud.firestore {
         ||
         (
           request.resource.data.status != "accepted"
+          && request.resource.data.status != "assigned"
           && request.resource.data.status != "delivered"
           && (
             request.resource.data.status == "canceled"
@@ -1967,46 +2162,7 @@ service cloud.firestore {
     || (signedIn() && resource.data.userId == request.auth.uid);
 
    allow create: if isAdmin()
-    || (
-      signedIn()
-      && request.resource.data.sourceType == "project_order"
-      && request.resource.data.projectId is string
-      && request.resource.data.orderId is string
-      && entryId == "project_order_" + request.resource.data.orderId
-      && request.resource.data.sourceId == request.resource.data.orderId
-      && request.resource.data.agreementId == request.resource.data.projectId
-      && request.resource.data.currency == "EGP"
-      && request.resource.data.status == "earned"
-      && request.resource.data.paidAt == null
-      && isProjectOperator(request.resource.data.projectId)
-      && projectData(request.resource.data.projectId).template in ["supermarket","laundry","restaurant","bakery"]
-      && commissionAgreementExists(request.resource.data.projectId)
-      && commissionAgreementData(request.resource.data.projectId).status == "accepted"
-      && request.resource.data.userId
-        == projectData(request.resource.data.projectId).ownerId
-      && request.resource.data.amount
-        == commissionAgreementData(request.resource.data.projectId).currentAmount
-      && request.resource.data.agreementVersion
-        == commissionAgreementData(request.resource.data.projectId).acceptedVersion
-      && getAfter(orderPath(request.resource.data.orderId)).data.projectId
-        == request.resource.data.projectId
-      && (
-        (
-          getAfter(orderPath(request.resource.data.orderId)).data.templateType in ["supermarket","restaurant","bakery"]
-          && getAfter(orderPath(request.resource.data.orderId)).data.status == "delivered"
-        )
-        ||
-        (
-          getAfter(orderPath(request.resource.data.orderId)).data.templateType == "laundry"
-          && getAfter(orderPath(request.resource.data.orderId)).data.status == "done"
-          && getAfter(orderPath(request.resource.data.orderId)).data.laundryStage == "delivered"
-        )
-      )
-      && getAfter(orderPath(request.resource.data.orderId)).data.commissionLocked
-        == true
-      && getAfter(orderPath(request.resource.data.orderId)).data.commissionAmount
-        == request.resource.data.amount
-    );
+    || validProjectOrderLedgerCreate(entryId);
 
    allow update: if isAdmin()
     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status","paidAt"]);
