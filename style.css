@@ -187,3 +187,24 @@ body{
     text-decoration:underline;
 
 }
+
+.hidden{display:none!important}
+
+.text-action{
+    width:auto!important;
+    display:inline-flex;
+    margin:2px 0 4px!important;
+    padding:4px 0!important;
+    background:transparent!important;
+    color:#2563eb;
+    font-size:14px!important;
+    justify-content:center;
+}
+.text-action:hover{text-decoration:underline}
+#email{direction:ltr;text-align:right}
+#password,#confirmPassword{direction:ltr;text-align:right}
+#status{min-height:24px;line-height:1.6;color:#334155}
+@media(max-width:520px){
+    body{align-items:flex-start;padding:14px 0}
+    .auth-card{max-width:calc(100% - 24px);padding:28px 18px;border-radius:18px}
+}
