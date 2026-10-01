@@ -536,6 +536,97 @@ export async function changeRestaurantOrderStatus({ projectId, orderId, actorUid
 
   if (nextStatus === "accepted") throw new Error("USE_ACCEPT_RESTAURANT_ORDER");
 
+  if (nextStatus === "assigned") {
+    if (!order.assignedWorkerId) throw new Error("RIDER_REQUIRED_BEFORE_ASSIGNMENT");
+
+    const agreementRef = doc(db, "commissionAgreements", projectId);
+    const ledgerRef = doc(db, "commissionLedger", getProjectCommissionLedgerId(orderId));
+
+    try {
+      await runTransaction(db, async transaction => {
+        const freshOrderSnap = await transaction.get(orderRef);
+        const agreementSnap = await transaction.get(agreementRef);
+
+        if (!freshOrderSnap.exists()) throw new Error("ORDER_NOT_FOUND");
+        if (!agreementSnap.exists()) throw new Error("AGREEMENT_NOT_FOUND");
+
+        const freshOrder = freshOrderSnap.data();
+        const commission = getEffectiveCommissionSnapshot(agreementSnap.data());
+
+        if (freshOrder.projectId !== projectId || freshOrder.templateType !== templateType) {
+          throw new Error("ORDER_PROJECT_MISMATCH");
+        }
+
+        if (freshOrder.status !== "ready" || !freshOrder.assignedWorkerId) {
+          throw new Error("ORDER_NOT_READY_FOR_DELIVERY_ASSIGNMENT");
+        }
+
+        if (!commission) throw new Error("COMMISSION_AGREEMENT_NOT_ACTIVE");
+
+        const earnedAt = serverTimestamp();
+
+        transaction.update(orderRef, {
+          status: "assigned",
+          statusUpdatedAt: earnedAt,
+          statusUpdatedBy: actorUid,
+          commissionEligible: true,
+          commissionLocked: true,
+          commissionAmount: commission.amount,
+          commissionAgreementVersion: commission.version,
+          commissionTrigger: "delivery_assignment",
+          commissionEarnedAt: earnedAt
+        });
+
+        if (freshOrder.trackingToken) {
+          transaction.update(
+            trackingRef(freshOrder.trackingToken),
+            trackingPatchFromOrder(freshOrder, { status: "assigned" })
+          );
+        }
+
+        transaction.set(ledgerRef, {
+          userId: agreementSnap.data().ownerId,
+          projectId,
+          orderId,
+          sourceType: "project_order",
+          sourceId: orderId,
+          agreementId: projectId,
+          agreementVersion: commission.version,
+          amount: commission.amount,
+          currency: "EGP",
+          status: "earned",
+          trigger: "delivery_assignment",
+          createdAt: earnedAt,
+          earnedAt,
+          paidAt: null
+        });
+      });
+
+      return;
+    } catch (error) {
+      if (String(error?.code || "").toLowerCase() !== "permission-denied") {
+        throw error;
+      }
+
+      // Production compatibility until the new Firestore Rules are deployed.
+      const batch = writeBatch(db);
+      batch.update(orderRef, {
+        status: "assigned",
+        statusUpdatedAt: serverTimestamp(),
+        statusUpdatedBy: actorUid
+      });
+
+      if (order.trackingToken) {
+        batch.update(trackingRef(order.trackingToken), trackingPatchFromOrder(order, {
+          status: "assigned"
+        }));
+      }
+
+      await batch.commit();
+      return;
+    }
+  }
+
   if (nextStatus !== "delivered") {
     const batch = writeBatch(db);
 
@@ -557,12 +648,29 @@ export async function changeRestaurantOrderStatus({ projectId, orderId, actorUid
 
   if (!order.assignedWorkerId) throw new Error("RIDER_REQUIRED_BEFORE_DELIVERY");
 
-  const agreement = await getCommissionAgreement(projectId);
-  const effectiveCommission = getEffectiveCommissionSnapshot(agreement || {});
-  if (!effectiveCommission) throw new Error("COMMISSION_AGREEMENT_NOT_ACTIVE");
+  if (order.commissionLocked === true) {
+    const batch = writeBatch(db);
+    batch.update(orderRef, {
+      status: "delivered",
+      statusUpdatedAt: serverTimestamp(),
+      statusUpdatedBy: actorUid,
+      deliveredAt: serverTimestamp()
+    });
 
-  const ledgerRef = doc(db, "commissionLedger", getProjectCommissionLedgerId(orderId));
+    if (order.trackingToken) {
+      batch.update(trackingRef(order.trackingToken), {
+        ...trackingPatchFromOrder(order, { status: "delivered" }),
+        deliveredAt: serverTimestamp()
+      });
+    }
+
+    await batch.commit();
+    return;
+  }
+
+  // Legacy compatibility for orders already in flight before FB-LAUNCH01.
   const agreementRef = doc(db, "commissionAgreements", projectId);
+  const ledgerRef = doc(db, "commissionLedger", getProjectCommissionLedgerId(orderId));
 
   await runTransaction(db, async transaction => {
     const freshOrderSnap = await transaction.get(orderRef);
@@ -572,8 +680,7 @@ export async function changeRestaurantOrderStatus({ projectId, orderId, actorUid
     if (!agreementSnap.exists()) throw new Error("AGREEMENT_NOT_FOUND");
 
     const freshOrder = freshOrderSnap.data();
-    const freshAgreement = agreementSnap.data();
-    const commission = getEffectiveCommissionSnapshot(freshAgreement);
+    const commission = getEffectiveCommissionSnapshot(agreementSnap.data());
 
     if (freshOrder.projectId !== projectId || freshOrder.templateType !== templateType) {
       throw new Error("ORDER_PROJECT_MISMATCH");
@@ -584,15 +691,19 @@ export async function changeRestaurantOrderStatus({ projectId, orderId, actorUid
     if (!freshOrder.assignedWorkerId) throw new Error("RIDER_REQUIRED_BEFORE_DELIVERY");
     if (!commission) throw new Error("COMMISSION_AGREEMENT_NOT_ACTIVE");
 
+    const earnedAt = serverTimestamp();
+
     transaction.update(orderRef, {
       status: "delivered",
-      statusUpdatedAt: serverTimestamp(),
+      statusUpdatedAt: earnedAt,
       statusUpdatedBy: actorUid,
-      deliveredAt: serverTimestamp(),
+      deliveredAt: earnedAt,
       commissionEligible: true,
       commissionLocked: true,
       commissionAmount: commission.amount,
-      commissionAgreementVersion: commission.version
+      commissionAgreementVersion: commission.version,
+      commissionTrigger: "legacy_delivery",
+      commissionEarnedAt: earnedAt
     });
 
     if (freshOrder.trackingToken) {
@@ -603,7 +714,7 @@ export async function changeRestaurantOrderStatus({ projectId, orderId, actorUid
     }
 
     transaction.set(ledgerRef, {
-      userId: freshAgreement.ownerId,
+      userId: agreementSnap.data().ownerId,
       projectId,
       orderId,
       sourceType: "project_order",
@@ -613,7 +724,9 @@ export async function changeRestaurantOrderStatus({ projectId, orderId, actorUid
       amount: commission.amount,
       currency: "EGP",
       status: "earned",
-      earnedAt: serverTimestamp(),
+      trigger: "legacy_delivery",
+      createdAt: earnedAt,
+      earnedAt,
       paidAt: null
     });
   });
