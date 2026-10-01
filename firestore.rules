@@ -44,17 +44,73 @@ service cloud.firestore {
   function orderData(orderId){ return get(orderPath(orderId)).data; }
   function commissionAgreementExists(agreementId){ return exists(commissionAgreementPath(agreementId)); }
   function commissionAgreementData(agreementId){ return get(commissionAgreementPath(agreementId)).data; }
-  function projectOrderLedgerAfterMatches(orderId, projectId, amount){
+  function projectOrderLedgerAfterMatches(orderId, projectId, amount, version){
    let ledger = getAfter(commissionLedgerPath("project_order_" + orderId)).data;
    return ledger.orderId == orderId
     && ledger.projectId == projectId
-    && ledger.amount == amount;
+    && ledger.amount == amount
+    && ledger.agreementVersion == version;
   }
-  function projectOrderLedgerExistsMatches(orderId, projectId, amount){
+  function projectOrderLedgerExistsMatches(orderId, projectId, amount, version){
+   let ledger = get(commissionLedgerPath("project_order_" + orderId)).data;
    return exists(commissionLedgerPath("project_order_" + orderId))
-    && get(commissionLedgerPath("project_order_" + orderId)).data.orderId == orderId
-    && get(commissionLedgerPath("project_order_" + orderId)).data.projectId == projectId
-    && get(commissionLedgerPath("project_order_" + orderId)).data.amount == amount;
+    && ledger.orderId == orderId
+    && ledger.projectId == projectId
+    && ledger.amount == amount
+    && ledger.agreementVersion == version;
+  }
+  function validCommissionTriggerState(order){
+   return (
+      order.templateType in ["supermarket","restaurant","bakery"]
+      && (
+        (order.status == "assigned" && order.assignedWorkerRole == "rider")
+        || order.status == "delivered"
+      )
+    )
+    || (
+      order.templateType == "laundry"
+      && (
+        (
+          order.status == "accepted"
+          && order.laundryStage == "out_for_delivery"
+          && order.assignedWorkerRole == "delivery_agent"
+        )
+        || (
+          order.status == "done"
+          && order.laundryStage == "delivered"
+        )
+      )
+    );
+  }
+  function validProjectOrderLedgerCreate(entryId){
+   let ledger = request.resource.data;
+   let project = projectData(ledger.projectId);
+   let agreement = commissionAgreementData(ledger.projectId);
+   let order = getAfter(orderPath(ledger.orderId)).data;
+   return signedIn()
+    && ledger.sourceType == "project_order"
+    && ledger.projectId is string
+    && ledger.orderId is string
+    && entryId == "project_order_" + ledger.orderId
+    && ledger.sourceId == ledger.orderId
+    && ledger.agreementId == ledger.projectId
+    && ledger.currency == "EGP"
+    && ledger.status == "earned"
+    && ledger.paidAt == null
+    && projectExists(ledger.projectId)
+    && commissionAgreementExists(ledger.projectId)
+    && isProjectOperator(ledger.projectId)
+    && project.template in ["supermarket","laundry","restaurant","bakery"]
+    && agreement.status == "accepted"
+    && agreement.currentAmount is number
+    && ledger.userId == project.ownerId
+    && ledger.amount == agreement.currentAmount
+    && ledger.agreementVersion == agreement.acceptedVersion
+    && order.projectId == ledger.projectId
+    && validCommissionTriggerState(order)
+    && order.commissionLocked == true
+    && order.commissionAmount == ledger.amount
+    && order.commissionAgreementVersion == ledger.agreementVersion;
   }
   function supermarketExists(projectId){ return exists(supermarketPath(projectId)); }
   function supermarketData(projectId){ return get(supermarketPath(projectId)).data; }
@@ -883,15 +939,10 @@ service cloud.firestore {
           && resource.data.laundryStage == "ready_delivery"
           && request.resource.data.status == "accepted"
           && request.resource.data.laundryStage == "out_for_delivery"
-          && commissionAgreementExists(resource.data.projectId)
-          && commissionAgreementData(resource.data.projectId).status == "accepted"
-          && commissionAgreementData(resource.data.projectId).currentAmount is number
           && request.resource.data.commissionEligible == true
           && request.resource.data.commissionLocked == true
-          && request.resource.data.commissionAmount
-            == commissionAgreementData(resource.data.projectId).currentAmount
-          && request.resource.data.commissionAgreementVersion
-            == commissionAgreementData(resource.data.projectId).acceptedVersion
+          && request.resource.data.commissionAmount is number
+          && request.resource.data.commissionAgreementVersion is number
           && request.resource.data.commissionTrigger == "delivery_assignment"
           && request.resource.data.commissionEarnedAt == request.time
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
@@ -909,7 +960,8 @@ service cloud.firestore {
           && projectOrderLedgerAfterMatches(
             orderId,
             resource.data.projectId,
-            request.resource.data.commissionAmount
+            request.resource.data.commissionAmount,
+            request.resource.data.commissionAgreementVersion
           )
         )
         ||
@@ -935,20 +987,16 @@ service cloud.firestore {
               && projectOrderLedgerExistsMatches(
                 orderId,
                 resource.data.projectId,
-                resource.data.commissionAmount
+                resource.data.commissionAmount,
+                resource.data.commissionAgreementVersion
               )
             )
             ||
             (
-              commissionAgreementExists(resource.data.projectId)
-              && commissionAgreementData(resource.data.projectId).status == "accepted"
-              && commissionAgreementData(resource.data.projectId).currentAmount is number
-              && request.resource.data.commissionEligible == true
+              request.resource.data.commissionEligible == true
               && request.resource.data.commissionLocked == true
-              && request.resource.data.commissionAmount
-                == commissionAgreementData(resource.data.projectId).currentAmount
-              && request.resource.data.commissionAgreementVersion
-                == commissionAgreementData(resource.data.projectId).acceptedVersion
+              && request.resource.data.commissionAmount is number
+              && request.resource.data.commissionAgreementVersion is number
               && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
                 "status",
                 "laundryStage",
@@ -1026,15 +1074,10 @@ service cloud.firestore {
           && request.resource.data.assignedWorkerId is string
           && request.resource.data.assignedWorkerId.size() > 0
           && request.resource.data.assignedWorkerRole == "rider"
-          && commissionAgreementExists(resource.data.projectId)
-          && commissionAgreementData(resource.data.projectId).status == "accepted"
-          && commissionAgreementData(resource.data.projectId).currentAmount is number
           && request.resource.data.commissionEligible == true
           && request.resource.data.commissionLocked == true
-          && request.resource.data.commissionAmount
-            == commissionAgreementData(resource.data.projectId).currentAmount
-          && request.resource.data.commissionAgreementVersion
-            == commissionAgreementData(resource.data.projectId).acceptedVersion
+          && request.resource.data.commissionAmount is number
+          && request.resource.data.commissionAgreementVersion is number
           && request.resource.data.commissionTrigger == "delivery_assignment"
           && request.resource.data.commissionEarnedAt == request.time
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
@@ -1051,7 +1094,8 @@ service cloud.firestore {
           && projectOrderLedgerAfterMatches(
             orderId,
             resource.data.projectId,
-            request.resource.data.commissionAmount
+            request.resource.data.commissionAmount,
+            request.resource.data.commissionAgreementVersion
           )
         )
         ||
@@ -1094,20 +1138,16 @@ service cloud.firestore {
               && projectOrderLedgerExistsMatches(
                 orderId,
                 resource.data.projectId,
-                resource.data.commissionAmount
+                resource.data.commissionAmount,
+                resource.data.commissionAgreementVersion
               )
             )
             ||
             (
-              commissionAgreementExists(resource.data.projectId)
-              && commissionAgreementData(resource.data.projectId).status == "accepted"
-              && commissionAgreementData(resource.data.projectId).currentAmount is number
-              && request.resource.data.commissionEligible == true
+              request.resource.data.commissionEligible == true
               && request.resource.data.commissionLocked == true
-              && request.resource.data.commissionAmount
-                == commissionAgreementData(resource.data.projectId).currentAmount
-              && request.resource.data.commissionAgreementVersion
-                == commissionAgreementData(resource.data.projectId).acceptedVersion
+              && request.resource.data.commissionAmount is number
+              && request.resource.data.commissionAgreementVersion is number
               && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
                 "status",
                 "statusUpdatedAt",
@@ -1184,15 +1224,10 @@ service cloud.firestore {
           && request.resource.data.assignedWorkerId is string
           && request.resource.data.assignedWorkerId.size() > 0
           && request.resource.data.assignedWorkerRole == "rider"
-          && commissionAgreementExists(resource.data.projectId)
-          && commissionAgreementData(resource.data.projectId).status == "accepted"
-          && commissionAgreementData(resource.data.projectId).currentAmount is number
           && request.resource.data.commissionEligible == true
           && request.resource.data.commissionLocked == true
-          && request.resource.data.commissionAmount
-            == commissionAgreementData(resource.data.projectId).currentAmount
-          && request.resource.data.commissionAgreementVersion
-            == commissionAgreementData(resource.data.projectId).acceptedVersion
+          && request.resource.data.commissionAmount is number
+          && request.resource.data.commissionAgreementVersion is number
           && request.resource.data.commissionTrigger == "delivery_assignment"
           && request.resource.data.commissionEarnedAt == request.time
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
@@ -1209,7 +1244,8 @@ service cloud.firestore {
           && projectOrderLedgerAfterMatches(
             orderId,
             resource.data.projectId,
-            request.resource.data.commissionAmount
+            request.resource.data.commissionAmount,
+            request.resource.data.commissionAgreementVersion
           )
         )
         ||
@@ -1252,20 +1288,16 @@ service cloud.firestore {
               && projectOrderLedgerExistsMatches(
                 orderId,
                 resource.data.projectId,
-                resource.data.commissionAmount
+                resource.data.commissionAmount,
+                resource.data.commissionAgreementVersion
               )
             )
             ||
             (
-              commissionAgreementExists(resource.data.projectId)
-              && commissionAgreementData(resource.data.projectId).status == "accepted"
-              && commissionAgreementData(resource.data.projectId).currentAmount is number
-              && request.resource.data.commissionEligible == true
+              request.resource.data.commissionEligible == true
               && request.resource.data.commissionLocked == true
-              && request.resource.data.commissionAmount
-                == commissionAgreementData(resource.data.projectId).currentAmount
-              && request.resource.data.commissionAgreementVersion
-                == commissionAgreementData(resource.data.projectId).acceptedVersion
+              && request.resource.data.commissionAmount is number
+              && request.resource.data.commissionAgreementVersion is number
               && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
                 "status",
                 "statusUpdatedAt",
@@ -2174,62 +2206,7 @@ service cloud.firestore {
     || (signedIn() && resource.data.userId == request.auth.uid);
 
    allow create: if isAdmin()
-    || (
-      signedIn()
-      && request.resource.data.sourceType == "project_order"
-      && request.resource.data.projectId is string
-      && request.resource.data.orderId is string
-      && entryId == "project_order_" + request.resource.data.orderId
-      && request.resource.data.sourceId == request.resource.data.orderId
-      && request.resource.data.agreementId == request.resource.data.projectId
-      && request.resource.data.currency == "EGP"
-      && request.resource.data.status == "earned"
-      && request.resource.data.paidAt == null
-      && isProjectOperator(request.resource.data.projectId)
-      && projectData(request.resource.data.projectId).template in ["supermarket","laundry","restaurant","bakery"]
-      && commissionAgreementExists(request.resource.data.projectId)
-      && commissionAgreementData(request.resource.data.projectId).status == "accepted"
-      && request.resource.data.userId
-        == projectData(request.resource.data.projectId).ownerId
-      && request.resource.data.amount
-        == commissionAgreementData(request.resource.data.projectId).currentAmount
-      && request.resource.data.agreementVersion
-        == commissionAgreementData(request.resource.data.projectId).acceptedVersion
-      && getAfter(orderPath(request.resource.data.orderId)).data.projectId
-        == request.resource.data.projectId
-      && (
-        (
-          getAfter(orderPath(request.resource.data.orderId)).data.templateType in ["supermarket","restaurant","bakery"]
-          && (
-            (
-              getAfter(orderPath(request.resource.data.orderId)).data.status == "assigned"
-              && getAfter(orderPath(request.resource.data.orderId)).data.assignedWorkerRole == "rider"
-            )
-            || getAfter(orderPath(request.resource.data.orderId)).data.status == "delivered"
-          )
-        )
-        ||
-        (
-          getAfter(orderPath(request.resource.data.orderId)).data.templateType == "laundry"
-          && (
-            (
-              getAfter(orderPath(request.resource.data.orderId)).data.status == "accepted"
-              && getAfter(orderPath(request.resource.data.orderId)).data.laundryStage == "out_for_delivery"
-              && getAfter(orderPath(request.resource.data.orderId)).data.assignedWorkerRole == "delivery_agent"
-            )
-            ||
-            (
-              getAfter(orderPath(request.resource.data.orderId)).data.status == "done"
-              && getAfter(orderPath(request.resource.data.orderId)).data.laundryStage == "delivered"
-            )
-          )
-        )
-      )
-      && getAfter(orderPath(request.resource.data.orderId)).data.commissionLocked
-        == true
-      && getAfter(orderPath(request.resource.data.orderId)).data.commissionAmount
-        == request.resource.data.amount
-    );
+    || validProjectOrderLedgerCreate(entryId);
 
    allow update: if isAdmin()
     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status","paidAt"]);
