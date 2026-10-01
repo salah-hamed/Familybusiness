@@ -87,14 +87,7 @@ async function refreshAccount(){
     ?`مرحبًا ${currentOperator?.name||"بالسوبرماركت"} — لوحة التشغيل جاهزة.`
     :"لا يمكن تشغيل الطلبات قبل قبول أول اتفاق عمولة.";
 
-  if(canOperate){
-    await loadOperations();
-    await renderOperatorFinancePanel({
-      container:$("operationsPanel"),
-      projectId,
-      operatorUid:currentUser.uid
-    });
-  }
+  if(canOperate) await loadOperations();
 }
 
 onAuthStateChanged(auth,async user=>{
@@ -187,6 +180,11 @@ async function loadOperations(){
   if(ordersResult.status==="rejected"){
     $("ordersList").innerHTML=`<p class="message">تعذر تحميل الطلبات: ${escapeHTML(ordersResult.reason?.message||"UNKNOWN_ERROR")}</p>`;
   }
+  await renderOperatorFinancePanel({
+    container:$("operationsPanel"),
+    projectId,
+    operatorUid:currentUser.uid
+  });
 }
 
 $("copyCustomerLinkBtn").onclick=async()=>{
