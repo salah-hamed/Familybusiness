@@ -96,6 +96,94 @@ export function allowedLaundryNextStages(order={}){
   return FLOW[currentLaundryStage(order)]||[];
 }
 
+export async function createLaundryOrder(orderData={}){
+  const projectId=clean(orderData.projectId);
+  if(!projectId)throw new Error("PROJECT_REQUIRED");
+
+  const trackingToken=randomTrackingToken();
+  const orderRef=doc(collection(db,"orders"));
+  const publicTrackingRef=trackingRef(trackingToken);
+  const price=Number(orderData.price||0);
+  const items=Array.isArray(orderData.items)?orderData.items:[];
+
+  const trackedOrder={
+    ...orderData,
+    projectId,
+    providerId:projectId,
+    templateType:"laundry",
+    trackingToken,
+    createdAt:serverTimestamp()
+  };
+
+  const batch=writeBatch(db);
+  batch.set(orderRef,trackedOrder);
+  batch.set(publicTrackingRef,{
+    trackingToken,
+    orderId:orderRef.id,
+    projectId,
+    templateType:"laundry",
+    status:"new",
+    items,
+    subtotal:price,
+    deliveryFee:0,
+    total:price,
+    createdAt:serverTimestamp(),
+    updatedAt:serverTimestamp()
+  });
+
+  try{
+    await batch.commit();
+    return {
+      orderId:orderRef.id,
+      trackingToken,
+      trackingEnabled:true,
+      total:price
+    };
+  }catch(error){
+    const code=String(error?.code||"").toLowerCase();
+    if(!code.includes("permission-denied"))throw error;
+
+    const legacy={...orderData,projectId,providerId:projectId,templateType:"laundry",createdAt:serverTimestamp()};
+    delete legacy.trackingToken;
+    const legacyRef=await addDoc(collection(db,"orders"),legacy);
+
+    return {
+      orderId:legacyRef.id,
+      trackingToken:"",
+      trackingEnabled:false,
+      total:price
+    };
+  }
+}
+
+export async function getLaundryOrderTracking(trackingToken){
+  const token=clean(trackingToken);
+  if(!token)return null;
+
+  const snap=await getDoc(trackingRef(token));
+  if(!snap.exists())return null;
+
+  const data=snap.data();
+  if(data.projectId==null||data.templateType!=="laundry")return null;
+
+  return {trackingToken:token,...data};
+}
+
+export function subscribeLaundryOrderTracking(trackingToken,onChange,onError=null){
+  const token=clean(trackingToken);
+  if(!token)return ()=>{};
+
+  return onSnapshot(
+    trackingRef(token),
+    snap=>{
+      if(!snap.exists()){onChange?.(null);return;}
+      const data={trackingToken:token,...snap.data()};
+      onChange?.(data.templateType==="laundry"?data:null);
+    },
+    error=>onError?.(error)
+  );
+}
+
 export async function listLaundryOrdersPage(projectId,{pageSize=50,cursor=null}={}){
   const size=Math.max(1,Math.min(100,Number(pageSize)||50));
   const constraints=[
