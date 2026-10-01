@@ -1,9 +1,11 @@
-import { createOrder } from "./orders.js";
+import { createOrder, getLaundryOrderTracking, subscribeLaundryOrderTracking } from "./orders.js";
 import db from "../../core/firebase/firebase-db.js";
 import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const $ = id => document.getElementById(id);
 let currentProjectId = "";
+const orderSubscriptions = new Map();
+let trackedOrders = new Map();
 let priceConfig = {
   shirtWash: 0, shirtIron: 0,
   trousersWash: 0, trousersIron: 0,
@@ -28,12 +30,164 @@ const quantities = Object.fromEntries(itemDefinitions.map(item => [item.key, 0])
 const services = Object.fromEntries(itemDefinitions.map(item => [item.key, item.washOnly ? "wash" : "wash_iron"]));
 
 function storageKey(){ return `familybusiness:laundry:${currentProjectId}:customer`; }
+function ordersStorageKey(){ return `familybusiness:laundry:${currentProjectId}:orders`; }
 function normalizeEgyptWhatsapp(number){let clean=String(number||"").replace(/\D/g,"");if(clean.startsWith("0020"))clean=clean.slice(2);if(clean.startsWith("20"))return clean;if(clean.startsWith("0"))clean=clean.slice(1);return `20${clean}`;}
 function unavailable(message="يرجى التواصل مع صاحب المشروع."){document.querySelector(".app").innerHTML=`<section class="card" style="text-align:center"><h2>🔒 المشروع غير متاح</h2><p>${message}</p></section>`;}
 function today(){const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().split("T")[0];}
 function readSaved(){try{return JSON.parse(localStorage.getItem(storageKey())||"null");}catch{return null;}}
 function saveCustomer(){localStorage.setItem(storageKey(),JSON.stringify({customerName:$("customerName").value.trim(),customerPhone:$("customerPhone").value.trim(),customerAddress:$("customerAddress").value.trim(),location:$("location").value}));}
 function fillSaved(){const p=readSaved();if(!p)return;["customerName","customerPhone","customerAddress","location"].forEach(id=>{if(p[id])$(id).value=p[id];});}
+
+function loadHistoryTokens(){
+  try{
+    const data=JSON.parse(localStorage.getItem(ordersStorageKey())||"[]");
+    return Array.isArray(data)?data.filter(Boolean):[];
+  }catch{return [];}
+}
+
+function rememberOrder(token){
+  if(!token)return;
+  const tokens=loadHistoryTokens().filter(item=>item!==token);
+  tokens.unshift(token);
+  localStorage.setItem(ordersStorageKey(),JSON.stringify(tokens.slice(0,20)));
+  refreshOrdersButton();
+}
+
+function refreshOrdersButton(){
+  const count=loadHistoryTokens().length;
+  $("myOrdersBtn").innerText=count?`📦 طلباتي (${count})`:"📦 طلباتي";
+}
+
+const laundryStatusSteps=[
+  ["new","تم استلام الطلب"],
+  ["accepted","تم قبول الطلب"],
+  ["pickup_assigned","تم تعيين مندوب الاستلام"],
+  ["picked_up","تم استلام الملابس"],
+  ["processing","جاري الغسيل والمكواة"],
+  ["ready_delivery","الطلب جاهز للتوصيل"],
+  ["out_for_delivery","خرج للتوصيل"],
+  ["delivered","تم التوصيل"]
+];
+
+function laundryStatusLabel(status){
+  return Object.fromEntries(laundryStatusSteps)[status]
+    ||(status==="canceled"?"تم إلغاء الطلب":status||"—");
+}
+
+function formatOrderDate(value){
+  const date=value?.toDate?.();
+  if(!date)return "";
+  return new Intl.DateTimeFormat("ar-EG",{dateStyle:"medium",timeStyle:"short"}).format(date);
+}
+
+function renderLaundryTimeline(order){
+  if(order.status==="canceled")return '<div class="orderCanceled">تم إلغاء الطلب</div>';
+  const current=laundryStatusSteps.findIndex(([status])=>status===order.status);
+  return `<div class="trackingTimeline">${laundryStatusSteps.map(([status,label],index)=>`
+    <div class="trackingStep ${index<=current?"done":""} ${index===current?"current":""}">
+      <span></span><small>${label}</small>
+    </div>`).join("")}</div>`;
+}
+
+function renderMyOrders(){
+  const orders=[...trackedOrders.values()]
+    .filter(Boolean)
+    .sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
+
+  $("ordersList").innerHTML=orders.length
+    ?orders.map(order=>{
+      const items=(order.items||[])
+        .filter(item=>Number(item.quantity||0)>0)
+        .map(item=>`${Number(item.quantity||0)} × ${esc(item.label||item.key||"قطعة")} — ${esc(item.serviceLabel||"")}`)
+        .join("، ");
+
+      return `<article class="customerOrderCard" data-tracking-token="${esc(order.trackingToken)}">
+        <div class="orderCardHead">
+          <div>
+            <b>طلب #${esc(String(order.orderId||"").slice(0,7))}</b>
+            <small>${esc(formatOrderDate(order.createdAt))}</small>
+          </div>
+          <span class="orderStatusBadge ${order.status==="delivered"?"delivered":order.status==="canceled"?"canceled":""}">
+            ${esc(laundryStatusLabel(order.status))}
+          </span>
+        </div>
+        <div class="orderItemsSummary">${items||"تفاصيل الطلب غير متاحة"}</div>
+        <div class="orderTotal">الإجمالي: <b>${money(order.total)}</b></div>
+        ${renderLaundryTimeline(order)}
+        <button class="repeatLaundryBtn" type="button">اطلب نفس القطع مرة أخرى</button>
+      </article>`;
+    }).join("")
+    :'<p class="ordersEmpty">لا توجد طلبات محفوظة على هذا الجهاز حتى الآن.</p>';
+
+  document.querySelectorAll(".customerOrderCard").forEach(card=>{
+    const order=trackedOrders.get(card.dataset.trackingToken);
+    card.querySelector(".repeatLaundryBtn").onclick=()=>repeatLaundryOrder(order);
+  });
+}
+
+async function loadMyOrders(){
+  const tokens=loadHistoryTokens();
+  if(!tokens.length){
+    trackedOrders=new Map();
+    renderMyOrders();
+    return;
+  }
+
+  const results=await Promise.all(tokens.map(async token=>{
+    try{return await getLaundryOrderTracking(token);}catch{return null;}
+  }));
+
+  trackedOrders=new Map(
+    results
+      .filter(order=>order&&order.projectId===currentProjectId)
+      .map(order=>[order.trackingToken,order])
+  );
+
+  for(const [token,order] of trackedOrders){
+    if(["delivered","canceled"].includes(order.status)||orderSubscriptions.has(token))continue;
+
+    const unsubscribe=subscribeLaundryOrderTracking(token,updated=>{
+      if(!updated)return;
+      trackedOrders.set(token,updated);
+      renderMyOrders();
+
+      if(["delivered","canceled"].includes(updated.status)){
+        orderSubscriptions.get(token)?.();
+        orderSubscriptions.delete(token);
+      }
+    });
+
+    orderSubscriptions.set(token,unsubscribe);
+  }
+
+  renderMyOrders();
+}
+
+function repeatLaundryOrder(order){
+  if(!order?.items?.length)return;
+
+  itemDefinitions.forEach(item=>{
+    const previous=order.items.find(entry=>entry.key===item.key);
+    quantities[item.key]=Math.max(0,Math.min(100,Number(previous?.quantity||0)));
+
+    if(item.washOnly){
+      services[item.key]="wash";
+      return;
+    }
+
+    const previousService=previous?.service;
+    services[item.key]=["wash","iron","wash_iron"].includes(previousService)
+      ?previousService
+      :"wash_iron";
+  });
+
+  renderItems();
+  $("ordersSheet").classList.add("hidden");
+  $("status").innerText="تم تجهيز نفس القطع والخدمات. اختار موعد استلام جديد ثم أرسل الطلب.";
+  $("submitOrder").innerText="إرسال طلب الاستلام";
+  $("itemsSection").scrollIntoView({behavior:"smooth",block:"start"});
+}
+
 
 function hasConfiguredPricing(config = {}){
   return [
@@ -105,7 +259,7 @@ async function init(){
 
   $("businessTitle").innerText=laundry.name||data.businessName||"غسيل ومكواة الملابس";
   priceConfig={...priceConfig,...data.priceConfig};
-  renderItems();fillSaved();
+  renderItems();fillSaved();refreshOrdersButton();
   if(laundry.whatsapp)$("whatsappBtn").href=`https://wa.me/${normalizeEgyptWhatsapp(laundry.whatsapp)}`;else $("whatsappBtn").style.display="none";
   if(laundry.instapayLink)$("paymentBtn").href=laundry.instapayLink;else $("paymentBtn").style.display="none";
   $("submitOrder").onclick=async()=>{
@@ -115,8 +269,29 @@ async function init(){
     const order={projectId:currentProjectId,providerId:currentProjectId,templateType:"laundry",serviceType:"laundry_per_piece",customerName:$("customerName").value.trim(),customerPhone:$("customerPhone").value.trim(),customerAddress:$("customerAddress").value.trim(),location:$("location").value,pickupDate:$("pickupDate").value,pickupTime:$("pickupTime").value,visitDate:$("pickupDate").value,visitTime:$("pickupTime").value,notes:$("notes").value.trim(),items,totalPieces:pieces,price,status:"new"};
     $("submitOrder").disabled=true;$("status").innerText="جاري إرسال الطلب...";
     const result=await createOrder(order);
-    if(result.success){saveCustomer();$("status").innerText="تم إرسال طلب الاستلام بنجاح 🎉";$("submitOrder").innerText="تم إرسال الطلب ✅";}else{$("status").innerText=result.error;}
+    if(result.success){
+      saveCustomer();
+      rememberOrder(result.trackingToken);
+      $("status").innerText=result.trackingEnabled
+        ?`تم إرسال طلب الاستلام بنجاح 🎉 رقم الطلب ${result.orderId.slice(0,7)}. تقدر تتابع حالته من «طلباتي».`
+        :`تم إرسال طلب الاستلام بنجاح 🎉 رقم الطلب ${result.orderId.slice(0,7)}.`;
+      $("submitOrder").innerText="تم إرسال الطلب ✅";
+    }else{
+      $("status").innerText=result.error;
+    }
     $("submitOrder").disabled=false;
   };
 }
+
+$("myOrdersBtn").onclick=async()=>{
+  $("ordersSheet").classList.remove("hidden");
+  $("ordersList").innerHTML='<p class="ordersEmpty">جاري تحميل طلباتك...</p>';
+  await loadMyOrders();
+};
+
+$("closeOrders").onclick=()=>$("ordersSheet").classList.add("hidden");
+$("ordersSheet").addEventListener("click",event=>{
+  if(event.target===$("ordersSheet"))$("ordersSheet").classList.add("hidden");
+});
+
 init();
