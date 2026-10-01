@@ -112,6 +112,126 @@ service cloud.firestore {
     && order.commissionAmount == ledger.amount
     && order.commissionAgreementVersion == ledger.agreementVersion;
   }
+  function validTrackedLaundryProjectOrderLedgerCreate(entryId){
+   let ledger = request.resource.data;
+   let order = getAfter(orderPath(ledger.orderId)).data;
+   return signedIn()
+    && ledger.sourceType == "project_order"
+    && ledger.projectId is string
+    && ledger.orderId is string
+    && entryId == "project_order_" + ledger.orderId
+    && ledger.sourceId == ledger.orderId
+    && ledger.agreementId == ledger.projectId
+    && ledger.currency == "EGP"
+    && ledger.status == "earned"
+    && ledger.paidAt == null
+    && order.templateType == "laundry"
+    && order.trackingToken is string
+    && order.trackingToken.size() >= 40
+    && order.projectId == ledger.projectId
+    && order.status == "accepted"
+    && order.laundryStage == "out_for_delivery"
+    && order.commissionLocked == true
+    && order.commissionAmount == ledger.amount
+    && order.commissionAgreementVersion == ledger.agreementVersion
+    && ledger.userId == projectData(ledger.projectId).ownerId
+    && isProjectOperator(ledger.projectId);
+  }
+
+  function validTrackedLaundryDispatchUpdate(orderId){
+   let before = resource.data;
+   let after = request.resource.data;
+   let agreement = commissionAgreementData(before.projectId);
+   let ledger = getAfter(commissionLedgerPath("project_order_" + orderId)).data;
+   let tracking = getAfter(orderTrackingPath(before.trackingToken)).data;
+   return signedIn()
+    && before.templateType == "laundry"
+    && before.trackingToken is string
+    && before.trackingToken.size() >= 40
+    && isProjectOperator(before.projectId)
+    && before.status == "accepted"
+    && before.laundryStage == "ready_delivery"
+    && before.assignedWorkerId is string
+    && before.assignedWorkerId.size() > 0
+    && before.assignedWorkerRole == "delivery_agent"
+    && after.projectId == before.projectId
+    && after.providerId == before.providerId
+    && after.trackingToken == before.trackingToken
+    && after.status == "accepted"
+    && after.laundryStage == "out_for_delivery"
+    && after.statusUpdatedBy == request.auth.uid
+    && agreement.status == "accepted"
+    && agreement.currentAmount is number
+    && agreement.acceptedVersion is number
+    && after.commissionEligible == true
+    && after.commissionLocked == true
+    && after.commissionAmount == agreement.currentAmount
+    && after.commissionAgreementVersion == agreement.acceptedVersion
+    && after.commissionTrigger == "delivery_assignment"
+    && after.commissionEarnedAt == request.time
+    && after.diff(before).affectedKeys().hasOnly([
+      "status",
+      "laundryStage",
+      "statusUpdatedAt",
+      "statusUpdatedBy",
+      "commissionEligible",
+      "commissionLocked",
+      "commissionAmount",
+      "commissionAgreementVersion",
+      "commissionTrigger",
+      "commissionEarnedAt"
+    ])
+    && ledger.orderId == orderId
+    && ledger.projectId == before.projectId
+    && ledger.amount == after.commissionAmount
+    && ledger.agreementVersion == after.commissionAgreementVersion
+    && tracking.trackingToken == before.trackingToken
+    && tracking.orderId == orderId
+    && tracking.projectId == before.projectId
+    && tracking.templateType == "laundry"
+    && tracking.status == "out_for_delivery";
+  }
+
+  function validTrackedLaundryDeliveryUpdate(orderId){
+   let before = resource.data;
+   let after = request.resource.data;
+   let ledger = get(commissionLedgerPath("project_order_" + orderId)).data;
+   let tracking = getAfter(orderTrackingPath(before.trackingToken)).data;
+   return signedIn()
+    && before.templateType == "laundry"
+    && before.trackingToken is string
+    && before.trackingToken.size() >= 40
+    && isProjectOperator(before.projectId)
+    && before.status == "accepted"
+    && before.laundryStage == "out_for_delivery"
+    && before.commissionEligible == true
+    && before.commissionLocked == true
+    && before.commissionAmount is number
+    && before.commissionAgreementVersion is number
+    && after.projectId == before.projectId
+    && after.providerId == before.providerId
+    && after.trackingToken == before.trackingToken
+    && after.status == "done"
+    && after.laundryStage == "delivered"
+    && after.statusUpdatedBy == request.auth.uid
+    && after.commissionEligible == before.commissionEligible
+    && after.commissionLocked == before.commissionLocked
+    && after.commissionAmount == before.commissionAmount
+    && after.commissionAgreementVersion == before.commissionAgreementVersion
+    && after.diff(before).affectedKeys().hasOnly([
+      "status","laundryStage","statusUpdatedAt","statusUpdatedBy","deliveredAt"
+    ])
+    && ledger.orderId == orderId
+    && ledger.projectId == before.projectId
+    && ledger.amount == before.commissionAmount
+    && ledger.agreementVersion == before.commissionAgreementVersion
+    && tracking.trackingToken == before.trackingToken
+    && tracking.orderId == orderId
+    && tracking.projectId == before.projectId
+    && tracking.templateType == "laundry"
+    && tracking.status == "delivered";
+  }
+
   function validDispatchCommissionUpdate(orderId){
    let before = resource.data;
    let after = request.resource.data;
@@ -1120,6 +1240,8 @@ service cloud.firestore {
    }
 
    allow update: if validTrackedLaundryOperationalUpdate();
+   allow update: if validTrackedLaundryDispatchUpdate(orderId);
+   allow update: if validTrackedLaundryDeliveryUpdate(orderId);
    allow update: if validDispatchCommissionUpdate(orderId);
    allow update: if validLockedCommissionDeliveryUpdate(orderId);
 
@@ -2427,6 +2549,7 @@ service cloud.firestore {
     );
 
    allow create: if isAdmin()
+    || validTrackedLaundryProjectOrderLedgerCreate(entryId)
     || validProjectOrderLedgerCreate(entryId);
 
    allow update: if (
