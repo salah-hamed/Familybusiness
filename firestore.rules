@@ -848,6 +848,40 @@ service cloud.firestore {
    allow delete: if isAdmin();
   }
 
+  match /subscriptionPayments/{paymentId} {
+   allow create: if signedIn()
+    && request.resource.data.paymentId == paymentId
+    && request.resource.data.userId == request.auth.uid
+    && request.resource.data.userEmail is string
+    && request.resource.data.userEmail.size() <= 254
+    && request.resource.data.paymentType in ["initial","renewal"]
+    && request.resource.data.amount is number
+    && (
+      (request.resource.data.paymentType == "initial" && request.resource.data.amount == 350)
+      || (request.resource.data.paymentType == "renewal" && request.resource.data.amount == 59)
+    )
+    && request.resource.data.currency == "EGP"
+    && request.resource.data.paymentMethod == "instapay"
+    && request.resource.data.paymentReference is string
+    && request.resource.data.paymentReference.size() >= 4
+    && request.resource.data.paymentReference.size() <= 120
+    && request.resource.data.proofPath == "subscription-proofs/" + request.auth.uid + "/" + paymentId
+    && request.resource.data.status == "pending_review"
+    && request.resource.data.submittedAt == request.time
+    && request.resource.data.reviewedAt == null
+    && request.resource.data.reviewedBy == ""
+    && request.resource.data.rejectionReason == ""
+    && request.resource.data.keys().hasOnly([
+      "paymentId","userId","userEmail","paymentType","amount","currency",
+      "paymentMethod","paymentReference","proofPath","status","submittedAt",
+      "reviewedAt","reviewedBy","rejectionReason"
+    ]);
+   allow get, list: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
+   allow update: if isAdmin();
+   allow delete: if false;
+  }
+
+
   match /projects/{projectId} {
    allow get: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid) || (resource.data.isActive == true && resource.data.status == "active" && subscriptionActive(resource.data.ownerId));
    allow list: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid);

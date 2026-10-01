@@ -1379,3 +1379,92 @@ test("commission reversal cannot be requested before the order is canceled", asy
     })
   );
 });
+
+
+function subscriptionPaymentRecord(uid, paymentId, extra = {}) {
+  return {
+    paymentId,
+    userId: uid,
+    userEmail: `${uid}@example.com`,
+    paymentType: "initial",
+    amount: 350,
+    currency: "EGP",
+    paymentMethod: "instapay",
+    paymentReference: "REF-12345",
+    proofPath: `subscription-proofs/${uid}/${paymentId}`,
+    status: "pending_review",
+    submittedAt: serverTimestamp(),
+    reviewedAt: null,
+    reviewedBy: "",
+    rejectionReason: "",
+    ...extra
+  };
+}
+
+test("subscriber can create a valid initial subscription payment proof record", async () => {
+  const uid = "payment_owner";
+  const paymentId = `${uid}_1`;
+  await seedUser(uid, {
+    isActive: false,
+    subscriptionStatus: "pending",
+    initialActivationPaid: false
+  });
+  const db = testEnv.authenticatedContext(uid).firestore();
+
+  await assertSucceeds(
+    setDoc(
+      doc(db, "subscriptionPayments", paymentId),
+      subscriptionPaymentRecord(uid, paymentId)
+    )
+  );
+});
+
+test("subscriber cannot forge subscription payment amount or owner", async () => {
+  const uid = "payment_guard_owner";
+  await seedUser(uid, {
+    isActive: false,
+    subscriptionStatus: "pending",
+    initialActivationPaid: false
+  });
+  const db = testEnv.authenticatedContext(uid).firestore();
+
+  await assertFails(
+    setDoc(
+      doc(db, "subscriptionPayments", `${uid}_wrong_amount`),
+      subscriptionPaymentRecord(uid, `${uid}_wrong_amount`, { amount: 1 })
+    )
+  );
+
+  await assertFails(
+    setDoc(
+      doc(db, "subscriptionPayments", `${uid}_wrong_owner`),
+      subscriptionPaymentRecord("someone_else", `${uid}_wrong_owner`)
+    )
+  );
+});
+
+test("subscriber can query only their own subscription payment records", async () => {
+  const uid = "payment_query_owner";
+  const otherUid = "payment_query_other";
+  await seedUser(uid);
+  await seedUser(otherUid);
+
+  await testEnv.withSecurityRulesDisabled(async context => {
+    const adminDb = context.firestore();
+    await setDoc(
+      doc(adminDb, "subscriptionPayments", `${uid}_a`),
+      subscriptionPaymentRecord(uid, `${uid}_a`, { submittedAt: new Date("2026-10-01T10:00:00Z") })
+    );
+    await setDoc(
+      doc(adminDb, "subscriptionPayments", `${otherUid}_a`),
+      subscriptionPaymentRecord(otherUid, `${otherUid}_a`, { submittedAt: new Date("2026-10-01T11:00:00Z") })
+    );
+  });
+
+  const db = testEnv.authenticatedContext(uid).firestore();
+
+  await assertSucceeds(
+    getDocs(query(collection(db, "subscriptionPayments"), where("userId", "==", uid)))
+  );
+  await assertFails(getDocs(collection(db, "subscriptionPayments")));
+});

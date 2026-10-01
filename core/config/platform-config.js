@@ -2,7 +2,8 @@ export const PLATFORM_BILLING = Object.freeze({
   currency: "EGP",
   initialActivationFee: 350,
   monthlyRenewalFee: 59,
-  subscriptionDays: 30
+  subscriptionDays: 30,
+  instapayAccount: ""
 });
 
 export const REFERRAL_CONFIG = Object.freeze({

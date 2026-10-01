@@ -320,3 +320,62 @@ body{
   .subscriptionCard{align-items:flex-start}
   .sectionHeading h2{font-size:22px}
 }
+
+.paymentCard{
+  margin:-12px 0 30px;
+  padding:22px;
+  border-radius:24px;
+  background:#fff;
+  border:1px solid #dfe9e2;
+  box-shadow:0 12px 30px rgba(15,23,42,.05);
+}
+.paymentCard.hidden{display:none}
+.paymentCardHead{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}
+.paymentCardHead h2{margin:4px 0 5px}
+.paymentCardHead p{margin:0;color:var(--ws-muted)}
+.paymentBadge{
+  white-space:nowrap;
+  padding:7px 10px;
+  border-radius:999px;
+  background:#fff7ed;
+  color:#9a4d08;
+  font-size:11px;
+  font-weight:900;
+}
+.paymentBadge.pending{background:#fff7ed;color:#9a4d08}
+.paymentBadge.rejected{background:#fff1f2;color:#9f1239}
+.paymentInstructions{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+  margin:16px 0;
+}
+.paymentInstructions>div{
+  padding:13px;
+  border-radius:15px;
+  background:#f8faf9;
+  border:1px solid #e4ebe6;
+}
+.paymentInstructions small,.paymentInstructions strong{display:block}
+.paymentInstructions small{color:var(--ws-muted);font-size:10px;margin-bottom:4px}
+.paymentInstructions strong{font-size:14px}
+#platformInstapayAccount{direction:ltr;text-align:right}
+.paymentField{display:block;margin-top:12px}
+.paymentField>span{display:block;font-weight:900;font-size:12px;margin-bottom:6px}
+.paymentField input{
+  width:100%;
+  box-sizing:border-box;
+  padding:12px;
+  border:1px solid #dfe7e1;
+  border-radius:13px;
+  background:#fff;
+}
+.paymentField small{display:block;color:var(--ws-muted);margin-top:5px}
+#paymentReference{direction:ltr;text-align:right}
+#submitPaymentProofBtn{margin-top:14px;width:100%;border-radius:14px;padding:13px}
+.paymentReviewStatus{margin:12px 0 0;font-weight:800;line-height:1.7;color:#475569}
+@media(max-width:600px){
+  .paymentCardHead{display:block}
+  .paymentBadge{display:inline-block;margin-top:10px}
+  .paymentInstructions{grid-template-columns:1fr}
+}
