@@ -84,14 +84,7 @@ async function refreshAccount(){
     ? `مرحبًا ${currentRestaurant?.name||currentOperator?.name||"بالمخبز"} — لوحة التشغيل جاهزة.`
     :"لا يمكن تشغيل الطلبات قبل قبول أول اتفاق عمولة.";
 
-  if(canOperate){
-    await loadOperations();
-    await renderOperatorFinancePanel({
-      container:$("operationsPanel"),
-      projectId,
-      operatorUid:currentUser.uid
-    });
-  }
+  if(canOperate) await loadOperations();
 }
 
 onAuthStateChanged(auth,async user=>{
@@ -263,6 +256,11 @@ async function loadOperations(){
   if(ordersResult.status==="rejected"){
     $("ordersMessage").innerText=`تعذر تحميل الطلبات: ${ordersResult.reason?.message||"UNKNOWN_ERROR"}`;
   }
+  await renderOperatorFinancePanel({
+    container:$("operationsPanel"),
+    projectId,
+    operatorUid:currentUser.uid
+  });
 }
 
 $("copyCustomerLinkBtn").onclick=async()=>{
