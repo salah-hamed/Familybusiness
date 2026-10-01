@@ -2191,15 +2191,113 @@ service cloud.firestore {
    allow get, list: if isAdmin()
     || (
       signedIn()
-      && resource.data.ownerId == request.auth.uid
-    )
-    || (
-      signedIn()
       && resource.data.projectId is string
-      && isProjectOperator(resource.data.projectId)
+      && (
+        ownsProject(resource.data.projectId)
+        || isProjectOperator(resource.data.projectId)
+      )
     );
 
-   allow create, update: if isAdmin();
+   allow create: if signedIn()
+    && request.resource.data.settlementId == settlementId
+    && request.resource.data.projectId is string
+    && isProjectOperator(request.resource.data.projectId)
+    && projectExists(request.resource.data.projectId)
+    && request.resource.data.ownerId == projectData(request.resource.data.projectId).ownerId
+    && request.resource.data.operatorId == projectData(request.resource.data.projectId).operatorId
+    && request.resource.data.declaredBy == request.auth.uid
+    && request.resource.data.amount is number
+    && request.resource.data.amount > 0
+    && request.resource.data.currency == "EGP"
+    && request.resource.data.status == "pending_owner_confirmation"
+    && request.resource.data.createdAt == request.time
+    && request.resource.data.declaredAt == request.time
+    && request.resource.data.updatedAt == request.time
+    && request.resource.data.confirmedAt == null
+    && request.resource.data.confirmedBy == null
+    && request.resource.data.rejectedAt == null
+    && request.resource.data.rejectedBy == null;
+
+   allow update: if signedIn()
+    && resource.data.projectId is string
+    && ownsProject(resource.data.projectId)
+    && resource.data.ownerId == request.auth.uid
+    && resource.data.status == "pending_owner_confirmation"
+    && request.resource.data.settlementId == resource.data.settlementId
+    && request.resource.data.projectId == resource.data.projectId
+    && request.resource.data.ownerId == resource.data.ownerId
+    && request.resource.data.operatorId == resource.data.operatorId
+    && request.resource.data.templateId == resource.data.templateId
+    && request.resource.data.businessName == resource.data.businessName
+    && request.resource.data.currency == resource.data.currency
+    && request.resource.data.amount == resource.data.amount
+    && request.resource.data.paymentMethod == resource.data.paymentMethod
+    && request.resource.data.paymentReference == resource.data.paymentReference
+    && request.resource.data.note == resource.data.note
+    && request.resource.data.declaredAt == resource.data.declaredAt
+    && request.resource.data.declaredBy == resource.data.declaredBy
+    && request.resource.data.createdAt == resource.data.createdAt
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+      "status",
+      "confirmedAt",
+      "confirmedBy",
+      "rejectedAt",
+      "rejectedBy",
+      "updatedAt"
+    ])
+    && (
+      (
+        request.resource.data.status == "confirmed"
+        && request.resource.data.confirmedAt == request.time
+        && request.resource.data.confirmedBy == request.auth.uid
+        && request.resource.data.rejectedAt == null
+        && request.resource.data.rejectedBy == null
+      )
+      ||
+      (
+        request.resource.data.status == "rejected"
+        && request.resource.data.rejectedAt == request.time
+        && request.resource.data.rejectedBy == request.auth.uid
+        && request.resource.data.confirmedAt == null
+        && request.resource.data.confirmedBy == null
+      )
+    );
+
+   allow delete: if false;
+  }
+
+  match /commissionPaymentStates/{projectId} {
+   allow get, list: if isAdmin()
+    || ownsProject(projectId)
+    || isProjectOperator(projectId);
+
+   allow create: if signedIn()
+    && (ownsProject(projectId) || isProjectOperator(projectId))
+    && request.resource.data.projectId == projectId
+    && request.resource.data.ownerId == projectData(projectId).ownerId
+    && request.resource.data.operatorId == projectData(projectId).operatorId
+    && request.resource.data.pendingSettlementId is string
+    && request.resource.data.updatedAt == request.time
+    && request.resource.data.keys().hasOnly([
+      "projectId",
+      "ownerId",
+      "operatorId",
+      "pendingSettlementId",
+      "updatedAt"
+    ]);
+
+   allow update: if signedIn()
+    && (ownsProject(projectId) || isProjectOperator(projectId))
+    && request.resource.data.projectId == resource.data.projectId
+    && request.resource.data.ownerId == resource.data.ownerId
+    && request.resource.data.operatorId == resource.data.operatorId
+    && request.resource.data.pendingSettlementId is string
+    && request.resource.data.updatedAt == request.time
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+      "pendingSettlementId",
+      "updatedAt"
+    ]);
+
    allow delete: if false;
   }
 
