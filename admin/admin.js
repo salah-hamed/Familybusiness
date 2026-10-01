@@ -42,7 +42,8 @@ const state = {
   operators: { rows: [], cursor: null, hasMore: false, loading: false, search: "" },
   orders: { rows: [], cursor: null, hasMore: false, loading: false, search: "", status: "all" },
   commissions: { rows: [], cursor: null, hasMore: false, loading: false, search: "", status: "all" },
-  settlements: { rows: [], cursor: null, hasMore: false, loading: false, search: "", status: "all" }
+  settlements: { rows: [], cursor: null, hasMore: false, loading: false, search: "", status: "all" },
+  reversals: { rows: [], cursor: null, hasMore: false, loading: false, search: "", status: "all" }
 };
 
 const sectionLoaded = {
@@ -51,7 +52,8 @@ const sectionLoaded = {
   operatorsSection: false,
   ordersSection: false,
   commissionsSection: false,
-  settlementsSection: false
+  settlementsSection: false,
+  reversalsSection: false
 };
 
 function clean(value) {
@@ -89,6 +91,7 @@ function statusPill(status) {
     confirmed: "تم تأكيد الدفع",
     pending_owner_confirmation: "بانتظار تأكيد المشترك",
     rejected: "مرفوض",
+    reversed: "تم عكس العمولة",
     new: "جديد",
     delivered: "تم التوصيل",
     done: "مكتمل",
@@ -141,9 +144,11 @@ async function loadOverview() {
       activeOperators,
       totalOrders,
       totalCommission,
+      reversedCommission,
       confirmedPayments,
       legacyPayments,
-      pendingPayments
+      pendingPayments,
+      pendingReversals
     ] = await Promise.all([
       countDocs("users"),
       countDocs("users", [where("subscriptionStatus", "==", "active")]),
@@ -153,13 +158,16 @@ async function loadOverview() {
       countDocs("operators", [where("isActive", "==", true)]),
       countDocs("orders"),
       aggregateAmount("commissionLedger"),
+      aggregateAmount("commissionLedger", [where("status", "==", "reversed")]).catch(() => ({ totalAmount: 0, entryCount: 0 })),
       aggregateAmount("commissionSettlements", [where("status", "==", "confirmed")]).catch(() => ({ totalAmount: 0, entryCount: 0 })),
       aggregateAmount("commissionSettlements", [where("status", "==", "paid")]).catch(() => ({ totalAmount: 0, entryCount: 0 })),
-      countDocs("commissionSettlements", [where("status", "==", "pending_owner_confirmation")]).catch(() => null)
+      countDocs("commissionSettlements", [where("status", "==", "pending_owner_confirmation")]).catch(() => null),
+      countDocs("commissionReversals", [where("status", "==", "pending_owner_confirmation")]).catch(() => null)
     ]);
 
+    const netCommission = Math.max(0, totalCommission.totalAmount - reversedCommission.totalAmount);
     const confirmedPaid = confirmedPayments.totalAmount + legacyPayments.totalAmount;
-    const outstanding = Math.max(0, totalCommission.totalAmount - confirmedPaid);
+    const outstanding = Math.max(0, netCommission - confirmedPaid);
 
     $("metricUsers").innerText = totalUsers.toLocaleString("ar-EG");
     $("metricUsersMeta").innerText = `${activeUsers} نشط · ${pendingUsers} بانتظار التفعيل`;
@@ -168,7 +176,7 @@ async function loadOverview() {
     $("metricOperatorsMeta").innerText = `${activeOperators} مشغّل نشط`;
     $("metricOrders").innerText = totalOrders.toLocaleString("ar-EG");
     $("metricOrdersMeta").innerText = "إجمالي الطلبات المسجلة";
-    $("metricEarned").innerText = money(totalCommission.totalAmount);
+    $("metricEarned").innerText = money(netCommission);
     $("metricPaid").innerText = money(confirmedPaid);
     $("metricOutstanding").innerText = money(outstanding);
 
@@ -180,6 +188,16 @@ async function loadOverview() {
       $("metricPendingSettlementsMeta").innerText = pendingPayments
         ? "دفعات تحتاج تأكيد المشترك"
         : "لا توجد دفعات معلقة";
+    }
+
+    if (pendingReversals == null) {
+      $("metricPendingReversals").innerText = "—";
+      $("metricPendingReversalsMeta").innerText = "تحتاج نشر Firestore Rules الجديدة";
+    } else {
+      $("metricPendingReversals").innerText = pendingReversals.toLocaleString("ar-EG");
+      $("metricPendingReversalsMeta").innerText = pendingReversals
+        ? "طلبات تنتظر قرار المشترك"
+        : "لا توجد طلبات عكس معلقة";
     }
 
     $("billingSummary").innerText =
@@ -793,6 +811,102 @@ function renderSettlements() {
   `).join("") : '<div class="emptyState">لا توجد عمليات دفع مطابقة.</div>';
 }
 
+
+async function loadReversals({ append = false } = {}) {
+  const s = state.reversals;
+  if (s.loading) return;
+  s.loading = true;
+  $("loadMoreReversalsBtn").disabled = true;
+  $("reversalsMessage").innerText = s.search ? "جاري البحث المباشر..." : "جاري تحميل طلبات عكس العمولات...";
+
+  try {
+    const constraints = [];
+
+    if (s.search) {
+      constraints.push(where("projectId", "==", s.search));
+      constraints.push(orderBy("createdAt", "desc"));
+      constraints.push(limit(SEARCH_LIMIT));
+
+      const snap = await getDocs(query(collection(db, "commissionReversals"), ...constraints));
+      let rows = snap.docs.map(item => ({ reversalId: item.id, ...item.data() }));
+
+      if (s.status !== "all") {
+        rows = rows.filter(row => row.status === s.status);
+      }
+
+      s.rows = rows;
+      s.cursor = null;
+      s.hasMore = false;
+    } else {
+      if (s.status !== "all") constraints.push(where("status", "==", s.status));
+      constraints.push(orderBy("createdAt", "desc"));
+      if (append && s.cursor) constraints.push(startAfter(s.cursor));
+      constraints.push(limit(PAGE_SIZE));
+
+      const snap = await getDocs(query(collection(db, "commissionReversals"), ...constraints));
+      const rows = snap.docs.map(item => ({ reversalId: item.id, ...item.data() }));
+
+      s.rows = append ? mergeRows(s.rows, rows, "reversalId") : rows;
+      s.cursor = snap.docs.length ? snap.docs[snap.docs.length - 1] : null;
+      s.hasMore = snap.docs.length === PAGE_SIZE;
+    }
+
+    renderReversals();
+    $("reversalsMessage").innerText = s.search
+      ? `نتائج البحث: ${s.rows.length}`
+      : `المعروض الآن: ${s.rows.length} طلب عكس — للمتابعة فقط.`;
+    $("loadMoreReversalsBtn").classList.toggle("hidden", !s.hasMore || Boolean(s.search));
+    sectionLoaded.reversalsSection = true;
+  } catch (error) {
+    console.error(error);
+    const code = String(error?.code || "").toLowerCase();
+    $("reversalsMessage").innerText = code.includes("permission-denied")
+      ? "طلبات عكس العمولات تحتاج نشر Firestore Rules النهائية. باقي لوحة الإدارة تعمل بشكل طبيعي."
+      : `تعذر تحميل طلبات العكس: ${error.message}`;
+  } finally {
+    s.loading = false;
+    $("loadMoreReversalsBtn").disabled = false;
+  }
+}
+
+function reversalReasonLabel(reason) {
+  return ({
+    customer_canceled_after_dispatch: "العميل ألغى بعد الإرسال",
+    delivery_failed: "تعذر التوصيل",
+    duplicate_order: "طلب مكرر",
+    operator_error: "خطأ تشغيلي",
+    other: "سبب آخر"
+  })[reason] || reason || "—";
+}
+
+function renderReversals() {
+  const rows = state.reversals.rows;
+
+  $("reversalsContainer").innerHTML = rows.length ? rows.map(item => `
+    <article class="adminCard settlementCard ${escapeHTML(item.status || "")}">
+      <div class="cardHead">
+        <div>
+          <h3>طلب #${escapeHTML(String(item.orderId || "").slice(0, 8))}</h3>
+          <p class="codeText">${escapeHTML(item.reversalId)}</p>
+        </div>
+        ${statusPill(item.status)}
+      </div>
+      <div class="metaGrid">
+        <span>المشروع<br><b class="codeText">${escapeHTML(item.projectId || "—")}</b></span>
+        <span>قيمة العمولة<br><b>${money(item.amount)}</b></span>
+        <span>السبب<br><b>${escapeHTML(reversalReasonLabel(item.reasonCode))}</b></span>
+        <span>المشغّل UID<br><b class="codeText">${escapeHTML(item.requestedBy || "—")}</b></span>
+        <span>المشترك UID<br><b class="codeText">${escapeHTML(item.ownerId || "—")}</b></span>
+        <span>تاريخ الطلب<br><b>${formatDate(item.requestedAt || item.createdAt,true)}</b></span>
+        <span>تاريخ التأكيد<br><b>${formatDate(item.confirmedAt,true)}</b></span>
+        <span>تاريخ الرفض<br><b>${formatDate(item.rejectedAt,true)}</b></span>
+      </div>
+      ${item.note ? `<p class="smallMuted">ملاحظة: ${escapeHTML(item.note)}</p>` : ""}
+      <p class="smallMuted">الإدارة تراقب فقط؛ قرار عكس العمولة بين المشغّل والمشترك.</p>
+    </article>
+  `).join("") : '<div class="emptyState">لا توجد طلبات عكس مطابقة.</div>';
+}
+
 async function ensureSectionLoaded(sectionId) {
   if (sectionLoaded[sectionId]) return;
   if (sectionId === "usersSection") await loadUsers();
@@ -801,6 +915,7 @@ async function ensureSectionLoaded(sectionId) {
   if (sectionId === "ordersSection") await loadAdminOrders();
   if (sectionId === "commissionsSection") await loadCommissions();
   if (sectionId === "settlementsSection") await loadSettlements();
+  if (sectionId === "reversalsSection") await loadReversals();
 }
 
 function switchSection(sectionId) {
@@ -822,6 +937,7 @@ async function refreshLoadedSections() {
   if (sectionLoaded.ordersSection) jobs.push(loadAdminOrders());
   if (sectionLoaded.commissionsSection) jobs.push(loadCommissions());
   if (sectionLoaded.settlementsSection) jobs.push(loadSettlements());
+  if (sectionLoaded.reversalsSection) jobs.push(loadReversals());
   await Promise.all(jobs);
 }
 
@@ -840,6 +956,7 @@ $("refreshOperatorsBtn").addEventListener("click", () => loadOperators());
 $("refreshOrdersAdminBtn").addEventListener("click", () => loadAdminOrders());
 $("refreshCommissionsBtn").addEventListener("click", () => loadCommissions());
 $("refreshSettlementsBtn").addEventListener("click", () => loadSettlements());
+$("refreshReversalsBtn").addEventListener("click", () => loadReversals());
 
 $("usersSearch").addEventListener("input", event => {
   state.users.search = clean(event.target.value);
@@ -904,6 +1021,18 @@ $("settlementsStatusFilter").addEventListener("change", event => {
   state.settlements.status = event.target.value;
   loadSettlements();
 });
+
+$("reversalsSearch").addEventListener("input", event => {
+  state.reversals.search = clean(event.target.value);
+  state.reversals.cursor = null;
+  debounceSearch(() => loadReversals());
+});
+$("reversalsStatusFilter").addEventListener("change", event => {
+  state.reversals.status = event.target.value;
+  state.reversals.cursor = null;
+  loadReversals();
+});
+$("loadMoreReversalsBtn").addEventListener("click", () => loadReversals({ append: true }));
 
 $("usersContainer").addEventListener("click", async event => {
   const button = event.target.closest("[data-action][data-uid]");

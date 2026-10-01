@@ -47,6 +47,7 @@
         <article class="metricCard moneyCard"><span>مدفوع</span><b id="metricPaid">—</b><small>دفعات أكدها المشتركون</small></article>
         <article class="metricCard dueCard"><span>مستحق حاليًا</span><b id="metricOutstanding">—</b><small>قبل التسوية والسداد</small></article>
         <article class="metricCard"><span>دفعات بانتظار التأكيد</span><b id="metricPendingSettlements">—</b><small id="metricPendingSettlementsMeta">—</small></article>
+        <article class="metricCard"><span>عكس عمولات معلّق</span><b id="metricPendingReversals">—</b><small id="metricPendingReversalsMeta">—</small></article>
       </section>
 
       <nav class="adminTabs" aria-label="أقسام الإدارة">
@@ -56,6 +57,7 @@
         <button class="tabBtn" data-section="ordersSection">الطلبات</button>
         <button class="tabBtn" data-section="commissionsSection">العمولات</button>
         <button class="tabBtn" data-section="settlementsSection">التسويات</button>
+        <button class="tabBtn" data-section="reversalsSection">عكس العمولات</button>
       </nav>
 
       <section id="usersSection" class="adminSection activeSection">
@@ -147,6 +149,7 @@
             <option value="all">كل حالات القيود</option>
             <option value="earned">مستحق</option>
             <option value="paid">مدفوع - نظام سابق</option>
+            <option value="reversed">تم عكسها</option>
           </select>
         </div>
         <p id="commissionsMessage" class="message"></p>
@@ -175,6 +178,26 @@
         <p id="settlementsMessage" class="message"></p>
         <div id="settlementsContainer" class="cardList"></div>
         <button id="loadMoreSettlementsBtn" class="loadMore hidden" type="button">عرض 50 عملية إضافية</button>
+      </section>
+
+      <section id="reversalsSection" class="adminSection">
+        <div class="sectionHead">
+          <div><span class="sectionKicker">مراجعة فقط</span><h2>طلبات عكس العمولات</h2></div>
+          <button id="refreshReversalsBtn" class="secondaryBtn" type="button">تحديث</button>
+        </div>
+        <p class="hintBox">الإدارة لا توافق ولا ترفض. المشغّل يطلب العكس بعد إلغاء الطلب، والمشترك هو صاحب قرار التأكيد أو الرفض.</p>
+        <div class="filterGrid">
+          <input id="reversalsSearch" type="search" placeholder="بحث مباشر بـ Project ID">
+          <select id="reversalsStatusFilter">
+            <option value="all">كل الحالات</option>
+            <option value="pending_owner_confirmation">بانتظار تأكيد المشترك</option>
+            <option value="confirmed">تم عكس العمولة</option>
+            <option value="rejected">رفض المشترك</option>
+          </select>
+        </div>
+        <p id="reversalsMessage" class="message"></p>
+        <div id="reversalsContainer" class="cardList"></div>
+        <button id="loadMoreReversalsBtn" class="loadMore hidden" type="button">عرض 50 طلب عكس إضافي</button>
       </section>
     </main>
   </div>

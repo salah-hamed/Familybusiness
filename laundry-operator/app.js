@@ -3,6 +3,7 @@ import db from "../core/firebase/firebase-db.js";
 import { claimOperatorAccess,getOperator,operatorCanOperate,buildOperatorAuthEmail } from "../core/partners/partner-service.js";
 import { acceptPendingCommission,rejectPendingCommission,getCommissionAgreement } from "../core/commissions/commission-service.js";
 import { renderOperatorFinancePanel } from "../core/commissions/finance-panel.js";
+import { requestCommissionReversal } from "../core/commissions/reversal-service.js";
 import { getLaundry,updateLaundrySettings } from "../core/laundry/laundry-service.js";
 import { WORKER_ROLES,createWorker,listProjectWorkers,setWorkerActive } from "../core/workers/worker-service.js";
 import { assignWorkerAndPrepareWhatsApp, rollbackPreparedAssignment } from "../core/workers/worker-dispatch-service.js";
@@ -91,6 +92,21 @@ $("addWorkerBtn").onclick=async()=>{try{await createWorker({projectId,actorUid:u
 
 function itemSummary(order){return (order.items||[]).filter(x=>Number(x.quantity||0)>0).map(x=>`${Number(x.quantity)} × ${esc(x.label||x.key)} — ${esc(x.serviceLabel||x.service)}`).join("<br>");}
 function workerSelect(role,orderId){const list=workers.filter(w=>w.isActive&&w.role===role);return `<select data-worker-select="${orderId}"><option value="">اختر العامل</option>${list.map(w=>`<option value="${w.workerId}">${esc(w.name)}</option>`).join("")}</select>`;}
+
+function reversalReasonOptions(){
+  return `
+    <option value="customer_canceled_after_dispatch">العميل ألغى بعد الإرسال</option>
+    <option value="delivery_failed">تعذر التوصيل</option>
+    <option value="duplicate_order">طلب مكرر</option>
+    <option value="operator_error">خطأ تشغيلي</option>
+    <option value="other">سبب آخر</option>
+  `;
+}
+function reversalErrorMessage(error){
+  if(error?.message==="REVERSAL_ALREADY_EXISTS")return "تم إرسال طلب عكس العمولة لهذا الأوردر بالفعل.";
+  if(error?.message==="REVERSAL_EXCEEDS_OUTSTANDING")return "لا يمكن عكس العمولة لأن الرصيد المستحق الحالي أقل من قيمة العمولة.";
+  return error?.message||"تعذر إرسال طلب عكس العمولة.";
+}
 async function assignAndDispatch(order,role,nextStage){
   const select=document.querySelector(`[data-worker-select="${order.orderId}"]`);
   const workerId=select?.value;
@@ -180,6 +196,7 @@ async function loadOrders({appendHistory=false}={}){
     if(stage==="ready_delivery")controls+=workerSelect("delivery_agent",order.orderId)+'<button class="primary deliveryBtn">تعيين التوصيل + واتساب</button>';
     if(stage==="out_for_delivery")controls+='<button class="primary stageBtn" data-stage="delivered">تم التوصيل</button>';
     if(order.assignedWorkerWhatsapp&&["pickup_assigned","out_for_delivery"].includes(stage))controls+='<button class="secondary resendWhatsapp">إعادة إرسال واتساب</button>';
+    if(order.status==="canceled"&&order.commissionLocked===true)controls+=`<select class="reversalReasonSelect">${reversalReasonOptions()}</select><button class="secondary requestReversal">طلب عكس العمولة</button>`;
     if(next.includes("canceled"))controls+='<button class="danger stageBtn" data-stage="canceled">إلغاء</button>';
     return `<article class="orderCard" data-order="${order.orderId}"><div class="orderTop"><div><b>${esc(order.customerName||"عميل")}</b><div class="muted">${esc(order.customerPhone||"")} · ${esc(order.customerAddress||"")}</div></div><span class="pill">${stageLabel(stage)}</span></div><div class="orderItems">${itemSummary(order)}</div><b>${money(order.price)}</b><div class="orderActions">${controls}</div></article>`;
   }).join(""):'<p class="muted">لا توجد طلبات بعد.</p>';
@@ -189,6 +206,30 @@ async function loadOrders({appendHistory=false}={}){
     card.querySelectorAll(".stageBtn").forEach(btn=>btn.onclick=async()=>{try{await changeLaundryStage({projectId,orderId:order.orderId,actorUid:user.uid,nextStage:btn.dataset.stage});await loadOrders();}catch(e){alert(e.message);}});
     card.querySelector(".pickupBtn")?.addEventListener("click",()=>assignAndDispatch(order,"pickup_agent","pickup_assigned"));
     card.querySelector(".deliveryBtn")?.addEventListener("click",()=>assignAndDispatch(order,"delivery_agent","out_for_delivery"));
+    card.querySelector(".requestReversal")?.addEventListener("click",async()=>{
+      const button=card.querySelector(".requestReversal");
+      const reasonCode=card.querySelector(".reversalReasonSelect")?.value||"other";
+      button.disabled=true;
+      try{
+        await requestCommissionReversal({
+          projectId,
+          orderId:order.orderId,
+          operatorUid:user.uid,
+          reasonCode
+        });
+        alert("تم إرسال طلب عكس العمولة لصاحب المشروع للمراجعة.");
+        await renderOperatorFinancePanel({
+          container:$("operationsPanel"),
+          projectId,
+          operatorUid:user.uid
+        });
+      }catch(e){
+        alert(reversalErrorMessage(e));
+      }finally{
+        button.disabled=false;
+      }
+    });
+
     card.querySelector(".resendWhatsapp")?.addEventListener("click",()=>{
       const worker={
         name:order.assignedWorkerName,
