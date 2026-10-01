@@ -1,4 +1,5 @@
 import auth from "../core/firebase/firebase-auth.js";
+import { friendlyOperatorError } from "../core/operators/operator-errors.js";
 import { claimOperatorAccess, getOperator, operatorCanOperate, buildOperatorAuthEmail } from "../core/partners/partner-service.js";
 import { getCommissionAgreement } from "../core/commissions/commission-service.js";
 import { getSupermarket } from "../core/supermarket/supermarket-service.js";
@@ -146,7 +147,7 @@ async function authorize() {
       code.includes("permission-denied")
       || ["OPERATOR_ALREADY_CLAIMED","OPERATOR_INVITE_MISMATCH"].includes(message)
         ? "رابط الدخول ده اتلغى أو تم استبداله. اطلب رابط دخول جديد من صاحب المشروع."
-        : `تعذر فتح الكتالوج: ${message || "UNKNOWN_ERROR"}`;
+        : friendlyOperatorError(error,"تعذر فتح كتالوج المنتجات. حاول تحديث الصفحة.");
     return false;
   }
 
@@ -424,7 +425,7 @@ function bindCatalogCardEvents(visibleEntries) {
       } catch (error) {
         $("catalogMessage").innerText = error.message === "PRODUCT_ALREADY_EXISTS"
           ? "المنتج موجود بالفعل في متجرك."
-          : `تعذر الإضافة: ${error.message}`;
+          : friendlyOperatorError(error,"تعذر إضافة المنتج. راجع البيانات وحاول مرة أخرى.");
         btn.disabled = false;
       }
     };
@@ -451,7 +452,7 @@ function bindCatalogCardEvents(visibleEntries) {
           await refreshLocalCatalog();
           $("catalogMessage").innerText = `تم تحديث سعر ${product.name} ✅`;
         } catch (error) {
-          $("catalogMessage").innerText = `تعذر حفظ السعر: ${error.message}`;
+          $("catalogMessage").innerText = friendlyOperatorError(error,"تعذر حفظ السعر. راجع القيمة وحاول مرة أخرى.");
           quickSave.disabled = false;
         }
       };
@@ -474,7 +475,7 @@ function bindCatalogCardEvents(visibleEntries) {
           await refreshLocalCatalog({ syncMeta: true });
           $("catalogMessage").innerText = nextActive ? "تم تفعيل المنتج ✅" : "تم إيقاف المنتج مؤقتًا.";
         } catch (error) {
-          $("catalogMessage").innerText = `تعذر تغيير الحالة: ${error.message}`;
+          $("catalogMessage").innerText = friendlyOperatorError(error,"تعذر تغيير حالة المنتج. حاول مرة أخرى.");
           toggle.disabled = false;
         }
       };
@@ -496,7 +497,7 @@ function bindCatalogCardEvents(visibleEntries) {
           await refreshLocalCatalog({ syncMeta: true });
           $("catalogMessage").innerText = "تم حفظ بيانات المنتج ✅";
         } catch (error) {
-          $("catalogMessage").innerText = `تعذر حفظ البيانات: ${error.message}`;
+          $("catalogMessage").innerText = friendlyOperatorError(error,"تعذر حفظ بيانات المنتج. راجع البيانات وحاول مرة أخرى.");
           saveDetails.disabled = false;
         }
       };
@@ -512,7 +513,7 @@ function bindCatalogCardEvents(visibleEntries) {
           await refreshLocalCatalog({ syncMeta: true });
           $("catalogMessage").innerText = "تم حذف المنتج من المتجر.";
         } catch (error) {
-          $("catalogMessage").innerText = `تعذر الحذف: ${error.message}`;
+          $("catalogMessage").innerText = friendlyOperatorError(error,"تعذر حذف المنتج حاليًا.");
         }
       };
     }
@@ -625,7 +626,7 @@ $("addSelectedBtn").onclick = async () => {
     await refreshLocalCatalog({ syncMeta: true });
     $("catalogMessage").innerText = `تمت إضافة ${result.added} منتج ✅${result.skipped ? ` — تم تخطي ${result.skipped} موجود بالفعل` : ""}`;
   } catch (error) {
-    $("catalogMessage").innerText = `تعذر الإضافة الجماعية: ${error.message}`;
+    $("catalogMessage").innerText = friendlyOperatorError(error,"تعذر إضافة المنتجات المحددة. حاول مرة أخرى.");
     $("addSelectedBtn").disabled = false;
   }
 };
@@ -643,7 +644,7 @@ $("bulkActivateBtn").onclick = async () => {
     await refreshLocalCatalog({ syncMeta: true });
     $("catalogMessage").innerText = "تم تفعيل المنتجات المحددة ✅";
   } catch (error) {
-    $("catalogMessage").innerText = `تعذر التفعيل: ${error.message}`;
+    $("catalogMessage").innerText = friendlyOperatorError(error,"تعذر تفعيل المنتجات المحددة.");
   }
 };
 
@@ -660,7 +661,7 @@ $("bulkPauseBtn").onclick = async () => {
     await refreshLocalCatalog({ syncMeta: true });
     $("catalogMessage").innerText = "تم إيقاف المنتجات المحددة.";
   } catch (error) {
-    $("catalogMessage").innerText = `تعذر الإيقاف: ${error.message}`;
+    $("catalogMessage").innerText = friendlyOperatorError(error,"تعذر إيقاف المنتجات المحددة.");
   }
 };
 
@@ -678,7 +679,7 @@ $("bulkCategoryBtn").onclick = async () => {
     await refreshLocalCatalog({ syncMeta: true });
     $("catalogMessage").innerText = "تم تغيير التصنيف ✅";
   } catch (error) {
-    $("catalogMessage").innerText = `تعذر تغيير التصنيف: ${error.message}`;
+    $("catalogMessage").innerText = friendlyOperatorError(error,"تعذر تغيير تصنيف المنتجات.");
   }
 };
 
@@ -694,7 +695,7 @@ $("bulkDeleteBtn").onclick = async () => {
     await refreshLocalCatalog({ syncMeta: true });
     $("catalogMessage").innerText = "تم حذف المنتجات المحددة من المتجر.";
   } catch (error) {
-    $("catalogMessage").innerText = `تعذر الحذف: ${error.message}`;
+    $("catalogMessage").innerText = friendlyOperatorError(error,"تعذر حذف المنتج حاليًا.");
   }
 };
 
@@ -720,7 +721,7 @@ $("addProductBtn").onclick = async () => {
   } catch (error) {
     $("productMessage").innerText = error.message === "PRODUCT_ALREADY_EXISTS"
       ? "المنتج موجود بالفعل بنفس الاسم والحجم."
-      : `تعذر الإضافة: ${error.message}`;
+      : friendlyOperatorError(error,"تعذر إضافة المنتج. راجع البيانات وحاول مرة أخرى.");
   }
 };
 
@@ -772,7 +773,7 @@ async function scanBarcode() {
     detect();
   } catch (error) {
     stopBarcode();
-    $("productMessage").innerText = `تعذر تشغيل الكاميرا: ${error.message}`;
+    $("productMessage").innerText = "تعذر تشغيل الكاميرا. تأكد من منح إذن الكاميرا للمتصفح ثم حاول مرة أخرى.";
   }
 }
 
@@ -883,7 +884,7 @@ $("importBtn").onclick = async () => {
     $("importMessage").innerText =
       `تمت معالجة ${result.imported} منتج ✅ — جديد: ${result.added} — موجود وتم إثراؤه: ${result.updated}. لو الصور داخل Excel كرسومات مضمّنة وليست روابط فلن يستطيع المتصفح استخراجها.`;
   } catch (error) {
-    $("importMessage").innerText = `فشل الاستيراد: ${error.message}`;
+    $("importMessage").innerText = friendlyOperatorError(error,"تعذر استيراد الملف. تأكد من صيغة البيانات وحاول مرة أخرى.");
   }
 };
 
@@ -900,7 +901,7 @@ $("mergeDuplicatesBtn").onclick = async () => {
       ? `تم الدمج ✅ ${result.groups} مجموعة — حذف ${result.removed} نسخة زائدة — إثراء ${result.enriched} منتج.`
       : "تم الفحص ✅ لم نجد تكرارات مؤكدة.";
   } catch (error) {
-    $("duplicateMessage").innerText = `تعذر الفحص: ${error.message}`;
+    $("duplicateMessage").innerText = friendlyOperatorError(error,"تعذر فحص المنتجات المكررة. حاول مرة أخرى.");
   } finally {
     $("mergeDuplicatesBtn").disabled = false;
   }
@@ -934,6 +935,6 @@ onAuthStateChanged(auth, async user => {
   try {
     await loadProducts({ syncMeta: true });
   } catch (error) {
-    $("catalogMessage").innerText = `تعذر تحميل الكتالوج: ${error.message}`;
+    $("catalogMessage").innerText = friendlyOperatorError(error,"تعذر تحميل كتالوج المنتجات. حدّث الصفحة وحاول مرة أخرى.");
   }
 });
