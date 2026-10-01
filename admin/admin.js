@@ -1179,6 +1179,7 @@ function renderReversals() {
 async function ensureSectionLoaded(sectionId) {
   if (sectionLoaded[sectionId]) return;
   if (sectionId === "usersSection") await loadUsers();
+  if (sectionId === "subscriptionPaymentsSection") await loadSubscriptionPayments();
   if (sectionId === "projectsSection") await loadProjects();
   if (sectionId === "operatorsSection") await loadOperators();
   if (sectionId === "ordersSection") await loadAdminOrders();
@@ -1202,6 +1203,7 @@ async function refreshLoadedSections() {
   await loadOverview();
   const jobs = [];
   if (sectionLoaded.usersSection) jobs.push(loadUsers());
+  if (sectionLoaded.subscriptionPaymentsSection) jobs.push(loadSubscriptionPayments());
   if (sectionLoaded.projectsSection) jobs.push(loadProjects());
   if (sectionLoaded.operatorsSection) jobs.push(loadOperators());
   if (sectionLoaded.ordersSection) jobs.push(loadAdminOrders());
@@ -1222,6 +1224,7 @@ document.querySelectorAll(".tabBtn").forEach(button => {
 });
 
 $("refreshAllBtn").addEventListener("click", refreshLoadedSections);
+$("refreshSubscriptionPaymentsBtn").addEventListener("click", () => loadSubscriptionPayments());
 $("refreshProjectsBtn").addEventListener("click", () => loadProjects());
 $("refreshOperatorsBtn").addEventListener("click", () => loadOperators());
 $("refreshOrdersAdminBtn").addEventListener("click", () => loadAdminOrders());
@@ -1241,6 +1244,61 @@ $("usersStatusFilter").addEventListener("change", event => {
   loadUsers();
 });
 $("loadMoreUsersBtn").addEventListener("click", () => loadUsers({ append: true }));
+
+$("subscriptionPaymentsSearch").addEventListener("input", event => {
+  state.subscriptionPayments.search = clean(event.target.value);
+  state.subscriptionPayments.cursor = null;
+  debounceSearch(() => loadSubscriptionPayments());
+});
+$("subscriptionPaymentsStatusFilter").addEventListener("change", event => {
+  state.subscriptionPayments.status = event.target.value;
+  state.subscriptionPayments.cursor = null;
+  loadSubscriptionPayments();
+});
+$("loadMoreSubscriptionPaymentsBtn").addEventListener("click", () => loadSubscriptionPayments({ append: true }));
+
+$("subscriptionPaymentsContainer").addEventListener("click", async event => {
+  const button = event.target.closest("[data-action]");
+  if (!button) return;
+
+  if (button.dataset.action === "view-payment-proof") {
+    await openSubscriptionProof(button.dataset.proof || "");
+    return;
+  }
+
+  const paymentId = button.dataset.payment;
+  if (!paymentId) return;
+  button.disabled = true;
+
+  try {
+    if (button.dataset.action === "approve-subscription-payment") {
+      const confirmed = confirm("اعتماد هذه الدفعة سيُفعّل/يُجدد الاشتراك فورًا. هل راجعت مرجع التحويل والصورة؟");
+      if (!confirmed) return;
+      await approveSubscriptionPayment(paymentId);
+      $("subscriptionPaymentsMessage").innerText = "تم اعتماد الدفعة وتحديث الاشتراك بنجاح ✅";
+    } else if (button.dataset.action === "reject-subscription-payment") {
+      const reason = prompt("اكتب سبب الرفض ليظهر للمشترك:");
+      if (reason === null) return;
+      await rejectSubscriptionPayment(paymentId, reason);
+      $("subscriptionPaymentsMessage").innerText = "تم رفض الإثبات بدون تغيير حالة الاشتراك.";
+    }
+
+    await Promise.all([loadSubscriptionPayments(), loadUsers(), loadOverview()]);
+  } catch (error) {
+    console.error(error);
+    const message = String(error?.message || "");
+    $("subscriptionPaymentsMessage").innerText =
+      message === "REJECTION_REASON_REQUIRED"
+        ? "سبب الرفض يجب أن يكون واضحًا من 3 إلى 300 حرف."
+        : message === "PAYMENT_DOES_NOT_MATCH_ACCOUNT_STATE"
+          ? "الدفعة لا تطابق حالة الاشتراك الحالية. راجع نوع الدفعة والمبلغ."
+          : message === "PAYMENT_ALREADY_REVIEWED"
+            ? "تمت مراجعة هذه الدفعة بالفعل. حدّث القائمة."
+            : "تعذر تنفيذ مراجعة الدفعة. حدّث البيانات وحاول مرة أخرى.";
+  } finally {
+    button.disabled = false;
+  }
+});
 
 $("projectsSearch").addEventListener("input", event => {
   state.projects.search = clean(event.target.value);
@@ -1330,24 +1388,31 @@ $("loadMoreReversalsBtn").addEventListener("click", () => loadReversals({ append
 $("usersContainer").addEventListener("click", async event => {
   const button = event.target.closest("[data-action][data-uid]");
   if (!button) return;
+
+  if (button.dataset.action === "view-user-payments") {
+    state.subscriptionPayments.search = button.dataset.uid;
+    state.subscriptionPayments.status = "all";
+    state.subscriptionPayments.cursor = null;
+    $("subscriptionPaymentsSearch").value = button.dataset.uid;
+    $("subscriptionPaymentsStatusFilter").value = "all";
+    switchSection("subscriptionPaymentsSection");
+    await loadSubscriptionPayments();
+    return;
+  }
+
+  if (button.dataset.action !== "deactivate-user") return;
   button.disabled = true;
 
   try {
-    if (button.dataset.action === "activate-user") {
-      await activateOrRenewUser(button.dataset.uid);
-      $("usersMessage").innerText = "تم تحديث الاشتراك بنجاح.";
-    } else if (button.dataset.action === "deactivate-user") {
-      await updateDoc(doc(db, "users", button.dataset.uid), {
-        isActive: false,
-        subscriptionStatus: "inactive"
-      });
-      $("usersMessage").innerText = "تم إيقاف الاشتراك.";
-    }
-
+    await updateDoc(doc(db, "users", button.dataset.uid), {
+      isActive: false,
+      subscriptionStatus: "inactive"
+    });
+    $("usersMessage").innerText = "تم إيقاف الاشتراك.";
     await Promise.all([loadUsers(), loadOverview()]);
   } catch (error) {
     console.error(error);
-    $("usersMessage").innerText = `تعذر تنفيذ الإجراء: ${error.message}`;
+    $("usersMessage").innerText = "تعذر إيقاف الاشتراك. حاول مرة أخرى.";
   } finally {
     button.disabled = false;
   }
