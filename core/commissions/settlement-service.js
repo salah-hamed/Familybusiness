@@ -5,16 +5,16 @@ import {
   doc,
   getDoc,
   getDocs,
+  getAggregateFromServer,
   query,
   where,
   orderBy,
   limit,
+  sum,
+  count,
   runTransaction,
-  serverTimestamp,
-  deleteField
+  serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-
-const SETTLEMENT_ENTRY_LIMIT = 200;
 
 function clean(value) {
   return String(value || "").trim();
@@ -22,205 +22,248 @@ function clean(value) {
 
 function money(value) {
   const amount = Number(value);
-  if (!Number.isFinite(amount) || amount < 0) throw new Error("INVALID_SETTLEMENT_AMOUNT");
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error("INVALID_PAYMENT_AMOUNT");
+  }
   return Math.round(amount * 100) / 100;
 }
 
-function toMillis(value) {
-  if (typeof value?.toMillis === "function") return value.toMillis();
-  if (value?.seconds) return Number(value.seconds) * 1000;
-  return 0;
+async function aggregateAmount(queryRef) {
+  const snap = await getAggregateFromServer(queryRef, {
+    totalAmount: sum("amount"),
+    entryCount: count()
+  });
+
+  return {
+    totalAmount: Number(snap.data().totalAmount || 0),
+    entryCount: Number(snap.data().entryCount || 0)
+  };
 }
 
-export async function listProjectOutstandingCommissionEntries(projectId) {
+export async function getProjectPaymentSummary(projectId) {
   const pid = clean(projectId);
   if (!pid) throw new Error("PROJECT_ID_REQUIRED");
 
+  const ledger = collection(db, "commissionLedger");
+  const payments = collection(db, "commissionSettlements");
+
+  const [earned, confirmed, pending] = await Promise.all([
+    aggregateAmount(query(
+      ledger,
+      where("projectId", "==", pid),
+      where("sourceType", "==", "project_order")
+    )),
+    aggregateAmount(query(
+      payments,
+      where("projectId", "==", pid),
+      where("status", "==", "confirmed")
+    )),
+    aggregateAmount(query(
+      payments,
+      where("projectId", "==", pid),
+      where("status", "==", "pending_owner_confirmation")
+    ))
+  ]);
+
+  const paidAmount = Math.min(earned.totalAmount, confirmed.totalAmount);
+
+  return {
+    earnedAmount: earned.totalAmount,
+    earnedCount: earned.entryCount,
+    paidAmount,
+    outstandingAmount: Math.max(0, earned.totalAmount - paidAmount),
+    pendingAmount: pending.totalAmount,
+    pendingCount: pending.entryCount
+  };
+}
+
+export async function listProjectPaymentRequests(
+  projectId,
+  { pageSize = 20 } = {}
+) {
+  const pid = clean(projectId);
+  if (!pid) throw new Error("PROJECT_ID_REQUIRED");
+
+  const size = Math.max(1, Math.min(50, Number(pageSize) || 20));
   const snap = await getDocs(
     query(
-      collection(db, "commissionLedger"),
-      where("projectId", "==", pid)
+      collection(db, "commissionSettlements"),
+      where("projectId", "==", pid),
+      orderBy("createdAt", "desc"),
+      limit(size)
     )
   );
 
-  return snap.docs
-    .map(item => ({ entryId: item.id, ...item.data() }))
-    .filter(entry =>
-      entry.sourceType === "project_order" &&
-      entry.status === "earned" &&
-      !entry.paidAt &&
-      !entry.settlementId
-    )
-    .sort((a, b) => toMillis(a.createdAt || a.earnedAt) - toMillis(b.createdAt || b.earnedAt));
+  return snap.docs.map(item => ({
+    settlementId: item.id,
+    ...item.data()
+  }));
 }
 
-export async function createProjectCommissionSettlement({
+export async function declareOperatorPayment({
   projectId,
-  adminUid,
+  operatorUid,
+  amount,
+  paymentMethod,
+  paymentReference = "",
   note = ""
 }) {
   const pid = clean(projectId);
-  const uid = clean(adminUid);
-  if (!pid || !uid) throw new Error("SETTLEMENT_FIELDS_REQUIRED");
+  const uid = clean(operatorUid);
+  const paidAmount = money(amount);
+  const method = clean(paymentMethod);
+  const reference = clean(paymentReference).slice(0, 200);
+  const safeNote = clean(note).slice(0, 500);
 
-  const outstanding = await listProjectOutstandingCommissionEntries(pid);
-  if (!outstanding.length) throw new Error("NO_OUTSTANDING_COMMISSIONS");
+  if (!pid || !uid || !method) throw new Error("PAYMENT_FIELDS_REQUIRED");
 
-  const selected = outstanding.slice(0, SETTLEMENT_ENTRY_LIMIT);
-  const settlementRef = doc(collection(db, "commissionSettlements"));
+  const summary = await getProjectPaymentSummary(pid);
+  if (summary.pendingCount > 0) throw new Error("PENDING_PAYMENT_EXISTS");
+  if (summary.outstandingAmount <= 0) throw new Error("NO_OUTSTANDING_COMMISSIONS");
+  if (paidAmount > summary.outstandingAmount) throw new Error("PAYMENT_EXCEEDS_OUTSTANDING");
+
   const projectRef = doc(db, "projects", pid);
+  const stateRef = doc(db, "commissionPaymentStates", pid);
+  const settlementRef = doc(collection(db, "commissionSettlements"));
 
   await runTransaction(db, async transaction => {
-    const projectSnap = await transaction.get(projectRef);
+    const [projectSnap, stateSnap] = await Promise.all([
+      transaction.get(projectRef),
+      transaction.get(stateRef)
+    ]);
+
     if (!projectSnap.exists()) throw new Error("PROJECT_NOT_FOUND");
     const project = projectSnap.data();
 
-    const freshEntries = [];
-    for (const entry of selected) {
-      const entryRef = doc(db, "commissionLedger", entry.entryId);
-      const snap = await transaction.get(entryRef);
-      if (!snap.exists()) throw new Error("COMMISSION_ENTRY_NOT_FOUND");
-      const data = snap.data();
-
-      if (
-        data.projectId !== pid ||
-        data.sourceType !== "project_order" ||
-        data.status !== "earned" ||
-        data.paidAt ||
-        data.settlementId
-      ) {
-        throw new Error("COMMISSION_ENTRY_NO_LONGER_OUTSTANDING");
-      }
-
-      freshEntries.push({
-        ref: entryRef,
-        entryId: snap.id,
-        orderId: data.orderId || data.sourceId || "",
-        amount: money(data.amount)
-      });
+    if (
+      project.operatingModel !== "partner_operated" ||
+      !project.operatorId
+    ) {
+      throw new Error("PROJECT_NOT_PARTNER_OPERATED");
     }
 
-    const amount = money(freshEntries.reduce((sum, entry) => sum + entry.amount, 0));
+    if (stateSnap.exists() && stateSnap.data().pendingSettlementId) {
+      throw new Error("PENDING_PAYMENT_EXISTS");
+    }
+
+    const operatorRef = doc(db, "operators", project.operatorId);
+    const operatorSnap = await transaction.get(operatorRef);
+    if (!operatorSnap.exists()) throw new Error("OPERATOR_NOT_FOUND");
+
+    const operator = operatorSnap.data();
+    if (
+      operator.authUid !== uid ||
+      operator.status !== "active" ||
+      operator.isActive !== true
+    ) {
+      throw new Error("OPERATOR_ACCESS_DENIED");
+    }
+
     const createdAt = serverTimestamp();
 
     transaction.set(settlementRef, {
       settlementId: settlementRef.id,
       projectId: pid,
       ownerId: project.ownerId,
-      operatorId: project.operatorId || "",
+      operatorId: project.operatorId,
       templateId: project.template || project.projectId || "",
-      businessName: project.businessName || "",
+      businessName: project.businessName || operator.name || "",
       currency: "EGP",
-      status: "pending",
-      entryIds: freshEntries.map(entry => entry.entryId),
-      orderIds: freshEntries.map(entry => entry.orderId),
-      entryCount: freshEntries.length,
-      amount,
-      note: clean(note).slice(0, 500),
-      createdAt,
-      createdBy: uid,
-      updatedAt: createdAt,
-      paidAt: null,
-      paidBy: null,
-      paymentMethod: "",
-      paymentReference: "",
-      voidAt: null,
-      voidBy: null
-    });
-
-    for (const entry of freshEntries) {
-      transaction.update(entry.ref, {
-        settlementId: settlementRef.id,
-        settlementStatus: "pending",
-        settlementCreatedAt: createdAt
-      });
-    }
-  });
-
-  return {
-    settlementId: settlementRef.id,
-    entryCount: selected.length,
-    hasMore: outstanding.length > selected.length
-  };
-}
-
-export async function markCommissionSettlementPaid({
-  settlementId,
-  adminUid,
-  paymentMethod,
-  paymentReference = ""
-}) {
-  const sid = clean(settlementId);
-  const uid = clean(adminUid);
-  const method = clean(paymentMethod);
-  const reference = clean(paymentReference).slice(0, 200);
-
-  if (!sid || !uid || !method) throw new Error("PAYMENT_FIELDS_REQUIRED");
-
-  const settlementRef = doc(db, "commissionSettlements", sid);
-
-  await runTransaction(db, async transaction => {
-    const settlementSnap = await transaction.get(settlementRef);
-    if (!settlementSnap.exists()) throw new Error("SETTLEMENT_NOT_FOUND");
-
-    const settlement = settlementSnap.data();
-    if (settlement.status !== "pending") throw new Error("SETTLEMENT_NOT_PENDING");
-
-    const entryIds = Array.isArray(settlement.entryIds) ? settlement.entryIds : [];
-    if (!entryIds.length) throw new Error("SETTLEMENT_ENTRIES_MISSING");
-
-    const entries = [];
-    for (const entryId of entryIds) {
-      const entryRef = doc(db, "commissionLedger", entryId);
-      const entrySnap = await transaction.get(entryRef);
-      if (!entrySnap.exists()) throw new Error("COMMISSION_ENTRY_NOT_FOUND");
-      const entry = entrySnap.data();
-
-      if (
-        entry.settlementId !== sid ||
-        entry.projectId !== settlement.projectId ||
-        entry.status !== "earned"
-      ) {
-        throw new Error("SETTLEMENT_ENTRY_MISMATCH");
-      }
-
-      entries.push({ ref: entryRef, amount: money(entry.amount) });
-    }
-
-    const ledgerTotal = money(entries.reduce((sum, entry) => sum + entry.amount, 0));
-    if (ledgerTotal !== money(settlement.amount)) {
-      throw new Error("SETTLEMENT_TOTAL_MISMATCH");
-    }
-
-    const paidAt = serverTimestamp();
-
-    transaction.update(settlementRef, {
-      status: "paid",
-      paidAt,
-      paidBy: uid,
+      amount: paidAmount,
+      status: "pending_owner_confirmation",
       paymentMethod: method.slice(0, 80),
       paymentReference: reference,
-      updatedAt: paidAt
+      note: safeNote,
+      declaredAt: createdAt,
+      declaredBy: uid,
+      createdAt,
+      updatedAt: createdAt,
+      confirmedAt: null,
+      confirmedBy: null,
+      rejectedAt: null,
+      rejectedBy: null
     });
 
-    for (const entry of entries) {
-      transaction.update(entry.ref, {
-        status: "paid",
-        paidAt,
-        settlementStatus: "paid"
-      });
+    transaction.set(stateRef, {
+      projectId: pid,
+      ownerId: project.ownerId,
+      operatorId: project.operatorId,
+      pendingSettlementId: settlementRef.id,
+      updatedAt: createdAt
+    }, { merge: true });
+  });
+
+  return settlementRef.id;
+}
+
+export async function confirmOwnerPayment({
+  settlementId,
+  ownerUid
+}) {
+  const sid = clean(settlementId);
+  const uid = clean(ownerUid);
+  if (!sid || !uid) throw new Error("PAYMENT_CONFIRMATION_FIELDS_REQUIRED");
+
+  const settlementRef = doc(db, "commissionSettlements", sid);
+  const initialSnap = await getDoc(settlementRef);
+  if (!initialSnap.exists()) throw new Error("SETTLEMENT_NOT_FOUND");
+
+  const initial = initialSnap.data();
+  if (initial.ownerId !== uid) throw new Error("SETTLEMENT_OWNER_MISMATCH");
+  if (initial.status !== "pending_owner_confirmation") {
+    throw new Error("SETTLEMENT_NOT_PENDING");
+  }
+
+  const summary = await getProjectPaymentSummary(initial.projectId);
+  if (Number(initial.amount || 0) > summary.outstandingAmount) {
+    throw new Error("PAYMENT_EXCEEDS_CURRENT_OUTSTANDING");
+  }
+
+  const stateRef = doc(db, "commissionPaymentStates", initial.projectId);
+
+  await runTransaction(db, async transaction => {
+    const [settlementSnap, stateSnap] = await Promise.all([
+      transaction.get(settlementRef),
+      transaction.get(stateRef)
+    ]);
+
+    if (!settlementSnap.exists()) throw new Error("SETTLEMENT_NOT_FOUND");
+    const settlement = settlementSnap.data();
+
+    if (settlement.ownerId !== uid) throw new Error("SETTLEMENT_OWNER_MISMATCH");
+    if (settlement.status !== "pending_owner_confirmation") {
+      throw new Error("SETTLEMENT_NOT_PENDING");
     }
+    if (
+      !stateSnap.exists() ||
+      stateSnap.data().pendingSettlementId !== sid
+    ) {
+      throw new Error("PAYMENT_STATE_MISMATCH");
+    }
+
+    const confirmedAt = serverTimestamp();
+
+    transaction.update(settlementRef, {
+      status: "confirmed",
+      confirmedAt,
+      confirmedBy: uid,
+      updatedAt: confirmedAt
+    });
+
+    transaction.set(stateRef, {
+      pendingSettlementId: "",
+      updatedAt: confirmedAt
+    }, { merge: true });
   });
 }
 
-export async function voidCommissionSettlement({
+export async function rejectOwnerPayment({
   settlementId,
-  adminUid,
-  note = ""
+  ownerUid
 }) {
   const sid = clean(settlementId);
-  const uid = clean(adminUid);
-  if (!sid || !uid) throw new Error("SETTLEMENT_FIELDS_REQUIRED");
+  const uid = clean(ownerUid);
+  if (!sid || !uid) throw new Error("PAYMENT_CONFIRMATION_FIELDS_REQUIRED");
 
   const settlementRef = doc(db, "commissionSettlements", sid);
 
@@ -229,48 +272,57 @@ export async function voidCommissionSettlement({
     if (!settlementSnap.exists()) throw new Error("SETTLEMENT_NOT_FOUND");
 
     const settlement = settlementSnap.data();
-    if (settlement.status !== "pending") throw new Error("SETTLEMENT_NOT_PENDING");
-
-    const entryIds = Array.isArray(settlement.entryIds) ? settlement.entryIds : [];
-    const entries = [];
-
-    for (const entryId of entryIds) {
-      const entryRef = doc(db, "commissionLedger", entryId);
-      const entrySnap = await transaction.get(entryRef);
-      if (!entrySnap.exists()) continue;
-      entries.push({ ref: entryRef, data: entrySnap.data() });
+    if (settlement.ownerId !== uid) throw new Error("SETTLEMENT_OWNER_MISMATCH");
+    if (settlement.status !== "pending_owner_confirmation") {
+      throw new Error("SETTLEMENT_NOT_PENDING");
     }
 
-    const voidAt = serverTimestamp();
+    const stateRef = doc(db, "commissionPaymentStates", settlement.projectId);
+    const stateSnap = await transaction.get(stateRef);
+
+    if (
+      !stateSnap.exists() ||
+      stateSnap.data().pendingSettlementId !== sid
+    ) {
+      throw new Error("PAYMENT_STATE_MISMATCH");
+    }
+
+    const rejectedAt = serverTimestamp();
 
     transaction.update(settlementRef, {
-      status: "void",
-      voidAt,
-      voidBy: uid,
-      note: clean(note || settlement.note).slice(0, 500),
-      updatedAt: voidAt
+      status: "rejected",
+      rejectedAt,
+      rejectedBy: uid,
+      updatedAt: rejectedAt
     });
 
-    for (const entry of entries) {
-      if (entry.data.settlementId !== sid || entry.data.status === "paid") continue;
-      transaction.update(entry.ref, {
-        settlementId: deleteField(),
-        settlementStatus: deleteField(),
-        settlementCreatedAt: deleteField()
-      });
-    }
+    transaction.set(stateRef, {
+      pendingSettlementId: "",
+      updatedAt: rejectedAt
+    }, { merge: true });
   });
 }
 
-export async function listRecentCommissionSettlements({ pageSize = 100 } = {}) {
-  const size = Math.max(1, Math.min(100, Number(pageSize) || 100));
+export async function listRecentCommissionSettlements({
+  status = "all",
+  pageSize = 50
+} = {}) {
+  const size = Math.max(1, Math.min(100, Number(pageSize) || 50));
+  const constraints = [];
+
+  if (status !== "all") {
+    constraints.push(where("status", "==", status));
+  }
+
+  constraints.push(orderBy("createdAt", "desc"));
+  constraints.push(limit(size));
+
   const snap = await getDocs(
-    query(
-      collection(db, "commissionSettlements"),
-      orderBy("createdAt", "desc"),
-      limit(size)
-    )
+    query(collection(db, "commissionSettlements"), ...constraints)
   );
 
-  return snap.docs.map(item => ({ settlementId: item.id, ...item.data() }));
+  return snap.docs.map(item => ({
+    settlementId: item.id,
+    ...item.data()
+  }));
 }
