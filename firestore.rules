@@ -14,6 +14,7 @@ service cloud.firestore {
   function laundryPath(projectId){ return /databases/$(database)/documents/laundries/$(projectId); }
   function commissionLedgerPath(entryId){ return /databases/$(database)/documents/commissionLedger/$(entryId); }
   function commissionReversalPath(reversalId){ return /databases/$(database)/documents/commissionReversals/$(reversalId); }
+  function subscriptionPaymentPath(paymentId){ return /databases/$(database)/documents/subscriptionPayments/$(paymentId); }
   function userExists(uid){ return exists(userPath(uid)); }
   function userData(uid){ return get(userPath(uid)).data; }
   function isAdmin(){ return signedIn() && userExists(request.auth.uid) && userData(request.auth.uid).role == "admin"; }
@@ -837,7 +838,43 @@ service cloud.firestore {
     ]);
    allow get: if isAdmin() || (signedIn() && request.auth.uid == uid);
    allow list: if isAdmin();
-   allow update: if isAdmin() || (
+   allow update: if (
+    isAdmin()
+    && (
+      (
+        request.resource.data.isActive == false
+        && request.resource.data.subscriptionStatus == "inactive"
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "isActive","subscriptionStatus"
+        ])
+      )
+      ||
+      (
+        request.resource.data.isActive == true
+        && request.resource.data.subscriptionStatus == "active"
+        && request.resource.data.initialActivationPaid == true
+        && request.resource.data.billingCycle == "monthly"
+        && request.resource.data.lastSubscriptionPaymentId is string
+        && request.resource.data.lastSubscriptionPaymentId.size() > 0
+        && request.resource.data.lastPaymentType in ["initial","renewal"]
+        && request.resource.data.lastPaymentAmount is number
+        && request.resource.data.lastPaymentAt == request.time
+        && request.resource.data.subscriptionExpiresAt > request.time
+        && existsAfter(subscriptionPaymentPath(request.resource.data.lastSubscriptionPaymentId))
+        && getAfter(subscriptionPaymentPath(request.resource.data.lastSubscriptionPaymentId)).data.status == "approved"
+        && getAfter(subscriptionPaymentPath(request.resource.data.lastSubscriptionPaymentId)).data.userId == uid
+        && getAfter(subscriptionPaymentPath(request.resource.data.lastSubscriptionPaymentId)).data.paymentType == request.resource.data.lastPaymentType
+        && getAfter(subscriptionPaymentPath(request.resource.data.lastSubscriptionPaymentId)).data.amount == request.resource.data.lastPaymentAmount
+        && getAfter(subscriptionPaymentPath(request.resource.data.lastSubscriptionPaymentId)).data.reviewedBy == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "isActive","subscriptionStatus","initialActivationPaid","billingCycle",
+          "subscriptionStartedAt","subscriptionExpiresAt","lastPaymentAmount",
+          "lastPaymentType","lastPaymentAt","lastSubscriptionPaymentId",
+          "lastRenewalAt","activatedAt","referralQualified"
+        ])
+      )
+    )
+   ) || (
     signedIn()
     && request.auth.uid == uid
     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name"])
@@ -877,7 +914,33 @@ service cloud.firestore {
       "reviewedAt","reviewedBy","rejectionReason"
     ]);
    allow get, list: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
-   allow update: if isAdmin();
+   allow update: if isAdmin()
+    && resource.data.status == "pending_review"
+    && request.resource.data.paymentId == resource.data.paymentId
+    && request.resource.data.userId == resource.data.userId
+    && request.resource.data.userEmail == resource.data.userEmail
+    && request.resource.data.paymentType == resource.data.paymentType
+    && request.resource.data.amount == resource.data.amount
+    && request.resource.data.currency == resource.data.currency
+    && request.resource.data.paymentMethod == resource.data.paymentMethod
+    && request.resource.data.paymentReference == resource.data.paymentReference
+    && request.resource.data.proofPath == resource.data.proofPath
+    && request.resource.data.submittedAt == resource.data.submittedAt
+    && request.resource.data.status in ["approved","rejected"]
+    && request.resource.data.reviewedAt == request.time
+    && request.resource.data.reviewedBy == request.auth.uid
+    && (
+      (request.resource.data.status == "approved" && request.resource.data.rejectionReason == "")
+      || (
+        request.resource.data.status == "rejected"
+        && request.resource.data.rejectionReason is string
+        && request.resource.data.rejectionReason.size() >= 3
+        && request.resource.data.rejectionReason.size() <= 300
+      )
+    )
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+      "status","reviewedAt","reviewedBy","rejectionReason"
+    ]);
    allow delete: if false;
   }
 
