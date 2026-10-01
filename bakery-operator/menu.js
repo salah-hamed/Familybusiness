@@ -1,4 +1,5 @@
 import auth from "../core/firebase/firebase-auth.js";
+import { friendlyOperatorError } from "../core/operators/operator-errors.js";
 import { claimOperatorAccess, getOperator, operatorCanOperate, buildOperatorAuthEmail } from "../core/partners/partner-service.js";
 import { getCommissionAgreement } from "../core/commissions/commission-service.js";
 import { getRestaurant } from "../core/restaurant/restaurant-service.js";
@@ -86,7 +87,7 @@ async function authorize(){
     const message=String(e?.message||"");
     $("pageStatus").innerText=code.includes("permission-denied")||["OPERATOR_ALREADY_CLAIMED","OPERATOR_INVITE_MISMATCH"].includes(message)
       ?"رابط الدخول ده اتلغى أو تم استبداله. اطلب رابط دخول جديد من صاحب المشروع."
-      :`تعذر فتح قائمة المنتجات: ${message||"UNKNOWN_ERROR"}`;
+      :`تعذر فتح قائمة المنتجات: ${message||:friendlyOperatorError(e,"تعذر فتح قائمة المنتجات. حاول تحديث الصفحة.");
     return false;
   }
 
@@ -212,7 +213,7 @@ function renderMenu(){
         });
         upsertLocalMenuItem(updated);
         renderMenu();
-      }catch(e){alert(e.message);}
+      }catch(e){alert(friendlyOperatorError(e,"تعذر تحديث الصنف. راجع البيانات وحاول مرة أخرى."));}
     };
 
     card.querySelector(".toggleItem").onclick=async()=>{
@@ -224,7 +225,7 @@ function renderMenu(){
         });
         upsertLocalMenuItem(updated);
         renderMenu();
-      }catch(e){alert(e.message);}
+      }catch(e){alert(friendlyOperatorError(e,"تعذر تحديث الصنف. راجع البيانات وحاول مرة أخرى."));}
     };
 
     card.querySelector(".deleteItem").onclick=async()=>{
@@ -233,7 +234,7 @@ function renderMenu(){
         await deleteRestaurantMenuItem(projectId,itemId);
         removeLocalMenuItem(itemId);
         renderMenu();
-      }catch(e){alert(e.message);}
+      }catch(e){alert(friendlyOperatorError(e,"تعذر تحديث الصنف. راجع البيانات وحاول مرة أخرى."));}
     };
   });
 }
@@ -259,7 +260,7 @@ $("addItemBtn").onclick=async()=>{
     ["itemName","itemCategory","itemPrice","itemDescription","itemImage"].forEach(id=>$(id).value="");
     $("itemMessage").innerText="تمت إضافة المنتج ✅";
     renderMenu();
-  }catch(e){$("itemMessage").innerText=e.message;}
+  }catch(e){$("itemMessage").innerText=friendlyOperatorError(e,"تعذر حفظ الصنف. راجع الاسم والسعر وحاول مرة أخرى.");}
 };
 
 $("menuSearch").addEventListener("input",event=>{
