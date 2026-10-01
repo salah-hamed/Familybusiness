@@ -55,7 +55,7 @@ function render(){
   $("statusBanner").innerText=accepted?"المغسلة مرتبطة بالمشروع. التشغيل عند المغسلة وأنت تتابع العمولة.":"المشروع في انتظار اعتماد اتفاق العمولة.";
   $("linkedLaundryName").innerText=laundry.name||operator.name||"المغسلة";
   $("operatorState").innerText=operator.isActive?"نشطة":"بانتظار التفعيل";
-  $("currentCommission").innerText=accepted?money(agreement.currentAmount)+" لكل طلب مكتمل":"لم تعتمد بعد";
+  $("currentCommission").innerText=accepted?money(agreement.currentAmount)+" لكل طلب يتم إرساله للتوصيل":"لم تعتمد بعد";
   $("agreementStatus").innerText=pending?`${statusText(agreement?.status)} · تعديل منتظر`:statusText(agreement?.status||operator.agreementStatus);
   $("laundryMeta").innerHTML=[
     ["المسؤول",laundry.contactName||operator.contactName||"—"],["الهاتف",laundry.phone||operator.phone||"—"],
