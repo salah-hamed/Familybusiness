@@ -2,7 +2,7 @@ import db from "../firebase/firebase-db.js";
 import { getEffectiveCommissionSnapshot, getProjectCommissionLedgerId } from "../commissions/commission-service.js";
 
 import {
-  collection,query,where,orderBy,startAfter,limit,getDocs,getCountFromServer,doc,getDoc,updateDoc,runTransaction,serverTimestamp
+  collection,query,where,orderBy,startAfter,limit,getDocs,getCountFromServer,doc,getDoc,addDoc,updateDoc,writeBatch,onSnapshot,runTransaction,serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const FLOW=Object.freeze({
@@ -15,6 +15,39 @@ const FLOW=Object.freeze({
   out_for_delivery:["delivered","canceled"],
   delivered:[],canceled:[]
 });
+
+function clean(value){return String(value||"").trim();}
+
+function randomTrackingToken(){
+  const bytes=new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return [...bytes].map(value=>value.toString(16).padStart(2,"0")).join("");
+}
+
+function trackingRef(token){
+  return doc(db,"orderTracking",token);
+}
+
+function laundryTrackingStatus(order={},override=""){
+  if(override)return override;
+  if(order.status==="new")return "new";
+  if(order.status==="canceled")return "canceled";
+  if(order.status==="done"||order.laundryStage==="delivered")return "delivered";
+  return order.laundryStage||"accepted";
+}
+
+function trackingPatchFromOrder(order={},overrideStatus=""){
+  const total=Number(order.price||0);
+  return {
+    status:laundryTrackingStatus(order,overrideStatus),
+    items:Array.isArray(order.items)?order.items:[],
+    subtotal:total,
+    deliveryFee:0,
+    total,
+    updatedAt:serverTimestamp()
+  };
+}
+
 
 
 function isMissingCompositeIndexError(error){
