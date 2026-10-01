@@ -178,8 +178,7 @@ export async function changeLaundryStage({projectId,orderId,actorUid,nextStage})
     const agreementRef=doc(db,"commissionAgreements",projectId);
     const ledgerRef=doc(db,"commissionLedger",getProjectCommissionLedgerId(orderId));
 
-    try{
-      await runTransaction(db,async transaction=>{
+    await runTransaction(db,async transaction=>{
         const freshOrderSnap=await transaction.get(ref);
         const agreementSnap=await transaction.get(agreementRef);
         if(!freshOrderSnap.exists()||!agreementSnap.exists())throw new Error("ORDER_OR_AGREEMENT_NOT_FOUND");
@@ -225,21 +224,9 @@ export async function changeLaundryStage({projectId,orderId,actorUid,nextStage})
           earnedAt,
           paidAt:null
         });
-      });
+    });
 
-      return;
-    }catch(error){
-      if(String(error?.code||"").toLowerCase()!=="permission-denied")throw error;
-
-      // Production compatibility until the new Firestore Rules are deployed.
-      await updateDoc(ref,{
-        status:"accepted",
-        laundryStage:"out_for_delivery",
-        statusUpdatedAt:serverTimestamp(),
-        statusUpdatedBy:actorUid
-      });
-      return;
-    }
+    return;
   }
 
   if(nextStage!=="delivered"){
