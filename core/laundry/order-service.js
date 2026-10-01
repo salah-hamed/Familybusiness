@@ -291,7 +291,12 @@ export async function changeLaundryStage({projectId,orderId,actorUid,nextStage})
   if(nextStage==="out_for_delivery"&&!order.assignedWorkerId)throw new Error("DELIVERY_AGENT_REQUIRED");
 
   if(nextStage==="canceled"){
-    await updateDoc(ref,{status:"canceled",statusUpdatedAt:serverTimestamp(),statusUpdatedBy:actorUid});
+    const batch=writeBatch(db);
+    batch.update(ref,{status:"canceled",statusUpdatedAt:serverTimestamp(),statusUpdatedBy:actorUid});
+    if(order.trackingToken){
+      batch.update(trackingRef(order.trackingToken),trackingPatchFromOrder(order,"canceled"));
+    }
+    await batch.commit();
     return;
   }
 
@@ -330,6 +335,13 @@ export async function changeLaundryStage({projectId,orderId,actorUid,nextStage})
           commissionEarnedAt:earnedAt
         });
 
+        if(fresh.trackingToken){
+          transaction.update(
+            trackingRef(fresh.trackingToken),
+            trackingPatchFromOrder(fresh,"out_for_delivery")
+          );
+        }
+
         transaction.set(ledgerRef,{
           userId:agreementSnap.data().ownerId,
           projectId,
@@ -364,20 +376,33 @@ export async function changeLaundryStage({projectId,orderId,actorUid,nextStage})
   }
 
   if(nextStage!=="delivered"){
-    await updateDoc(ref,{
+    const batch=writeBatch(db);
+    batch.update(ref,{
       status:"accepted",laundryStage:nextStage,statusUpdatedAt:serverTimestamp(),statusUpdatedBy:actorUid
     });
+    if(order.trackingToken){
+      batch.update(trackingRef(order.trackingToken),trackingPatchFromOrder(order,nextStage));
+    }
+    await batch.commit();
     return;
   }
 
   if(order.commissionLocked===true){
-    await updateDoc(ref,{
+    const batch=writeBatch(db);
+    batch.update(ref,{
       status:"done",
       laundryStage:"delivered",
       deliveredAt:serverTimestamp(),
       statusUpdatedAt:serverTimestamp(),
       statusUpdatedBy:actorUid
     });
+    if(order.trackingToken){
+      batch.update(trackingRef(order.trackingToken),{
+        ...trackingPatchFromOrder(order,"delivered"),
+        deliveredAt:serverTimestamp()
+      });
+    }
+    await batch.commit();
     return;
   }
 
@@ -409,6 +434,13 @@ export async function changeLaundryStage({projectId,orderId,actorUid,nextStage})
       commissionAmount:commission.amount,
       commissionAgreementVersion:commission.version
     });
+
+    if(fresh.trackingToken){
+      transaction.update(trackingRef(fresh.trackingToken),{
+        ...trackingPatchFromOrder(fresh,"delivered"),
+        deliveredAt:earnedAt
+      });
+    }
 
     transaction.set(ledgerRef,{
       userId:agreementSnap.data().ownerId,
