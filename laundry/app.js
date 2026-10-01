@@ -3,6 +3,7 @@ import { protectPage } from "../core/auth/auth-guard.js";
 import { createOrResumeLaundrySetup, getLaundryBundle, migrateLegacyLaundryProject } from "../core/laundry/laundry-service.js";
 import { proposeCommission } from "../core/commissions/commission-service.js";
 import { getProjectCommissionSummary } from "../core/commissions/earnings-service.js";
+import { renderOwnerFinancePanel } from "../core/commissions/finance-panel.js";
 import { ensureOperatorInviteAccess, getOperatorInviteToken, rotateOperatorInviteAccess } from "../core/partners/partner-service.js";
 import { normalizeWhatsAppPhone } from "../core/whatsapp/dispatch-service.js";
 import { createGuide } from "../core/onboarding/guide.js";
