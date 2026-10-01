@@ -15,6 +15,7 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  Timestamp,
   updateDoc,
   where,
   writeBatch
@@ -1467,4 +1468,151 @@ test("subscriber can query only their own subscription payment records", async (
     getDocs(query(collection(db, "subscriptionPayments"), where("userId", "==", uid)))
   );
   await assertFails(getDocs(collection(db, "subscriptionPayments")));
+});
+
+
+async function seedPendingSubscriptionReviewFixture(suffix = "review") {
+  const uid = `subscriber_${suffix}`;
+  const adminId = `admin_${suffix}`;
+  const paymentId = `${uid}_payment`;
+
+  await testEnv.withSecurityRulesDisabled(async context => {
+    const db = context.firestore();
+    await setDoc(doc(db, "users", uid), {
+      uid,
+      name: "Subscriber",
+      email: `${uid}@example.com`,
+      isActive: false,
+      subscriptionStatus: "pending",
+      initialActivationPaid: false,
+      billingCycle: "initial",
+      referredByUserId: "",
+      referralQualified: false
+    });
+    await setDoc(doc(db, "users", adminId), {
+      uid: adminId,
+      name: "Admin",
+      email: `${adminId}@example.com`,
+      role: "admin",
+      isActive: true,
+      subscriptionStatus: "active"
+    });
+    await setDoc(
+      doc(db, "subscriptionPayments", paymentId),
+      subscriptionPaymentRecord(uid, paymentId, {
+        submittedAt: new Date("2026-10-01T10:00:00Z")
+      })
+    );
+  });
+
+  return { uid, adminId, paymentId };
+}
+
+function initialActivationUpdate(paymentId, amount = 350) {
+  return {
+    isActive: true,
+    subscriptionStatus: "active",
+    initialActivationPaid: true,
+    billingCycle: "monthly",
+    subscriptionStartedAt: serverTimestamp(),
+    subscriptionExpiresAt: Timestamp.fromDate(new Date("2099-01-01T00:00:00Z")),
+    lastPaymentAmount: amount,
+    lastPaymentType: "initial",
+    lastPaymentAt: serverTimestamp(),
+    lastSubscriptionPaymentId: paymentId,
+    lastRenewalAt: null,
+    activatedAt: serverTimestamp()
+  };
+}
+
+test("admin cannot activate a subscriber without atomically approving a matching payment", async () => {
+  const { uid, adminId, paymentId } = await seedPendingSubscriptionReviewFixture("activation_gate");
+  const adminDb = testEnv.authenticatedContext(adminId).firestore();
+
+  await assertFails(
+    updateDoc(doc(adminDb, "users", uid), initialActivationUpdate(paymentId))
+  );
+});
+
+test("admin cannot approve payment without activating its subscriber in the same atomic write", async () => {
+  const { adminId, paymentId } = await seedPendingSubscriptionReviewFixture("approval_gate");
+  const adminDb = testEnv.authenticatedContext(adminId).firestore();
+
+  await assertFails(
+    updateDoc(doc(adminDb, "subscriptionPayments", paymentId), {
+      status: "approved",
+      reviewedAt: serverTimestamp(),
+      reviewedBy: adminId,
+      rejectionReason: ""
+    })
+  );
+});
+
+test("admin can atomically approve payment and activate subscriber with matching snapshot", async () => {
+  const { uid, adminId, paymentId } = await seedPendingSubscriptionReviewFixture("atomic_approval");
+  const adminDb = testEnv.authenticatedContext(adminId).firestore();
+  const batch = writeBatch(adminDb);
+
+  batch.update(doc(adminDb, "subscriptionPayments", paymentId), {
+    status: "approved",
+    reviewedAt: serverTimestamp(),
+    reviewedBy: adminId,
+    rejectionReason: ""
+  });
+  batch.update(doc(adminDb, "users", uid), initialActivationUpdate(paymentId));
+
+  await assertSucceeds(batch.commit());
+
+  const [paymentSnap, userSnap] = await Promise.all([
+    getDoc(doc(adminDb, "subscriptionPayments", paymentId)),
+    getDoc(doc(adminDb, "users", uid))
+  ]);
+
+  assert.equal(paymentSnap.data().status, "approved");
+  assert.equal(userSnap.data().subscriptionStatus, "active");
+  assert.equal(userSnap.data().lastSubscriptionPaymentId, paymentId);
+});
+
+test("payment approval and activation fail when amount snapshot does not match", async () => {
+  const { uid, adminId, paymentId } = await seedPendingSubscriptionReviewFixture("amount_mismatch");
+  const adminDb = testEnv.authenticatedContext(adminId).firestore();
+  const batch = writeBatch(adminDb);
+
+  batch.update(doc(adminDb, "subscriptionPayments", paymentId), {
+    status: "approved",
+    reviewedAt: serverTimestamp(),
+    reviewedBy: adminId,
+    rejectionReason: ""
+  });
+  batch.update(doc(adminDb, "users", uid), initialActivationUpdate(paymentId, 59));
+
+  await assertFails(batch.commit());
+});
+
+test("admin can reject pending proof without activating subscriber and subscriber cannot review it", async () => {
+  const { uid, adminId, paymentId } = await seedPendingSubscriptionReviewFixture("rejection");
+  const adminDb = testEnv.authenticatedContext(adminId).firestore();
+  const subscriberDb = testEnv.authenticatedContext(uid).firestore();
+
+  await assertFails(
+    updateDoc(doc(subscriberDb, "subscriptionPayments", paymentId), {
+      status: "rejected",
+      reviewedAt: serverTimestamp(),
+      reviewedBy: uid,
+      rejectionReason: "غير واضح"
+    })
+  );
+
+  await assertSucceeds(
+    updateDoc(doc(adminDb, "subscriptionPayments", paymentId), {
+      status: "rejected",
+      reviewedAt: serverTimestamp(),
+      reviewedBy: adminId,
+      rejectionReason: "صورة التحويل غير واضحة"
+    })
+  );
+
+  const userSnap = await getDoc(doc(adminDb, "users", uid));
+  assert.equal(userSnap.data().subscriptionStatus, "pending");
+  assert.equal(userSnap.data().isActive, false);
 });

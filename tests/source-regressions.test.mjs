@@ -493,7 +493,8 @@ test("FB-LAUNCH02 admin control center exposes platform operations sections", ()
     "loadAdminOrders",
     "loadCommissions",
     "loadSettlements",
-    "activateOrRenewUser"
+    "loadSubscriptionPayments",
+    "approveSubscriptionPayment"
   ]) {
     assert.equal(source.includes(marker), true, marker);
   }
