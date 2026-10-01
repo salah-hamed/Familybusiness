@@ -2,7 +2,8 @@
       registerUser,
       loginUser,
       logoutUser,
-      observeAuth
+      observeAuth,
+      requestPasswordReset
     } from './core/auth/auth.js';
 import { createGuide } from './core/onboarding/guide.js';
 import { buildAuthGuide } from './core/onboarding/guide-state.js';
@@ -37,6 +38,10 @@ const pageTitle =
 
 const switchMode =
   document.querySelector(".switch-mode");
+const switchPrompt =
+  document.getElementById("switchPrompt");
+const forgotPasswordBtn =
+  document.getElementById("forgotPasswordBtn");
 const referralUserId = new URLSearchParams(window.location.search).get("ref") || "";
 let currentMode = "register";
 const guideController = createGuide(buildAuthGuide({ mode: currentMode }), { autoOpen: true });
@@ -52,6 +57,10 @@ function updatePage() {
         confirmPasswordGroup.style.display = "block";
 
         registerBtn.innerText = "🚀 امتلك شركتك";
+        passwordInput.autocomplete = "new-password";
+        forgotPasswordBtn.classList.add("hidden");
+        switchPrompt.innerText = "لديك حساب بالفعل؟";
+        loginBtn.innerText = "تسجيل الدخول";
 
     } else {
 
@@ -62,6 +71,10 @@ function updatePage() {
         confirmPasswordGroup.style.display = "none";
 
         registerBtn.innerText = "🔐 تسجيل الدخول";
+        passwordInput.autocomplete = "current-password";
+        forgotPasswordBtn.classList.remove("hidden");
+        switchPrompt.innerText = "ليس لديك حساب؟";
+        loginBtn.innerText = "إنشاء حساب";
 
     }
 
@@ -139,8 +152,9 @@ registerBtn.addEventListener("click", async () => {
 
     event.preventDefault();
 
-    currentMode = "login";
+    currentMode = currentMode === "register" ? "login" : "register";
 
+    status.innerText = "";
     updatePage();
 
 });
@@ -154,24 +168,14 @@ registerBtn.addEventListener("click", async () => {
         await logoutUser();
 
         status.innerText =
-          "Logged Out ✅";
+          "تم تسجيل الخروج ✅";
 
       });
 
 
     // Observe Auth State
-    observeAuth((user) => {
-
-      if(user) {
-
-        console.log("Current User:", user.email);
-
-      } else {
-
-        console.log("No User Logged In");
-
-      }
-
+    observeAuth(() => {
+      // Keep the page synchronized without exposing account details in production logs.
     });
 
 updatePage();
