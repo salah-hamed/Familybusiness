@@ -54,14 +54,7 @@ async function refreshAccount(){
   const canOperate=operatorCanOperate(operator)&&agreement?.status==="accepted"&&agreement?.currentAmount!=null;
   setVisible("operationsPanel",canOperate);
   $("pageStatus").innerText=canOperate?`مرحبًا ${operator?.name||"بالمغسلة"} — التشغيل جاهز.`:"التشغيل متوقف لحد قبول أول اتفاق عمولة.";
-  if(canOperate){
-    await loadOperations();
-    await renderOperatorFinancePanel({
-      container:$("operationsPanel"),
-      projectId,
-      operatorUid:user.uid
-    });
-  }
+  if(canOperate) await loadOperations();
 }
 
 onAuthStateChanged(auth,async current=>{user=current;if(!projectId||!inviteAuthEmail){setVisible("authPanel",false);setVisible("agreementPanel",false);setVisible("operationsPanel",false);$("logoutBtn").classList.add("hidden");$("pageStatus").innerText="دعوة واتساب غير مكتملة أو غير صالحة.";return;}if(current&&String(current.email||"").toLowerCase()!==inviteAuthEmail.toLowerCase()){await signOut(auth);return;}if(!current){setVisible("authPanel",true);setVisible("agreementPanel",false);setVisible("operationsPanel",false);$("logoutBtn").classList.add("hidden");$("pageStatus").innerText="فعّل الدعوة بكلمة مرور أول مرة، أو سجل دخولك لو فعلتها قبل كده.";return;}refreshAccount();});
@@ -78,6 +71,11 @@ async function loadOperations(){
   const url=new URL("../templates/laundry/",location.href);url.searchParams.set("project",projectId);$("customerOrderLink").value=url;
   const projectSnap=await getDoc(doc(db,"projects",projectId));renderPricing(projectSnap.data()?.priceConfig||{});
   await Promise.all([loadWorkers(),loadOrders()]);
+  await renderOperatorFinancePanel({
+    container:$("operationsPanel"),
+    projectId,
+    operatorUid:user.uid
+  });
 }
 $("saveSettingsBtn").onclick=async()=>{try{await updateLaundrySettings(projectId,{name:$("settingsName").value,phone:$("settingsPhone").value,whatsapp:$("settingsWhatsapp").value,address:$("settingsAddress").value,location:$("settingsLocation").value,instapayLink:$("settingsInstapay").value,isAcceptingOrders:$("acceptingOrders").checked});$("settingsMessage").innerText="تم الحفظ ✅";}catch(e){$("settingsMessage").innerText=e.message;}};
 $("copyCustomerLinkBtn").onclick=async()=>{try{await navigator.clipboard.writeText($("customerOrderLink").value);}catch{$("customerOrderLink").select();document.execCommand("copy");}$("settingsMessage").innerText="تم نسخ رابط العملاء ✅";};
