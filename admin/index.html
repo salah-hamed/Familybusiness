@@ -40,6 +40,7 @@
 
       <section id="overviewCards" class="metricGrid" aria-label="مؤشرات المنصة">
         <article class="metricCard"><span>المستخدمون</span><b id="metricUsers">—</b><small id="metricUsersMeta">—</small></article>
+        <article class="metricCard"><span>دفعات اشتراك للمراجعة</span><b id="metricPendingSubscriptionPayments">—</b><small>إثباتات InstaPay تحتاج قرار</small></article>
         <article class="metricCard"><span>المشاريع</span><b id="metricProjects">—</b><small>كل المشاريع المسجلة</small></article>
         <article class="metricCard"><span>المشغّلون</span><b id="metricOperators">—</b><small id="metricOperatorsMeta">—</small></article>
         <article class="metricCard"><span>الطلبات</span><b id="metricOrders">—</b><small id="metricOrdersMeta">—</small></article>
@@ -52,6 +53,7 @@
 
       <nav class="adminTabs" aria-label="أقسام الإدارة">
         <button class="tabBtn active" data-section="usersSection">المستخدمون</button>
+        <button class="tabBtn" data-section="subscriptionPaymentsSection">دفعات الاشتراك</button>
         <button class="tabBtn" data-section="projectsSection">المشاريع</button>
         <button class="tabBtn" data-section="operatorsSection">المشغّلون</button>
         <button class="tabBtn" data-section="ordersSection">الطلبات</button>
@@ -78,6 +80,27 @@
         <p id="usersMessage" class="message"></p>
         <div id="usersContainer" class="cardList"></div>
         <button id="loadMoreUsersBtn" class="loadMore hidden" type="button">عرض 50 مستخدم إضافي</button>
+      </section>
+
+
+      <section id="subscriptionPaymentsSection" class="adminSection">
+        <div class="sectionHead">
+          <div><span class="sectionKicker">Subscription Review Queue</span><h2>دفعات الاشتراك وإثباتات InstaPay</h2></div>
+          <button id="refreshSubscriptionPaymentsBtn" class="secondaryBtn" type="button">تحديث</button>
+        </div>
+        <p class="hintBox">التفعيل يتم من هنا فقط بعد مراجعة مرجع التحويل والصورة. قبول الدفعة يفعّل الاشتراك في نفس العملية، والرفض لا يغيّر حالة الحساب.</p>
+        <div class="filterGrid">
+          <input id="subscriptionPaymentsSearch" type="search" placeholder="بحث مباشر: Payment ID أو User UID أو مرجع التحويل">
+          <select id="subscriptionPaymentsStatusFilter">
+            <option value="pending_review">بانتظار المراجعة</option>
+            <option value="all">كل الحالات</option>
+            <option value="approved">معتمد</option>
+            <option value="rejected">مرفوض</option>
+          </select>
+        </div>
+        <p id="subscriptionPaymentsMessage" class="message"></p>
+        <div id="subscriptionPaymentsContainer" class="cardList"></div>
+        <button id="loadMoreSubscriptionPaymentsBtn" class="loadMore hidden" type="button">عرض 50 دفعة إضافية</button>
       </section>
 
       <section id="projectsSection" class="adminSection">
