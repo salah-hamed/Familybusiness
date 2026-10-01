@@ -4,7 +4,8 @@ import { acceptPendingCommission, rejectPendingCommission, getCommissionAgreemen
 import { renderOperatorFinancePanel } from "../core/commissions/finance-panel.js";
 import { getRestaurant, updateRestaurantSettings } from "../core/restaurant/restaurant-service.js";
 import { WORKER_ROLES, createWorker, listProjectWorkers, setWorkerActive } from "../core/workers/worker-service.js";
-import { assignWorkerAndPrepareWhatsApp } from "../core/workers/worker-dispatch-service.js";
+import { assignWorkerAndPrepareWhatsApp, rollbackPreparedAssignment } from "../core/workers/worker-dispatch-service.js";
+import { buildWorkerWhatsAppUrl, openWhatsAppPlaceholder, navigatePreparedWhatsAppWindow } from "../core/whatsapp/dispatch-service.js";
 import { allowedNextRestaurantStatuses, listRestaurantOperationalOrders, listRestaurantHistoryPage, countRestaurantDeliveredOrders, acceptRestaurantOrder, changeRestaurantOrderStatus } from "../core/restaurant/order-service.js";
 
 import {
@@ -408,13 +409,14 @@ async function loadOrders({appendHistory=false}={}){
       o.status==="preparing"?'<button class="primary statusAction" data-next="ready">جاهز للتوصيل</button>':
       o.status==="assigned"?'<button class="primary statusAction" data-next="out_for_delivery">خرج للتوصيل</button>':
       o.status==="out_for_delivery"?'<button class="primary statusAction" data-next="delivered">تأكيد التوصيل</button>':"";
+    const resend=o.assignedWorkerWhatsapp?'<button class="secondary resendWhatsapp">إعادة إرسال واتساب</button>':"";
 
     return `<article class="rowCard orderCard" data-order="${o.orderId}">
       <div class="rowTop"><div><b>طلب #${o.orderId.slice(0,7)}</b><div class="muted">${escapeHTML(o.customerName)} · ${escapeHTML(o.customerPhone)}</div></div><span class="pill">${statusLabel(o.status)}</span></div>
       <div class="orderItems">${items||"لا توجد تفاصيل"}</div>
       <div class="muted">${escapeHTML(o.customerAddress||"")} · الإجمالي <b>${money(o.total||o.price)}</b></div>
       ${o.assignedWorkerName?`<div class="muted">المندوب: <b>${escapeHTML(o.assignedWorkerName)}</b></div>`:""}
-      <div class="orderActions">${riderSelect}${nextButton}${canCancel?'<button class="danger statusAction" data-next="canceled">إلغاء</button>':""}</div>
+      <div class="orderActions">${riderSelect}${nextButton}${resend}${canCancel?'<button class="danger statusAction" data-next="canceled">إلغاء</button>':""}</div>
     </article>`;
   }).join(""):'<p class="muted">لا توجد طلبات حتى الآن.</p>';
 
@@ -436,12 +438,55 @@ async function loadOrders({appendHistory=false}={}){
     card.querySelector(".assignRider")?.addEventListener("click",async()=>{
       const workerId=card.querySelector(".riderSelect").value;
       if(!workerId){alert("اختار المندوب الأول");return;}
+
+      const popup=openWhatsAppPlaceholder();
+
       try{
-        const result=await assignWorkerAndPrepareWhatsApp({projectId,orderId:order.orderId,workerId,actorUid:currentUser.uid});
-        await changeRestaurantOrderStatus({projectId,orderId:order.orderId,actorUid:currentUser.uid,nextStatus:"assigned"});
-        window.open(result.whatsappUrl,"_blank","noopener");
+        const result=await assignWorkerAndPrepareWhatsApp({
+          projectId,
+          orderId:order.orderId,
+          workerId,
+          actorUid:currentUser.uid,
+          businessName:currentRestaurant?.name||""
+        });
+
+        try{
+          await changeRestaurantOrderStatus({projectId,orderId:order.orderId,actorUid:currentUser.uid,nextStatus:"assigned"});
+        }catch(statusError){
+          await rollbackPreparedAssignment({
+            projectId,
+            orderId:order.orderId,
+            actorUid:currentUser.uid
+          });
+          throw statusError;
+        }
+
+        const opened=navigatePreparedWhatsAppWindow(popup,result.whatsappUrl);
         await loadOrders();
-      }catch(e){alert(e.message);}
+
+        if(!opened){
+          alert("تم تعيين المندوب واحتساب العمولة، لكن المتصفح منع فتح واتساب. اضغط «إعادة إرسال واتساب» من الطلب.");
+        }
+      }catch(e){
+        try{popup?.close();}catch{}
+        alert(e.message);
+      }
+    });
+
+    card.querySelector(".resendWhatsapp")?.addEventListener("click",()=>{
+      const worker={
+        name:order.assignedWorkerName,
+        whatsapp:order.assignedWorkerWhatsapp
+      };
+      const url=buildWorkerWhatsAppUrl({
+        templateId:"restaurant",
+        orderId:order.orderId,
+        order,
+        worker,
+        businessName:currentRestaurant?.name||""
+      });
+      const opened=window.open(url,"_blank","noopener");
+      if(!opened) alert("المتصفح منع فتح واتساب. اسمح بالنوافذ المنبثقة وحاول مرة أخرى.");
     });
   });
 }
