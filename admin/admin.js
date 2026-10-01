@@ -6,15 +6,11 @@ import {
   formatEgp
 } from "../core/config/platform-config.js";
 import { escapeHTML } from "../core/utils/helpers.js";
-import {
-  createProjectCommissionSettlement,
-  listRecentCommissionSettlements,
-  markCommissionSettlementPaid,
-  voidCommissionSettlement
-} from "../core/commissions/settlement-service.js";
+import { listRecentCommissionSettlements } from "../core/commissions/settlement-service.js";
 
 import {
   collection,
+  getDoc,
   getDocs,
   getCountFromServer,
   getAggregateFromServer,
@@ -34,24 +30,20 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const $ = id => document.getElementById(id);
-const USERS_PAGE_SIZE = 50;
-const USERS_SEARCH_PAGE_SIZE = 100;
-const ADMIN_LIST_LIMIT = 100;
+const PAGE_SIZE = 50;
+const SEARCH_LIMIT = 50;
 
 let adminSession = null;
-let users = [];
-let usersCursor = null;
-let usersHasMore = false;
-let usersLoading = false;
-let currentSearch = "";
-let currentStatus = "all";
 let searchTimer = null;
 
-let projects = [];
-let operators = [];
-let adminOrders = [];
-let commissions = [];
-let settlements = [];
+const state = {
+  users: { rows: [], cursor: null, hasMore: false, loading: false, search: "", status: "all" },
+  projects: { rows: [], cursor: null, hasMore: false, loading: false, search: "", template: "all" },
+  operators: { rows: [], cursor: null, hasMore: false, loading: false, search: "" },
+  orders: { rows: [], cursor: null, hasMore: false, loading: false, search: "", status: "all" },
+  commissions: { rows: [], cursor: null, hasMore: false, loading: false, search: "", status: "all" },
+  settlements: { rows: [], cursor: null, hasMore: false, loading: false, search: "", status: "all" }
+};
 
 const sectionLoaded = {
   usersSection: false,
@@ -64,21 +56,6 @@ const sectionLoaded = {
 
 function clean(value) {
   return String(value || "").trim();
-}
-
-function normalizeSearch(value) {
-  return clean(value)
-    .toLowerCase()
-    .replace(/[أإآ]/g, "ا")
-    .replace(/ى/g, "ي")
-    .replace(/ة/g, "ه")
-    .replace(/\s+/g, " ");
-}
-
-function containsSearch(parts, term) {
-  const q = normalizeSearch(term);
-  if (!q) return true;
-  return normalizeSearch(parts.filter(Boolean).join(" ")).includes(q);
 }
 
 function formatDate(value, withTime = false) {
@@ -108,14 +85,30 @@ function statusPill(status) {
     pending_invite: "دعوة معلقة",
     accepted: "مقبول",
     earned: "مستحق",
-    paid: "مدفوع",
-    void: "ملغي",
+    paid: "مدفوع - نظام سابق",
+    confirmed: "تم تأكيد الدفع",
+    pending_owner_confirmation: "بانتظار تأكيد المشترك",
+    rejected: "مرفوض",
     new: "جديد",
     delivered: "تم التوصيل",
     done: "مكتمل",
     canceled: "ملغي"
   })[value] || value;
+
   return `<span class="pill ${escapeHTML(value)}">${escapeHTML(label)}</span>`;
+}
+
+function uniqueRows(rows, key) {
+  const map = new Map();
+  for (const row of rows) {
+    const id = row[key];
+    if (id && !map.has(id)) map.set(id, row);
+  }
+  return [...map.values()];
+}
+
+function mergeRows(target, rows, key) {
+  return uniqueRows([...target, ...rows], key);
 }
 
 async function countDocs(collectionName, constraints = []) {
@@ -123,11 +116,12 @@ async function countDocs(collectionName, constraints = []) {
   return Number(snap.data().count || 0);
 }
 
-async function aggregateLedger(constraints = []) {
+async function aggregateAmount(collectionName, constraints = []) {
   const snap = await getAggregateFromServer(
-    query(collection(db, "commissionLedger"), ...constraints),
+    query(collection(db, collectionName), ...constraints),
     { totalAmount: sum("amount"), entryCount: count() }
   );
+
   return {
     totalAmount: Number(snap.data().totalAmount || 0),
     entryCount: Number(snap.data().entryCount || 0)
@@ -146,9 +140,10 @@ async function loadOverview() {
       totalOperators,
       activeOperators,
       totalOrders,
-      earnedLedger,
-      paidLedger,
-      pendingSettlements
+      totalCommission,
+      confirmedPayments,
+      legacyPayments,
+      pendingPayments
     ] = await Promise.all([
       countDocs("users"),
       countDocs("users", [where("subscriptionStatus", "==", "active")]),
@@ -157,15 +152,14 @@ async function loadOverview() {
       countDocs("operators"),
       countDocs("operators", [where("isActive", "==", true)]),
       countDocs("orders"),
-      aggregateLedger([where("status", "==", "earned")]),
-      aggregateLedger([where("status", "==", "paid")]),
-      countDocs("commissionSettlements", [where("status", "==", "pending")]).catch(error => {
-        console.warn("Settlement metrics unavailable until production Rules are deployed.", error);
-        return null;
-      })
+      aggregateAmount("commissionLedger"),
+      aggregateAmount("commissionSettlements", [where("status", "==", "confirmed")]).catch(() => ({ totalAmount: 0, entryCount: 0 })),
+      aggregateAmount("commissionSettlements", [where("status", "==", "paid")]).catch(() => ({ totalAmount: 0, entryCount: 0 })),
+      countDocs("commissionSettlements", [where("status", "==", "pending_owner_confirmation")]).catch(() => null)
     ]);
 
-    const allCommission = earnedLedger.totalAmount + paidLedger.totalAmount;
+    const confirmedPaid = confirmedPayments.totalAmount + legacyPayments.totalAmount;
+    const outstanding = Math.max(0, totalCommission.totalAmount - confirmedPaid);
 
     $("metricUsers").innerText = totalUsers.toLocaleString("ar-EG");
     $("metricUsersMeta").innerText = `${activeUsers} نشط · ${pendingUsers} بانتظار التفعيل`;
@@ -174,62 +168,126 @@ async function loadOverview() {
     $("metricOperatorsMeta").innerText = `${activeOperators} مشغّل نشط`;
     $("metricOrders").innerText = totalOrders.toLocaleString("ar-EG");
     $("metricOrdersMeta").innerText = "إجمالي الطلبات المسجلة";
-    $("metricEarned").innerText = money(allCommission);
-    $("metricPaid").innerText = money(paidLedger.totalAmount);
-    $("metricOutstanding").innerText = money(earnedLedger.totalAmount);
-    if (pendingSettlements == null) {
+    $("metricEarned").innerText = money(totalCommission.totalAmount);
+    $("metricPaid").innerText = money(confirmedPaid);
+    $("metricOutstanding").innerText = money(outstanding);
+
+    if (pendingPayments == null) {
       $("metricPendingSettlements").innerText = "—";
       $("metricPendingSettlementsMeta").innerText = "تحتاج نشر Firestore Rules الجديدة";
     } else {
-      $("metricPendingSettlements").innerText = pendingSettlements.toLocaleString("ar-EG");
-      $("metricPendingSettlementsMeta").innerText = pendingSettlements ? "تحتاج مراجعة أو سداد" : "لا توجد تسويات معلقة";
+      $("metricPendingSettlements").innerText = pendingPayments.toLocaleString("ar-EG");
+      $("metricPendingSettlementsMeta").innerText = pendingPayments
+        ? "دفعات تحتاج تأكيد المشترك"
+        : "لا توجد دفعات معلقة";
     }
 
     $("billingSummary").innerText =
       `${formatEgp(PLATFORM_BILLING.initialActivationFee)} أول مرة · ${formatEgp(PLATFORM_BILLING.monthlyRenewalFee)} شهري · إحالة ${formatEgp(REFERRAL_CONFIG.qualifiedReferralReward)}`;
 
-    $("overviewStatus").innerText = `آخر تحديث: ${new Intl.DateTimeFormat("ar-EG",{timeStyle:"short"}).format(new Date())}`;
+    $("overviewStatus").innerText =
+      `آخر تحديث: ${new Intl.DateTimeFormat("ar-EG",{timeStyle:"short"}).format(new Date())}`;
   } catch (error) {
     console.error(error);
     $("overviewStatus").innerText = `تعذر تحميل بعض المؤشرات: ${error.message}`;
   }
 }
 
-function userQueryConstraints({ status = "all", cursor = null, pageSize = USERS_PAGE_SIZE } = {}) {
-  const constraints = [];
-  pageSize = Math.max(1, Math.min(100, Number(pageSize) || USERS_PAGE_SIZE));
-  if (status !== "all") constraints.push(where("subscriptionStatus", "==", status));
-  constraints.push(orderBy(documentId()));
-  if (cursor) constraints.push(startAfter(cursor));
-  constraints.push(limit(pageSize));
-  return constraints;
+async function exactUserSearch(term) {
+  const q = clean(term);
+  if (!q) return [];
+
+  const jobs = [
+    getDoc(doc(db, "users", q)).then(snap => snap.exists() ? [{ uid: snap.id, ...snap.data() }] : []),
+    getDocs(query(collection(db, "users"), where("email", "==", q), limit(SEARCH_LIMIT)))
+      .then(snap => snap.docs.map(item => ({ uid: item.id, ...item.data() }))),
+    getDocs(query(collection(db, "users"), where("name", "==", q), limit(SEARCH_LIMIT)))
+      .then(snap => snap.docs.map(item => ({ uid: item.id, ...item.data() })))
+  ];
+
+  return uniqueRows((await Promise.all(jobs)).flat(), "uid");
 }
 
-async function listUsersPage(options = {}) {
-  const snap = await getDocs(query(collection(db, "users"), ...userQueryConstraints(options)));
-  const size = Math.max(1, Math.min(100, Number(options.pageSize) || USERS_PAGE_SIZE));
-  return {
-    users: snap.docs.map(item => ({ uid: item.id, ...item.data() })),
-    nextCursor: snap.docs.length ? snap.docs[snap.docs.length - 1] : null,
-    hasMore: snap.docs.length === size
-  };
-}
+async function loadUsers({ append = false } = {}) {
+  const s = state.users;
+  if (s.loading) return;
+  s.loading = true;
+  $("loadMoreUsersBtn").disabled = true;
+  $("usersMessage").innerText = s.search ? "جاري البحث المباشر..." : "جاري تحميل المستخدمين...";
 
-async function searchAllUsers(term, status = "all") {
-  const matches = [];
-  let cursor = null;
+  try {
+    const total = await countDocs(
+      "users",
+      s.status === "all" ? [] : [where("subscriptionStatus", "==", s.status)]
+    );
 
-  while (true) {
-    const page = await listUsersPage({ status, cursor, pageSize: USERS_SEARCH_PAGE_SIZE });
-    matches.push(...page.users.filter(user =>
-      containsSearch([user.uid, user.name, user.email], term)
-    ));
-    if (!page.hasMore || !page.nextCursor) break;
-    if (cursor && page.nextCursor.id === cursor.id) throw new Error("USERS_PAGINATION_STALLED");
-    cursor = page.nextCursor;
+    if (s.search) {
+      let rows = await exactUserSearch(s.search);
+      if (s.status !== "all") rows = rows.filter(row => row.subscriptionStatus === s.status);
+      s.rows = rows;
+      s.cursor = null;
+      s.hasMore = false;
+    } else {
+      const constraints = [];
+      if (s.status !== "all") constraints.push(where("subscriptionStatus", "==", s.status));
+      constraints.push(orderBy(documentId()));
+      if (append && s.cursor) constraints.push(startAfter(s.cursor));
+      constraints.push(limit(PAGE_SIZE));
+
+      const snap = await getDocs(query(collection(db, "users"), ...constraints));
+      const rows = snap.docs.map(item => ({ uid: item.id, ...item.data() }));
+      s.rows = append ? mergeRows(s.rows, rows, "uid") : rows;
+      s.cursor = snap.docs.length ? snap.docs[snap.docs.length - 1] : null;
+      s.hasMore = snap.docs.length === PAGE_SIZE;
+    }
+
+    renderUsers();
+    $("usersCount").innerText = `الإجمالي: ${total.toLocaleString("ar-EG")}`;
+    $("usersMessage").innerText = s.search
+      ? `نتائج البحث المباشر: ${s.rows.length}`
+      : `المعروض الآن: ${s.rows.length} من ${total}`;
+    $("loadMoreUsersBtn").classList.toggle("hidden", !s.hasMore || Boolean(s.search));
+    sectionLoaded.usersSection = true;
+  } catch (error) {
+    console.error(error);
+    $("usersMessage").innerText = `تعذر تحميل المستخدمين: ${error.message}`;
+  } finally {
+    s.loading = false;
+    $("loadMoreUsersBtn").disabled = false;
   }
+}
 
-  return matches;
+function renderUsers() {
+  const rows = state.users.rows;
+  $("usersContainer").innerHTML = rows.length ? rows.map(user => {
+    const initialAlreadyPaid = hasPaidInitialActivation(user);
+    const nextAmount = initialAlreadyPaid
+      ? PLATFORM_BILLING.monthlyRenewalFee
+      : PLATFORM_BILLING.initialActivationFee;
+
+    return `
+      <article class="adminCard">
+        <div class="cardHead">
+          <div><h3>${escapeHTML(user.name || "بدون اسم")}</h3><p>${escapeHTML(user.email || "")}</p></div>
+          ${statusPill(user.subscriptionStatus || "pending")}
+        </div>
+        <div class="metaGrid">
+          <span>UID<br><b class="codeText">${escapeHTML(user.uid)}</b></span>
+          <span>أول اشتراك<br><b>${initialAlreadyPaid ? "تم" : "لم يتم"}</b></span>
+          <span>انتهاء الاشتراك<br><b>${formatDate(user.subscriptionExpiresAt)}</b></span>
+          <span>المطلوب الآن<br><b>${formatEgp(nextAmount)}</b></span>
+          <span>إحالة<br><b>${escapeHTML(user.referredByUserId || "لا يوجد")}</b></span>
+          <span>آخر دفعة اشتراك<br><b>${money(user.lastPaymentAmount || 0)}</b></span>
+        </div>
+        <div class="actions">
+          <button class="primaryBtn" data-action="activate-user" data-uid="${escapeHTML(user.uid)}">
+            ${initialAlreadyPaid ? "تأكيد التجديد" : "تفعيل أول مرة"}
+          </button>
+          <button class="secondaryBtn" data-action="deactivate-user" data-uid="${escapeHTML(user.uid)}">إيقاف الاشتراك</button>
+        </div>
+      </article>
+    `;
+  }).join("") : '<div class="emptyState">لا توجد نتائج مطابقة.</div>';
 }
 
 async function activateOrRenewUser(uid) {
@@ -241,14 +299,14 @@ async function activateOrRenewUser(uid) {
     const data = userSnap.data();
     const initialAlreadyPaid = hasPaidInitialActivation(data);
     const now = new Date();
+    const referrerId = /^[A-Za-z0-9_-]{1,128}$/.test(clean(data.referredByUserId))
+      ? clean(data.referredByUserId)
+      : "";
 
     let referrerRef = null;
     let referrerSnap = null;
     let referralRef = null;
     let referralSnap = null;
-    const referrerId = /^[A-Za-z0-9_-]{1,128}$/.test(clean(data.referredByUserId))
-      ? clean(data.referredByUserId)
-      : "";
 
     if (!initialAlreadyPaid && referrerId && referrerId !== uid) {
       referrerRef = doc(db, "users", referrerId);
@@ -259,10 +317,12 @@ async function activateOrRenewUser(uid) {
 
     let periodStart = now;
     if (initialAlreadyPaid && data.subscriptionExpiresAt) {
-      const existingExpiry = typeof data.subscriptionExpiresAt.toDate === "function"
+      const currentExpiry = typeof data.subscriptionExpiresAt.toDate === "function"
         ? data.subscriptionExpiresAt.toDate()
         : new Date(data.subscriptionExpiresAt);
-      if (!Number.isNaN(existingExpiry.getTime()) && existingExpiry > now) periodStart = existingExpiry;
+      if (!Number.isNaN(currentExpiry.getTime()) && currentExpiry > now) {
+        periodStart = currentExpiry;
+      }
     }
 
     const expiresAt = new Date(periodStart);
@@ -323,126 +383,69 @@ async function activateOrRenewUser(uid) {
   });
 }
 
-function renderUsers() {
-  const container = $("usersContainer");
-  if (!users.length) {
-    container.innerHTML = '<div class="emptyState">لا توجد نتائج مطابقة.</div>';
-    return;
-  }
+async function searchProjects(term) {
+  const q = clean(term);
+  if (!q) return [];
 
-  container.innerHTML = users.map(user => {
-    const initialAlreadyPaid = hasPaidInitialActivation(user);
-    const nextAmount = initialAlreadyPaid
-      ? PLATFORM_BILLING.monthlyRenewalFee
-      : PLATFORM_BILLING.initialActivationFee;
+  const jobs = [
+    getDoc(doc(db, "projects", q)).then(snap => snap.exists() ? [{ projectDocId: snap.id, ...snap.data() }] : []),
+    getDocs(query(collection(db, "projects"), where("ownerId", "==", q), limit(SEARCH_LIMIT)))
+      .then(snap => snap.docs.map(item => ({ projectDocId: item.id, ...item.data() }))),
+    getDocs(query(collection(db, "projects"), where("businessName", "==", q), limit(SEARCH_LIMIT)))
+      .then(snap => snap.docs.map(item => ({ projectDocId: item.id, ...item.data() })))
+  ];
 
-    return `
-      <article class="adminCard" data-user="${escapeHTML(user.uid)}">
-        <div class="cardHead">
-          <div>
-            <h3>${escapeHTML(user.name || "بدون اسم")}</h3>
-            <p>${escapeHTML(user.email || "")}</p>
-          </div>
-          ${statusPill(user.subscriptionStatus || "pending")}
-        </div>
-        <div class="metaGrid">
-          <span>UID<br><b class="codeText">${escapeHTML(user.uid)}</b></span>
-          <span>أول اشتراك<br><b>${initialAlreadyPaid ? "تم" : "لم يتم"}</b></span>
-          <span>انتهاء الاشتراك<br><b>${formatDate(user.subscriptionExpiresAt)}</b></span>
-          <span>المطلوب الآن<br><b>${formatEgp(nextAmount)}</b></span>
-          <span>إحالة<br><b>${user.referredByUserId ? escapeHTML(user.referredByUserId) : "لا يوجد"}</b></span>
-          <span>آخر دفعة<br><b>${money(user.lastPaymentAmount || 0)}</b></span>
-        </div>
-        <div class="actions">
-          <button class="primaryBtn" data-action="activate-user" data-uid="${escapeHTML(user.uid)}">
-            ${initialAlreadyPaid ? "تأكيد التجديد" : "تفعيل أول مرة"}
-          </button>
-          <button class="secondaryBtn" data-action="deactivate-user" data-uid="${escapeHTML(user.uid)}">إيقاف الاشتراك</button>
-        </div>
-      </article>
-    `;
-  }).join("");
+  return uniqueRows((await Promise.all(jobs)).flat(), "projectDocId");
 }
 
-async function loadUsers({ append = false } = {}) {
-  if (usersLoading) return;
-  const search = currentSearch.trim();
-
-  if (search && search.length < 2) {
-    $("usersMessage").innerText = "اكتب حرفين على الأقل للبحث في كل المستخدمين.";
-    users = [];
-    renderUsers();
-    return;
-  }
-
-  usersLoading = true;
-  $("loadMoreUsersBtn").disabled = true;
-  $("usersMessage").innerText = search ? "جاري البحث..." : "جاري تحميل المستخدمين...";
+async function loadProjects({ append = false } = {}) {
+  const s = state.projects;
+  if (s.loading) return;
+  s.loading = true;
+  $("loadMoreProjectsBtn").disabled = true;
+  $("projectsMessage").innerText = s.search ? "جاري البحث المباشر..." : "جاري تحميل المشاريع...";
 
   try {
-    const total = await countDocs("users", currentStatus === "all" ? [] : [where("subscriptionStatus", "==", currentStatus)]);
-
-    if (search) {
-      users = await searchAllUsers(search, currentStatus);
-      usersCursor = null;
-      usersHasMore = false;
-      $("usersCount").innerText = `${users.length} نتيجة من ${total}`;
+    if (s.search) {
+      let rows = await searchProjects(s.search);
+      if (s.template !== "all") rows = rows.filter(row => row.template === s.template);
+      s.rows = rows;
+      s.cursor = null;
+      s.hasMore = false;
     } else {
-      const page = await listUsersPage({
-        status: currentStatus,
-        cursor: append ? usersCursor : null,
-        pageSize: USERS_PAGE_SIZE
-      });
+      const constraints = [];
+      if (s.template !== "all") constraints.push(where("template", "==", s.template));
+      constraints.push(orderBy(documentId()));
+      if (append && s.cursor) constraints.push(startAfter(s.cursor));
+      constraints.push(limit(PAGE_SIZE));
 
-      if (append) {
-        const known = new Set(users.map(user => user.uid));
-        users.push(...page.users.filter(user => !known.has(user.uid)));
-      } else {
-        users = page.users;
-      }
-
-      usersCursor = page.nextCursor;
-      usersHasMore = page.hasMore;
-      $("usersCount").innerText = `الإجمالي: ${total}`;
+      const snap = await getDocs(query(collection(db, "projects"), ...constraints));
+      const rows = snap.docs.map(item => ({ projectDocId: item.id, ...item.data() }));
+      s.rows = append ? mergeRows(s.rows, rows, "projectDocId") : rows;
+      s.cursor = snap.docs.length ? snap.docs[snap.docs.length - 1] : null;
+      s.hasMore = snap.docs.length === PAGE_SIZE;
     }
 
-    renderUsers();
-    $("usersMessage").innerText = `المعروض الآن: ${users.length}`;
-    $("loadMoreUsersBtn").classList.toggle("hidden", !usersHasMore || Boolean(search));
-    sectionLoaded.usersSection = true;
-  } catch (error) {
-    console.error(error);
-    $("usersMessage").innerText = `تعذر تحميل المستخدمين: ${error.message}`;
-  } finally {
-    usersLoading = false;
-    $("loadMoreUsersBtn").disabled = false;
-  }
-}
-
-async function loadProjects() {
-  $("projectsMessage").innerText = "جاري تحميل المشاريع...";
-  try {
-    const snap = await getDocs(query(collection(db, "projects"), orderBy(documentId()), limit(ADMIN_LIST_LIMIT)));
-    projects = snap.docs.map(item => ({ projectDocId: item.id, ...item.data() }));
     renderProjects();
-    $("projectsMessage").innerText = `آخر ${projects.length} مشروع — استخدم البحث لتصفية المعروض.`;
+    $("projectsMessage").innerText = s.search
+      ? `نتائج البحث: ${s.rows.length}`
+      : `المعروض الآن: ${s.rows.length} مشروع. القوائم تُحمّل على دفعات حتى لا تتوه مع نمو المنصة.`;
+    $("loadMoreProjectsBtn").classList.toggle("hidden", !s.hasMore || Boolean(s.search));
     sectionLoaded.projectsSection = true;
   } catch (error) {
     console.error(error);
     $("projectsMessage").innerText = `تعذر تحميل المشاريع: ${error.message}`;
+  } finally {
+    s.loading = false;
+    $("loadMoreProjectsBtn").disabled = false;
   }
 }
 
 function renderProjects() {
-  const term = $("projectsSearch").value;
-  const template = $("projectsTemplateFilter").value;
-  const filtered = projects.filter(project =>
-    (template === "all" || project.template === template) &&
-    containsSearch([project.projectDocId, project.ownerId, project.businessName, project.template], term)
-  );
-
-  $("projectsContainer").innerHTML = filtered.length ? filtered.map(project => {
+  const rows = state.projects.rows;
+  $("projectsContainer").innerHTML = rows.length ? rows.map(project => {
     const active = project.isActive === true && project.status === "active";
+
     return `
       <article class="adminCard">
         <div class="cardHead">
@@ -459,42 +462,83 @@ function renderProjects() {
           <span>الإصدار<br><b>${escapeHTML(String(project.templateVersion || "—"))}</b></span>
         </div>
         <div class="actions">
-          <button class="${active ? "secondaryBtn" : "primaryBtn"}" data-action="toggle-project" data-project="${escapeHTML(project.projectDocId)}" data-active="${active}">
+          <button class="${active ? "secondaryBtn" : "primaryBtn"}"
+            data-action="toggle-project"
+            data-project="${escapeHTML(project.projectDocId)}"
+            data-active="${active}">
             ${active ? "إيقاف المشروع" : "إعادة تفعيل المشروع"}
           </button>
-          <button class="secondaryBtn" data-action="prepare-settlement" data-project="${escapeHTML(project.projectDocId)}">تسوية عمولات المشروع</button>
+          <button class="secondaryBtn" data-action="view-project-payments" data-project="${escapeHTML(project.projectDocId)}">
+            عرض حساب المشروع
+          </button>
         </div>
       </article>
     `;
   }).join("") : '<div class="emptyState">لا توجد مشاريع مطابقة.</div>';
 }
 
-async function loadOperators() {
-  $("operatorsMessage").innerText = "جاري تحميل المشغّلين...";
+async function searchOperators(term) {
+  const q = clean(term);
+  if (!q) return [];
+
+  const jobs = [
+    getDoc(doc(db, "operators", q)).then(snap => snap.exists() ? [{ operatorId: snap.id, ...snap.data() }] : []),
+    getDocs(query(collection(db, "operators"), where("phone", "==", q), limit(SEARCH_LIMIT)))
+      .then(snap => snap.docs.map(item => ({ operatorId: item.id, ...item.data() }))),
+    getDocs(query(collection(db, "operators"), where("whatsapp", "==", q), limit(SEARCH_LIMIT)))
+      .then(snap => snap.docs.map(item => ({ operatorId: item.id, ...item.data() }))),
+    getDocs(query(collection(db, "operators"), where("authLoginEmail", "==", q), limit(SEARCH_LIMIT)))
+      .then(snap => snap.docs.map(item => ({ operatorId: item.id, ...item.data() })))
+  ];
+
+  return uniqueRows((await Promise.all(jobs)).flat(), "operatorId");
+}
+
+async function loadOperators({ append = false } = {}) {
+  const s = state.operators;
+  if (s.loading) return;
+  s.loading = true;
+  $("loadMoreOperatorsBtn").disabled = true;
+  $("operatorsMessage").innerText = s.search ? "جاري البحث المباشر..." : "جاري تحميل المشغّلين...";
+
   try {
-    const snap = await getDocs(query(collection(db, "operators"), orderBy(documentId()), limit(ADMIN_LIST_LIMIT)));
-    operators = snap.docs.map(item => ({ operatorId: item.id, ...item.data() }));
+    if (s.search) {
+      s.rows = await searchOperators(s.search);
+      s.cursor = null;
+      s.hasMore = false;
+    } else {
+      const constraints = [orderBy(documentId())];
+      if (append && s.cursor) constraints.push(startAfter(s.cursor));
+      constraints.push(limit(PAGE_SIZE));
+
+      const snap = await getDocs(query(collection(db, "operators"), ...constraints));
+      const rows = snap.docs.map(item => ({ operatorId: item.id, ...item.data() }));
+      s.rows = append ? mergeRows(s.rows, rows, "operatorId") : rows;
+      s.cursor = snap.docs.length ? snap.docs[snap.docs.length - 1] : null;
+      s.hasMore = snap.docs.length === PAGE_SIZE;
+    }
+
     renderOperators();
-    $("operatorsMessage").innerText = `المعروض: ${operators.length} مشغّل.`;
+    $("operatorsMessage").innerText = s.search
+      ? `نتائج البحث: ${s.rows.length}`
+      : `المعروض الآن: ${s.rows.length} مشغّل.`;
+    $("loadMoreOperatorsBtn").classList.toggle("hidden", !s.hasMore || Boolean(s.search));
     sectionLoaded.operatorsSection = true;
   } catch (error) {
     console.error(error);
     $("operatorsMessage").innerText = `تعذر تحميل المشغّلين: ${error.message}`;
+  } finally {
+    s.loading = false;
+    $("loadMoreOperatorsBtn").disabled = false;
   }
 }
 
 function renderOperators() {
-  const term = $("operatorsSearch").value;
-  const filtered = operators.filter(operator =>
-    containsSearch([
-      operator.operatorId, operator.projectId, operator.name, operator.contactName,
-      operator.phone, operator.whatsapp, operator.authLoginEmail
-    ], term)
-  );
-
-  $("operatorsContainer").innerHTML = filtered.length ? filtered.map(operator => {
+  const rows = state.operators.rows;
+  $("operatorsContainer").innerHTML = rows.length ? rows.map(operator => {
     const active = operator.isActive === true && operator.status === "active";
     const canReactivate = Boolean(operator.authUid) && operator.agreementStatus === "accepted";
+
     return `
       <article class="adminCard">
         <div class="cardHead">
@@ -522,125 +566,231 @@ function renderOperators() {
   }).join("") : '<div class="emptyState">لا توجد نتائج مطابقة.</div>';
 }
 
-async function loadAdminOrders() {
-  $("ordersAdminMessage").innerText = "جاري تحميل آخر الطلبات...";
+async function loadAdminOrders({ append = false } = {}) {
+  const s = state.orders;
+  if (s.loading) return;
+  s.loading = true;
+  $("loadMoreOrdersBtn").disabled = true;
+  $("ordersAdminMessage").innerText = s.search ? "جاري البحث المباشر..." : "جاري تحميل الطلبات...";
+
   try {
-    const snap = await getDocs(
-      query(collection(db, "orders"), orderBy("createdAt", "desc"), limit(ADMIN_LIST_LIMIT))
-    );
-    adminOrders = snap.docs.map(item => ({ orderId: item.id, ...item.data() }));
+    if (s.search) {
+      const exact = await getDoc(doc(db, "orders", s.search));
+      const byProject = await getDocs(query(
+        collection(db, "orders"),
+        where("projectId", "==", s.search),
+        orderBy("createdAt", "desc"),
+        limit(SEARCH_LIMIT)
+      ));
+
+      let rows = [
+        ...(exact.exists() ? [{ orderId: exact.id, ...exact.data() }] : []),
+        ...byProject.docs.map(item => ({ orderId: item.id, ...item.data() }))
+      ];
+      rows = uniqueRows(rows, "orderId");
+      if (s.status !== "all") {
+        rows = rows.filter(row => row.status === s.status || row.laundryStage === s.status);
+      }
+
+      s.rows = rows;
+      s.cursor = null;
+      s.hasMore = false;
+    } else {
+      const constraints = [];
+      if (s.status !== "all") constraints.push(where("status", "==", s.status));
+      constraints.push(orderBy("createdAt", "desc"));
+      if (append && s.cursor) constraints.push(startAfter(s.cursor));
+      constraints.push(limit(PAGE_SIZE));
+
+      const snap = await getDocs(query(collection(db, "orders"), ...constraints));
+      const rows = snap.docs.map(item => ({ orderId: item.id, ...item.data() }));
+      s.rows = append ? mergeRows(s.rows, rows, "orderId") : rows;
+      s.cursor = snap.docs.length ? snap.docs[snap.docs.length - 1] : null;
+      s.hasMore = snap.docs.length === PAGE_SIZE;
+    }
+
     renderAdminOrders();
-    $("ordersAdminMessage").innerText = `آخر ${adminOrders.length} طلب.`;
+    $("ordersAdminMessage").innerText = s.search
+      ? `نتائج البحث: ${s.rows.length}`
+      : `المعروض الآن: ${s.rows.length} طلب.`;
+    $("loadMoreOrdersBtn").classList.toggle("hidden", !s.hasMore || Boolean(s.search));
     sectionLoaded.ordersSection = true;
   } catch (error) {
     console.error(error);
     $("ordersAdminMessage").innerText = `تعذر تحميل الطلبات: ${error.message}`;
+  } finally {
+    s.loading = false;
+    $("loadMoreOrdersBtn").disabled = false;
   }
 }
 
 function renderAdminOrders() {
-  const term = $("ordersSearch").value;
-  const status = $("ordersStatusFilter").value;
-  const filtered = adminOrders.filter(order =>
-    (status === "all" || order.status === status || order.laundryStage === status) &&
-    containsSearch([order.orderId, order.projectId, order.customerName, order.customerPhone, order.templateType], term)
-  );
-
-  $("ordersTableBody").innerHTML = filtered.length ? filtered.map(order => `
+  const rows = state.orders.rows;
+  $("ordersTableBody").innerHTML = rows.length ? rows.map(order => `
     <tr>
       <td><b>#${escapeHTML(order.orderId.slice(0,8))}</b><br><small>${formatDate(order.createdAt,true)}</small></td>
       <td>${escapeHTML(order.templateType || "—")}<br><small class="codeText">${escapeHTML(order.projectId || "—")}</small></td>
       <td>${escapeHTML(order.customerName || "—")}<br><small>${escapeHTML(order.customerPhone || "")}</small></td>
       <td>${statusPill(order.status || order.laundryStage || "—")}<br><small>${escapeHTML(order.laundryStage || "")}</small></td>
       <td><b>${money(order.total ?? order.price ?? 0)}</b></td>
-      <td>${order.commissionLocked ? `<b>${money(order.commissionAmount)}</b><br><small>${escapeHTML(order.commissionTrigger || "legacy")}</small>` : "—"}</td>
+      <td>${order.commissionLocked
+        ? `<b>${money(order.commissionAmount)}</b><br><small>${escapeHTML(order.commissionTrigger || "legacy")}</small>`
+        : "—"}</td>
     </tr>
   `).join("") : '<tr><td colspan="6">لا توجد طلبات مطابقة.</td></tr>';
 }
 
-async function loadCommissions() {
-  $("commissionsMessage").innerText = "جاري تحميل دفتر العمولات...";
+async function loadCommissions({ append = false } = {}) {
+  const s = state.commissions;
+  if (s.loading) return;
+  s.loading = true;
+  $("loadMoreCommissionsBtn").disabled = true;
+  $("commissionsMessage").innerText = s.search ? "جاري البحث المباشر..." : "جاري تحميل دفتر العمولات...";
+
   try {
-    const snap = await getDocs(
-      query(collection(db, "commissionLedger"), orderBy("createdAt", "desc"), limit(ADMIN_LIST_LIMIT))
-    );
-    commissions = snap.docs.map(item => ({ entryId: item.id, ...item.data() }));
+    if (s.search) {
+      const exact = await getDoc(doc(db, "commissionLedger", s.search));
+      const [byProject, byUser] = await Promise.all([
+        getDocs(query(
+          collection(db, "commissionLedger"),
+          where("projectId", "==", s.search),
+          orderBy("createdAt", "desc"),
+          limit(SEARCH_LIMIT)
+        )),
+        getDocs(query(
+          collection(db, "commissionLedger"),
+          where("userId", "==", s.search),
+          orderBy("createdAt", "desc"),
+          limit(SEARCH_LIMIT)
+        ))
+      ]);
+
+      let rows = [
+        ...(exact.exists() ? [{ entryId: exact.id, ...exact.data() }] : []),
+        ...byProject.docs.map(item => ({ entryId: item.id, ...item.data() })),
+        ...byUser.docs.map(item => ({ entryId: item.id, ...item.data() }))
+      ];
+
+      rows = uniqueRows(rows, "entryId");
+      if (s.status !== "all") rows = rows.filter(row => row.status === s.status);
+      s.rows = rows;
+      s.cursor = null;
+      s.hasMore = false;
+    } else {
+      const constraints = [];
+      if (s.status !== "all") constraints.push(where("status", "==", s.status));
+      constraints.push(orderBy("createdAt", "desc"));
+      if (append && s.cursor) constraints.push(startAfter(s.cursor));
+      constraints.push(limit(PAGE_SIZE));
+
+      const snap = await getDocs(query(collection(db, "commissionLedger"), ...constraints));
+      const rows = snap.docs.map(item => ({ entryId: item.id, ...item.data() }));
+      s.rows = append ? mergeRows(s.rows, rows, "entryId") : rows;
+      s.cursor = snap.docs.length ? snap.docs[snap.docs.length - 1] : null;
+      s.hasMore = snap.docs.length === PAGE_SIZE;
+    }
+
     renderCommissions();
-    $("commissionsMessage").innerText = `آخر ${commissions.length} قيد عمولة.`;
+    $("commissionsMessage").innerText = s.search
+      ? `نتائج البحث: ${s.rows.length}`
+      : `المعروض الآن: ${s.rows.length} قيد.`;
+    $("loadMoreCommissionsBtn").classList.toggle("hidden", !s.hasMore || Boolean(s.search));
     sectionLoaded.commissionsSection = true;
   } catch (error) {
     console.error(error);
     $("commissionsMessage").innerText = `تعذر تحميل العمولات: ${error.message}`;
+  } finally {
+    s.loading = false;
+    $("loadMoreCommissionsBtn").disabled = false;
   }
 }
 
 function renderCommissions() {
-  $("commissionsTableBody").innerHTML = commissions.length ? commissions.map(entry => `
+  const rows = state.commissions.rows;
+  $("commissionsTableBody").innerHTML = rows.length ? rows.map(entry => `
     <tr>
       <td><b class="codeText">${escapeHTML(entry.entryId)}</b><br><small>${formatDate(entry.createdAt || entry.earnedAt,true)}</small></td>
       <td>${escapeHTML(entry.sourceType || "—")}<br><small class="codeText">${escapeHTML(entry.projectId || entry.sourceId || "—")}</small></td>
       <td><span class="codeText">${escapeHTML(entry.userId || "—")}</span></td>
       <td><b>${money(entry.amount)}</b></td>
       <td>${statusPill(entry.status || "earned")}</td>
-      <td>${entry.settlementId ? `<span class="codeText">${escapeHTML(entry.settlementId.slice(0,12))}</span><br>${statusPill(entry.settlementStatus || "pending")}` : "غير مجمّعة"}</td>
+      <td>${entry.settlementId ? escapeHTML(entry.settlementId) : "الدفع يُسجل منفصلًا"}</td>
     </tr>
   `).join("") : '<tr><td colspan="6">لا توجد قيود عمولة.</td></tr>';
 }
 
 async function loadSettlements() {
-  $("settlementsMessage").innerText = "جاري تحميل التسويات...";
+  const s = state.settlements;
+  if (s.loading) return;
+  s.loading = true;
+  $("loadMoreSettlementsBtn").disabled = true;
+  $("settlementsMessage").innerText = s.search ? "جاري البحث المباشر..." : "جاري تحميل عمليات الدفع...";
+
   try {
-    settlements = await listRecentCommissionSettlements({ pageSize: ADMIN_LIST_LIMIT });
+    if (s.search) {
+      const snap = await getDocs(query(
+        collection(db, "commissionSettlements"),
+        where("projectId", "==", s.search),
+        orderBy("createdAt", "desc"),
+        limit(SEARCH_LIMIT)
+      ));
+
+      let rows = snap.docs.map(item => ({ settlementId: item.id, ...item.data() }));
+      if (s.status !== "all") rows = rows.filter(row => row.status === s.status);
+      s.rows = rows;
+      s.cursor = null;
+      s.hasMore = false;
+    } else {
+      s.rows = await listRecentCommissionSettlements({
+        status: s.status,
+        pageSize: PAGE_SIZE
+      });
+      s.cursor = null;
+      s.hasMore = false;
+    }
+
     renderSettlements();
-    $("settlementsMessage").innerText = `المعروض: ${settlements.length} تسوية.`;
+    $("settlementsMessage").innerText = s.search
+      ? `نتائج البحث: ${s.rows.length}`
+      : `آخر ${s.rows.length} عملية دفع — للمتابعة فقط.`;
+    $("loadMoreSettlementsBtn").classList.add("hidden");
     sectionLoaded.settlementsSection = true;
   } catch (error) {
     console.error(error);
     const code = String(error?.code || "").toLowerCase();
     $("settlementsMessage").innerText = code.includes("permission-denied")
-      ? "قسم التسويات جاهز في الكود ويحتاج نشر Firestore Rules الجديدة على Firebase قبل استخدامه على الموقع الحي."
-      : `تعذر تحميل التسويات: ${error.message}`;
+      ? "عمليات الدفع الجديدة تحتاج نشر Firestore Rules النهائية. باقي لوحة الإدارة تعمل بشكل طبيعي."
+      : `تعذر تحميل عمليات الدفع: ${error.message}`;
+  } finally {
+    s.loading = false;
+    $("loadMoreSettlementsBtn").disabled = false;
   }
 }
 
 function renderSettlements() {
-  $("settlementsContainer").innerHTML = settlements.length ? settlements.map(item => {
-    const pending = item.status === "pending";
-    return `
-      <article class="adminCard settlementCard ${escapeHTML(item.status || "")}" data-settlement="${escapeHTML(item.settlementId)}">
-        <div class="cardHead">
-          <div>
-            <h3>${escapeHTML(item.businessName || item.templateId || "تسوية عمولات")}</h3>
-            <p class="codeText">${escapeHTML(item.settlementId)}</p>
-          </div>
-          ${statusPill(item.status)}
+  const rows = state.settlements.rows;
+  $("settlementsContainer").innerHTML = rows.length ? rows.map(item => `
+    <article class="adminCard settlementCard ${escapeHTML(item.status || "")}">
+      <div class="cardHead">
+        <div>
+          <h3>${escapeHTML(item.businessName || item.templateId || "عملية دفع")}</h3>
+          <p class="codeText">${escapeHTML(item.settlementId)}</p>
         </div>
-        <div class="metaGrid">
-          <span>المشروع<br><b class="codeText">${escapeHTML(item.projectId)}</b></span>
-          <span>عدد الطلبات<br><b>${Number(item.entryCount || 0).toLocaleString("ar-EG")}</b></span>
-          <span>قيمة التسوية<br><b>${money(item.amount)}</b></span>
-          <span>أُنشئت<br><b>${formatDate(item.createdAt,true)}</b></span>
-          <span>طريقة الدفع<br><b>${escapeHTML(item.paymentMethod || "—")}</b></span>
-          <span>مرجع الدفع<br><b>${escapeHTML(item.paymentReference || "—")}</b></span>
-          <span>السداد<br><b>${formatDate(item.paidAt,true)}</b></span>
-          <span>ملاحظة<br><b>${escapeHTML(item.note || "—")}</b></span>
-        </div>
-        ${pending ? `
-          <div class="settlementActions">
-            <select data-field="paymentMethod">
-              <option value="instapay">InstaPay</option>
-              <option value="bank_transfer">تحويل بنكي</option>
-              <option value="cash">نقدي</option>
-              <option value="other">أخرى</option>
-            </select>
-            <input data-field="paymentReference" maxlength="200" placeholder="رقم/مرجع التحويل - اختياري">
-            <button class="primaryBtn" data-action="pay-settlement" data-settlement="${escapeHTML(item.settlementId)}">تأكيد السداد</button>
-            <button class="dangerBtn" data-action="void-settlement" data-settlement="${escapeHTML(item.settlementId)}">إلغاء التسوية</button>
-          </div>
-        ` : ""}
-      </article>
-    `;
-  }).join("") : '<div class="emptyState">لا توجد تسويات بعد.</div>';
+        ${statusPill(item.status)}
+      </div>
+      <div class="metaGrid">
+        <span>المشروع<br><b class="codeText">${escapeHTML(item.projectId || "—")}</b></span>
+        <span>المبلغ<br><b>${money(item.amount)}</b></span>
+        <span>طريقة الدفع<br><b>${escapeHTML(item.paymentMethod || "—")}</b></span>
+        <span>مرجع الدفع<br><b>${escapeHTML(item.paymentReference || "—")}</b></span>
+        <span>سجلها المشغّل<br><b>${formatDate(item.declaredAt || item.createdAt,true)}</b></span>
+        <span>تأكيد المشترك<br><b>${formatDate(item.confirmedAt,true)}</b></span>
+        <span>المشغّل UID<br><b class="codeText">${escapeHTML(item.declaredBy || "—")}</b></span>
+        <span>المشترك UID<br><b class="codeText">${escapeHTML(item.ownerId || "—")}</b></span>
+      </div>
+      <p class="smallMuted">لو العملية معلقة، الإجراء المطلوب بين المشغّل والمشترك فقط. الإدارة تراقب ولا تؤكد نيابة عن أي طرف.</p>
+    </article>
+  `).join("") : '<div class="emptyState">لا توجد عمليات دفع مطابقة.</div>';
 }
 
 async function ensureSectionLoaded(sectionId) {
@@ -675,35 +825,85 @@ async function refreshLoadedSections() {
   await Promise.all(jobs);
 }
 
+function debounceSearch(fn) {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(fn, 350);
+}
+
 document.querySelectorAll(".tabBtn").forEach(button => {
   button.addEventListener("click", () => switchSection(button.dataset.section));
 });
 
 $("refreshAllBtn").addEventListener("click", refreshLoadedSections);
-$("refreshProjectsBtn").addEventListener("click", loadProjects);
-$("refreshOperatorsBtn").addEventListener("click", loadOperators);
-$("refreshOrdersAdminBtn").addEventListener("click", loadAdminOrders);
-$("refreshCommissionsBtn").addEventListener("click", loadCommissions);
-$("refreshSettlementsBtn").addEventListener("click", loadSettlements);
+$("refreshProjectsBtn").addEventListener("click", () => loadProjects());
+$("refreshOperatorsBtn").addEventListener("click", () => loadOperators());
+$("refreshOrdersAdminBtn").addEventListener("click", () => loadAdminOrders());
+$("refreshCommissionsBtn").addEventListener("click", () => loadCommissions());
+$("refreshSettlementsBtn").addEventListener("click", () => loadSettlements());
 
 $("usersSearch").addEventListener("input", event => {
-  currentSearch = event.target.value;
-  clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => loadUsers(), 300);
+  state.users.search = clean(event.target.value);
+  state.users.cursor = null;
+  debounceSearch(() => loadUsers());
 });
 $("usersStatusFilter").addEventListener("change", event => {
-  currentStatus = event.target.value;
-  usersCursor = null;
-  usersHasMore = false;
+  state.users.status = event.target.value;
+  state.users.cursor = null;
   loadUsers();
 });
 $("loadMoreUsersBtn").addEventListener("click", () => loadUsers({ append: true }));
 
-$("projectsSearch").addEventListener("input", renderProjects);
-$("projectsTemplateFilter").addEventListener("change", renderProjects);
-$("operatorsSearch").addEventListener("input", renderOperators);
-$("ordersSearch").addEventListener("input", renderAdminOrders);
-$("ordersStatusFilter").addEventListener("change", renderAdminOrders);
+$("projectsSearch").addEventListener("input", event => {
+  state.projects.search = clean(event.target.value);
+  state.projects.cursor = null;
+  debounceSearch(() => loadProjects());
+});
+$("projectsTemplateFilter").addEventListener("change", event => {
+  state.projects.template = event.target.value;
+  state.projects.cursor = null;
+  loadProjects();
+});
+$("loadMoreProjectsBtn").addEventListener("click", () => loadProjects({ append: true }));
+
+$("operatorsSearch").addEventListener("input", event => {
+  state.operators.search = clean(event.target.value);
+  state.operators.cursor = null;
+  debounceSearch(() => loadOperators());
+});
+$("loadMoreOperatorsBtn").addEventListener("click", () => loadOperators({ append: true }));
+
+$("ordersSearch").addEventListener("input", event => {
+  state.orders.search = clean(event.target.value);
+  state.orders.cursor = null;
+  debounceSearch(() => loadAdminOrders());
+});
+$("ordersStatusFilter").addEventListener("change", event => {
+  state.orders.status = event.target.value;
+  state.orders.cursor = null;
+  loadAdminOrders();
+});
+$("loadMoreOrdersBtn").addEventListener("click", () => loadAdminOrders({ append: true }));
+
+$("commissionsSearch").addEventListener("input", event => {
+  state.commissions.search = clean(event.target.value);
+  state.commissions.cursor = null;
+  debounceSearch(() => loadCommissions());
+});
+$("commissionsStatusFilter").addEventListener("change", event => {
+  state.commissions.status = event.target.value;
+  state.commissions.cursor = null;
+  loadCommissions();
+});
+$("loadMoreCommissionsBtn").addEventListener("click", () => loadCommissions({ append: true }));
+
+$("settlementsSearch").addEventListener("input", event => {
+  state.settlements.search = clean(event.target.value);
+  debounceSearch(() => loadSettlements());
+});
+$("settlementsStatusFilter").addEventListener("change", event => {
+  state.settlements.status = event.target.value;
+  loadSettlements();
+});
 
 $("usersContainer").addEventListener("click", async event => {
   const button = event.target.closest("[data-action][data-uid]");
@@ -714,14 +914,14 @@ $("usersContainer").addEventListener("click", async event => {
     if (button.dataset.action === "activate-user") {
       await activateOrRenewUser(button.dataset.uid);
       $("usersMessage").innerText = "تم تحديث الاشتراك بنجاح.";
-    }
-    if (button.dataset.action === "deactivate-user") {
+    } else if (button.dataset.action === "deactivate-user") {
       await updateDoc(doc(db, "users", button.dataset.uid), {
         isActive: false,
         subscriptionStatus: "inactive"
       });
       $("usersMessage").innerText = "تم إيقاف الاشتراك.";
     }
+
     await Promise.all([loadUsers(), loadOverview()]);
   } catch (error) {
     console.error(error);
@@ -734,12 +934,14 @@ $("usersContainer").addEventListener("click", async event => {
 $("projectsContainer").addEventListener("click", async event => {
   const button = event.target.closest("[data-action][data-project]");
   if (!button) return;
+
   const projectId = button.dataset.project;
 
-  if (button.dataset.action === "prepare-settlement") {
-    $("settlementProjectId").value = projectId;
-    switchSection("commissionsSection");
-    $("settlementProjectId").focus();
+  if (button.dataset.action === "view-project-payments") {
+    state.settlements.search = projectId;
+    $("settlementsSearch").value = projectId;
+    switchSection("settlementsSection");
+    await loadSettlements();
     return;
   }
 
@@ -779,87 +981,6 @@ $("operatorsContainer").addEventListener("click", async event => {
   } catch (error) {
     console.error(error);
     $("operatorsMessage").innerText = `تعذر تحديث المشغّل: ${error.message}`;
-  } finally {
-    button.disabled = false;
-  }
-});
-
-$("createSettlementBtn").addEventListener("click", async () => {
-  const button = $("createSettlementBtn");
-  const projectId = clean($("settlementProjectId").value);
-  if (!projectId) {
-    $("commissionsMessage").innerText = "اكتب Project ID أولًا.";
-    return;
-  }
-
-  button.disabled = true;
-  $("commissionsMessage").innerText = "جاري إنشاء كشف المستحقات...";
-
-  try {
-    const result = await createProjectCommissionSettlement({
-      projectId,
-      adminUid: adminSession.user.uid,
-      note: $("settlementNote").value
-    });
-
-    $("commissionsMessage").innerText = result.hasMore
-      ? `تم إنشاء تسوية لـ ${result.entryCount} طلب. ما زالت هناك قيود أخرى وستحتاج تسوية إضافية.`
-      : `تم إنشاء التسوية بنجاح لـ ${result.entryCount} طلب.`;
-
-    sectionLoaded.settlementsSection = false;
-    await Promise.all([loadCommissions(), loadOverview(), loadSettlements()]);
-    switchSection("settlementsSection");
-  } catch (error) {
-    console.error(error);
-    const code = String(error?.code || "").toLowerCase();
-    $("commissionsMessage").innerText = code.includes("permission-denied")
-      ? "إنشاء التسويات يحتاج نشر Firestore Rules الجديدة أولًا. باقي لوحة الإدارة تعمل بشكل طبيعي."
-      : `تعذر إنشاء التسوية: ${error.message}`;
-  } finally {
-    button.disabled = false;
-  }
-});
-
-$("settlementsContainer").addEventListener("click", async event => {
-  const button = event.target.closest("[data-action][data-settlement]");
-  if (!button) return;
-
-  const card = button.closest("[data-settlement]");
-  const settlementId = button.dataset.settlement;
-  button.disabled = true;
-
-  try {
-    if (button.dataset.action === "pay-settlement") {
-      const paymentMethod = card.querySelector("[data-field='paymentMethod']").value;
-      const paymentReference = card.querySelector("[data-field='paymentReference']").value;
-
-      await markCommissionSettlementPaid({
-        settlementId,
-        adminUid: adminSession.user.uid,
-        paymentMethod,
-        paymentReference
-      });
-
-      $("settlementsMessage").innerText = "تم تسجيل السداد وتحديث كل قيود العمولة المرتبطة.";
-    }
-
-    if (button.dataset.action === "void-settlement") {
-      const accepted = window.confirm("إلغاء هذه التسوية سيعيد قيود العمولة إلى المستحقات غير المجمعة. هل تريد الاستمرار؟");
-      if (!accepted) return;
-
-      await voidCommissionSettlement({
-        settlementId,
-        adminUid: adminSession.user.uid,
-        note: "Voided from admin control center"
-      });
-
-      $("settlementsMessage").innerText = "تم إلغاء التسوية وإعادة القيود للمستحقات.";
-    }
-
-    await Promise.all([loadSettlements(), loadCommissions(), loadOverview()]);
-  } catch (error) {
-    console.error(error);
-    $("settlementsMessage").innerText = `تعذر تنفيذ الإجراء: ${error.message}`;
   } finally {
     button.disabled = false;
   }
