@@ -701,9 +701,7 @@ export async function changeRestaurantOrderStatus({ projectId, orderId, actorUid
       commissionEligible: true,
       commissionLocked: true,
       commissionAmount: commission.amount,
-      commissionAgreementVersion: commission.version,
-      commissionTrigger: "legacy_delivery",
-      commissionEarnedAt: earnedAt
+      commissionAgreementVersion: commission.version
     });
 
     if (freshOrder.trackingToken) {
