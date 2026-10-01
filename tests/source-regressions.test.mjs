@@ -732,3 +732,71 @@ test("FB-LAUNCH05A reversal indexes support project history and net balance aggr
     assert.equal(signatures.includes(signature), true, signature);
   }
 });
+
+
+test("FB-LAUNCH05B owner finance panel handles pending reversal decisions", () => {
+  const panel = readFileSync("core/commissions/finance-panel.js", "utf8");
+
+  for (const marker of [
+    "listProjectCommissionReversals",
+    "confirmCommissionReversal",
+    "rejectCommissionReversal",
+    "موافقة على عكس العمولة",
+    "رفض طلب العكس",
+    "طلبات عكس العمولة"
+  ]) {
+    assert.equal(panel.includes(marker), true, marker);
+  }
+});
+
+test("FB-LAUNCH05B all operator dashboards request reversal only for canceled commissioned orders", () => {
+  for (const path of [
+    "supermarket-operator/app.js",
+    "restaurant-operator/app.js",
+    "bakery-operator/app.js",
+    "laundry-operator/app.js"
+  ]) {
+    const source = readFileSync(path, "utf8");
+    assert.equal(source.includes("requestCommissionReversal"), true, path);
+    assert.equal(source.includes('status==="canceled"'), true, path);
+    assert.equal(source.includes("commissionLocked===true"), true, path);
+    assert.equal(source.includes("reversalReasonSelect"), true, path);
+    assert.equal(source.includes("طلب عكس العمولة"), true, path);
+  }
+});
+
+test("FB-LAUNCH05B admin monitors reversals but cannot execute reversal decisions", () => {
+  const html = readFileSync("admin/index.html", "utf8");
+  const source = readFileSync("admin/admin.js", "utf8");
+
+  for (const marker of [
+    "reversalsSection",
+    "reversalsSearch",
+    "reversalsStatusFilter",
+    "loadMoreReversalsBtn",
+    "metricPendingReversals"
+  ]) {
+    assert.equal(html.includes(marker), true, marker);
+  }
+
+  for (const marker of [
+    "loadReversals",
+    "renderReversals",
+    "commissionReversals",
+    "reversalReasonLabel"
+  ]) {
+    assert.equal(source.includes(marker), true, marker);
+  }
+
+  assert.equal(source.includes("confirmCommissionReversal"), false);
+  assert.equal(source.includes("rejectCommissionReversal"), false);
+  assert.equal(source.includes("requestCommissionReversal"), false);
+});
+
+test("FB-LAUNCH05B admin overview reports net commission after confirmed reversals", () => {
+  const source = readFileSync("admin/admin.js", "utf8");
+
+  assert.equal(source.includes('aggregateAmount("commissionLedger", [where("status", "==", "reversed")])'), true);
+  assert.equal(source.includes("const netCommission = Math.max(0, totalCommission.totalAmount - reversedCommission.totalAmount)"), true);
+  assert.equal(source.includes('$("metricEarned").innerText = money(netCommission)'), true);
+});
