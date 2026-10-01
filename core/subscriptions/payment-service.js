@@ -79,10 +79,7 @@ export async function submitSubscriptionPaymentProof({
 
   const required = requiredSubscriptionPayment(userData);
   const paymentId = `${user.uid}_${Date.now()}`;
-  const extension = String(proofFile.type).toLowerCase() === "image/png"
-    ? "png"
-    : String(proofFile.type).toLowerCase() === "image/webp" ? "webp" : "jpg";
-  const proofPath = `subscription-proofs/${user.uid}/${paymentId}.${extension}`;
+  const proofPath = `subscription-proofs/${user.uid}/${paymentId}`;
   const proofRef = ref(storage, proofPath);
 
   await uploadBytes(proofRef, proofFile, {
