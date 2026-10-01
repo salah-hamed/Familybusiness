@@ -164,7 +164,8 @@ async function loadOverview() {
       confirmedPayments,
       legacyPayments,
       pendingPayments,
-      pendingReversals
+      pendingReversals,
+      pendingSubscriptionPayments
     ] = await Promise.all([
       countDocs("users"),
       countDocs("users", [where("subscriptionStatus", "==", "active")]),
@@ -178,7 +179,8 @@ async function loadOverview() {
       aggregateAmount("commissionSettlements", [where("status", "==", "confirmed")]).catch(() => ({ totalAmount: 0, entryCount: 0 })),
       aggregateAmount("commissionSettlements", [where("status", "==", "paid")]).catch(() => ({ totalAmount: 0, entryCount: 0 })),
       countDocs("commissionSettlements", [where("status", "==", "pending_owner_confirmation")]).catch(() => null),
-      countDocs("commissionReversals", [where("status", "==", "pending_owner_confirmation")]).catch(() => null)
+      countDocs("commissionReversals", [where("status", "==", "pending_owner_confirmation")]).catch(() => null),
+      countDocs("subscriptionPayments", [where("status", "==", "pending_review")]).catch(() => null)
     ]);
 
     const netCommission = Math.max(0, totalCommission.totalAmount - reversedCommission.totalAmount);
@@ -187,6 +189,9 @@ async function loadOverview() {
 
     $("metricUsers").innerText = totalUsers.toLocaleString("ar-EG");
     $("metricUsersMeta").innerText = `${activeUsers} نشط · ${pendingUsers} بانتظار التفعيل`;
+    $("metricPendingSubscriptionPayments").innerText = pendingSubscriptionPayments == null
+      ? "—"
+      : pendingSubscriptionPayments.toLocaleString("ar-EG");
     $("metricProjects").innerText = totalProjects.toLocaleString("ar-EG");
     $("metricOperators").innerText = totalOperators.toLocaleString("ar-EG");
     $("metricOperatorsMeta").innerText = `${activeOperators} مشغّل نشط`;
