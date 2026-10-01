@@ -1,6 +1,7 @@
 import auth from "../core/firebase/firebase-auth.js";
 import { claimOperatorAccess, getOperator, operatorCanOperate, buildOperatorAuthEmail } from "../core/partners/partner-service.js";
 import { acceptPendingCommission, rejectPendingCommission, getCommissionAgreement } from "../core/commissions/commission-service.js";
+import { renderOperatorFinancePanel } from "../core/commissions/finance-panel.js";
 import { getRestaurant, updateRestaurantSettings } from "../core/restaurant/restaurant-service.js";
 import { WORKER_ROLES, createWorker, listProjectWorkers, setWorkerActive } from "../core/workers/worker-service.js";
 import { assignWorkerAndPrepareWhatsApp } from "../core/workers/worker-dispatch-service.js";
@@ -83,7 +84,14 @@ async function refreshAccount(){
     ? `مرحبًا ${currentRestaurant?.name||currentOperator?.name||"بالمخبز"} — لوحة التشغيل جاهزة.`
     :"لا يمكن تشغيل الطلبات قبل قبول أول اتفاق عمولة.";
 
-  if(canOperate)await loadOperations();
+  if(canOperate){
+    await loadOperations();
+    await renderOperatorFinancePanel({
+      container:$("operationsPanel"),
+      projectId,
+      operatorUid:currentUser.uid
+    });
+  }
 }
 
 onAuthStateChanged(auth,async user=>{
