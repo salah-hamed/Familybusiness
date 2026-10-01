@@ -14,8 +14,14 @@ import {
 import {
   getProjectDocId
 } from "../core/projects/project-service.js";
-import { REFERRAL_CONFIG, formatEgp } from "../core/config/platform-config.js";
+import { PLATFORM_BILLING, REFERRAL_CONFIG, formatEgp } from "../core/config/platform-config.js";
 import { isSubscriptionActive, subscriptionExpiryDate } from "../core/subscriptions/subscription-service.js";
+import {
+  getLatestSubscriptionPayment,
+  paymentStatusCopy,
+  requiredSubscriptionPayment,
+  submitSubscriptionPaymentProof
+} from "../core/subscriptions/payment-service.js";
 import { createGuide } from "../core/onboarding/guide.js";
 import { buildWorkspaceGuide } from "../core/onboarding/guide-state.js";
 const userName =
@@ -32,6 +38,92 @@ const logoutBtn = document.getElementById("logoutBtn");
 const projectCount = document.getElementById("projectCount");
 const workspaceAccountState = document.getElementById("workspaceAccountState");
 const subscriptionHint = document.getElementById("subscriptionHint");
+const subscriptionPaymentPanel = document.getElementById("subscriptionPaymentPanel");
+const platformInstapayAccount = document.getElementById("platformInstapayAccount");
+const paymentRequiredText = document.getElementById("paymentRequiredText");
+const paymentAmount = document.getElementById("paymentAmount");
+const paymentBadge = document.getElementById("paymentBadge");
+const paymentReference = document.getElementById("paymentReference");
+const paymentProofFile = document.getElementById("paymentProofFile");
+const submitPaymentProofBtn = document.getElementById("submitPaymentProofBtn");
+const paymentReviewStatus = document.getElementById("paymentReviewStatus");
+const paymentForm = document.getElementById("paymentForm");
+
+function paymentErrorMessage(error) {
+  const message = String(error?.message || "");
+  if (message === "PAYMENT_ALREADY_PENDING") {
+    return "عندك إثبات دفع بانتظار المراجعة بالفعل.";
+  }
+  if (message === "INVALID_PAYMENT_REFERENCE") {
+    return "راجع مرجع عملية InstaPay واكتبه كما يظهر في التحويل.";
+  }
+  if (message.startsWith("ارفع ") || message.startsWith("صيغة ") || message.startsWith("حجم ") || message.startsWith("ملف ")) {
+    return message;
+  }
+  if (String(error?.code || "").includes("storage/unauthorized")) {
+    return "تعذر رفع الإثبات حاليًا بسبب صلاحيات التخزين. حاول بعد تحديث إعدادات المنصة.";
+  }
+  return "تعذر إرسال إثبات الدفع. تأكد من الإنترنت وحاول مرة أخرى.";
+}
+
+async function renderSubscriptionPayment(user, userData, subscriptionActive) {
+  if (!subscriptionPaymentPanel) return;
+
+  subscriptionPaymentPanel.classList.toggle("hidden", subscriptionActive);
+  if (subscriptionActive) return;
+
+  const required = requiredSubscriptionPayment(userData);
+  paymentAmount.innerText = formatEgp(required.amount);
+  paymentRequiredText.innerText = required.paymentType === "initial"
+    ? "أول تفعيل للحساب. بعد اعتماد الدفعة تقدر تشغّل المشاريع الأربعة."
+    : "تجديد الاشتراك الشهري لإعادة تشغيل المشاريع.";
+  platformInstapayAccount.innerText = PLATFORM_BILLING.instapayAccount || "لم يتم ضبط حساب التحويل بعد";
+  submitPaymentProofBtn.disabled = !PLATFORM_BILLING.instapayAccount;
+
+  let latest = null;
+  try {
+    latest = await getLatestSubscriptionPayment(user.uid);
+  } catch (error) {
+    console.error(error);
+    paymentReviewStatus.innerText = String(error?.code || "").includes("failed-precondition")
+      ? "سجل الدفع يحتاج نشر Firestore Index النهائي قبل استخدامه Live."
+      : "تعذر تحميل حالة آخر إثبات دفع.";
+  }
+
+  const pending = latest?.status === "pending_review";
+  paymentForm.classList.toggle("hidden", pending);
+  paymentBadge.className = `paymentBadge ${latest?.status || ""}`;
+  paymentBadge.innerText = pending
+    ? "قيد المراجعة"
+    : latest?.status === "rejected"
+      ? "يحتاج إثبات جديد"
+      : "بانتظار الدفع";
+  paymentReviewStatus.innerText = paymentStatusCopy(latest)
+    || (PLATFORM_BILLING.instapayAccount
+      ? "بعد التحويل اكتب مرجع العملية وارفع صورة الإثبات للمراجعة."
+      : "يجب ضبط حساب InstaPay للمنصة قبل استقبال دفعات حقيقية.");
+
+  submitPaymentProofBtn.onclick = async () => {
+    submitPaymentProofBtn.disabled = true;
+    paymentReviewStatus.innerText = "جاري رفع الإثبات وتسجيل الدفعة...";
+    try {
+      await submitSubscriptionPaymentProof({
+        user,
+        userData,
+        paymentReference: paymentReference.value,
+        proofFile: paymentProofFile.files?.[0]
+      });
+      paymentForm.classList.add("hidden");
+      paymentBadge.className = "paymentBadge pending";
+      paymentBadge.innerText = "قيد المراجعة";
+      paymentReviewStatus.innerText = "تم استلام إثبات التحويل وهو الآن بانتظار مراجعة الإدارة.";
+    } catch (error) {
+      console.error(error);
+      paymentReviewStatus.innerText = paymentErrorMessage(error);
+      submitPaymentProofBtn.disabled = !PLATFORM_BILLING.instapayAccount;
+    }
+  };
+}
 
 const projectCopy = {
   supermarket: "حوّل سوبرماركت شغال بالفعل لقناة طلبات أونلاين وتابع عمولتك على الأوردرات المكتملة.",
@@ -226,8 +318,10 @@ getDiscoverableProjects().forEach(project => {
     if (subscriptionHint) {
       subscriptionHint.innerText = subscriptionActive
         ? "أداتك جاهزة. اختار مشروع من تحت وابدأ ربط أول نشاط شغال حواليك."
-        : "بعد تفعيل الاشتراك تقدر تشغّل المشاريع الأربعة وتبدأ ربط الأنشطة.";
+        : "ارفع إثبات التحويل من بطاقة الدفع أسفل حالة الاشتراك. بعد المراجعة سيتفعل الحساب.";
     }
+
+    await renderSubscriptionPayment(user, data, subscriptionActive);
 
   }
 
