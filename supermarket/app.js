@@ -82,7 +82,7 @@ function render(){
   ].map(([k,v])=>`<div class="metaItem"><b>${escapeHTML(k)}</b><div>${escapeHTML(v)}</div></div>`).join("");
 
   if(pending && agreement?.pendingAmount!=null){
-    $("commissionMessage").innerText=`في انتظار موافقة السوبرماركت على ${money(agreement.pendingAmount)} لكل طلب مكتمل.`;
+    $("commissionMessage").innerText=`في انتظار موافقة السوبرماركت على ${money(agreement.pendingAmount)} لكل طلب يتم إرساله للتوصيل.`;
   } else {
     $("commissionMessage").innerText="";
   }
