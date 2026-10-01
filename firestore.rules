@@ -9,6 +9,7 @@ service cloud.firestore {
   function commissionAgreementPath(agreementId){ return /databases/$(database)/documents/commissionAgreements/$(agreementId); }
   function workerPath(workerId){ return /databases/$(database)/documents/workers/$(workerId); }
   function orderPath(orderId){ return /databases/$(database)/documents/orders/$(orderId); }
+  function orderTrackingPath(trackingToken){ return /databases/$(database)/documents/orderTracking/$(trackingToken); }
   function supermarketPath(projectId){ return /databases/$(database)/documents/supermarkets/$(projectId); }
   function restaurantPath(projectId){ return /databases/$(database)/documents/restaurants/$(projectId); }
   function laundryPath(projectId){ return /databases/$(database)/documents/laundries/$(projectId); }
@@ -1051,6 +1052,74 @@ service cloud.firestore {
       && ownsProject(resource.data.projectId)
     );
 
+   function validTrackedLaundryOperationalUpdate(){
+    let before = resource.data;
+    let after = request.resource.data;
+    let tracking = getAfter(orderTrackingPath(before.trackingToken)).data;
+    return before.templateType == "laundry"
+      && before.trackingToken is string
+      && before.trackingToken.size() >= 40
+      && signedIn()
+      && (isAdmin() || isProjectOperator(before.projectId))
+      && after.projectId == before.projectId
+      && after.providerId == before.providerId
+      && after.trackingToken == before.trackingToken
+      && after.statusUpdatedBy == request.auth.uid
+      && (
+        (
+          before.status == "new"
+          && (
+            (after.status == "accepted" && after.laundryStage == "accepted")
+            || after.status == "canceled"
+          )
+        )
+        ||
+        (
+          before.status == "accepted"
+          && before.laundryStage is string
+          && after.laundryStage is string
+          && validLaundryTransition(
+            before.status,
+            before.laundryStage,
+            after.status,
+            after.laundryStage
+          )
+        )
+      )
+      && after.status != "done"
+      && (
+        after.status == "canceled"
+        || after.laundryStage != "out_for_delivery"
+      )
+      && (
+        after.status == "canceled"
+        || after.laundryStage != "pickup_assigned"
+        || (
+          after.assignedWorkerId is string
+          && after.assignedWorkerId.size() > 0
+          && workerExists(after.assignedWorkerId)
+          && workerData(after.assignedWorkerId).projectId == before.projectId
+          && workerData(after.assignedWorkerId).role == "pickup_agent"
+        )
+      )
+      && after.diff(before).affectedKeys().hasOnly([
+        "status",
+        "laundryStage",
+        "statusUpdatedAt",
+        "statusUpdatedBy"
+      ])
+      && tracking.trackingToken == before.trackingToken
+      && tracking.orderId is string
+      && tracking.projectId == before.projectId
+      && tracking.templateType == "laundry"
+      && tracking.status == laundryTrackingStatus(after)
+      && tracking.items == after.items
+      && tracking.subtotal == after.price
+      && tracking.deliveryFee == 0
+      && tracking.total == after.price;
+   }
+
+   allow update: if validTrackedLaundryOperationalUpdate();
    allow update: if validDispatchCommissionUpdate(orderId);
    allow update: if validLockedCommissionDeliveryUpdate(orderId);
 
