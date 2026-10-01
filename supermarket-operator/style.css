@@ -114,3 +114,7 @@
   .catalogQuickEdit label{grid-column:1/-1}
   .catalogAdvanced .productEditGrid{grid-template-columns:1fr}
 }
+
+.operatorRecoveryHelp{margin-top:12px;border-top:1px dashed var(--line);padding-top:10px}
+.operatorRecoveryHelp summary{cursor:pointer;font-weight:800;color:var(--green)}
+.operatorRecoveryHelp p{margin:8px 0 0}

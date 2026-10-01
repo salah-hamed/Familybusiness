@@ -200,7 +200,7 @@ $("resetOperatorAccessBtn").onclick=async()=>{
     await refresh();
     $("linksHint").innerText="تم إصدار رابط دخول جديد ✅ الرابط القديم لم يعد صالحًا. ابعت الرابط الجديد لمسؤول السوبرماركت.";
   }catch(e){
-    $("linksHint").innerText=`تعذر إصدار رابط جديد: ${e.message}`;
+    $("linksHint").innerText="تعذر إصدار رابط دخول جديد. حدّث الصفحة وحاول مرة أخرى. إذا استمرت المشكلة تواصل مع إدارة المنصة.";
   }finally{
     btn.disabled=false;
   }

@@ -18,10 +18,14 @@
     <h2>دخول مسؤول المغسلة</h2>
     <p class="muted">افتح رابط الدعوة الذي وصلك على واتساب. أول مرة اختار كلمة مرور، وبعدها استخدم نفس الرابط للدخول.</p>
     <div class="formGrid">
-      <label>كلمة المرور<input id="authPassword" type="password" minlength="6"></label>
+      <label>كلمة المرور<input id="authPassword" type="password" minlength="6" autocomplete="current-password" aria-label="كلمة المرور"></label>
     </div>
     <div class="actions"><button id="loginBtn" class="primary">دخول</button><button id="registerBtn" class="secondary">تفعيل الدعوة أول مرة</button></div>
     <p id="authMessage" class="message"></p>
+    <details class="operatorRecoveryHelp">
+      <summary>نسيت كلمة المرور أو فقدت رابط الدخول؟</summary>
+      <p class="muted">تواصل مع صاحب المشروع واطلب منه «إصدار رابط دخول جديد». الرابط القديم سيتوقف فورًا، لكن الطلبات والعمولة وبيانات المشروع لن تتغير.</p>
+    </details>
   </section>
 
   <section id="agreementPanel" class="card hidden">
