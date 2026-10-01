@@ -690,7 +690,8 @@ test("FB-LAUNCH05A commission reversal is bilateral and preserves commission amo
   }
 
   assert.equal(source.includes("transaction.update(ledgerRef"), true);
-  assert.equal(source.includes("amount:"), true);
+  assert.equal(source.includes("Number(ledger.amount || 0)"), true);
+  assert.equal(source.includes("transaction.update(ledgerRef, {\n      amount"), false);
 });
 
 test("FB-LAUNCH05A reversed commissions are removed from owner and project earnings", () => {
