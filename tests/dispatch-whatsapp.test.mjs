@@ -41,12 +41,12 @@ test("bakery dispatch includes business, products, quantities, pricing and total
   for (const expected of [
     "مخبز النور",
     "2 × فينو",
-    "5 جنيه للوحدة",
-    "الإجمالي 10 جنيه",
+    `${Number(5).toLocaleString("ar-EG")} جنيه للوحدة`,
+    `الإجمالي ${Number(10).toLocaleString("ar-EG")} جنيه`,
     "1 × باتيه",
-    "قيمة المنتجات: 22 جنيه",
-    "التوصيل: 8 جنيه",
-    "إجمالي التحصيل: 30 جنيه",
+    `قيمة المنتجات: ${Number(22).toLocaleString("ar-EG")} جنيه`,
+    `التوصيل: ${Number(8).toLocaleString("ar-EG")} جنيه`,
+    `إجمالي التحصيل: ${Number(30).toLocaleString("ar-EG")} جنيه`,
     "الاتصال قبل الوصول"
   ]) {
     assert.equal(message.includes(expected), true, expected);
@@ -75,8 +75,8 @@ test("supermarket and restaurant dispatch keep full item details", () => {
     });
 
     assert.equal(message.includes("3 × منتج اختبار"), true, templateId);
-    assert.equal(message.includes("7 جنيه للوحدة"), true, templateId);
-    assert.equal(message.includes("إجمالي التحصيل: 25 جنيه"), true, templateId);
+    assert.equal(message.includes(`${Number(7).toLocaleString("ar-EG")} جنيه للوحدة`), true, templateId);
+    assert.equal(message.includes(`إجمالي التحصيل: ${Number(25).toLocaleString("ar-EG")} جنيه`), true, templateId);
   }
 });
 
@@ -104,7 +104,7 @@ test("laundry dispatch includes pieces, service and collection total", () => {
   assert.equal(message.includes("2 × قميص"), true);
   assert.equal(message.includes("غسيل + مكواة"), true);
   assert.equal(message.includes("موعد الاستلام: 6 مساءً"), true);
-  assert.equal(message.includes("إجمالي التحصيل: 30 جنيه"), true);
+  assert.equal(message.includes(`إجمالي التحصيل: ${Number(30).toLocaleString("ar-EG")} جنيه`), true);
 });
 
 test("WhatsApp URL keeps Egyptian phone normalization and encoded message", () => {
