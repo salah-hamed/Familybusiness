@@ -5,7 +5,7 @@ import {
   paymentStatusCopy,
   requiredSubscriptionPayment,
   validatePaymentProofFile
-} from "../core/subscriptions/payment-service.js";
+} from "../core/subscriptions/payment-policy.js";
 
 test("subscription payment amount is derived from activation history", () => {
   assert.deepEqual(
