@@ -222,7 +222,8 @@ function renderItems(){
   itemDefinitions.forEach(item=>{
     const row=document.createElement("div");
     row.className="itemRow";
-    const serviceControl=item.washOnly?'<span class="serviceFixed">غسيل فقط</span>':`<select class="serviceSelect" data-service-key="${item.key}" aria-label="نوع الخدمة لـ ${item.label}"><option value="wash">غسيل فقط</option><option value="iron">مكواة فقط</option><option value="wash_iron" selected>غسيل + مكواة</option></select>`;
+    const selectedService=services[item.key];
+    const serviceControl=item.washOnly?'<span class="serviceFixed">غسيل فقط</span>':`<select class="serviceSelect" data-service-key="${item.key}" aria-label="نوع الخدمة لـ ${item.label}"><option value="wash" ${selectedService==="wash"?"selected":""}>غسيل فقط</option><option value="iron" ${selectedService==="iron"?"selected":""}>مكواة فقط</option><option value="wash_iron" ${selectedService==="wash_iron"?"selected":""}>غسيل + مكواة</option></select>`;
     row.innerHTML=`<div class="itemDetails"><span class="itemName">${item.icon} ${item.label}</span>${serviceControl}<span class="itemPrice" id="price-${item.key}"></span></div><div class="counter"><button type="button" data-key="${item.key}" data-step="-1">−</button><strong id="qty-${item.key}">${quantities[item.key]}</strong><button type="button" data-key="${item.key}" data-step="1">+</button></div>`;
     box.appendChild(row);updateItemPrice(item);
   });
