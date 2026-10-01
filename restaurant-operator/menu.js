@@ -78,11 +78,7 @@ async function authorize(){
   try{
     await claimOperatorAccess(projectId,currentUser);
   }catch(e){
-    const code=String(e?.code||"");
-    const message=String(e?.message||"");
-    $("pageStatus").innerText=code.includes("permission-denied")||["OPERATOR_ALREADY_CLAIMED","OPERATOR_INVITE_MISMATCH"].includes(message)
-      ?"رابط الدخول ده اتلغى أو تم استبداله. اطلب رابط دخول جديد من صاحب المشروع."
-      :`تعذر فتح المنيو: ${message||:friendlyOperatorError(e,"تعذر فتح المنيو. حاول تحديث الصفحة.");
+    $("pageStatus").innerText=friendlyOperatorError(e,"تعذر فتح المنيو. حاول تحديث الصفحة أو اطلب رابط دعوة جديد.");
     return false;
   }
 
