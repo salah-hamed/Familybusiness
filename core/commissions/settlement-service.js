@@ -47,7 +47,7 @@ export async function listProjectOutstandingCommissionEntries(projectId) {
     .map(item => ({ entryId: item.id, ...item.data() }))
     .filter(entry =>
       entry.sourceType === "project_order" &&
-      entry.status !== "paid" &&
+      entry.status === "earned" &&
       !entry.paidAt &&
       !entry.settlementId
     )
@@ -85,7 +85,7 @@ export async function createProjectCommissionSettlement({
       if (
         data.projectId !== pid ||
         data.sourceType !== "project_order" ||
-        data.status === "paid" ||
+        data.status !== "earned" ||
         data.paidAt ||
         data.settlementId
       ) {
@@ -179,7 +179,7 @@ export async function markCommissionSettlementPaid({
       if (
         entry.settlementId !== sid ||
         entry.projectId !== settlement.projectId ||
-        entry.status === "paid"
+        entry.status !== "earned"
       ) {
         throw new Error("SETTLEMENT_ENTRY_MISMATCH");
       }
