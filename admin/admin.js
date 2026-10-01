@@ -1,4 +1,5 @@
 import db from "../core/firebase/firebase-db.js";
+import storage from "../core/firebase/firebase-storage.js";
 import { protectAdmin } from "../core/auth/admin-guard.js";
 import {
   PLATFORM_BILLING,
@@ -29,6 +30,7 @@ import {
   serverTimestamp,
   Timestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getBlob, ref as storageRef } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
 const $ = id => document.getElementById(id);
 const PAGE_SIZE = 50;
@@ -40,6 +42,7 @@ let searchTimer = null;
 
 const state = {
   users: { rows: [], cursor: null, hasMore: false, loading: false, search: "", status: "all" },
+  subscriptionPayments: { rows: [], cursor: null, hasMore: false, loading: false, search: "", status: "pending_review" },
   projects: { rows: [], cursor: null, hasMore: false, loading: false, search: "", template: "all" },
   operators: { rows: [], cursor: null, hasMore: false, loading: false, search: "" },
   orders: { rows: [], cursor: null, hasMore: false, loading: false, search: "", status: "all" },
@@ -51,6 +54,7 @@ const state = {
 
 const sectionLoaded = {
   usersSection: false,
+  subscriptionPaymentsSection: false,
   projectsSection: false,
   operatorsSection: false,
   ordersSection: false,
