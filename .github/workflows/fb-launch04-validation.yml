@@ -1,0 +1,27 @@
+name: FB-LAUNCH04 Dispatch Reliability Validation
+on:
+  push:
+    branches:
+      - fb-launch04-dispatch-whatsapp-reliability
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install
+      - run: node --check core/whatsapp/dispatch-service.js
+      - run: node --check core/workers/worker-dispatch-service.js
+      - run: node --check supermarket-operator/app.js
+      - run: node --check restaurant-operator/app.js
+      - run: node --check bakery-operator/app.js
+      - run: node --check laundry-operator/app.js
+      - run: node --check tests/dispatch-whatsapp.test.mjs
+      - run: node --check tests/source-regressions.test.mjs
+      - run: npm test
