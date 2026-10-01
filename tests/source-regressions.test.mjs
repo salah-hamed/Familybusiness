@@ -160,28 +160,30 @@ test("PF01 active and history services keep server-side status filters before an
 });
 
 
-test("PF02 admin defaults to paged users instead of reading the whole collection", () => {
+test("PF02 admin keeps users paged and avoids full-collection search scans", () => {
   const source = readFileSync("admin/admin.js", "utf8");
   assert.equal(source.includes('getDocs(collection(db, "users"))'), false);
-  assert.equal(source.includes("listUsersPage"), true);
-  assert.equal(source.includes("startAfter(cursor)"), true);
-  assert.equal(source.includes("limit(pageSize)"), true);
+  assert.equal(source.includes("PAGE_SIZE = 50"), true);
+  assert.equal(source.includes("startAfter(s.cursor)"), true);
+  assert.equal(source.includes("limit(PAGE_SIZE)"), true);
   assert.equal(source.includes("getCountFromServer"), true);
 });
 
-test("PF02 admin search is exhaustive only when a search term is present", () => {
+test("PF02 admin search is direct by indexed identity fields", () => {
   const source = readFileSync("admin/admin.js", "utf8");
-  assert.equal(source.includes("searchAllUsers"), true);
-  assert.equal(source.includes("if (search)"), true);
-  assert.equal(source.includes("USERS_PAGINATION_STALLED"), true);
+  assert.equal(source.includes("exactUserSearch"), true);
+  assert.equal(source.includes('getDoc(doc(db, "users", q))'), true);
+  assert.equal(source.includes('where("email", "==", q)'), true);
+  assert.equal(source.includes('where("name", "==", q)'), true);
+  assert.equal(source.includes("USERS_PAGINATION_STALLED"), false);
 });
 
-test("PF02 admin has one pagination control and server-side subscription filter", () => {
+test("PF02 admin keeps one user pagination control and server-side subscription filter", () => {
   const html = readFileSync("admin/index.html", "utf8");
   const source = readFileSync("admin/admin.js", "utf8");
   assert.equal((html.match(/id="loadMoreUsersBtn"/g) || []).length, 1);
   assert.equal(html.includes('id="usersStatusFilter"'), true);
-  assert.equal(source.includes('where("subscriptionStatus", "==", status)'), true);
+  assert.equal(source.includes('where("subscriptionStatus", "==", s.status)'), true);
 });
 
 
