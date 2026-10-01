@@ -466,3 +466,66 @@ test("FB-LAUNCH01 owner dashboards use neutral commission-count wording", () => 
     assert.equal(html.includes("الطلبات المحتسبة"), true, path);
   }
 });
+
+
+test("FB-LAUNCH02 admin control center exposes platform operations sections", () => {
+  const html = readFileSync("admin/index.html", "utf8");
+  const source = readFileSync("admin/admin.js", "utf8");
+
+  for (const marker of [
+    "usersSection",
+    "projectsSection",
+    "operatorsSection",
+    "ordersSection",
+    "commissionsSection",
+    "settlementsSection",
+    "metricOutstanding",
+    "metricPendingSettlements"
+  ]) {
+    assert.equal(html.includes(marker), true, marker);
+  }
+
+  for (const marker of [
+    "loadOverview",
+    "loadProjects",
+    "loadOperators",
+    "loadAdminOrders",
+    "loadCommissions",
+    "loadSettlements",
+    "activateOrRenewUser"
+  ]) {
+    assert.equal(source.includes(marker), true, marker);
+  }
+});
+
+test("FB-LAUNCH02 settlement service batches earned project commissions and pays them atomically", () => {
+  const source = readFileSync("core/commissions/settlement-service.js", "utf8");
+
+  assert.equal(source.includes("SETTLEMENT_ENTRY_LIMIT = 200"), true);
+  assert.equal(source.includes('entry.status === "earned"'), true);
+  assert.equal(source.includes("createProjectCommissionSettlement"), true);
+  assert.equal(source.includes("markCommissionSettlementPaid"), true);
+  assert.equal(source.includes("voidCommissionSettlement"), true);
+  assert.equal(source.includes('status: "paid"'), true);
+  assert.equal(source.includes('settlementStatus: "paid"'), true);
+  assert.equal(source.includes("SETTLEMENT_TOTAL_MISMATCH"), true);
+});
+
+test("FB-LAUNCH02 admin avoids unsafe cascading project hard-delete controls", () => {
+  const html = readFileSync("admin/index.html", "utf8");
+  const source = readFileSync("admin/admin.js", "utf8");
+
+  assert.equal(source.includes("deleteDoc"), false);
+  assert.equal(html.includes("إيقاف المشروع"), false);
+  assert.equal(source.includes("toggle-project"), true);
+});
+
+test("FB-LAUNCH02 rules protect settlement ownership and immutable commission value", () => {
+  const rules = readFileSync("firestore.rules", "utf8");
+
+  assert.equal(rules.includes("match /commissionSettlements/{settlementId}"), true);
+  assert.equal(rules.includes('request.resource.data.amount == resource.data.amount'), true);
+  assert.equal(rules.includes('"settlementId"'), true);
+  assert.equal(rules.includes('"settlementStatus"'), true);
+  assert.equal(rules.includes('"settlementCreatedAt"'), true);
+});
