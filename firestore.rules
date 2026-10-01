@@ -1013,7 +1013,8 @@ service cloud.firestore {
               && projectOrderLedgerAfterMatches(
                 orderId,
                 resource.data.projectId,
-                request.resource.data.commissionAmount
+                request.resource.data.commissionAmount,
+                request.resource.data.commissionAgreementVersion
               )
             )
           )
@@ -1163,7 +1164,8 @@ service cloud.firestore {
               && projectOrderLedgerAfterMatches(
                 orderId,
                 resource.data.projectId,
-                request.resource.data.commissionAmount
+                request.resource.data.commissionAmount,
+                request.resource.data.commissionAgreementVersion
               )
             )
           )
@@ -1313,7 +1315,8 @@ service cloud.firestore {
               && projectOrderLedgerAfterMatches(
                 orderId,
                 resource.data.projectId,
-                request.resource.data.commissionAmount
+                request.resource.data.commissionAmount,
+                request.resource.data.commissionAgreementVersion
               )
             )
           )
