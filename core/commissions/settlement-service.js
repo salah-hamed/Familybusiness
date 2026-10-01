@@ -40,19 +40,27 @@ async function aggregateAmount(queryRef) {
   };
 }
 
-export async function getProjectPaymentSummary(projectId) {
+export async function getProjectPaymentSummary(
+  projectId,
+  { ownerId = "" } = {}
+) {
   const pid = clean(projectId);
+  const oid = clean(ownerId);
   if (!pid) throw new Error("PROJECT_ID_REQUIRED");
 
   const ledger = collection(db, "commissionLedger");
   const payments = collection(db, "commissionSettlements");
+  const ledgerScope = [
+    where("projectId", "==", pid),
+    where("sourceType", "==", "project_order")
+  ];
 
-  const [earned, confirmed, pending] = await Promise.all([
-    aggregateAmount(query(
-      ledger,
-      where("projectId", "==", pid),
-      where("sourceType", "==", "project_order")
-    )),
+  if (oid) {
+    ledgerScope.push(where("userId", "==", oid));
+  }
+
+  const [earned, confirmed, legacyPaid, pending] = await Promise.all([
+    aggregateAmount(query(ledger, ...ledgerScope)),
     aggregateAmount(query(
       payments,
       where("projectId", "==", pid),
@@ -61,11 +69,17 @@ export async function getProjectPaymentSummary(projectId) {
     aggregateAmount(query(
       payments,
       where("projectId", "==", pid),
+      where("status", "==", "paid")
+    )),
+    aggregateAmount(query(
+      payments,
+      where("projectId", "==", pid),
       where("status", "==", "pending_owner_confirmation")
     ))
   ]);
 
-  const paidAmount = Math.min(earned.totalAmount, confirmed.totalAmount);
+  const recordedPayments = confirmed.totalAmount + legacyPaid.totalAmount;
+  const paidAmount = Math.min(earned.totalAmount, recordedPayments);
 
   return {
     earnedAmount: earned.totalAmount,
@@ -214,7 +228,7 @@ export async function confirmOwnerPayment({
     throw new Error("SETTLEMENT_NOT_PENDING");
   }
 
-  const summary = await getProjectPaymentSummary(initial.projectId);
+  const summary = await getProjectPaymentSummary(initial.projectId, { ownerId: uid });
   if (Number(initial.amount || 0) > summary.outstandingAmount) {
     throw new Error("PAYMENT_EXCEEDS_CURRENT_OUTSTANDING");
   }
