@@ -236,13 +236,12 @@ test("PF04 active owner project pages use server aggregates instead of loading t
   }
 });
 
-test("PF04 project earnings aggregate keeps project isolation and paid compatibility", () => {
+test("PF04 project earnings keep project isolation while FB-LAUNCH03 uses confirmed peer payments", () => {
   const source = readFileSync("core/commissions/earnings-service.js", "utf8");
-  assert.equal(source.includes('where("sourceType", "==", "project_order")'), true);
-  assert.equal(source.includes('where("projectId", "==", pid)'), true);
-  assert.equal(source.includes('where("status", "==", "paid")'), true);
-  assert.equal(source.includes('where("paidAt", "!=", null)'), true);
-  assert.equal(source.includes("paidByStatus.totalAmount + paidByTimestamp.totalAmount - paidOverlap.totalAmount"), true);
+  assert.equal(source.includes("getProjectPaymentSummary"), true);
+  assert.equal(source.includes("{ ownerId: uid }"), true);
+  assert.equal(source.includes("pendingPaymentAmount"), true);
+  assert.equal(source.includes("outstandingAmount: summary.outstandingAmount"), true);
 });
 
 test("PF04 project earnings indexes are version controlled", () => {
@@ -498,17 +497,19 @@ test("FB-LAUNCH02 admin control center exposes platform operations sections", ()
   }
 });
 
-test("FB-LAUNCH02 settlement service batches earned project commissions and pays them atomically", () => {
+test("FB-LAUNCH03 peer settlement is operator-declared and owner-confirmed", () => {
   const source = readFileSync("core/commissions/settlement-service.js", "utf8");
 
-  assert.equal(source.includes("SETTLEMENT_ENTRY_LIMIT = 200"), true);
-  assert.equal(source.includes('entry.status === "earned"'), true);
-  assert.equal(source.includes("createProjectCommissionSettlement"), true);
-  assert.equal(source.includes("markCommissionSettlementPaid"), true);
-  assert.equal(source.includes("voidCommissionSettlement"), true);
-  assert.equal(source.includes('status: "paid"'), true);
-  assert.equal(source.includes('settlementStatus: "paid"'), true);
-  assert.equal(source.includes("SETTLEMENT_TOTAL_MISMATCH"), true);
+  assert.equal(source.includes("declareOperatorPayment"), true);
+  assert.equal(source.includes("confirmOwnerPayment"), true);
+  assert.equal(source.includes("rejectOwnerPayment"), true);
+  assert.equal(source.includes('status: "pending_owner_confirmation"'), true);
+  assert.equal(source.includes('status: "confirmed"'), true);
+  assert.equal(source.includes("PENDING_PAYMENT_EXISTS"), true);
+  assert.equal(source.includes("PAYMENT_EXCEEDS_OUTSTANDING"), true);
+  assert.equal(source.includes("commissionPaymentStates"), true);
+  assert.equal(source.includes("markCommissionSettlementPaid"), false);
+  assert.equal(source.includes("createProjectCommissionSettlement"), false);
 });
 
 test("FB-LAUNCH02 admin avoids unsafe cascading project hard-delete controls", () => {
@@ -520,20 +521,88 @@ test("FB-LAUNCH02 admin avoids unsafe cascading project hard-delete controls", (
   assert.equal(source.includes("toggle-project"), true);
 });
 
-test("FB-LAUNCH02 rules protect settlement ownership and immutable commission value", () => {
+test("FB-LAUNCH03 rules make admin read-only for peer payments", () => {
   const rules = readFileSync("firestore.rules", "utf8");
 
   assert.equal(rules.includes("match /commissionSettlements/{settlementId}"), true);
+  assert.equal(rules.includes("isProjectOperator(request.resource.data.projectId)"), true);
+  assert.equal(rules.includes('request.resource.data.status == "pending_owner_confirmation"'), true);
   assert.equal(rules.includes('request.resource.data.amount == resource.data.amount'), true);
-  assert.equal(rules.includes('"settlementId"'), true);
-  assert.equal(rules.includes('"settlementStatus"'), true);
-  assert.equal(rules.includes('"settlementCreatedAt"'), true);
+  assert.equal(rules.includes("ownsProject(resource.data.projectId)"), true);
+  assert.equal(rules.includes("match /commissionPaymentStates/{projectId}"), true);
+  assert.equal(rules.includes("allow create, update: if isAdmin();"), false);
 });
 
 
-test("FB-LAUNCH02 admin stays usable before production settlement Rules are deployed", () => {
+test("FB-LAUNCH03 admin monitors payments without executing them and stays scalable", () => {
+  const html = readFileSync("admin/index.html", "utf8");
   const source = readFileSync("admin/admin.js", "utf8");
-  assert.equal(source.includes("Settlement metrics unavailable until production Rules are deployed."), true);
-  assert.equal(source.includes('return null;'), true);
-  assert.equal(source.includes("قسم التسويات جاهز في الكود ويحتاج نشر Firestore Rules الجديدة"), true);
+
+  assert.equal(source.includes("declareOperatorPayment"), false);
+  assert.equal(source.includes("confirmOwnerPayment"), false);
+  assert.equal(source.includes("markCommissionSettlementPaid"), false);
+  assert.equal(source.includes("createProjectCommissionSettlement"), false);
+  assert.equal(html.includes("الإدارة تراقب"), false);
+  assert.equal(html.includes("للمتابعة والمراجعة فقط"), true);
+
+  for (const id of [
+    "loadMoreProjectsBtn",
+    "loadMoreOperatorsBtn",
+    "loadMoreOrdersBtn",
+    "loadMoreCommissionsBtn"
+  ]) {
+    assert.equal(html.includes(id), true, id);
+  }
+
+  assert.equal(source.includes("PAGE_SIZE = 50"), true);
+  assert.equal(source.includes("getDoc(doc(db, \"projects\", q))"), true);
+  assert.equal(source.includes("where(\"projectId\", \"==\", s.search)"), true);
+  assert.equal(source.includes("ADMIN_LIST_LIMIT"), false);
+});
+
+
+test("FB-LAUNCH03 all owner and operator dashboards expose the shared peer-payment panel", () => {
+  for (const path of [
+    "supermarket/app.js",
+    "restaurant/app.js",
+    "bakery/app.js",
+    "laundry/app.js"
+  ]) {
+    const source = readFileSync(path, "utf8");
+    assert.equal(source.includes("renderOwnerFinancePanel"), true, path);
+  }
+
+  for (const path of [
+    "supermarket-operator/app.js",
+    "restaurant-operator/app.js",
+    "bakery-operator/app.js",
+    "laundry-operator/app.js"
+  ]) {
+    const source = readFileSync(path, "utf8");
+    assert.equal(source.includes("renderOperatorFinancePanel"), true, path);
+  }
+
+  const panel = readFileSync("core/commissions/finance-panel.js", "utf8");
+  assert.equal(panel.includes("تم سداد هذا المبلغ"), true);
+  assert.equal(panel.includes("تأكيد استلام المبلغ"), true);
+  assert.equal(panel.includes("لم أستلم المبلغ"), true);
+});
+
+test("FB-LAUNCH03 finance indexes support peer balances and scalable admin drill-down", () => {
+  const config = JSON.parse(readFileSync("firestore.indexes.json", "utf8"));
+  const signatures = config.indexes.map(index =>
+    `${index.collectionGroup}:${index.fields.map(field => field.fieldPath).join(",")}`
+  );
+
+  for (const signature of [
+    "commissionSettlements:projectId,status",
+    "orders:projectId,createdAt",
+    "orders:status,createdAt",
+    "commissionLedger:projectId,createdAt",
+    "commissionLedger:status,createdAt",
+    "commissionLedger:projectId,sourceType",
+    "commissionLedger:userId,sourceType,projectId"
+  ]) {
+    assert.equal(signatures.includes(signature), true, signature);
+  }
 });
