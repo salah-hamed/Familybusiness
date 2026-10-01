@@ -1,4 +1,5 @@
 import auth from "../core/firebase/firebase-auth.js";
+import { friendlyOperatorError } from "../core/operators/operator-errors.js";
 import { claimOperatorAccess, getOperator, operatorCanOperate, buildOperatorAuthEmail } from "../core/partners/partner-service.js";
 import { acceptPendingCommission, rejectPendingCommission, getCommissionAgreement } from "../core/commissions/commission-service.js";
 import { renderOperatorFinancePanel } from "../core/commissions/finance-panel.js";
@@ -53,16 +54,7 @@ function escapeHTML(v){return String(v??"").replace(/&/g,"&amp;").replace(/</g,"
 function statusLabel(s){return ({new:"جديد",accepted:"مقبول",preparing:"جاري التحضير",ready:"جاهز",assigned:"تم تعيين مندوب",out_for_delivery:"خرج للتوصيل",delivered:"تم التوصيل",canceled:"ملغي"})[s]||s;}
 function setVisible(id,visible){$(id).classList.toggle("hidden",!visible);}
 function operatorAccessErrorMessage(error){
-  const code=String(error?.code||"");
-  const message=String(error?.message||"");
-  if(
-    code.includes("permission-denied")
-    || message==="OPERATOR_ALREADY_CLAIMED"
-    || message==="OPERATOR_INVITE_MISMATCH"
-  ){
-    return "رابط الدخول ده اتلغى أو تم استبداله. اطلب رابط دخول جديد من صاحب المشروع.";
-  }
-  return `تعذر ربط الحساب: ${message||"UNKNOWN_ERROR"}`;
+  return friendlyOperatorError(error,"تعذر فتح لوحة التشغيل. حاول تحديث الصفحة أو اطلب رابط دعوة جديد.");
 }
 
 async function refreshAccount(){
@@ -136,7 +128,7 @@ $("registerBtn").onclick=async()=>{
   }catch(e){
     $("authMessage").innerText=e.code==="auth/email-already-in-use"
       ?"الدعوة مفعلة بالفعل. استخدم تسجيل الدخول."
-      :e.message;
+      :friendlyOperatorError(e,"تعذر تفعيل الدعوة. راجع كلمة المرور وحاول مرة أخرى.");
   }
 };
 
@@ -158,7 +150,7 @@ $("acceptAgreementBtn").onclick=async()=>{
     await acceptPendingCommission({projectDocId:projectId,operatorAuthUid:currentUser.uid});
     $("agreementMessage").innerText="تم قبول العمولة ✅";
     await refreshAccount();
-  }catch(e){$("agreementMessage").innerText=e.message;}
+  }catch(e){$("agreementMessage").innerText=friendlyOperatorError(e,"تعذر تحديث اتفاق العمولة.");}
 };
 
 $("rejectAgreementBtn").onclick=async()=>{
@@ -166,7 +158,7 @@ $("rejectAgreementBtn").onclick=async()=>{
     await rejectPendingCommission({projectDocId:projectId,operatorAuthUid:currentUser.uid});
     $("agreementMessage").innerText="تم رفض العمولة.";
     await refreshAccount();
-  }catch(e){$("agreementMessage").innerText=e.message;}
+  }catch(e){$("agreementMessage").innerText=friendlyOperatorError(e,"تعذر تحديث اتفاق العمولة.");}
 };
 
 function renderRestaurantSettings(){
@@ -267,11 +259,11 @@ async function loadOperations(){
   ]);
 
   if(ridersResult.status==="rejected"){
-    $("riderMessage").innerText=`تعذر تحميل المندوبين: ${ridersResult.reason?.message||"UNKNOWN_ERROR"}`;
+    $("riderMessage").innerText=friendlyOperatorError(ridersResult.reason,"تعذر تحميل المندوبين. اضغط تحديث وحاول مرة أخرى.");
   }
 
   if(ordersResult.status==="rejected"){
-    $("ordersMessage").innerText=`تعذر تحميل الطلبات: ${ordersResult.reason?.message||"UNKNOWN_ERROR"}`;
+    $("ordersMessage").innerText=friendlyOperatorError(ordersResult.reason,"تعذر تحميل الطلبات. اضغط تحديث وحاول مرة أخرى.");
   }
   await renderOperatorFinancePanel({
     container:$("operationsPanel"),
@@ -324,14 +316,14 @@ $("saveSettingsBtn").onclick=async()=>{
 
     Promise.allSettled([loadRiders(),loadOrders()]).then(([ridersResult,ordersResult])=>{
       if(ridersResult.status==="rejected"){
-        $("riderMessage").innerText=`تم حفظ الإعدادات، لكن تعذر تحديث المندوبين: ${ridersResult.reason?.message||"UNKNOWN_ERROR"}`;
+        $("riderMessage").innerText=`تم حفظ الإعدادات، لكن ${friendlyOperatorError(ridersResult.reason,"تعذر تحديث المندوبين.")}`;
       }
       if(ordersResult.status==="rejected"){
-        $("ordersMessage").innerText=`تم حفظ الإعدادات، لكن تعذر تحديث الطلبات: ${ordersResult.reason?.message||"UNKNOWN_ERROR"}`;
+        $("ordersMessage").innerText=`تم حفظ الإعدادات، لكن ${friendlyOperatorError(ordersResult.reason,"تعذر تحديث الطلبات.")}`;
       }
     });
   }catch(e){
-    $("settingsMessage").innerText=`تعذر الحفظ: ${e.message}`;
+    $("settingsMessage").innerText=friendlyOperatorError(e,"تعذر حفظ الإعدادات. راجع البيانات وحاول مرة أخرى.");
   }finally{
     $("saveSettingsBtn").disabled=false;
   }
@@ -372,7 +364,7 @@ $("addRiderBtn").onclick=async()=>{
     $("riderPhone").value="";
     $("riderMessage").innerText="تمت إضافة المندوب ✅";
     await loadRiders();
-  }catch(e){$("riderMessage").innerText=e.message;}
+  }catch(e){$("riderMessage").innerText=friendlyOperatorError(e,"تعذر تحديث المندوب. راجع البيانات وحاول مرة أخرى.");}
 };
 
 function activeRiderOptions(){
@@ -456,7 +448,7 @@ async function loadOrders({appendHistory=false}={}){
           await changeRestaurantOrderStatus({projectId,orderId:order.orderId,actorUid:currentUser.uid,nextStatus:btn.dataset.next});
         }
         await loadOrders();
-      }catch(e){alert(e.message);}finally{btn.disabled=false;}
+      }catch(e){alert(friendlyOperatorError(e,"تعذر تنفيذ الإجراء على الطلب. حدّث الطلبات وحاول مرة أخرى."));}finally{btn.disabled=false;}
     });
 
     card.querySelector(".assignRider")?.addEventListener("click",async()=>{
@@ -493,7 +485,7 @@ async function loadOrders({appendHistory=false}={}){
         }
       }catch(e){
         try{popup?.close();}catch{}
-        alert(e.message);
+        alert(friendlyOperatorError(e,"تعذر تنفيذ الإجراء على الطلب. حدّث الطلبات وحاول مرة أخرى."));
       }
     });
 
@@ -544,13 +536,13 @@ $("refreshOrdersBtn").onclick=async()=>{
   try{
     await loadOrders();
   }catch(e){
-    $("ordersMessage").innerText=`تعذر تحديث الطلبات: ${e.message}`;
+    $("ordersMessage").innerText=friendlyOperatorError(e,"تعذر تحديث الطلبات. حاول مرة أخرى.");
   }
 };
 $("loadOlderOrdersBtn").onclick=async()=>{
   const btn=$("loadOlderOrdersBtn");
   btn.disabled=true;
   $("ordersMessage").innerText="جاري تحميل طلبات أقدم...";
-  try{await loadOrders({appendHistory:true});}catch(e){$("ordersMessage").innerText=`تعذر تحميل المزيد: ${e.message}`;}finally{btn.disabled=false;}
+  try{await loadOrders({appendHistory:true});}catch(e){$("ordersMessage").innerText=friendlyOperatorError(e,"تعذر تحميل طلبات أقدم. حاول مرة أخرى.");}finally{btn.disabled=false;}
 };
 document.querySelectorAll(".tabs button").forEach(btn=>btn.onclick=()=>document.getElementById(btn.dataset.target)?.scrollIntoView({behavior:"smooth",block:"start"}));
