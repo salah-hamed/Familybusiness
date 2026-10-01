@@ -1,0 +1,48 @@
+name: Export Firebase Production Sync Files
+on:
+  push:
+    branches:
+      - export-firebase-sync-files
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare instructions
+        run: |
+          cat > FIREBASE_PRODUCTION_SYNC_README.txt <<'EOF'
+          FAMILY BUSINESS — FIREBASE PRODUCTION SYNC
+          Source main SHA: d3f7d4d752adb9ec2d4f1643328bf8e4835189fa
+
+          MANUAL / PRODUCTION SYNC FILES:
+          1) firestore.rules
+             Deploy to Cloud Firestore Rules.
+          2) firestore.indexes.json
+             Deploy Firestore indexes with Firebase CLI.
+          3) storage.rules
+             Deploy to Firebase Storage Rules.
+          4) firebase.json
+             Keep with the repo when using Firebase CLI; it points Firebase to firestore.rules, indexes and storage.rules.
+          5) platform-config.js
+             Reference copy only. Before real subscription payments, set PLATFORM_BILLING.instapayAccount to the real Family Business InstaPay account in the repository and deploy the site.
+
+          IMPORTANT:
+          - Do not invent or leave a fake InstaPay account.
+          - Storage Rules are required for subscription payment proof uploads.
+          - Firestore Rules/Indexes include all launch work through FB-LAUNCH11.
+          - If deploying by CLI from the project root, use:
+              firebase deploy --only firestore:rules,firestore:indexes,storage
+          EOF
+          cp core/config/platform-config.js platform-config.js
+      - uses: actions/upload-artifact@v4
+        with:
+          name: family-business-firebase-production-sync
+          path: |
+            firestore.rules
+            firestore.indexes.json
+            storage.rules
+            firebase.json
+            platform-config.js
+            FIREBASE_PRODUCTION_SYNC_README.txt
+          if-no-files-found: error
