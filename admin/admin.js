@@ -92,6 +92,8 @@ function statusPill(status) {
     active: "نشط",
     inactive: "موقوف",
     pending: "معلق",
+    pending_review: "بانتظار المراجعة",
+    approved: "معتمد",
     pending_invite: "دعوة معلقة",
     accepted: "مقبول",
     earned: "مستحق",
@@ -319,24 +321,43 @@ function renderUsers() {
           <span>آخر دفعة اشتراك<br><b>${money(user.lastPaymentAmount || 0)}</b></span>
         </div>
         <div class="actions">
-          <button class="primaryBtn" data-action="activate-user" data-uid="${escapeHTML(user.uid)}">
-            ${initialAlreadyPaid ? "تأكيد التجديد" : "تفعيل أول مرة"}
-          </button>
-          <button class="secondaryBtn" data-action="deactivate-user" data-uid="${escapeHTML(user.uid)}">إيقاف الاشتراك</button>
+          <button class="primaryBtn" data-action="view-user-payments" data-uid="${escapeHTML(user.uid)}">راجع دفعات الاشتراك</button>
+          ${user.subscriptionStatus === "active"
+            ? `<button class="secondaryBtn" data-action="deactivate-user" data-uid="${escapeHTML(user.uid)}">إيقاف الاشتراك</button>`
+            : ""}
         </div>
       </article>
     `;
   }).join("") : '<div class="emptyState">لا توجد نتائج مطابقة.</div>';
 }
 
-async function activateOrRenewUser(uid) {
+async function approveSubscriptionPayment(paymentId) {
+  if (!adminSession?.user?.uid) throw new Error("ADMIN_SESSION_REQUIRED");
+
   await runTransaction(db, async transaction => {
+    const paymentRef = doc(db, "subscriptionPayments", paymentId);
+    const paymentSnap = await transaction.get(paymentRef);
+    if (!paymentSnap.exists()) throw new Error("PAYMENT_NOT_FOUND");
+
+    const payment = paymentSnap.data();
+    if (payment.status !== "pending_review") throw new Error("PAYMENT_ALREADY_REVIEWED");
+
+    const uid = clean(payment.userId);
     const userRef = doc(db, "users", uid);
     const userSnap = await transaction.get(userRef);
     if (!userSnap.exists()) throw new Error("USER_NOT_FOUND");
 
     const data = userSnap.data();
     const initialAlreadyPaid = hasPaidInitialActivation(data);
+    const expectedType = initialAlreadyPaid ? "renewal" : "initial";
+    const expectedAmount = initialAlreadyPaid
+      ? PLATFORM_BILLING.monthlyRenewalFee
+      : PLATFORM_BILLING.initialActivationFee;
+
+    if (payment.paymentType !== expectedType || Number(payment.amount) !== Number(expectedAmount)) {
+      throw new Error("PAYMENT_DOES_NOT_MATCH_ACCOUNT_STATE");
+    }
+
     const now = new Date();
     const referrerId = /^[A-Za-z0-9_-]{1,128}$/.test(clean(data.referredByUserId))
       ? clean(data.referredByUserId)
@@ -367,6 +388,13 @@ async function activateOrRenewUser(uid) {
     const expiresAt = new Date(periodStart);
     expiresAt.setDate(expiresAt.getDate() + PLATFORM_BILLING.subscriptionDays);
 
+    transaction.update(paymentRef, {
+      status: "approved",
+      reviewedAt: serverTimestamp(),
+      reviewedBy: adminSession.user.uid,
+      rejectionReason: ""
+    });
+
     transaction.update(userRef, {
       isActive: true,
       subscriptionStatus: "active",
@@ -376,11 +404,10 @@ async function activateOrRenewUser(uid) {
         ? (data.subscriptionStartedAt || Timestamp.fromDate(now))
         : Timestamp.fromDate(now),
       subscriptionExpiresAt: Timestamp.fromDate(expiresAt),
-      lastPaymentAmount: initialAlreadyPaid
-        ? PLATFORM_BILLING.monthlyRenewalFee
-        : PLATFORM_BILLING.initialActivationFee,
-      lastPaymentType: initialAlreadyPaid ? "renewal" : "initial",
+      lastPaymentAmount: expectedAmount,
+      lastPaymentType: expectedType,
       lastPaymentAt: serverTimestamp(),
+      lastSubscriptionPaymentId: paymentId,
       lastRenewalAt: initialAlreadyPaid ? serverTimestamp() : (data.lastRenewalAt || null),
       activatedAt: data.activatedAt || serverTimestamp()
     });
@@ -420,6 +447,135 @@ async function activateOrRenewUser(uid) {
       transaction.update(userRef, { referralQualified: true });
     }
   });
+}
+
+async function rejectSubscriptionPayment(paymentId, reason) {
+  if (!adminSession?.user?.uid) throw new Error("ADMIN_SESSION_REQUIRED");
+  const cleanReason = clean(reason);
+  if (cleanReason.length < 3 || cleanReason.length > 300) {
+    throw new Error("REJECTION_REASON_REQUIRED");
+  }
+
+  await updateDoc(doc(db, "subscriptionPayments", paymentId), {
+    status: "rejected",
+    reviewedAt: serverTimestamp(),
+    reviewedBy: adminSession.user.uid,
+    rejectionReason: cleanReason
+  });
+}
+
+async function searchSubscriptionPayments(term) {
+  const q = clean(term);
+  if (!q) return [];
+
+  const jobs = [
+    getDoc(doc(db, "subscriptionPayments", q))
+      .then(snap => snap.exists() ? [{ paymentId: snap.id, ...snap.data() }] : []),
+    getDocs(query(collection(db, "subscriptionPayments"), where("userId", "==", q), limit(SEARCH_LIMIT)))
+      .then(snap => snap.docs.map(item => ({ paymentId: item.id, ...item.data() }))),
+    getDocs(query(collection(db, "subscriptionPayments"), where("paymentReference", "==", q), limit(SEARCH_LIMIT)))
+      .then(snap => snap.docs.map(item => ({ paymentId: item.id, ...item.data() })))
+  ];
+
+  return uniqueRows((await Promise.all(jobs)).flat(), "paymentId");
+}
+
+async function loadSubscriptionPayments({ append = false } = {}) {
+  const s = state.subscriptionPayments;
+  if (s.loading) return;
+  s.loading = true;
+  $("loadMoreSubscriptionPaymentsBtn").disabled = true;
+  $("subscriptionPaymentsMessage").innerText = s.search
+    ? "جاري البحث المباشر..."
+    : "جاري تحميل دفعات الاشتراك...";
+
+  try {
+    if (s.search) {
+      let rows = await searchSubscriptionPayments(s.search);
+      if (s.status !== "all") rows = rows.filter(row => row.status === s.status);
+      s.rows = rows;
+      s.cursor = null;
+      s.hasMore = false;
+    } else {
+      const constraints = [];
+      if (s.status !== "all") constraints.push(where("status", "==", s.status));
+      constraints.push(orderBy("submittedAt", s.status === "all" ? "desc" : "asc"));
+      if (append && s.cursor) constraints.push(startAfter(s.cursor));
+      constraints.push(limit(PAGE_SIZE));
+
+      const snap = await getDocs(query(collection(db, "subscriptionPayments"), ...constraints));
+      const rows = snap.docs.map(item => ({ paymentId: item.id, ...item.data() }));
+      s.rows = append ? mergeRows(s.rows, rows, "paymentId") : rows;
+      s.cursor = snap.docs.length ? snap.docs[snap.docs.length - 1] : null;
+      s.hasMore = snap.docs.length === PAGE_SIZE;
+    }
+
+    renderSubscriptionPayments();
+    $("subscriptionPaymentsMessage").innerText = s.search
+      ? `نتائج البحث المباشر: ${s.rows.length}`
+      : `المعروض الآن: ${s.rows.length} دفعة`;
+    $("loadMoreSubscriptionPaymentsBtn").classList.toggle("hidden", !s.hasMore || Boolean(s.search));
+    sectionLoaded.subscriptionPaymentsSection = true;
+  } catch (error) {
+    console.error(error);
+    $("subscriptionPaymentsMessage").innerText = String(error?.code || "").includes("failed-precondition")
+      ? "قائمة مراجعة الاشتراكات تحتاج نشر Firestore Index النهائي قبل استخدامها Live."
+      : "تعذر تحميل دفعات الاشتراك.";
+  } finally {
+    s.loading = false;
+    $("loadMoreSubscriptionPaymentsBtn").disabled = false;
+  }
+}
+
+function renderSubscriptionPayments() {
+  const rows = state.subscriptionPayments.rows;
+  $("subscriptionPaymentsContainer").innerHTML = rows.length ? rows.map(payment => {
+    const pending = payment.status === "pending_review";
+    return `
+      <article class="adminCard">
+        <div class="cardHead">
+          <div>
+            <h3>${escapeHTML(payment.userEmail || payment.userId || "مستخدم")}</h3>
+            <p class="codeText">${escapeHTML(payment.paymentId)}</p>
+          </div>
+          ${statusPill(payment.status || "pending_review")}
+        </div>
+        <div class="metaGrid">
+          <span>User UID<br><b class="codeText">${escapeHTML(payment.userId || "—")}</b></span>
+          <span>النوع<br><b>${payment.paymentType === "renewal" ? "تجديد" : "أول تفعيل"}</b></span>
+          <span>المبلغ<br><b>${money(payment.amount)}</b></span>
+          <span>طريقة الدفع<br><b>InstaPay</b></span>
+          <span>مرجع التحويل<br><b class="codeText">${escapeHTML(payment.paymentReference || "—")}</b></span>
+          <span>تاريخ الإرسال<br><b>${formatDate(payment.submittedAt,true)}</b></span>
+          <span>المراجع<br><b>${escapeHTML(payment.reviewedBy || "—")}</b></span>
+          <span>سبب الرفض<br><b>${escapeHTML(payment.rejectionReason || "—")}</b></span>
+        </div>
+        <div class="actions">
+          <button class="secondaryBtn" data-action="view-payment-proof" data-proof="${escapeHTML(payment.proofPath || "")}">فتح إثبات التحويل</button>
+          ${pending ? `
+            <button class="primaryBtn" data-action="approve-subscription-payment" data-payment="${escapeHTML(payment.paymentId)}">اعتماد وتفعيل</button>
+            <button class="dangerBtn" data-action="reject-subscription-payment" data-payment="${escapeHTML(payment.paymentId)}">رفض الإثبات</button>
+          ` : ""}
+        </div>
+      </article>
+    `;
+  }).join("") : '<div class="emptyState">لا توجد دفعات مطابقة.</div>';
+}
+
+async function openSubscriptionProof(path) {
+  if (!path) return;
+  const popup = window.open("", "_blank", "noopener");
+  try {
+    const blob = await getBlob(storageRef(storage, path), 5 * 1024 * 1024);
+    const url = URL.createObjectURL(blob);
+    if (popup) popup.location.href = url;
+    else window.open(url, "_blank", "noopener");
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } catch (error) {
+    if (popup) popup.close();
+    console.error(error);
+    $("subscriptionPaymentsMessage").innerText = "تعذر فتح صورة الإثبات. تأكد من نشر Storage Rules ثم حاول مرة أخرى.";
+  }
 }
 
 async function searchProjects(term) {
