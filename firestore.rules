@@ -88,6 +88,7 @@ service cloud.firestore {
    let ledger = request.resource.data;
    let order = getAfter(orderPath(ledger.orderId)).data;
    return signedIn()
+    && !(order.templateType == "laundry" && ("trackingToken" in order))
     && ledger.sourceType == "project_order"
     && ledger.projectId is string
     && ledger.orderId is string
@@ -1239,13 +1240,48 @@ service cloud.firestore {
       && tracking.total == after.price;
    }
 
-   allow update: if validTrackedLaundryOperationalUpdate();
-   allow update: if validTrackedLaundryDispatchUpdate(orderId);
-   allow update: if validTrackedLaundryDeliveryUpdate(orderId);
-   allow update: if validDispatchCommissionUpdate(orderId);
-   allow update: if validLockedCommissionDeliveryUpdate(orderId);
+   allow update: if resource.data.templateType == "laundry"
+    && ("trackingToken" in resource.data)
+    && request.resource.data.status != "done"
+    && (
+      request.resource.data.status == "canceled"
+      || request.resource.data.laundryStage != "out_for_delivery"
+    )
+    && validTrackedLaundryOperationalUpdate();
 
-   allow update: if (
+   allow update: if resource.data.templateType == "laundry"
+    && ("trackingToken" in resource.data)
+    && resource.data.status == "accepted"
+    && resource.data.laundryStage == "ready_delivery"
+    && request.resource.data.status == "accepted"
+    && request.resource.data.laundryStage == "out_for_delivery"
+    && validTrackedLaundryDispatchUpdate(orderId);
+
+   allow update: if resource.data.templateType == "laundry"
+    && ("trackingToken" in resource.data)
+    && resource.data.status == "accepted"
+    && resource.data.laundryStage == "out_for_delivery"
+    && request.resource.data.status == "done"
+    && request.resource.data.laundryStage == "delivered"
+    && validTrackedLaundryDeliveryUpdate(orderId);
+
+   allow update: if !(
+      resource.data.templateType == "laundry"
+      && ("trackingToken" in resource.data)
+    )
+    && validDispatchCommissionUpdate(orderId);
+
+   allow update: if !(
+      resource.data.templateType == "laundry"
+      && ("trackingToken" in resource.data)
+    )
+    && validLockedCommissionDeliveryUpdate(orderId);
+
+   allow update: if !(
+      resource.data.templateType == "laundry"
+      && ("trackingToken" in resource.data)
+    )
+    && (
     (
       !(resource.data.templateType in ["supermarket","laundry","restaurant","bakery"])
       && (isAdmin() || ownsProject(resource.data.projectId))
