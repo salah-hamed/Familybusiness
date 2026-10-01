@@ -50,7 +50,7 @@ async function refreshAccount(){
   setVisible("authPanel",false);$("logoutBtn").classList.remove("hidden");
   const pending=agreement?.pendingStatus==="pending"&&agreement?.pendingAmount!=null;
   setVisible("agreementPanel",pending);
-  if(pending){$("agreementText").innerText=`${agreement.currentAmount!=null?`العمولة الحالية ${money(agreement.currentAmount)} — المقترح الجديد`:"العمولة المقترحة"}: ${money(agreement.pendingAmount)} لكل طلب مكتمل`;}
+  if(pending){$("agreementText").innerText=`${agreement.currentAmount!=null?`العمولة الحالية ${money(agreement.currentAmount)} — المقترح الجديد`:"العمولة المقترحة"}: ${money(agreement.pendingAmount)} لكل طلب يتم إرساله للتوصيل`;}
   const canOperate=operatorCanOperate(operator)&&agreement?.status==="accepted"&&agreement?.currentAmount!=null;
   setVisible("operationsPanel",canOperate);
   $("pageStatus").innerText=canOperate?`مرحبًا ${operator?.name||"بالمغسلة"} — التشغيل جاهز.`:"التشغيل متوقف لحد قبول أول اتفاق عمولة.";
