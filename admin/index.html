@@ -55,6 +55,7 @@
         <button class="tabBtn" data-section="projectsSection">المشاريع</button>
         <button class="tabBtn" data-section="operatorsSection">المشغّلون</button>
         <button class="tabBtn" data-section="ordersSection">الطلبات</button>
+        <button class="tabBtn" data-section="exceptionsSection">تنبيهات التشغيل</button>
         <button class="tabBtn" data-section="commissionsSection">العمولات</button>
         <button class="tabBtn" data-section="settlementsSection">التسويات</button>
         <button class="tabBtn" data-section="reversalsSection">عكس العمولات</button>
@@ -135,6 +136,35 @@
           <tbody id="ordersTableBody"></tbody>
         </table></div>
         <button id="loadMoreOrdersBtn" class="loadMore hidden" type="button">عرض 50 طلب إضافي</button>
+      </section>
+
+
+      <section id="exceptionsSection" class="adminSection">
+        <div class="sectionHead">
+          <div><span class="sectionKicker">Exception Queue</span><h2>تنبيهات التشغيل والطلبات المتأخرة</h2></div>
+          <button id="refreshExceptionsBtn" class="secondaryBtn" type="button">تحديث</button>
+        </div>
+        <p class="hintBox">قائمة متابعة فقط لأقدم الطلبات المفتوحة التي تجاوزت الوقت المتوقع لمرحلتها. لا يتم إلغاء أو تغيير أي طلب تلقائيًا.</p>
+        <div class="filterGrid">
+          <select id="exceptionsTemplateFilter">
+            <option value="all">كل المشاريع</option>
+            <option value="supermarket">سوبرماركت</option>
+            <option value="restaurant">مطعم</option>
+            <option value="bakery">مخبز</option>
+            <option value="laundry">مغسلة</option>
+          </select>
+          <select id="exceptionsLevelFilter">
+            <option value="all">كل درجات التأخير</option>
+            <option value="critical">متأخر جدًا</option>
+            <option value="warning">متأخر</option>
+          </select>
+        </div>
+        <p id="exceptionsMessage" class="message"></p>
+        <div class="tableWrap"><table class="dataTable">
+          <thead><tr><th>التنبيه</th><th>الطلب</th><th>المشروع</th><th>العميل</th><th>المرحلة الحالية</th><th>المتابعة</th></tr></thead>
+          <tbody id="exceptionsTableBody"></tbody>
+        </table></div>
+        <button id="loadMoreExceptionsBtn" class="loadMore hidden" type="button">فحص 50 طلب مفتوح أقدم</button>
       </section>
 
       <section id="commissionsSection" class="adminSection">
