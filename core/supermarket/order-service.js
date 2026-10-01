@@ -559,8 +559,7 @@ export async function changeSupermarketOrderStatus({
     const agreementRef = doc(db, "commissionAgreements", projectId);
     const ledgerRef = doc(db, "commissionLedger", getProjectCommissionLedgerId(orderId));
 
-    try {
-      await runTransaction(db, async transaction => {
+    await runTransaction(db, async transaction => {
         const freshOrderSnap = await transaction.get(orderRef);
         const agreementSnap = await transaction.get(agreementRef);
 
@@ -617,31 +616,9 @@ export async function changeSupermarketOrderStatus({
           earnedAt,
           paidAt: null
         });
-      });
+    });
 
-      return;
-    } catch (error) {
-      if (String(error?.code || "").toLowerCase() !== "permission-denied") {
-        throw error;
-      }
-
-      // Production compatibility until the new Firestore Rules are deployed.
-      const batch = writeBatch(db);
-      batch.update(orderRef, {
-        status: "assigned",
-        statusUpdatedAt: serverTimestamp(),
-        statusUpdatedBy: actorUid
-      });
-
-      if (order.trackingToken) {
-        batch.update(trackingRef(order.trackingToken), trackingPatchFromOrder(order, {
-          status: "assigned"
-        }));
-      }
-
-      await batch.commit();
-      return;
-    }
+    return;
   }
 
   if (nextStatus !== "delivered") {
