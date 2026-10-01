@@ -78,7 +78,7 @@ async function refreshAccount(){
     const prefix=currentAgreement.currentAmount!=null
       ? `العمولة الحالية ${money(currentAgreement.currentAmount)} — التعديل المقترح`
       :"العمولة المقترحة";
-    $("agreementText").innerText=`${prefix}: ${money(currentAgreement.pendingAmount)} لكل طلب مكتمل`;
+    $("agreementText").innerText=`${prefix}: ${money(currentAgreement.pendingAmount)} لكل طلب يتم إرساله للتوصيل`;
   }
 
   const canOperate=operatorCanOperate(currentOperator)&&currentAgreement?.status==="accepted"&&currentAgreement?.currentAmount!=null;
