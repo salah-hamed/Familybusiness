@@ -670,3 +670,65 @@ test("FB-LAUNCH04 resend never reassigns worker or reruns commission transition"
     assert.equal(block.includes("buildWorkerWhatsAppUrl"), true, path);
   }
 });
+
+
+test("FB-LAUNCH05A commission reversal is bilateral and preserves commission amount", () => {
+  const source = readFileSync("core/commissions/reversal-service.js", "utf8");
+
+  for (const marker of [
+    "requestCommissionReversal",
+    "confirmCommissionReversal",
+    "rejectCommissionReversal",
+    "ORDER_MUST_BE_CANCELED_FIRST",
+    "REVERSAL_EXCEEDS_OUTSTANDING",
+    "REVERSAL_EXCEEDS_CURRENT_OUTSTANDING",
+    'status: "pending_owner_confirmation"',
+    'status: "confirmed"',
+    'status: "reversed"'
+  ]) {
+    assert.equal(source.includes(marker), true, marker);
+  }
+
+  assert.equal(source.includes("transaction.update(ledgerRef"), true);
+  assert.equal(source.includes("Number(ledger.amount || 0)"), true);
+  assert.equal(source.includes("transaction.update(ledgerRef, {\n      amount"), false);
+});
+
+test("FB-LAUNCH05A reversed commissions are removed from owner and project earnings", () => {
+  const settlement = readFileSync("core/commissions/settlement-service.js", "utf8");
+  const earnings = readFileSync("core/commissions/earnings-service.js", "utf8");
+
+  assert.equal(settlement.includes('where("status", "==", "reversed")'), true);
+  assert.equal(settlement.includes("netEarnedAmount"), true);
+  assert.equal(settlement.includes("reversedAmount"), true);
+
+  assert.equal(earnings.includes('where("status", "==", "reversed")'), true);
+  assert.equal(earnings.includes("reversedProjectOrders"), true);
+  assert.equal(earnings.includes("netProjectOrderAmount"), true);
+});
+
+test("FB-LAUNCH05A rules block unilateral operator reversal and require owner-confirmed reversal document", () => {
+  const rules = readFileSync("firestore.rules", "utf8");
+
+  assert.equal(rules.includes("match /commissionReversals/{reversalId}"), true);
+  assert.equal(rules.includes('resource.data.status == "earned"'), true);
+  assert.equal(rules.includes('request.resource.data.status == "reversed"'), true);
+  assert.equal(rules.includes('getAfter(commissionReversalPath(request.resource.data.reversalId)).data.status == "confirmed"'), true);
+  assert.equal(rules.includes("ownsProject(resource.data.projectId)"), true);
+});
+
+test("FB-LAUNCH05A reversal indexes support project history and net balance aggregation", () => {
+  const config = JSON.parse(readFileSync("firestore.indexes.json", "utf8"));
+  const signatures = config.indexes.map(index =>
+    `${index.collectionGroup}:${index.fields.map(field => field.fieldPath).join(",")}`
+  );
+
+  for (const signature of [
+    "commissionReversals:projectId,createdAt",
+    "commissionReversals:status,createdAt",
+    "commissionLedger:projectId,sourceType,status",
+    "commissionLedger:userId,projectId,sourceType,status"
+  ]) {
+    assert.equal(signatures.includes(signature), true, signature);
+  }
+});

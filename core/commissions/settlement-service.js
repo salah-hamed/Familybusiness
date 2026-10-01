@@ -59,8 +59,13 @@ export async function getProjectPaymentSummary(
     ledgerScope.push(where("userId", "==", oid));
   }
 
-  const [earned, confirmed, legacyPaid, pending] = await Promise.all([
+  const [earned, reversed, confirmed, legacyPaid, pending] = await Promise.all([
     aggregateAmount(query(ledger, ...ledgerScope)),
+    aggregateAmount(query(
+      ledger,
+      ...ledgerScope,
+      where("status", "==", "reversed")
+    )),
     aggregateAmount(query(
       payments,
       where("projectId", "==", pid),
@@ -78,14 +83,18 @@ export async function getProjectPaymentSummary(
     ))
   ]);
 
+  const netEarnedAmount = Math.max(0, earned.totalAmount - reversed.totalAmount);
+  const netEarnedCount = Math.max(0, earned.entryCount - reversed.entryCount);
   const recordedPayments = confirmed.totalAmount + legacyPaid.totalAmount;
-  const paidAmount = Math.min(earned.totalAmount, recordedPayments);
+  const paidAmount = Math.min(netEarnedAmount, recordedPayments);
 
   return {
-    earnedAmount: earned.totalAmount,
-    earnedCount: earned.entryCount,
+    earnedAmount: netEarnedAmount,
+    earnedCount: netEarnedCount,
+    reversedAmount: reversed.totalAmount,
+    reversedCount: reversed.entryCount,
     paidAmount,
-    outstandingAmount: Math.max(0, earned.totalAmount - paidAmount),
+    outstandingAmount: Math.max(0, netEarnedAmount - paidAmount),
     pendingAmount: pending.totalAmount,
     pendingCount: pending.entryCount
   };

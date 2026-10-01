@@ -1209,3 +1209,173 @@ test("project operator can read only its project commission ledger entries", asy
   const otherDb = testEnv.authenticatedContext("other_operator_uid").firestore();
   await assertFails(getDoc(doc(otherDb, "commissionLedger", entryId)));
 });
+
+
+test("commission reversal requires operator request and owner confirmation", async () => {
+  const { ownerId, operatorUid, projectId } = await seedCommissionIntegrityFixture("reversal_handshake");
+  const orderId = "reversal_handshake_order";
+  const ledgerId = "project_order_" + orderId;
+  const reversalId = "project_order_" + orderId;
+
+  await testEnv.withSecurityRulesDisabled(async context => {
+    const db = context.firestore();
+
+    await setDoc(doc(db, "orders", orderId), {
+      projectId,
+      providerId: projectId,
+      templateType: "supermarket",
+      status: "canceled",
+      pricingLocked: true,
+      assignedWorkerId: "rider_1",
+      assignedWorkerRole: "rider",
+      commissionEligible: true,
+      commissionLocked: true,
+      commissionAmount: 5,
+      commissionAgreementVersion: 1
+    });
+
+    await setDoc(doc(db, "commissionLedger", ledgerId), {
+      userId: ownerId,
+      projectId,
+      orderId,
+      sourceType: "project_order",
+      sourceId: orderId,
+      agreementId: projectId,
+      agreementVersion: 1,
+      amount: 5,
+      currency: "EGP",
+      status: "earned",
+      trigger: "delivery_assignment",
+      createdAt: serverTimestamp(),
+      earnedAt: serverTimestamp(),
+      paidAt: null
+    });
+  });
+
+  const operatorDb = testEnv.authenticatedContext(operatorUid).firestore();
+  const ownerDb = testEnv.authenticatedContext(ownerId).firestore();
+  const strangerDb = testEnv.authenticatedContext("reversal_stranger").firestore();
+
+  await assertSucceeds(
+    setDoc(doc(operatorDb, "commissionReversals", reversalId), {
+      reversalId,
+      projectId,
+      orderId,
+      ledgerEntryId: ledgerId,
+      ownerId,
+      operatorId: projectId,
+      amount: 5,
+      currency: "EGP",
+      reasonCode: "delivery_failed",
+      note: "تعذر التسليم",
+      status: "pending_owner_confirmation",
+      requestedAt: serverTimestamp(),
+      requestedBy: operatorUid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      confirmedAt: null,
+      confirmedBy: null,
+      rejectedAt: null,
+      rejectedBy: null
+    })
+  );
+
+  await assertFails(
+    updateDoc(doc(operatorDb, "commissionReversals", reversalId), {
+      status: "confirmed",
+      confirmedAt: serverTimestamp(),
+      confirmedBy: operatorUid,
+      updatedAt: serverTimestamp()
+    })
+  );
+
+  await assertFails(getDoc(doc(strangerDb, "commissionReversals", reversalId)));
+  await assertSucceeds(getDoc(doc(ownerDb, "commissionReversals", reversalId)));
+
+  const batch = writeBatch(ownerDb);
+  batch.update(doc(ownerDb, "commissionReversals", reversalId), {
+    status: "confirmed",
+    confirmedAt: serverTimestamp(),
+    confirmedBy: ownerId,
+    updatedAt: serverTimestamp()
+  });
+  batch.update(doc(ownerDb, "commissionLedger", ledgerId), {
+    status: "reversed",
+    reversedAt: serverTimestamp(),
+    reversalId,
+    reversalReason: "delivery_failed",
+    reversalConfirmedBy: ownerId
+  });
+
+  await assertSucceeds(batch.commit());
+
+  const ledgerSnap = await getDoc(doc(ownerDb, "commissionLedger", ledgerId));
+  assert.equal(ledgerSnap.data().status, "reversed");
+});
+
+test("commission reversal cannot be requested before the order is canceled", async () => {
+  const { ownerId, operatorUid, projectId } = await seedCommissionIntegrityFixture("reversal_requires_cancel");
+  const orderId = "reversal_requires_cancel_order";
+  const ledgerId = "project_order_" + orderId;
+
+  await testEnv.withSecurityRulesDisabled(async context => {
+    const db = context.firestore();
+
+    await setDoc(doc(db, "orders", orderId), {
+      projectId,
+      providerId: projectId,
+      templateType: "supermarket",
+      status: "out_for_delivery",
+      pricingLocked: true,
+      assignedWorkerId: "rider_1",
+      assignedWorkerRole: "rider",
+      commissionEligible: true,
+      commissionLocked: true,
+      commissionAmount: 5,
+      commissionAgreementVersion: 1
+    });
+
+    await setDoc(doc(db, "commissionLedger", ledgerId), {
+      userId: ownerId,
+      projectId,
+      orderId,
+      sourceType: "project_order",
+      sourceId: orderId,
+      agreementId: projectId,
+      agreementVersion: 1,
+      amount: 5,
+      currency: "EGP",
+      status: "earned",
+      trigger: "delivery_assignment",
+      createdAt: serverTimestamp(),
+      earnedAt: serverTimestamp(),
+      paidAt: null
+    });
+  });
+
+  const operatorDb = testEnv.authenticatedContext(operatorUid).firestore();
+
+  await assertFails(
+    setDoc(doc(operatorDb, "commissionReversals", ledgerId), {
+      reversalId: ledgerId,
+      projectId,
+      orderId,
+      ledgerEntryId: ledgerId,
+      ownerId,
+      operatorId: projectId,
+      amount: 5,
+      currency: "EGP",
+      reasonCode: "delivery_failed",
+      note: "",
+      status: "pending_owner_confirmation",
+      requestedAt: serverTimestamp(),
+      requestedBy: operatorUid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      confirmedAt: null,
+      confirmedBy: null,
+      rejectedAt: null,
+      rejectedBy: null
+    })
+  );
+});

@@ -13,6 +13,7 @@ service cloud.firestore {
   function restaurantPath(projectId){ return /databases/$(database)/documents/restaurants/$(projectId); }
   function laundryPath(projectId){ return /databases/$(database)/documents/laundries/$(projectId); }
   function commissionLedgerPath(entryId){ return /databases/$(database)/documents/commissionLedger/$(entryId); }
+  function commissionReversalPath(reversalId){ return /databases/$(database)/documents/commissionReversals/$(reversalId); }
   function userExists(uid){ return exists(userPath(uid)); }
   function userData(uid){ return get(userPath(uid)).data; }
   function isAdmin(){ return signedIn() && userExists(request.auth.uid) && userData(request.auth.uid).role == "admin"; }
@@ -2170,7 +2171,8 @@ service cloud.firestore {
    allow create: if isAdmin()
     || validProjectOrderLedgerCreate(entryId);
 
-   allow update: if isAdmin()
+   allow update: if (
+    isAdmin()
     && request.resource.data.userId == resource.data.userId
     && request.resource.data.sourceType == resource.data.sourceType
     && request.resource.data.sourceId == resource.data.sourceId
@@ -2182,7 +2184,144 @@ service cloud.firestore {
       "settlementId",
       "settlementStatus",
       "settlementCreatedAt"
-    ]);
+    ])
+   )
+   ||
+   (
+    signedIn()
+    && resource.data.sourceType == "project_order"
+    && resource.data.userId == request.auth.uid
+    && resource.data.status == "earned"
+    && request.resource.data.status == "reversed"
+    && request.resource.data.userId == resource.data.userId
+    && request.resource.data.projectId == resource.data.projectId
+    && request.resource.data.orderId == resource.data.orderId
+    && request.resource.data.sourceType == resource.data.sourceType
+    && request.resource.data.sourceId == resource.data.sourceId
+    && request.resource.data.agreementId == resource.data.agreementId
+    && request.resource.data.agreementVersion == resource.data.agreementVersion
+    && request.resource.data.amount == resource.data.amount
+    && request.resource.data.currency == resource.data.currency
+    && request.resource.data.reversedAt == request.time
+    && request.resource.data.reversalId == "project_order_" + resource.data.orderId
+    && request.resource.data.reversalConfirmedBy == request.auth.uid
+    && exists(commissionReversalPath(request.resource.data.reversalId))
+    && getAfter(commissionReversalPath(request.resource.data.reversalId)).data.status == "confirmed"
+    && getAfter(commissionReversalPath(request.resource.data.reversalId)).data.ownerId == request.auth.uid
+    && getAfter(commissionReversalPath(request.resource.data.reversalId)).data.projectId == resource.data.projectId
+    && getAfter(commissionReversalPath(request.resource.data.reversalId)).data.orderId == resource.data.orderId
+    && getAfter(commissionReversalPath(request.resource.data.reversalId)).data.amount == resource.data.amount
+    && request.resource.data.reversalReason
+      == getAfter(commissionReversalPath(request.resource.data.reversalId)).data.reasonCode
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+      "status",
+      "reversedAt",
+      "reversalId",
+      "reversalReason",
+      "reversalConfirmedBy"
+    ])
+   );
+
+   allow delete: if false;
+  }
+
+  match /commissionReversals/{reversalId} {
+   allow get, list: if isAdmin()
+    || (
+      signedIn()
+      && resource.data.projectId is string
+      && (
+        ownsProject(resource.data.projectId)
+        || isProjectOperator(resource.data.projectId)
+      )
+    );
+
+   allow create: if signedIn()
+    && request.resource.data.reversalId == reversalId
+    && request.resource.data.orderId is string
+    && request.resource.data.projectId is string
+    && reversalId == "project_order_" + request.resource.data.orderId
+    && request.resource.data.ledgerEntryId == "project_order_" + request.resource.data.orderId
+    && isProjectOperator(request.resource.data.projectId)
+    && projectExists(request.resource.data.projectId)
+    && orderExists(request.resource.data.orderId)
+    && exists(commissionLedgerPath(request.resource.data.ledgerEntryId))
+    && request.resource.data.ownerId == projectData(request.resource.data.projectId).ownerId
+    && request.resource.data.operatorId == projectData(request.resource.data.projectId).operatorId
+    && request.resource.data.requestedBy == request.auth.uid
+    && request.resource.data.currency == "EGP"
+    && request.resource.data.amount is number
+    && request.resource.data.amount > 0
+    && request.resource.data.status == "pending_owner_confirmation"
+    && request.resource.data.reasonCode in [
+      "customer_canceled_after_dispatch",
+      "delivery_failed",
+      "duplicate_order",
+      "operator_error",
+      "other"
+    ]
+    && request.resource.data.createdAt == request.time
+    && request.resource.data.requestedAt == request.time
+    && request.resource.data.updatedAt == request.time
+    && request.resource.data.confirmedAt == null
+    && request.resource.data.confirmedBy == null
+    && request.resource.data.rejectedAt == null
+    && request.resource.data.rejectedBy == null
+    && orderData(request.resource.data.orderId).projectId == request.resource.data.projectId
+    && orderData(request.resource.data.orderId).status == "canceled"
+    && orderData(request.resource.data.orderId).commissionLocked == true
+    && orderData(request.resource.data.orderId).commissionAmount == request.resource.data.amount
+    && get(commissionLedgerPath(request.resource.data.ledgerEntryId)).data.projectId
+      == request.resource.data.projectId
+    && get(commissionLedgerPath(request.resource.data.ledgerEntryId)).data.orderId
+      == request.resource.data.orderId
+    && get(commissionLedgerPath(request.resource.data.ledgerEntryId)).data.amount
+      == request.resource.data.amount
+    && get(commissionLedgerPath(request.resource.data.ledgerEntryId)).data.status == "earned";
+
+   allow update: if signedIn()
+    && resource.data.projectId is string
+    && ownsProject(resource.data.projectId)
+    && resource.data.ownerId == request.auth.uid
+    && resource.data.status == "pending_owner_confirmation"
+    && request.resource.data.reversalId == resource.data.reversalId
+    && request.resource.data.projectId == resource.data.projectId
+    && request.resource.data.orderId == resource.data.orderId
+    && request.resource.data.ledgerEntryId == resource.data.ledgerEntryId
+    && request.resource.data.ownerId == resource.data.ownerId
+    && request.resource.data.operatorId == resource.data.operatorId
+    && request.resource.data.amount == resource.data.amount
+    && request.resource.data.currency == resource.data.currency
+    && request.resource.data.reasonCode == resource.data.reasonCode
+    && request.resource.data.note == resource.data.note
+    && request.resource.data.requestedAt == resource.data.requestedAt
+    && request.resource.data.requestedBy == resource.data.requestedBy
+    && request.resource.data.createdAt == resource.data.createdAt
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+      "status",
+      "confirmedAt",
+      "confirmedBy",
+      "rejectedAt",
+      "rejectedBy",
+      "updatedAt"
+    ])
+    && (
+      (
+        request.resource.data.status == "confirmed"
+        && request.resource.data.confirmedAt == request.time
+        && request.resource.data.confirmedBy == request.auth.uid
+        && request.resource.data.rejectedAt == null
+        && request.resource.data.rejectedBy == null
+      )
+      ||
+      (
+        request.resource.data.status == "rejected"
+        && request.resource.data.rejectedAt == request.time
+        && request.resource.data.rejectedBy == request.auth.uid
+        && request.resource.data.confirmedAt == null
+        && request.resource.data.confirmedBy == null
+      )
+    );
 
    allow delete: if false;
   }
