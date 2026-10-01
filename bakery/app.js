@@ -82,7 +82,7 @@ function render(){
   ].map(([k,v])=>`<div class="metaItem"><b>${escapeHTML(k)}</b><div>${escapeHTML(v)}</div></div>`).join("");
 
   $("commissionMessage").innerText=pending&&agreement?.pendingAmount!=null
-    ? `في انتظار موافقة المخبز على ${money(agreement.pendingAmount)} لكل طلب مكتمل.`
+    ? `في انتظار موافقة المخبز على ${money(agreement.pendingAmount)} لكل طلب يتم إرساله للتوصيل.`
     :"";
 
   const operatorUrl=new URL("../bakery-operator/",location.href);
