@@ -63,7 +63,7 @@ export async function getUserEarningsSummary(userId) {
 
   const base = collection(db, "commissionLedger");
 
-  const [all, projectOrders, referrals] = await Promise.all([
+  const [all, projectOrders, referrals, reversedProjectOrders] = await Promise.all([
     aggregateLedger(query(base, where("userId", "==", uid))),
     aggregateLedger(query(
       base,
@@ -74,14 +74,29 @@ export async function getUserEarningsSummary(userId) {
       base,
       where("userId", "==", uid),
       where("sourceType", "==", "referral")
+    )),
+    aggregateLedger(query(
+      base,
+      where("userId", "==", uid),
+      where("sourceType", "==", "project_order"),
+      where("status", "==", "reversed")
     ))
   ]);
 
+  const netProjectOrderAmount = Math.max(
+    0,
+    projectOrders.totalAmount - reversedProjectOrders.totalAmount
+  );
+  const netProjectOrderCount = Math.max(
+    0,
+    projectOrders.entryCount - reversedProjectOrders.entryCount
+  );
+
   return {
-    totalAmount: all.totalAmount,
-    entryCount: all.entryCount,
-    projectOrderAmount: projectOrders.totalAmount,
-    projectOrderCount: projectOrders.entryCount,
+    totalAmount: Math.max(0, all.totalAmount - reversedProjectOrders.totalAmount),
+    entryCount: Math.max(0, all.entryCount - reversedProjectOrders.entryCount),
+    projectOrderAmount: netProjectOrderAmount,
+    projectOrderCount: netProjectOrderCount,
     referralAmount: referrals.totalAmount,
     referralCount: referrals.entryCount
   };
