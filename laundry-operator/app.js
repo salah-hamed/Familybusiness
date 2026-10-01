@@ -1,4 +1,5 @@
 import auth from "../core/firebase/firebase-auth.js";
+import { friendlyOperatorError } from "../core/operators/operator-errors.js";
 import db from "../core/firebase/firebase-db.js";
 import { claimOperatorAccess,getOperator,operatorCanOperate,buildOperatorAuthEmail } from "../core/partners/partner-service.js";
 import { acceptPendingCommission,rejectPendingCommission,getCommissionAgreement } from "../core/commissions/commission-service.js";
@@ -41,14 +42,8 @@ function refreshOperatorFirstRunGuide({autoOpen=false}={}){
 const money=v=>`${Number(v||0).toLocaleString("ar-EG")} جنيه`;
 const esc=v=>String(v??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;");
 const setVisible=(id,on)=>$(id).classList.toggle("hidden",!on);
-const operatorAccessErrorMessage=error=>{
-  const code=String(error?.code||"");
-  const message=String(error?.message||"");
-  if(code.includes("permission-denied")||["OPERATOR_ALREADY_CLAIMED","OPERATOR_INVITE_MISMATCH"].includes(message)){
-    return "رابط الدخول ده اتلغى أو تم استبداله. اطلب رابط دخول جديد من صاحب المشروع.";
-  }
-  return `تعذر ربط الحساب: ${message||"UNKNOWN_ERROR"}`;
-};
+const operatorAccessErrorMessage=error=>
+  friendlyOperatorError(error,"تعذر فتح لوحة التشغيل. حاول تحديث الصفحة أو اطلب رابط دعوة جديد.");
 const stageLabel=s=>({new:"جديد",accepted:"مقبول",pickup_assigned:"تم تعيين الاستلام",picked_up:"تم الاستلام",processing:"جاري التجهيز",ready_delivery:"جاهز للتوصيل",out_for_delivery:"خرج للتوصيل",delivered:"تم التوصيل",canceled:"ملغي"})[s]||s;
 
 const pricing=[
@@ -78,11 +73,11 @@ async function refreshAccount(){
 }
 
 onAuthStateChanged(auth,async current=>{user=current;if(!projectId||!inviteAuthEmail){setVisible("authPanel",false);setVisible("agreementPanel",false);setVisible("operationsPanel",false);$("logoutBtn").classList.add("hidden");$("pageStatus").innerText="دعوة واتساب غير مكتملة أو غير صالحة.";return;}if(current&&String(current.email||"").toLowerCase()!==inviteAuthEmail.toLowerCase()){await signOut(auth);return;}if(!current){setVisible("authPanel",true);setVisible("agreementPanel",false);setVisible("operationsPanel",false);$("logoutBtn").classList.add("hidden");$("pageStatus").innerText="فعّل الدعوة بكلمة مرور أول مرة، أو سجل دخولك لو فعلتها قبل كده.";return;}refreshAccount();});
-$("registerBtn").onclick=async()=>{try{await createUserWithEmailAndPassword(auth,inviteAuthEmail,$("authPassword").value);$("authMessage").innerText="تم تفعيل الدعوة ✅";}catch(e){$("authMessage").innerText=e.code==="auth/email-already-in-use"?"الدعوة مفعلة بالفعل. استخدم تسجيل الدخول بنفس كلمة المرور.":e.message;}};
+$("registerBtn").onclick=async()=>{try{await createUserWithEmailAndPassword(auth,inviteAuthEmail,$("authPassword").value);$("authMessage").innerText="تم تفعيل الدعوة ✅";}catch(e){$("authMessage").innerText=e.code==="auth/email-already-in-use"?"الدعوة مفعلة بالفعل. استخدم تسجيل الدخول بنفس كلمة المرور.":friendlyOperatorError(e,"تعذر تفعيل الدعوة. راجع كلمة المرور وحاول مرة أخرى.");}};
 $("loginBtn").onclick=async()=>{try{await signInWithEmailAndPassword(auth,inviteAuthEmail,$("authPassword").value);$("authMessage").innerText="";}catch(e){$("authMessage").innerText="تعذر الدخول. راجع كلمة المرور أو تأكد أنك تستخدم نفس رابط الدعوة.";}};
 $("logoutBtn").onclick=()=>signOut(auth);
-$("acceptAgreementBtn").onclick=async()=>{try{await acceptPendingCommission({projectDocId:projectId,operatorAuthUid:user.uid});await refreshAccount();}catch(e){$("agreementMessage").innerText=e.message;}};
-$("rejectAgreementBtn").onclick=async()=>{try{await rejectPendingCommission({projectDocId:projectId,operatorAuthUid:user.uid});await refreshAccount();}catch(e){$("agreementMessage").innerText=e.message;}};
+$("acceptAgreementBtn").onclick=async()=>{try{await acceptPendingCommission({projectDocId:projectId,operatorAuthUid:user.uid});await refreshAccount();}catch(e){$("agreementMessage").innerText=friendlyOperatorError(e,"تعذر تحديث اتفاق العمولة.");}};
+$("rejectAgreementBtn").onclick=async()=>{try{await rejectPendingCommission({projectDocId:projectId,operatorAuthUid:user.uid});await refreshAccount();}catch(e){$("agreementMessage").innerText=friendlyOperatorError(e,"تعذر تحديث اتفاق العمولة.");}};
 
 async function loadOperations(){
   laundry=await getLaundry(projectId);agreement=await getCommissionAgreement(projectId);
@@ -98,9 +93,9 @@ async function loadOperations(){
   });
   refreshOperatorFirstRunGuide({autoOpen:true});
 }
-$("saveSettingsBtn").onclick=async()=>{try{await updateLaundrySettings(projectId,{name:$("settingsName").value,phone:$("settingsPhone").value,whatsapp:$("settingsWhatsapp").value,address:$("settingsAddress").value,location:$("settingsLocation").value,instapayLink:$("settingsInstapay").value,isAcceptingOrders:$("acceptingOrders").checked});$("settingsMessage").innerText="تم الحفظ ✅";laundry=await getLaundry(projectId);refreshOperatorFirstRunGuide();}catch(e){$("settingsMessage").innerText=e.message;}};
+$("saveSettingsBtn").onclick=async()=>{try{await updateLaundrySettings(projectId,{name:$("settingsName").value,phone:$("settingsPhone").value,whatsapp:$("settingsWhatsapp").value,address:$("settingsAddress").value,location:$("settingsLocation").value,instapayLink:$("settingsInstapay").value,isAcceptingOrders:$("acceptingOrders").checked});$("settingsMessage").innerText="تم الحفظ ✅";laundry=await getLaundry(projectId);refreshOperatorFirstRunGuide();}catch(e){$("settingsMessage").innerText=friendlyOperatorError(e,"تعذر حفظ الإعدادات. راجع البيانات وحاول مرة أخرى.");}};
 $("copyCustomerLinkBtn").onclick=async()=>{try{await navigator.clipboard.writeText($("customerOrderLink").value);}catch{$("customerOrderLink").select();document.execCommand("copy");}$("settingsMessage").innerText="تم نسخ رابط العملاء ✅";};
-$("savePricingBtn").onclick=async()=>{const config={};document.querySelectorAll("[data-price]").forEach(i=>config[i.dataset.price]=Number(i.value));if(Object.values(config).some(v=>!Number.isFinite(v)||v<0)){$("pricingMessage").innerText="راجع الأسعار.";return;}try{await updateDoc(doc(db,"projects",projectId),{priceConfig:config});currentPriceConfig=config;$("pricingMessage").innerText="تم حفظ الأسعار ✅";refreshOperatorFirstRunGuide();}catch(e){$("pricingMessage").innerText=e.message;}};
+$("savePricingBtn").onclick=async()=>{const config={};document.querySelectorAll("[data-price]").forEach(i=>config[i.dataset.price]=Number(i.value));if(Object.values(config).some(v=>!Number.isFinite(v)||v<0)){$("pricingMessage").innerText="راجع الأسعار.";return;}try{await updateDoc(doc(db,"projects",projectId),{priceConfig:config});currentPriceConfig=config;$("pricingMessage").innerText="تم حفظ الأسعار ✅";refreshOperatorFirstRunGuide();}catch(e){$("pricingMessage").innerText=friendlyOperatorError(e,"تعذر حفظ الأسعار. حاول مرة أخرى.");}};
 
 async function loadWorkers(){
   workers=await listProjectWorkers(projectId,{activeOnly:false});
@@ -108,7 +103,7 @@ async function loadWorkers(){
   document.querySelectorAll(".toggleWorker").forEach(btn=>btn.onclick=async()=>{const w=workers.find(x=>x.workerId===btn.dataset.worker);await setWorkerActive({workerId:w.workerId,projectId,actorUid:user.uid,isActive:!w.isActive});await loadWorkers();});
   if(operatorGuide)refreshOperatorFirstRunGuide();
 }
-$("addWorkerBtn").onclick=async()=>{try{await createWorker({projectId,actorUid:user.uid,name:$("workerName").value,whatsapp:$("workerWhatsapp").value,role:$("workerRole").value});$("workerName").value="";$("workerWhatsapp").value="";$("workerMessage").innerText="تمت الإضافة ✅";await loadWorkers();}catch(e){$("workerMessage").innerText=e.message;}};
+$("addWorkerBtn").onclick=async()=>{try{await createWorker({projectId,actorUid:user.uid,name:$("workerName").value,whatsapp:$("workerWhatsapp").value,role:$("workerRole").value});$("workerName").value="";$("workerWhatsapp").value="";$("workerMessage").innerText="تمت الإضافة ✅";await loadWorkers();}catch(e){$("workerMessage").innerText=friendlyOperatorError(e,"تعذر تحديث العامل. راجع البيانات وحاول مرة أخرى.");}};
 
 function itemSummary(order){return (order.items||[]).filter(x=>Number(x.quantity||0)>0).map(x=>`${Number(x.quantity)} × ${esc(x.label||x.key)} — ${esc(x.serviceLabel||x.service)}`).join("<br>");}
 function workerSelect(role,orderId){const list=workers.filter(w=>w.isActive&&w.role===role);return `<select data-worker-select="${orderId}"><option value="">اختر العامل</option>${list.map(w=>`<option value="${w.workerId}">${esc(w.name)}</option>`).join("")}</select>`;}
@@ -167,7 +162,7 @@ async function assignAndDispatch(order,role,nextStage){
     }
   }catch(e){
     try{popup?.close();}catch{}
-    alert(e.message);
+    alert(friendlyOperatorError(e,"تعذر تنفيذ الإجراء على الطلب. حدّث الطلبات وحاول مرة أخرى."));
   }
 }
 
@@ -225,7 +220,7 @@ async function loadOrders({appendHistory=false}={}){
 
   document.querySelectorAll(".orderCard").forEach(card=>{
     const order=orders.find(o=>o.orderId===card.dataset.order);
-    card.querySelectorAll(".stageBtn").forEach(btn=>btn.onclick=async()=>{try{await changeLaundryStage({projectId,orderId:order.orderId,actorUid:user.uid,nextStage:btn.dataset.stage});await loadOrders();}catch(e){alert(e.message);}});
+    card.querySelectorAll(".stageBtn").forEach(btn=>btn.onclick=async()=>{try{await changeLaundryStage({projectId,orderId:order.orderId,actorUid:user.uid,nextStage:btn.dataset.stage});await loadOrders();}catch(e){alert(friendlyOperatorError(e,"تعذر تنفيذ الإجراء على الطلب. حدّث الطلبات وحاول مرة أخرى."));}});
     card.querySelector(".pickupBtn")?.addEventListener("click",()=>assignAndDispatch(order,"pickup_agent","pickup_assigned"));
     card.querySelector(".deliveryBtn")?.addEventListener("click",()=>assignAndDispatch(order,"delivery_agent","out_for_delivery"));
     card.querySelector(".requestReversal")?.addEventListener("click",async()=>{
