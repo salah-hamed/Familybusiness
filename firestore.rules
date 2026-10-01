@@ -2159,14 +2159,47 @@ service cloud.firestore {
 
   match /commissionLedger/{entryId} {
    allow get, list: if isAdmin()
-    || (signedIn() && resource.data.userId == request.auth.uid);
+    || (signedIn() && resource.data.userId == request.auth.uid)
+    || (
+      signedIn()
+      && resource.data.sourceType == "project_order"
+      && resource.data.projectId is string
+      && isProjectOperator(resource.data.projectId)
+    );
 
    allow create: if isAdmin()
     || validProjectOrderLedgerCreate(entryId);
 
    allow update: if isAdmin()
-    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status","paidAt"]);
+    && request.resource.data.userId == resource.data.userId
+    && request.resource.data.sourceType == resource.data.sourceType
+    && request.resource.data.sourceId == resource.data.sourceId
+    && request.resource.data.amount == resource.data.amount
+    && request.resource.data.currency == resource.data.currency
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+      "status",
+      "paidAt",
+      "settlementId",
+      "settlementStatus",
+      "settlementCreatedAt"
+    ]);
 
+   allow delete: if false;
+  }
+
+  match /commissionSettlements/{settlementId} {
+   allow get, list: if isAdmin()
+    || (
+      signedIn()
+      && resource.data.ownerId == request.auth.uid
+    )
+    || (
+      signedIn()
+      && resource.data.projectId is string
+      && isProjectOperator(resource.data.projectId)
+    );
+
+   allow create, update: if isAdmin();
    allow delete: if false;
   }
 

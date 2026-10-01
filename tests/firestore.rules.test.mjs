@@ -1068,3 +1068,127 @@ test("laundry commission is earned only when the delivery agent moves a ready or
 
   await assertSucceeds(batch.commit());
 });
+
+
+test("admin settlement flow can reserve and pay earned commission without rewriting amount", async () => {
+  const { ownerId, operatorUid, projectId } = await seedCommissionIntegrityFixture("settlement_flow");
+  const adminId = "admin_settlement_flow";
+  const entryId = "project_order_settlement_flow_order";
+  const settlementId = "settlement_flow_1";
+
+  await seedUser(adminId, { role: "admin" });
+
+  await testEnv.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), "commissionLedger", entryId), {
+      userId: ownerId,
+      projectId,
+      orderId: "settlement_flow_order",
+      sourceType: "project_order",
+      sourceId: "settlement_flow_order",
+      agreementId: projectId,
+      agreementVersion: 1,
+      amount: 5,
+      currency: "EGP",
+      status: "earned",
+      trigger: "delivery_assignment",
+      createdAt: serverTimestamp(),
+      earnedAt: serverTimestamp(),
+      paidAt: null
+    });
+  });
+
+  const adminDb = testEnv.authenticatedContext(adminId).firestore();
+
+  await assertSucceeds(
+    setDoc(doc(adminDb, "commissionSettlements", settlementId), {
+      settlementId,
+      projectId,
+      ownerId,
+      operatorId: projectId,
+      templateId: "supermarket",
+      businessName: "Commission Store",
+      currency: "EGP",
+      status: "pending",
+      entryIds: [entryId],
+      orderIds: ["settlement_flow_order"],
+      entryCount: 1,
+      amount: 5,
+      note: "",
+      createdAt: serverTimestamp(),
+      createdBy: adminId,
+      updatedAt: serverTimestamp(),
+      paidAt: null,
+      paidBy: null,
+      paymentMethod: "",
+      paymentReference: "",
+      voidAt: null,
+      voidBy: null
+    })
+  );
+
+  await assertSucceeds(
+    updateDoc(doc(adminDb, "commissionLedger", entryId), {
+      settlementId,
+      settlementStatus: "pending",
+      settlementCreatedAt: serverTimestamp()
+    })
+  );
+
+  await assertFails(
+    updateDoc(doc(adminDb, "commissionLedger", entryId), {
+      amount: 999
+    })
+  );
+
+  await assertSucceeds(
+    updateDoc(doc(adminDb, "commissionLedger", entryId), {
+      status: "paid",
+      paidAt: serverTimestamp(),
+      settlementStatus: "paid"
+    })
+  );
+
+  const ownerDb = testEnv.authenticatedContext(ownerId).firestore();
+  const operatorDb = testEnv.authenticatedContext(operatorUid).firestore();
+  const strangerDb = testEnv.authenticatedContext("settlement_stranger").firestore();
+
+  await assertSucceeds(getDoc(doc(ownerDb, "commissionSettlements", settlementId)));
+  await assertSucceeds(getDoc(doc(operatorDb, "commissionSettlements", settlementId)));
+  await assertFails(getDoc(doc(strangerDb, "commissionSettlements", settlementId)));
+
+  await assertFails(
+    updateDoc(doc(operatorDb, "commissionSettlements", settlementId), {
+      status: "paid"
+    })
+  );
+});
+
+test("project operator can read only its project commission ledger entries", async () => {
+  const { ownerId, operatorUid, projectId } = await seedCommissionIntegrityFixture("operator_ledger_read");
+  const entryId = "project_order_operator_ledger_read";
+
+  await testEnv.withSecurityRulesDisabled(async context => {
+    await setDoc(doc(context.firestore(), "commissionLedger", entryId), {
+      userId: ownerId,
+      projectId,
+      orderId: "operator_ledger_read",
+      sourceType: "project_order",
+      sourceId: "operator_ledger_read",
+      agreementId: projectId,
+      agreementVersion: 1,
+      amount: 5,
+      currency: "EGP",
+      status: "earned",
+      trigger: "delivery_assignment",
+      createdAt: serverTimestamp(),
+      earnedAt: serverTimestamp(),
+      paidAt: null
+    });
+  });
+
+  const operatorDb = testEnv.authenticatedContext(operatorUid).firestore();
+  await assertSucceeds(getDoc(doc(operatorDb, "commissionLedger", entryId)));
+
+  const otherDb = testEnv.authenticatedContext("other_operator_uid").firestore();
+  await assertFails(getDoc(doc(otherDb, "commissionLedger", entryId)));
+});

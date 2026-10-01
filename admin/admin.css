@@ -1,1 +1,69 @@
-
+:root{
+  --bg:#f4f7f5;--panel:#fff;--ink:#152019;--muted:#657268;--line:#dce5df;
+  --brand:#176a38;--brand-2:#0f5130;--soft:#eef7f1;--warn:#fff6dc;--danger:#fff0ef;
+  --shadow:0 14px 35px rgba(29,53,40,.08)
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif;background:var(--bg);color:var(--ink)}
+button,input,select{font:inherit}
+button{cursor:pointer}
+.adminShell{max-width:1440px;margin:auto;padding:22px}
+.adminHeader{display:flex;justify-content:space-between;gap:22px;align-items:flex-start;margin-bottom:20px}
+.adminHeader h1{margin:4px 0 8px;font-size:clamp(28px,4vw,44px)}
+.adminHeader p{margin:0;color:var(--muted);max-width:780px;line-height:1.7}
+.eyebrow,.sectionKicker{display:inline-block;font-size:12px;font-weight:800;letter-spacing:.04em;color:var(--brand)}
+.headerMeta{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.headerMeta span{background:#e9f4ed;border:1px solid #cfe4d7;padding:10px 12px;border-radius:12px;font-weight:700}
+.heroPanel{display:flex;justify-content:space-between;gap:18px;align-items:center;background:linear-gradient(135deg,#123d27,#176a38);color:#fff;padding:22px;border-radius:24px;box-shadow:var(--shadow)}
+.heroPanel h2{margin:5px 0 8px;font-size:28px}.heroPanel p{margin:0;color:#d9efe1}
+.heroPanel .sectionKicker{color:#aee6bd}
+.billingBadge{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);padding:15px 18px;border-radius:18px;min-width:210px}
+.billingBadge small{display:block;color:#d9efe1;margin-bottom:5px}.billingBadge b{font-size:18px}
+.metricGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:16px 0 20px}
+.metricCard{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:16px;box-shadow:0 6px 18px rgba(29,53,40,.04)}
+.metricCard span{display:block;color:var(--muted);font-size:13px}.metricCard b{display:block;font-size:26px;margin:7px 0}.metricCard small{color:var(--muted)}
+.metricCard.moneyCard{border-top:4px solid #5c3fd6}.metricCard.dueCard{border-top:4px solid #e59d13}
+.adminTabs{display:flex;gap:8px;overflow:auto;padding:6px;background:#e8eeea;border-radius:16px;position:sticky;top:8px;z-index:10}
+.tabBtn{border:0;background:transparent;padding:11px 15px;border-radius:11px;font-weight:800;color:#4f5c53;white-space:nowrap}
+.tabBtn.active{background:#fff;color:var(--brand);box-shadow:0 4px 14px rgba(0,0,0,.06)}
+.adminSection{display:none;background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:18px;margin-top:14px;box-shadow:var(--shadow)}
+.adminSection.activeSection{display:block}
+.sectionHead{display:flex;justify-content:space-between;gap:14px;align-items:center;margin-bottom:14px}
+.sectionHead h2{margin:4px 0 0}.sectionCounter{background:var(--soft);padding:9px 12px;border-radius:999px;font-weight:800}
+.filterGrid{display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:10px}
+.fullSearch,.filterGrid input,.filterGrid select,.commissionToolbar input,.settlementActions input,.settlementActions select{
+  width:100%;padding:12px 13px;border:1px solid #cad7ce;border-radius:12px;background:#fff;color:var(--ink)
+}
+.message{min-height:24px;color:var(--muted);margin:8px 0}.hidden{display:none!important}
+.cardList{display:grid;gap:12px}
+.adminCard{border:1px solid var(--line);border-radius:17px;padding:15px;background:#fff}
+.cardHead{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.cardHead h3{margin:0 0 5px}.cardHead p{margin:0;color:var(--muted);word-break:break-word}
+.pill{display:inline-flex;align-items:center;padding:6px 9px;border-radius:999px;background:#eef3ef;font-size:12px;font-weight:800}
+.pill.active,.pill.paid{background:#e3f7e9;color:#13602e}.pill.pending{background:#fff4d6;color:#7b5700}.pill.inactive,.pill.void{background:#f3ecec;color:#7d3636}
+.metaGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:13px 0}
+.metaGrid span{background:#f7f9f7;border-radius:10px;padding:9px;font-size:13px;word-break:break-word}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.primaryBtn,.secondaryBtn,.dangerBtn,.loadMore{border:0;border-radius:10px;padding:10px 13px;font-weight:800}
+.primaryBtn{background:var(--brand);color:#fff}.secondaryBtn{background:#e8eeea;color:#26352b}.dangerBtn{background:#7f2929;color:#fff}.loadMore{display:block;margin:16px auto;background:#245c35;color:#fff}
+.tableWrap{overflow:auto;border:1px solid var(--line);border-radius:14px}
+.dataTable{width:100%;border-collapse:collapse;min-width:850px}.dataTable th,.dataTable td{padding:11px 10px;text-align:right;border-bottom:1px solid #e7ede9;vertical-align:top}
+.dataTable th{background:#f6f9f7;font-size:12px;color:#59665d;position:sticky;top:0}.dataTable td{font-size:13px}
+.dataTable tr:last-child td{border-bottom:0}
+.commissionToolbar{display:grid;grid-template-columns:1.2fr 1.5fr auto;gap:10px;align-items:end;background:#f7faf8;padding:12px;border-radius:14px;margin-bottom:10px}
+.commissionToolbar label{display:block;font-size:12px;font-weight:800;margin-bottom:5px;color:#5e6b62}
+.hintBox{background:#f3f0ff;border:1px solid #ded7ff;border-radius:14px;padding:12px;color:#51427d;line-height:1.7}
+.settlementCard{border-inline-start:5px solid #7356d8}.settlementCard.paid{border-inline-start-color:#21834a}.settlementCard.void{border-inline-start-color:#9b5c5c}
+.settlementActions{display:grid;grid-template-columns:1fr 1.3fr auto auto;gap:8px;align-items:end;margin-top:12px}
+.emptyState{text-align:center;background:#fff;border:1px solid var(--line);border-radius:18px;padding:35px}
+.smallMuted{font-size:12px;color:var(--muted)}
+.codeText{font-family:monospace;direction:ltr;display:inline-block}
+@media(max-width:1050px){
+  .metricGrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .metaGrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:700px){
+  .adminShell{padding:12px}.adminHeader,.heroPanel,.sectionHead{flex-direction:column;align-items:stretch}
+  .headerMeta{justify-content:flex-start}.metricGrid,.filterGrid,.commissionToolbar,.settlementActions{grid-template-columns:1fr}
+  .metaGrid{grid-template-columns:1fr}.adminTabs{top:0}.adminSection{padding:13px}.metricCard b{font-size:22px}
+}

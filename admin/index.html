@@ -3,56 +3,170 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1.0">
-  <title>لوحة إدارة Family Business</title>
-  <style>
-    *{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f6f8f7;color:#17211a}
-    main{max-width:1100px;margin:auto;padding:20px}.topbar{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:18px}
-    .summary{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:16px;background:#fff;border:1px solid #dde6df;border-radius:16px}
-    .controls{display:grid;grid-template-columns:2fr 1fr;gap:10px;margin:16px 0}
-    .controls input,.controls select,.controls button{padding:12px;border:1px solid #ccd8cf;border-radius:12px;font:inherit;background:#fff}
-    .controls button{cursor:pointer;font-weight:700}.message{min-height:24px;color:#5d6d62}.hidden{display:none!important}
-    .userCard{background:#fff;border:1px solid #dde6df;border-radius:16px;padding:16px;margin:12px 0}
-    .userCardHead{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.userCardHead h3{margin:0 0 5px}.userCardHead p{margin:0;color:#66756b}
-    .statusPill{background:#eef5ef;padding:5px 9px;border-radius:999px;font-size:12px;font-weight:700}
-    .userMeta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:14px 0}
-    .userMeta span{background:#f8faf8;padding:9px;border-radius:10px}.userActions{display:flex;gap:8px;flex-wrap:wrap}
-    .userActions button,.loadMore{padding:10px 14px;border:0;border-radius:10px;cursor:pointer;background:#176a38;color:#fff;font-weight:700}
-    .userActions .secondaryBtn{background:#e9eeea;color:#29372e}.loadMore{display:block;margin:16px auto;background:#245c35}
-    @media(max-width:650px){.summary,.topbar{align-items:stretch;flex-direction:column}.controls{grid-template-columns:1fr}.userMeta{grid-template-columns:1fr}}
-  </style>
+  <title>مركز إدارة Family Business</title>
+  <link rel="stylesheet" href="./admin.css">
 </head>
 <body>
-<main>
-  <header class="topbar">
-    <div>
-      <h1>Family Business Admin</h1>
-      <p>إدارة المستخدمين والاشتراكات</p>
-    </div>
-  </header>
+  <div class="adminShell">
+    <header class="adminHeader">
+      <div>
+        <span class="eyebrow">Family Business Control Center</span>
+        <h1>لوحة إدارة المنصة</h1>
+        <p>متابعة التشغيل والاشتراكات والمشاريع والطلبات والعمولات والتسويات من مكان واحد.</p>
+      </div>
+      <div class="headerMeta">
+        <span id="adminIdentity">جاري التحقق...</span>
+        <button id="refreshAllBtn" class="secondaryBtn" type="button">تحديث البيانات</button>
+      </div>
+    </header>
 
-  <section class="summary">
-    <div>
-      <h3 style="margin:0;">لوحة إدارة المنصة</h3>
-      <small>تحميل تدريجي للمستخدمين بدل قراءة القاعدة بالكامل</small>
-    </div>
-    <div id="usersCount">إجمالي المستخدمين: ...</div>
-  </section>
+    <section id="accessDenied" class="emptyState hidden">
+      <h2>غير مصرح بالدخول</h2>
+      <p>هذه الصفحة متاحة لحسابات الإدارة فقط.</p>
+    </section>
 
-  <section id="usersControls" class="controls hidden">
-    <input id="usersSearch" type="search" placeholder="ابحث بالاسم أو البريد الإلكتروني...">
-    <select id="usersStatusFilter">
-      <option value="all">كل الحالات</option>
-      <option value="active">نشط</option>
-      <option value="inactive">غير نشط</option>
-      <option value="pending">في انتظار التفعيل</option>
-    </select>
-  </section>
+    <main id="adminApp" class="hidden">
+      <section class="heroPanel">
+        <div>
+          <span class="sectionKicker">صورة المنصة الآن</span>
+          <h2>كل الأرقام المهمة أمامك</h2>
+          <p id="overviewStatus">جاري تحميل مؤشرات المنصة...</p>
+        </div>
+        <div class="billingBadge">
+          <small>الاشتراك الحالي</small>
+          <b id="billingSummary">...</b>
+        </div>
+      </section>
 
-  <p id="usersMessage" class="message"></p>
-  <div id="usersContainer"></div>
-  <button id="loadMoreUsersBtn" class="loadMore hidden" type="button">عرض 50 مستخدم إضافي</button>
+      <section id="overviewCards" class="metricGrid" aria-label="مؤشرات المنصة">
+        <article class="metricCard"><span>المستخدمون</span><b id="metricUsers">—</b><small id="metricUsersMeta">—</small></article>
+        <article class="metricCard"><span>المشاريع</span><b id="metricProjects">—</b><small>كل المشاريع المسجلة</small></article>
+        <article class="metricCard"><span>المشغّلون</span><b id="metricOperators">—</b><small id="metricOperatorsMeta">—</small></article>
+        <article class="metricCard"><span>الطلبات</span><b id="metricOrders">—</b><small id="metricOrdersMeta">—</small></article>
+        <article class="metricCard moneyCard"><span>عمولات مكتسبة</span><b id="metricEarned">—</b><small>مشاريع + إحالات</small></article>
+        <article class="metricCard moneyCard"><span>مدفوع</span><b id="metricPaid">—</b><small>قيود تم تسويتها</small></article>
+        <article class="metricCard dueCard"><span>مستحق حاليًا</span><b id="metricOutstanding">—</b><small>قبل التسوية والسداد</small></article>
+        <article class="metricCard"><span>تسويات معلقة</span><b id="metricPendingSettlements">—</b><small id="metricPendingSettlementsMeta">—</small></article>
+      </section>
+
+      <nav class="adminTabs" aria-label="أقسام الإدارة">
+        <button class="tabBtn active" data-section="usersSection">المستخدمون</button>
+        <button class="tabBtn" data-section="projectsSection">المشاريع</button>
+        <button class="tabBtn" data-section="operatorsSection">المشغّلون</button>
+        <button class="tabBtn" data-section="ordersSection">الطلبات</button>
+        <button class="tabBtn" data-section="commissionsSection">العمولات</button>
+        <button class="tabBtn" data-section="settlementsSection">التسويات</button>
+      </nav>
+
+      <section id="usersSection" class="adminSection activeSection">
+        <div class="sectionHead">
+          <div><span class="sectionKicker">الحسابات والاشتراكات</span><h2>المستخدمون</h2></div>
+          <span id="usersCount" class="sectionCounter">...</span>
+        </div>
+        <div id="usersControls" class="filterGrid">
+          <input id="usersSearch" type="search" placeholder="ابحث بالاسم أو البريد أو UID">
+          <select id="usersStatusFilter">
+            <option value="all">كل الحالات</option>
+            <option value="active">نشط</option>
+            <option value="inactive">غير نشط</option>
+            <option value="pending">في انتظار التفعيل</option>
+          </select>
+        </div>
+        <p id="usersMessage" class="message"></p>
+        <div id="usersContainer" class="cardList"></div>
+        <button id="loadMoreUsersBtn" class="loadMore hidden" type="button">عرض 50 مستخدم إضافي</button>
+      </section>
+
+      <section id="projectsSection" class="adminSection">
+        <div class="sectionHead">
+          <div><span class="sectionKicker">المشاريع النشطة والموقوفة</span><h2>المشاريع</h2></div>
+          <button id="refreshProjectsBtn" class="secondaryBtn" type="button">تحديث</button>
+        </div>
+        <div class="filterGrid">
+          <input id="projectsSearch" type="search" placeholder="ابحث باسم المشروع أو المالك أو Project ID">
+          <select id="projectsTemplateFilter">
+            <option value="all">كل الأنواع</option>
+            <option value="supermarket">سوبرماركت</option>
+            <option value="restaurant">مطعم</option>
+            <option value="bakery">مخبز</option>
+            <option value="laundry">مغسلة</option>
+          </select>
+        </div>
+        <p id="projectsMessage" class="message"></p>
+        <div id="projectsContainer" class="cardList"></div>
+      </section>
+
+      <section id="operatorsSection" class="adminSection">
+        <div class="sectionHead">
+          <div><span class="sectionKicker">شركاء التشغيل</span><h2>المشغّلون</h2></div>
+          <button id="refreshOperatorsBtn" class="secondaryBtn" type="button">تحديث</button>
+        </div>
+        <input id="operatorsSearch" class="fullSearch" type="search" placeholder="ابحث باسم النشاط أو الهاتف أو Project ID">
+        <p id="operatorsMessage" class="message"></p>
+        <div id="operatorsContainer" class="cardList"></div>
+      </section>
+
+      <section id="ordersSection" class="adminSection">
+        <div class="sectionHead">
+          <div><span class="sectionKicker">آخر حركة تشغيلية</span><h2>الطلبات</h2></div>
+          <button id="refreshOrdersAdminBtn" class="secondaryBtn" type="button">تحديث</button>
+        </div>
+        <div class="filterGrid">
+          <input id="ordersSearch" type="search" placeholder="Order ID أو Project ID أو اسم العميل">
+          <select id="ordersStatusFilter">
+            <option value="all">كل الحالات</option>
+            <option value="new">جديد</option>
+            <option value="accepted">مقبول</option>
+            <option value="ready">جاهز</option>
+            <option value="assigned">تم تعيين مندوب</option>
+            <option value="out_for_delivery">خرج للتوصيل</option>
+            <option value="delivered">تم التوصيل</option>
+            <option value="done">مكتمل</option>
+            <option value="canceled">ملغي</option>
+          </select>
+        </div>
+        <p id="ordersAdminMessage" class="message"></p>
+        <div class="tableWrap"><table class="dataTable">
+          <thead><tr><th>الطلب</th><th>المشروع</th><th>العميل</th><th>الحالة</th><th>القيمة</th><th>العمولة</th></tr></thead>
+          <tbody id="ordersTableBody"></tbody>
+        </table></div>
+      </section>
+
+      <section id="commissionsSection" class="adminSection">
+        <div class="sectionHead">
+          <div><span class="sectionKicker">دفتر العمولات</span><h2>العمولات والمستحقات</h2></div>
+          <button id="refreshCommissionsBtn" class="secondaryBtn" type="button">تحديث</button>
+        </div>
+        <div class="commissionToolbar">
+          <div>
+            <label for="settlementProjectId">إنشاء تسوية لمشروع</label>
+            <input id="settlementProjectId" type="text" placeholder="Project ID">
+          </div>
+          <div>
+            <label for="settlementNote">ملاحظة التسوية</label>
+            <input id="settlementNote" type="text" maxlength="500" placeholder="مثال: تسوية أسبوع 1-7 أكتوبر">
+          </div>
+          <button id="createSettlementBtn" class="primaryBtn" type="button">إنشاء كشف المستحقات</button>
+        </div>
+        <p id="commissionsMessage" class="message"></p>
+        <div class="tableWrap"><table class="dataTable">
+          <thead><tr><th>القيد</th><th>المشروع / المصدر</th><th>المستفيد</th><th>القيمة</th><th>الحالة</th><th>التسوية</th></tr></thead>
+          <tbody id="commissionsTableBody"></tbody>
+        </table></div>
+      </section>
+
+      <section id="settlementsSection" class="adminSection">
+        <div class="sectionHead">
+          <div><span class="sectionKicker">السداد والمراجعة المالية</span><h2>التسويات</h2></div>
+          <button id="refreshSettlementsBtn" class="secondaryBtn" type="button">تحديث</button>
+        </div>
+        <p class="hintBox">التسوية المعلقة تحجز قيود العمولة داخل كشف واحد. عند تأكيد السداد تتحول كل القيود المرتبطة إلى «مدفوع» في نفس العملية.</p>
+        <p id="settlementsMessage" class="message"></p>
+        <div id="settlementsContainer" class="cardList"></div>
+      </section>
+    </main>
+  </div>
 
   <script type="module" src="./admin.js"></script>
-</main>
 </body>
 </html>
