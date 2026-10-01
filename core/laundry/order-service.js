@@ -2,7 +2,7 @@ import db from "../firebase/firebase-db.js";
 import { getEffectiveCommissionSnapshot, getProjectCommissionLedgerId } from "../commissions/commission-service.js";
 
 import {
-  collection,query,where,orderBy,startAfter,limit,getDocs,getCountFromServer,doc,getDoc,updateDoc,runTransaction,serverTimestamp
+  collection,query,where,orderBy,startAfter,limit,getDocs,getCountFromServer,doc,getDoc,addDoc,updateDoc,writeBatch,onSnapshot,runTransaction,serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const FLOW=Object.freeze({
@@ -15,6 +15,39 @@ const FLOW=Object.freeze({
   out_for_delivery:["delivered","canceled"],
   delivered:[],canceled:[]
 });
+
+function clean(value){return String(value||"").trim();}
+
+function randomTrackingToken(){
+  const bytes=new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return [...bytes].map(value=>value.toString(16).padStart(2,"0")).join("");
+}
+
+function trackingRef(token){
+  return doc(db,"orderTracking",token);
+}
+
+function laundryTrackingStatus(order={},override=""){
+  if(override)return override;
+  if(order.status==="new")return "new";
+  if(order.status==="canceled")return "canceled";
+  if(order.status==="done"||order.laundryStage==="delivered")return "delivered";
+  return order.laundryStage||"accepted";
+}
+
+function trackingPatchFromOrder(order={},overrideStatus=""){
+  const total=Number(order.price||0);
+  return {
+    status:laundryTrackingStatus(order,overrideStatus),
+    items:Array.isArray(order.items)?order.items:[],
+    subtotal:total,
+    deliveryFee:0,
+    total,
+    updatedAt:serverTimestamp()
+  };
+}
+
 
 
 function isMissingCompositeIndexError(error){
@@ -61,6 +94,94 @@ export function currentLaundryStage(order={}){
 
 export function allowedLaundryNextStages(order={}){
   return FLOW[currentLaundryStage(order)]||[];
+}
+
+export async function createLaundryOrder(orderData={}){
+  const projectId=clean(orderData.projectId);
+  if(!projectId)throw new Error("PROJECT_REQUIRED");
+
+  const trackingToken=randomTrackingToken();
+  const orderRef=doc(collection(db,"orders"));
+  const publicTrackingRef=trackingRef(trackingToken);
+  const price=Number(orderData.price||0);
+  const items=Array.isArray(orderData.items)?orderData.items:[];
+
+  const trackedOrder={
+    ...orderData,
+    projectId,
+    providerId:projectId,
+    templateType:"laundry",
+    trackingToken,
+    createdAt:serverTimestamp()
+  };
+
+  const batch=writeBatch(db);
+  batch.set(orderRef,trackedOrder);
+  batch.set(publicTrackingRef,{
+    trackingToken,
+    orderId:orderRef.id,
+    projectId,
+    templateType:"laundry",
+    status:"new",
+    items,
+    subtotal:price,
+    deliveryFee:0,
+    total:price,
+    createdAt:serverTimestamp(),
+    updatedAt:serverTimestamp()
+  });
+
+  try{
+    await batch.commit();
+    return {
+      orderId:orderRef.id,
+      trackingToken,
+      trackingEnabled:true,
+      total:price
+    };
+  }catch(error){
+    const code=String(error?.code||"").toLowerCase();
+    if(!code.includes("permission-denied"))throw error;
+
+    const legacy={...orderData,projectId,providerId:projectId,templateType:"laundry",createdAt:serverTimestamp()};
+    delete legacy.trackingToken;
+    const legacyRef=await addDoc(collection(db,"orders"),legacy);
+
+    return {
+      orderId:legacyRef.id,
+      trackingToken:"",
+      trackingEnabled:false,
+      total:price
+    };
+  }
+}
+
+export async function getLaundryOrderTracking(trackingToken){
+  const token=clean(trackingToken);
+  if(!token)return null;
+
+  const snap=await getDoc(trackingRef(token));
+  if(!snap.exists())return null;
+
+  const data=snap.data();
+  if(data.projectId==null||data.templateType!=="laundry")return null;
+
+  return {trackingToken:token,...data};
+}
+
+export function subscribeLaundryOrderTracking(trackingToken,onChange,onError=null){
+  const token=clean(trackingToken);
+  if(!token)return ()=>{};
+
+  return onSnapshot(
+    trackingRef(token),
+    snap=>{
+      if(!snap.exists()){onChange?.(null);return;}
+      const data={trackingToken:token,...snap.data()};
+      onChange?.(data.templateType==="laundry"?data:null);
+    },
+    error=>onError?.(error)
+  );
 }
 
 export async function listLaundryOrdersPage(projectId,{pageSize=50,cursor=null}={}){
@@ -170,7 +291,12 @@ export async function changeLaundryStage({projectId,orderId,actorUid,nextStage})
   if(nextStage==="out_for_delivery"&&!order.assignedWorkerId)throw new Error("DELIVERY_AGENT_REQUIRED");
 
   if(nextStage==="canceled"){
-    await updateDoc(ref,{status:"canceled",statusUpdatedAt:serverTimestamp(),statusUpdatedBy:actorUid});
+    const batch=writeBatch(db);
+    batch.update(ref,{status:"canceled",statusUpdatedAt:serverTimestamp(),statusUpdatedBy:actorUid});
+    if(order.trackingToken){
+      batch.update(trackingRef(order.trackingToken),trackingPatchFromOrder(order,"canceled"));
+    }
+    await batch.commit();
     return;
   }
 
@@ -209,6 +335,13 @@ export async function changeLaundryStage({projectId,orderId,actorUid,nextStage})
           commissionEarnedAt:earnedAt
         });
 
+        if(fresh.trackingToken){
+          transaction.update(
+            trackingRef(fresh.trackingToken),
+            trackingPatchFromOrder(fresh,"out_for_delivery")
+          );
+        }
+
         transaction.set(ledgerRef,{
           userId:agreementSnap.data().ownerId,
           projectId,
@@ -243,20 +376,33 @@ export async function changeLaundryStage({projectId,orderId,actorUid,nextStage})
   }
 
   if(nextStage!=="delivered"){
-    await updateDoc(ref,{
+    const batch=writeBatch(db);
+    batch.update(ref,{
       status:"accepted",laundryStage:nextStage,statusUpdatedAt:serverTimestamp(),statusUpdatedBy:actorUid
     });
+    if(order.trackingToken){
+      batch.update(trackingRef(order.trackingToken),trackingPatchFromOrder(order,nextStage));
+    }
+    await batch.commit();
     return;
   }
 
   if(order.commissionLocked===true){
-    await updateDoc(ref,{
+    const batch=writeBatch(db);
+    batch.update(ref,{
       status:"done",
       laundryStage:"delivered",
       deliveredAt:serverTimestamp(),
       statusUpdatedAt:serverTimestamp(),
       statusUpdatedBy:actorUid
     });
+    if(order.trackingToken){
+      batch.update(trackingRef(order.trackingToken),{
+        ...trackingPatchFromOrder(order,"delivered"),
+        deliveredAt:serverTimestamp()
+      });
+    }
+    await batch.commit();
     return;
   }
 
@@ -288,6 +434,13 @@ export async function changeLaundryStage({projectId,orderId,actorUid,nextStage})
       commissionAmount:commission.amount,
       commissionAgreementVersion:commission.version
     });
+
+    if(fresh.trackingToken){
+      transaction.update(trackingRef(fresh.trackingToken),{
+        ...trackingPatchFromOrder(fresh,"delivered"),
+        deliveredAt:earnedAt
+      });
+    }
 
     transaction.set(ledgerRef,{
       userId:agreementSnap.data().ownerId,

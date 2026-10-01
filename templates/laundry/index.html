@@ -11,7 +11,8 @@
   <main class="app">
     <header class="hero">
       <div class="heroIcon">👕</div>
-      <div><span class="eyebrow">استلام وتوصيل من المنزل</span><h1 id="businessTitle">غسيل ومكواة الملابس</h1><p>اختار القطع وحدد لكل قطعة: غسيل، مكواة، أو غسيل + مكواة، وبعدها حدد موعد الاستلام.</p></div>
+      <div class="heroCopy"><span class="eyebrow">استلام وتوصيل من المنزل</span><h1 id="businessTitle">غسيل ومكواة الملابس</h1><p>اختار القطع وحدد لكل قطعة: غسيل، مكواة، أو غسيل + مكواة، وبعدها حدد موعد الاستلام.</p></div>
+      <button id="myOrdersBtn" class="ordersBtn" type="button">📦 طلباتي</button>
     </header>
 
     <section class="card" id="itemsSection">
@@ -50,6 +51,20 @@
 
     <footer>خدمة مدعومة بواسطة Family Business</footer>
   </main>
+
+  <div id="ordersSheet" class="ordersSheet hidden" role="dialog" aria-modal="true" aria-labelledby="ordersTitle">
+    <section class="ordersPanel">
+      <div class="ordersHead">
+        <div>
+          <h2 id="ordersTitle">طلباتي</h2>
+          <p>تابع طلب الغسيل من الاستلام حتى التوصيل.</p>
+        </div>
+        <button id="closeOrders" class="closeOrdersBtn" type="button" aria-label="إغلاق">✕</button>
+      </div>
+      <div id="ordersList" class="myOrdersList"></div>
+    </section>
+  </div>
+
   <script type="module" src="./app.js"></script>
 </body>
 </html>

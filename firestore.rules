@@ -9,6 +9,7 @@ service cloud.firestore {
   function commissionAgreementPath(agreementId){ return /databases/$(database)/documents/commissionAgreements/$(agreementId); }
   function workerPath(workerId){ return /databases/$(database)/documents/workers/$(workerId); }
   function orderPath(orderId){ return /databases/$(database)/documents/orders/$(orderId); }
+  function orderTrackingPath(trackingToken){ return /databases/$(database)/documents/orderTracking/$(trackingToken); }
   function supermarketPath(projectId){ return /databases/$(database)/documents/supermarkets/$(projectId); }
   function restaurantPath(projectId){ return /databases/$(database)/documents/restaurants/$(projectId); }
   function laundryPath(projectId){ return /databases/$(database)/documents/laundries/$(projectId); }
@@ -87,6 +88,7 @@ service cloud.firestore {
    let ledger = request.resource.data;
    let order = getAfter(orderPath(ledger.orderId)).data;
    return signedIn()
+    && !(order.templateType == "laundry" && ("trackingToken" in order))
     && ledger.sourceType == "project_order"
     && ledger.projectId is string
     && ledger.orderId is string
@@ -111,6 +113,126 @@ service cloud.firestore {
     && order.commissionAmount == ledger.amount
     && order.commissionAgreementVersion == ledger.agreementVersion;
   }
+  function validTrackedLaundryProjectOrderLedgerCreate(entryId){
+   let ledger = request.resource.data;
+   let order = getAfter(orderPath(ledger.orderId)).data;
+   return signedIn()
+    && ledger.sourceType == "project_order"
+    && ledger.projectId is string
+    && ledger.orderId is string
+    && entryId == "project_order_" + ledger.orderId
+    && ledger.sourceId == ledger.orderId
+    && ledger.agreementId == ledger.projectId
+    && ledger.currency == "EGP"
+    && ledger.status == "earned"
+    && ledger.paidAt == null
+    && order.templateType == "laundry"
+    && order.trackingToken is string
+    && order.trackingToken.size() >= 40
+    && order.projectId == ledger.projectId
+    && order.status == "accepted"
+    && order.laundryStage == "out_for_delivery"
+    && order.commissionLocked == true
+    && order.commissionAmount == ledger.amount
+    && order.commissionAgreementVersion == ledger.agreementVersion
+    && ledger.userId == projectData(ledger.projectId).ownerId
+    && isProjectOperator(ledger.projectId);
+  }
+
+  function validTrackedLaundryDispatchUpdate(orderId){
+   let before = resource.data;
+   let after = request.resource.data;
+   let agreement = commissionAgreementData(before.projectId);
+   let ledger = getAfter(commissionLedgerPath("project_order_" + orderId)).data;
+   let tracking = getAfter(orderTrackingPath(before.trackingToken)).data;
+   return signedIn()
+    && before.templateType == "laundry"
+    && before.trackingToken is string
+    && before.trackingToken.size() >= 40
+    && isProjectOperator(before.projectId)
+    && before.status == "accepted"
+    && before.laundryStage == "ready_delivery"
+    && before.assignedWorkerId is string
+    && before.assignedWorkerId.size() > 0
+    && before.assignedWorkerRole == "delivery_agent"
+    && after.projectId == before.projectId
+    && after.providerId == before.providerId
+    && after.trackingToken == before.trackingToken
+    && after.status == "accepted"
+    && after.laundryStage == "out_for_delivery"
+    && after.statusUpdatedBy == request.auth.uid
+    && agreement.status == "accepted"
+    && agreement.currentAmount is number
+    && agreement.acceptedVersion is number
+    && after.commissionEligible == true
+    && after.commissionLocked == true
+    && after.commissionAmount == agreement.currentAmount
+    && after.commissionAgreementVersion == agreement.acceptedVersion
+    && after.commissionTrigger == "delivery_assignment"
+    && after.commissionEarnedAt == request.time
+    && after.diff(before).affectedKeys().hasOnly([
+      "status",
+      "laundryStage",
+      "statusUpdatedAt",
+      "statusUpdatedBy",
+      "commissionEligible",
+      "commissionLocked",
+      "commissionAmount",
+      "commissionAgreementVersion",
+      "commissionTrigger",
+      "commissionEarnedAt"
+    ])
+    && ledger.orderId == orderId
+    && ledger.projectId == before.projectId
+    && ledger.amount == after.commissionAmount
+    && ledger.agreementVersion == after.commissionAgreementVersion
+    && tracking.trackingToken == before.trackingToken
+    && tracking.orderId == orderId
+    && tracking.projectId == before.projectId
+    && tracking.templateType == "laundry"
+    && tracking.status == "out_for_delivery";
+  }
+
+  function validTrackedLaundryDeliveryUpdate(orderId){
+   let before = resource.data;
+   let after = request.resource.data;
+   let ledger = get(commissionLedgerPath("project_order_" + orderId)).data;
+   let tracking = getAfter(orderTrackingPath(before.trackingToken)).data;
+   return signedIn()
+    && before.templateType == "laundry"
+    && before.trackingToken is string
+    && before.trackingToken.size() >= 40
+    && isProjectOperator(before.projectId)
+    && before.status == "accepted"
+    && before.laundryStage == "out_for_delivery"
+    && before.commissionEligible == true
+    && before.commissionLocked == true
+    && before.commissionAmount is number
+    && before.commissionAgreementVersion is number
+    && after.projectId == before.projectId
+    && after.providerId == before.providerId
+    && after.trackingToken == before.trackingToken
+    && after.status == "done"
+    && after.laundryStage == "delivered"
+    && after.statusUpdatedBy == request.auth.uid
+    && after.commissionEligible == before.commissionEligible
+    && after.commissionLocked == before.commissionLocked
+    && after.commissionAmount == before.commissionAmount
+    && after.commissionAgreementVersion == before.commissionAgreementVersion
+    && after.diff(before).affectedKeys().hasOnly([
+      "status","laundryStage","statusUpdatedAt","statusUpdatedBy","deliveredAt"
+    ])
+    && ledger.orderId == orderId
+    && ledger.projectId == before.projectId
+    && ledger.amount == before.commissionAmount
+    && ledger.agreementVersion == before.commissionAgreementVersion
+    && tracking.trackingToken == before.trackingToken
+    && tracking.orderId == orderId
+    && tracking.projectId == before.projectId
+    && tracking.templateType == "laundry"
+    && tracking.status == "delivered";
+  }
+
   function validDispatchCommissionUpdate(orderId){
    let before = resource.data;
    let after = request.resource.data;
@@ -337,7 +459,21 @@ service cloud.firestore {
     || (
       templateType in ["restaurant","bakery"]
       && restaurantPartnerReady(projectId)
+    )
+    || (
+      templateType == "laundry"
+      && laundryPartnerReady(projectId)
     );
+  }
+
+  function laundryTrackingStatus(order){
+   return order.status == "new"
+    ? "new"
+    : order.status == "canceled"
+      ? "canceled"
+      : order.status == "done"
+        ? "delivered"
+        : order.laundryStage;
   }
 
   function validSupermarketTransition(fromStatus, toStatus){
@@ -625,6 +761,8 @@ service cloud.firestore {
     && request.resource.data.totalPieces is number
     && request.resource.data.totalPieces > 0
     && request.resource.data.price is number
+    && request.resource.data.trackingToken is string
+    && request.resource.data.trackingToken.size() >= 40
 
     && items[0].key == "shirt"
     && (
@@ -1035,10 +1173,115 @@ service cloud.firestore {
       && ownsProject(resource.data.projectId)
     );
 
-   allow update: if validDispatchCommissionUpdate(orderId);
-   allow update: if validLockedCommissionDeliveryUpdate(orderId);
+   function validTrackedLaundryOperationalUpdate(){
+    let before = resource.data;
+    let after = request.resource.data;
+    let tracking = getAfter(orderTrackingPath(before.trackingToken)).data;
+    return before.templateType == "laundry"
+      && before.trackingToken is string
+      && before.trackingToken.size() >= 40
+      && signedIn()
+      && (isAdmin() || isProjectOperator(before.projectId))
+      && after.projectId == before.projectId
+      && after.providerId == before.providerId
+      && after.trackingToken == before.trackingToken
+      && after.statusUpdatedBy == request.auth.uid
+      && (
+        (
+          before.status == "new"
+          && (
+            (after.status == "accepted" && after.laundryStage == "accepted")
+            || after.status == "canceled"
+          )
+        )
+        ||
+        (
+          before.status == "accepted"
+          && before.laundryStage is string
+          && after.laundryStage is string
+          && validLaundryTransition(
+            before.status,
+            before.laundryStage,
+            after.status,
+            after.laundryStage
+          )
+        )
+      )
+      && after.status != "done"
+      && (
+        after.status == "canceled"
+        || after.laundryStage != "out_for_delivery"
+      )
+      && (
+        after.status == "canceled"
+        || after.laundryStage != "pickup_assigned"
+        || (
+          after.assignedWorkerId is string
+          && after.assignedWorkerId.size() > 0
+          && workerExists(after.assignedWorkerId)
+          && workerData(after.assignedWorkerId).projectId == before.projectId
+          && workerData(after.assignedWorkerId).role == "pickup_agent"
+        )
+      )
+      && after.diff(before).affectedKeys().hasOnly([
+        "status",
+        "laundryStage",
+        "statusUpdatedAt",
+        "statusUpdatedBy"
+      ])
+      && tracking.trackingToken == before.trackingToken
+      && tracking.orderId is string
+      && tracking.projectId == before.projectId
+      && tracking.templateType == "laundry"
+      && tracking.status == laundryTrackingStatus(after)
+      && tracking.items == after.items
+      && tracking.subtotal == after.price
+      && tracking.deliveryFee == 0
+      && tracking.total == after.price;
+   }
 
-   allow update: if (
+   allow update: if resource.data.templateType == "laundry"
+    && ("trackingToken" in resource.data)
+    && request.resource.data.status != "done"
+    && (
+      request.resource.data.status == "canceled"
+      || request.resource.data.laundryStage != "out_for_delivery"
+    )
+    && validTrackedLaundryOperationalUpdate();
+
+   allow update: if resource.data.templateType == "laundry"
+    && ("trackingToken" in resource.data)
+    && resource.data.status == "accepted"
+    && resource.data.laundryStage == "ready_delivery"
+    && request.resource.data.status == "accepted"
+    && request.resource.data.laundryStage == "out_for_delivery"
+    && validTrackedLaundryDispatchUpdate(orderId);
+
+   allow update: if resource.data.templateType == "laundry"
+    && ("trackingToken" in resource.data)
+    && resource.data.status == "accepted"
+    && resource.data.laundryStage == "out_for_delivery"
+    && request.resource.data.status == "done"
+    && request.resource.data.laundryStage == "delivered"
+    && validTrackedLaundryDeliveryUpdate(orderId);
+
+   allow update: if !(
+      resource.data.templateType == "laundry"
+      && ("trackingToken" in resource.data)
+    )
+    && validDispatchCommissionUpdate(orderId);
+
+   allow update: if !(
+      resource.data.templateType == "laundry"
+      && ("trackingToken" in resource.data)
+    )
+    && validLockedCommissionDeliveryUpdate(orderId);
+
+   allow update: if !(
+      resource.data.templateType == "laundry"
+      && ("trackingToken" in resource.data)
+    )
+    && (
     (
       !(resource.data.templateType in ["supermarket","laundry","restaurant","bakery"])
       && (isAdmin() || ownsProject(resource.data.projectId))
@@ -2160,14 +2403,14 @@ service cloud.firestore {
 
   match /orderTracking/{trackingToken} {
    allow get: if resource.data.trackingToken == trackingToken
-    && resource.data.templateType in ["supermarket","restaurant","bakery"]
+    && resource.data.templateType in ["supermarket","restaurant","bakery","laundry"]
     && trackingTemplateReady(resource.data.projectId, resource.data.templateType);
 
    allow list: if false;
 
    allow create: if request.resource.data.trackingToken == trackingToken
     && trackingToken.size() >= 40
-    && request.resource.data.templateType in ["supermarket","restaurant","bakery"]
+    && request.resource.data.templateType in ["supermarket","restaurant","bakery","laundry"]
     && request.resource.data.projectId is string
     && request.resource.data.orderId is string
     && request.resource.data.status == "new"
@@ -2202,32 +2445,41 @@ service cloud.firestore {
       == request.resource.data.status
     && getAfter(orderPath(request.resource.data.orderId)).data.items
       == request.resource.data.items
-    && getAfter(orderPath(request.resource.data.orderId)).data.subtotal
-      == request.resource.data.subtotal
-    && getAfter(orderPath(request.resource.data.orderId)).data.deliveryFee
-      == request.resource.data.deliveryFee
-    && getAfter(orderPath(request.resource.data.orderId)).data.total
-      == request.resource.data.total;
+    && (
+      request.resource.data.templateType == "laundry"
+      ? (
+        request.resource.data.subtotal == getAfter(orderPath(request.resource.data.orderId)).data.price
+        && request.resource.data.deliveryFee == 0
+        && request.resource.data.total == getAfter(orderPath(request.resource.data.orderId)).data.price
+      )
+      : (
+        getAfter(orderPath(request.resource.data.orderId)).data.subtotal
+          == request.resource.data.subtotal
+        && getAfter(orderPath(request.resource.data.orderId)).data.deliveryFee
+          == request.resource.data.deliveryFee
+        && getAfter(orderPath(request.resource.data.orderId)).data.total
+          == request.resource.data.total
+      )
+    );
 
-   allow update: if (
+   function validLaundryTrackingUpdate(){
+    let nextOrder = getAfter(orderPath(resource.data.orderId)).data;
+    return (
       isAdmin()
       || isProjectOperator(resource.data.projectId)
     )
     && request.resource.data.trackingToken == resource.data.trackingToken
     && request.resource.data.orderId == resource.data.orderId
     && request.resource.data.projectId == resource.data.projectId
-    && request.resource.data.templateType == resource.data.templateType
+    && request.resource.data.templateType == "laundry"
     && request.resource.data.createdAt == resource.data.createdAt
-    && request.resource.data.status
-      == getAfter(orderPath(resource.data.orderId)).data.status
-    && request.resource.data.items
-      == getAfter(orderPath(resource.data.orderId)).data.items
-    && request.resource.data.subtotal
-      == getAfter(orderPath(resource.data.orderId)).data.subtotal
-    && request.resource.data.deliveryFee
-      == getAfter(orderPath(resource.data.orderId)).data.deliveryFee
-    && request.resource.data.total
-      == getAfter(orderPath(resource.data.orderId)).data.total
+    && nextOrder.projectId == resource.data.projectId
+    && nextOrder.templateType == "laundry"
+    && request.resource.data.status == laundryTrackingStatus(nextOrder)
+    && request.resource.data.items == nextOrder.items
+    && request.resource.data.subtotal == nextOrder.price
+    && request.resource.data.deliveryFee == 0
+    && request.resource.data.total == nextOrder.price
     && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
       "status",
       "items",
@@ -2251,7 +2503,65 @@ service cloud.firestore {
       "updatedAt",
       "deliveredAt"
     ]);
+   }
 
+   allow update: if resource.data.templateType == "laundry"
+    && validLaundryTrackingUpdate();
+
+   allow update: if resource.data.templateType != "laundry"
+    && (
+      isAdmin()
+      || isProjectOperator(resource.data.projectId)
+    )
+    && request.resource.data.trackingToken == resource.data.trackingToken
+    && request.resource.data.orderId == resource.data.orderId
+    && request.resource.data.projectId == resource.data.projectId
+    && request.resource.data.templateType == resource.data.templateType
+    && request.resource.data.createdAt == resource.data.createdAt
+    && request.resource.data.status
+      == (
+        resource.data.templateType == "laundry"
+        ? laundryTrackingStatus(getAfter(orderPath(resource.data.orderId)).data)
+        : getAfter(orderPath(resource.data.orderId)).data.status
+      )
+    && request.resource.data.items
+      == getAfter(orderPath(resource.data.orderId)).data.items
+    && (
+      resource.data.templateType == "laundry"
+      ? (
+        request.resource.data.subtotal == getAfter(orderPath(resource.data.orderId)).data.price
+        && request.resource.data.deliveryFee == 0
+        && request.resource.data.total == getAfter(orderPath(resource.data.orderId)).data.price
+      )
+      : (
+        request.resource.data.subtotal == getAfter(orderPath(resource.data.orderId)).data.subtotal
+        && request.resource.data.deliveryFee == getAfter(orderPath(resource.data.orderId)).data.deliveryFee
+        && request.resource.data.total == getAfter(orderPath(resource.data.orderId)).data.total
+      )
+    )
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+      "status",
+      "items",
+      "subtotal",
+      "deliveryFee",
+      "total",
+      "updatedAt",
+      "deliveredAt"
+    ])
+    && request.resource.data.keys().hasOnly([
+      "trackingToken",
+      "orderId",
+      "projectId",
+      "templateType",
+      "status",
+      "items",
+      "subtotal",
+      "deliveryFee",
+      "total",
+      "createdAt",
+      "updatedAt",
+      "deliveredAt"
+    ]);
    allow delete: if false;
   }
 
@@ -2275,6 +2585,7 @@ service cloud.firestore {
     );
 
    allow create: if isAdmin()
+    || validTrackedLaundryProjectOrderLedgerCreate(entryId)
     || validProjectOrderLedgerCreate(entryId);
 
    allow update: if (

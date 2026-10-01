@@ -1,17 +1,13 @@
-import db from "../../core/firebase/firebase-db.js";
 import {
-  collection,
-  addDoc,
-  serverTimestamp
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  createLaundryOrder,
+  getLaundryOrderTracking,
+  subscribeLaundryOrderTracking
+} from "../../core/laundry/order-service.js";
 
 export async function createOrder(orderData) {
   try {
-    const ref = await addDoc(collection(db, "orders"), {
-      ...orderData,
-      createdAt: serverTimestamp()
-    });
-    return { success: true, orderId: ref.id };
+    const result = await createLaundryOrder(orderData);
+    return { success: true, ...result };
   } catch (error) {
     return {
       success: false,
@@ -20,3 +16,5 @@ export async function createOrder(orderData) {
     };
   }
 }
+
+export { getLaundryOrderTracking, subscribeLaundryOrderTracking };

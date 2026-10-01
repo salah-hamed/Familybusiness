@@ -191,7 +191,8 @@ function laundryOrder(projectId) {
       item("shoes", 0, 25)
     ],
     totalPieces: 1,
-    price: 10
+    price: 10,
+    trackingToken: "l".repeat(48)
   };
 }
 
@@ -1001,11 +1002,14 @@ test("operator cannot move a ready supermarket order to assigned without recordi
   );
 });
 
-test("laundry commission is earned only when the delivery agent moves a ready order out for delivery", async () => {
+test("laundry commission and customer tracking stay atomic through dispatch and delivery", async () => {
   const { ownerId, projectId } = await seedPartnerRuntime("laundry", "dispatch_trigger");
   const operatorUid = "operator_laundry";
   const orderId = "laundry_dispatch_order";
   const workerId = "laundry_delivery_agent";
+  const token = "f".repeat(48);
+  const baseOrder = laundryOrder(projectId);
+  baseOrder.trackingToken = token;
 
   await testEnv.withSecurityRulesDisabled(async context => {
     const db = context.firestore();
@@ -1022,9 +1026,7 @@ test("laundry commission is earned only when the delivery agent moves a ready or
       createdBy: operatorUid
     });
     await setDoc(doc(db, "orders", orderId), {
-      projectId,
-      providerId: projectId,
-      templateType: "laundry",
+      ...baseOrder,
       status: "accepted",
       laundryStage: "ready_delivery",
       assignedWorkerId: workerId,
@@ -1032,12 +1034,25 @@ test("laundry commission is earned only when the delivery agent moves a ready or
       assignedWorkerRole: "delivery_agent",
       assignedWorkerWhatsapp: "201000000003"
     });
+    await setDoc(doc(db, "orderTracking", token), {
+      trackingToken: token,
+      orderId,
+      projectId,
+      templateType: "laundry",
+      status: "ready_delivery",
+      items: baseOrder.items,
+      subtotal: baseOrder.price,
+      deliveryFee: 0,
+      total: baseOrder.price,
+      createdAt: new Date("2026-10-01T10:00:00Z"),
+      updatedAt: new Date("2026-10-01T10:00:00Z")
+    });
   });
 
   const db = testEnv.authenticatedContext(operatorUid).firestore();
-  const batch = writeBatch(db);
+  const dispatch = writeBatch(db);
 
-  batch.update(doc(db, "orders", orderId), {
+  dispatch.update(doc(db, "orders", orderId), {
     status: "accepted",
     laundryStage: "out_for_delivery",
     statusUpdatedAt: serverTimestamp(),
@@ -1050,7 +1065,16 @@ test("laundry commission is earned only when the delivery agent moves a ready or
     commissionEarnedAt: serverTimestamp()
   });
 
-  batch.set(doc(db, "commissionLedger", "project_order_" + orderId), {
+  dispatch.update(doc(db, "orderTracking", token), {
+    status: "out_for_delivery",
+    items: baseOrder.items,
+    subtotal: baseOrder.price,
+    deliveryFee: 0,
+    total: baseOrder.price,
+    updatedAt: serverTimestamp()
+  });
+
+  dispatch.set(doc(db, "commissionLedger", "project_order_" + orderId), {
     userId: ownerId,
     projectId,
     orderId,
@@ -1067,9 +1091,32 @@ test("laundry commission is earned only when the delivery agent moves a ready or
     paidAt: null
   });
 
-  await assertSucceeds(batch.commit());
-});
+  await assertSucceeds(dispatch.commit());
 
+  const delivery = writeBatch(db);
+  delivery.update(doc(db, "orders", orderId), {
+    status: "done",
+    laundryStage: "delivered",
+    deliveredAt: serverTimestamp(),
+    statusUpdatedAt: serverTimestamp(),
+    statusUpdatedBy: operatorUid
+  });
+  delivery.update(doc(db, "orderTracking", token), {
+    status: "delivered",
+    items: baseOrder.items,
+    subtotal: baseOrder.price,
+    deliveryFee: 0,
+    total: baseOrder.price,
+    updatedAt: serverTimestamp(),
+    deliveredAt: serverTimestamp()
+  });
+
+  await assertSucceeds(delivery.commit());
+
+  const publicDb = testEnv.unauthenticatedContext().firestore();
+  const trackingSnap = await getDoc(doc(publicDb, "orderTracking", token));
+  assert.equal(trackingSnap.data().status, "delivered");
+});
 
 test("operator declares payment, owner confirms it, and admin stays read-only", async () => {
   const { ownerId, operatorUid, projectId } = await seedCommissionIntegrityFixture("peer_settlement");
@@ -1615,4 +1662,130 @@ test("admin can reject pending proof without activating subscriber and subscribe
   const userSnap = await getDoc(doc(adminDb, "users", uid));
   assert.equal(userSnap.data().subscriptionStatus, "pending");
   assert.equal(userSnap.data().isActive, false);
+});
+
+
+test("public laundry order and tracking record can be created atomically", async () => {
+  const { projectId } = await seedPartnerRuntime("laundry", "customer_tracking_create");
+  const db = testEnv.unauthenticatedContext().firestore();
+  const orderId = "laundry_tracking_create_order";
+  const token = "c".repeat(48);
+  const order = laundryOrder(projectId);
+  order.trackingToken = token;
+
+  const batch = writeBatch(db);
+  batch.set(doc(db, "orders", orderId), order);
+  batch.set(doc(db, "orderTracking", token), {
+    trackingToken: token,
+    orderId,
+    projectId,
+    templateType: "laundry",
+    status: "new",
+    items: order.items,
+    subtotal: order.price,
+    deliveryFee: 0,
+    total: order.price,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  });
+
+  await assertSucceeds(batch.commit());
+
+  await assertSucceeds(getDoc(doc(db, "orderTracking", token)));
+  await assertFails(getDocs(collection(db, "orderTracking")));
+});
+
+test("laundry operator can update order stage and public tracking atomically", async () => {
+  const { projectId } = await seedPartnerRuntime("laundry", "customer_tracking_stage");
+  const operatorUid = "operator_laundry";
+  const orderId = "laundry_tracking_stage_order";
+  const token = "d".repeat(48);
+  const order = laundryOrder(projectId);
+  order.trackingToken = token;
+
+  await testEnv.withSecurityRulesDisabled(async context => {
+    const adminDb = context.firestore();
+    await setDoc(doc(adminDb, "orders", orderId), order);
+    await setDoc(doc(adminDb, "orderTracking", token), {
+      trackingToken: token,
+      orderId,
+      projectId,
+      templateType: "laundry",
+      status: "new",
+      items: order.items,
+      subtotal: order.price,
+      deliveryFee: 0,
+      total: order.price,
+      createdAt: new Date("2026-10-01T10:00:00Z"),
+      updatedAt: new Date("2026-10-01T10:00:00Z")
+    });
+  });
+
+  const db = testEnv.authenticatedContext(operatorUid).firestore();
+  const batch = writeBatch(db);
+
+  batch.update(doc(db, "orders", orderId), {
+    status: "accepted",
+    laundryStage: "accepted",
+    statusUpdatedAt: serverTimestamp(),
+    statusUpdatedBy: operatorUid
+  });
+  batch.update(doc(db, "orderTracking", token), {
+    status: "accepted",
+    items: order.items,
+    subtotal: order.price,
+    deliveryFee: 0,
+    total: order.price,
+    updatedAt: serverTimestamp()
+  });
+
+  await assertSucceeds(batch.commit());
+
+  const publicDb = testEnv.unauthenticatedContext().firestore();
+  const trackingSnap = await getDoc(doc(publicDb, "orderTracking", token));
+  assert.equal(trackingSnap.data().status, "accepted");
+});
+
+test("laundry tracking update cannot claim a stage different from the order", async () => {
+  const { projectId } = await seedPartnerRuntime("laundry", "customer_tracking_mismatch");
+  const operatorUid = "operator_laundry";
+  const orderId = "laundry_tracking_mismatch_order";
+  const token = "e".repeat(48);
+  const order = laundryOrder(projectId);
+  order.trackingToken = token;
+
+  await testEnv.withSecurityRulesDisabled(async context => {
+    const adminDb = context.firestore();
+    await setDoc(doc(adminDb, "orders", orderId), {
+      ...order,
+      status: "accepted",
+      laundryStage: "accepted"
+    });
+    await setDoc(doc(adminDb, "orderTracking", token), {
+      trackingToken: token,
+      orderId,
+      projectId,
+      templateType: "laundry",
+      status: "accepted",
+      items: order.items,
+      subtotal: order.price,
+      deliveryFee: 0,
+      total: order.price,
+      createdAt: new Date("2026-10-01T10:00:00Z"),
+      updatedAt: new Date("2026-10-01T10:00:00Z")
+    });
+  });
+
+  const db = testEnv.authenticatedContext(operatorUid).firestore();
+
+  await assertFails(
+    updateDoc(doc(db, "orderTracking", token), {
+      status: "delivered",
+      items: order.items,
+      subtotal: order.price,
+      deliveryFee: 0,
+      total: order.price,
+      updatedAt: serverTimestamp()
+    })
+  );
 });
