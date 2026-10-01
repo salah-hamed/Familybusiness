@@ -159,7 +159,10 @@ async function loadOverview() {
       countDocs("orders"),
       aggregateLedger([where("status", "==", "earned")]),
       aggregateLedger([where("status", "==", "paid")]),
-      countDocs("commissionSettlements", [where("status", "==", "pending")])
+      countDocs("commissionSettlements", [where("status", "==", "pending")]).catch(error => {
+        console.warn("Settlement metrics unavailable until production Rules are deployed.", error);
+        return null;
+      })
     ]);
 
     const allCommission = earnedLedger.totalAmount + paidLedger.totalAmount;
@@ -174,8 +177,13 @@ async function loadOverview() {
     $("metricEarned").innerText = money(allCommission);
     $("metricPaid").innerText = money(paidLedger.totalAmount);
     $("metricOutstanding").innerText = money(earnedLedger.totalAmount);
-    $("metricPendingSettlements").innerText = pendingSettlements.toLocaleString("ar-EG");
-    $("metricPendingSettlementsMeta").innerText = pendingSettlements ? "تحتاج مراجعة أو سداد" : "لا توجد تسويات معلقة";
+    if (pendingSettlements == null) {
+      $("metricPendingSettlements").innerText = "—";
+      $("metricPendingSettlementsMeta").innerText = "تحتاج نشر Firestore Rules الجديدة";
+    } else {
+      $("metricPendingSettlements").innerText = pendingSettlements.toLocaleString("ar-EG");
+      $("metricPendingSettlementsMeta").innerText = pendingSettlements ? "تحتاج مراجعة أو سداد" : "لا توجد تسويات معلقة";
+    }
 
     $("billingSummary").innerText =
       `${formatEgp(PLATFORM_BILLING.initialActivationFee)} أول مرة · ${formatEgp(PLATFORM_BILLING.monthlyRenewalFee)} شهري · إحالة ${formatEgp(REFERRAL_CONFIG.qualifiedReferralReward)}`;
@@ -588,7 +596,10 @@ async function loadSettlements() {
     sectionLoaded.settlementsSection = true;
   } catch (error) {
     console.error(error);
-    $("settlementsMessage").innerText = `تعذر تحميل التسويات: ${error.message}`;
+    const code = String(error?.code || "").toLowerCase();
+    $("settlementsMessage").innerText = code.includes("permission-denied")
+      ? "قسم التسويات جاهز في الكود ويحتاج نشر Firestore Rules الجديدة على Firebase قبل استخدامه على الموقع الحي."
+      : `تعذر تحميل التسويات: ${error.message}`;
   }
 }
 
@@ -800,7 +811,10 @@ $("createSettlementBtn").addEventListener("click", async () => {
     switchSection("settlementsSection");
   } catch (error) {
     console.error(error);
-    $("commissionsMessage").innerText = `تعذر إنشاء التسوية: ${error.message}`;
+    const code = String(error?.code || "").toLowerCase();
+    $("commissionsMessage").innerText = code.includes("permission-denied")
+      ? "إنشاء التسويات يحتاج نشر Firestore Rules الجديدة أولًا. باقي لوحة الإدارة تعمل بشكل طبيعي."
+      : `تعذر إنشاء التسوية: ${error.message}`;
   } finally {
     button.disabled = false;
   }

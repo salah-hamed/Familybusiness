@@ -529,3 +529,11 @@ test("FB-LAUNCH02 rules protect settlement ownership and immutable commission va
   assert.equal(rules.includes('"settlementStatus"'), true);
   assert.equal(rules.includes('"settlementCreatedAt"'), true);
 });
+
+
+test("FB-LAUNCH02 admin stays usable before production settlement Rules are deployed", () => {
+  const source = readFileSync("admin/admin.js", "utf8");
+  assert.equal(source.includes("Settlement metrics unavailable until production Rules are deployed."), true);
+  assert.equal(source.includes('return null;'), true);
+  assert.equal(source.includes("قسم التسويات جاهز في الكود ويحتاج نشر Firestore Rules الجديدة"), true);
+});
