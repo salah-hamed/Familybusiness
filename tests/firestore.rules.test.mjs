@@ -16,7 +16,8 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
-  where
+  where,
+  writeBatch
 } from "firebase/firestore";
 
 const PROJECT_ID = "family-business-rules-test";
@@ -868,4 +869,201 @@ test("operator fallback query must constrain both projectId and templateType", a
       where("templateType", "==", "restaurant")
     ))
   );
+});
+
+
+test("operator earns supermarket commission atomically when a ready order is assigned for delivery", async () => {
+  const { ownerId, operatorUid, projectId } = await seedCommissionIntegrityFixture("dispatch_trigger");
+  const orderId = "dispatch_trigger_order";
+  const workerId = "dispatch_trigger_rider";
+
+  await testEnv.withSecurityRulesDisabled(async context => {
+    const db = context.firestore();
+    await setDoc(doc(db, "workers", workerId), {
+      workerId,
+      ownerId,
+      projectId,
+      templateId: "supermarket",
+      name: "Rider One",
+      role: "rider",
+      phone: "201000000001",
+      whatsapp: "201000000001",
+      isActive: true,
+      createdBy: operatorUid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    await setDoc(doc(db, "orders", orderId), {
+      projectId,
+      providerId: projectId,
+      templateType: "supermarket",
+      status: "ready",
+      items: [{ name: "Milk", quantity: 1 }],
+      subtotal: 20,
+      deliveryFee: 10,
+      total: 30,
+      price: 30,
+      pricingLocked: true,
+      assignedWorkerId: workerId,
+      assignedWorkerName: "Rider One",
+      assignedWorkerRole: "rider",
+      assignedWorkerWhatsapp: "201000000001"
+    });
+  });
+
+  const db = testEnv.authenticatedContext(operatorUid).firestore();
+  const batch = writeBatch(db);
+  const orderRef = doc(db, "orders", orderId);
+  const ledgerRef = doc(db, "commissionLedger", "project_order_" + orderId);
+
+  batch.update(orderRef, {
+    status: "assigned",
+    statusUpdatedAt: serverTimestamp(),
+    statusUpdatedBy: operatorUid,
+    commissionEligible: true,
+    commissionLocked: true,
+    commissionAmount: 5,
+    commissionAgreementVersion: 1,
+    commissionTrigger: "delivery_assignment",
+    commissionEarnedAt: serverTimestamp()
+  });
+
+  batch.set(ledgerRef, {
+    userId: ownerId,
+    projectId,
+    orderId,
+    sourceType: "project_order",
+    sourceId: orderId,
+    agreementId: projectId,
+    agreementVersion: 1,
+    amount: 5,
+    currency: "EGP",
+    status: "earned",
+    trigger: "delivery_assignment",
+    createdAt: serverTimestamp(),
+    earnedAt: serverTimestamp(),
+    paidAt: null
+  });
+
+  await assertSucceeds(batch.commit());
+
+  const orderSnap = await getDoc(orderRef);
+  const ledgerSnap = await getDoc(ledgerRef);
+  assert.equal(orderSnap.data().status, "assigned");
+  assert.equal(orderSnap.data().commissionLocked, true);
+  assert.equal(orderSnap.data().commissionAmount, 5);
+  assert.equal(ledgerSnap.data().status, "earned");
+  assert.equal(ledgerSnap.data().amount, 5);
+});
+
+test("operator cannot move a ready supermarket order to assigned without recording commission", async () => {
+  const { operatorUid, projectId } = await seedCommissionIntegrityFixture("dispatch_requires_ledger");
+  const orderId = "dispatch_without_ledger";
+  const workerId = "dispatch_without_ledger_rider";
+
+  await testEnv.withSecurityRulesDisabled(async context => {
+    const db = context.firestore();
+    await setDoc(doc(db, "workers", workerId), {
+      workerId,
+      ownerId: "owner_commission_dispatch_requires_ledger",
+      projectId,
+      templateId: "supermarket",
+      name: "Rider Two",
+      role: "rider",
+      phone: "201000000002",
+      whatsapp: "201000000002",
+      isActive: true,
+      createdBy: operatorUid
+    });
+    await setDoc(doc(db, "orders", orderId), {
+      projectId,
+      providerId: projectId,
+      templateType: "supermarket",
+      status: "ready",
+      pricingLocked: true,
+      assignedWorkerId: workerId,
+      assignedWorkerName: "Rider Two",
+      assignedWorkerRole: "rider",
+      assignedWorkerWhatsapp: "201000000002"
+    });
+  });
+
+  const db = testEnv.authenticatedContext(operatorUid).firestore();
+
+  await assertFails(
+    updateDoc(doc(db, "orders", orderId), {
+      status: "assigned",
+      statusUpdatedAt: serverTimestamp(),
+      statusUpdatedBy: operatorUid
+    })
+  );
+});
+
+test("laundry commission is earned only when the delivery agent moves a ready order out for delivery", async () => {
+  const { ownerId, projectId } = await seedPartnerRuntime("laundry", "dispatch_trigger");
+  const operatorUid = "operator_laundry";
+  const orderId = "laundry_dispatch_order";
+  const workerId = "laundry_delivery_agent";
+
+  await testEnv.withSecurityRulesDisabled(async context => {
+    const db = context.firestore();
+    await setDoc(doc(db, "workers", workerId), {
+      workerId,
+      ownerId,
+      projectId,
+      templateId: "laundry",
+      name: "Delivery Agent",
+      role: "delivery_agent",
+      phone: "201000000003",
+      whatsapp: "201000000003",
+      isActive: true,
+      createdBy: operatorUid
+    });
+    await setDoc(doc(db, "orders", orderId), {
+      projectId,
+      providerId: projectId,
+      templateType: "laundry",
+      status: "accepted",
+      laundryStage: "ready_delivery",
+      assignedWorkerId: workerId,
+      assignedWorkerName: "Delivery Agent",
+      assignedWorkerRole: "delivery_agent",
+      assignedWorkerWhatsapp: "201000000003"
+    });
+  });
+
+  const db = testEnv.authenticatedContext(operatorUid).firestore();
+  const batch = writeBatch(db);
+
+  batch.update(doc(db, "orders", orderId), {
+    status: "accepted",
+    laundryStage: "out_for_delivery",
+    statusUpdatedAt: serverTimestamp(),
+    statusUpdatedBy: operatorUid,
+    commissionEligible: true,
+    commissionLocked: true,
+    commissionAmount: 5,
+    commissionAgreementVersion: 1,
+    commissionTrigger: "delivery_assignment",
+    commissionEarnedAt: serverTimestamp()
+  });
+
+  batch.set(doc(db, "commissionLedger", "project_order_" + orderId), {
+    userId: ownerId,
+    projectId,
+    orderId,
+    sourceType: "project_order",
+    sourceId: orderId,
+    agreementId: projectId,
+    agreementVersion: 1,
+    amount: 5,
+    currency: "EGP",
+    status: "earned",
+    trigger: "delivery_assignment",
+    createdAt: serverTimestamp(),
+    earnedAt: serverTimestamp(),
+    paidAt: null
+  });
+
+  await assertSucceeds(batch.commit());
 });
