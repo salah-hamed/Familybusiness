@@ -1,0 +1,28 @@
+name: FB-LAUNCH09B validation
+on:
+  push:
+    branches:
+      - fb-launch09b-operator-account-recovery
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - run: npm install
+      - name: Syntax checks
+        run: |
+          node --check supermarket/app.js
+          node --check restaurant/app.js
+          node --check bakery/app.js
+          node --check laundry/app.js
+      - name: Full test suite
+        run: npm test
