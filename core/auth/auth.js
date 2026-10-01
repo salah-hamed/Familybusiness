@@ -1,9 +1,11 @@
 import auth from "../firebase/firebase-auth.js";
 import db from "../firebase/firebase-db.js";
+import { friendlyAuthError } from "./auth-errors.js";
 
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  sendPasswordResetEmail,
   signOut,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
@@ -69,7 +71,7 @@ export async function registerUser(name, email, password, referredByUserId = "")
 
     return {
       success: false,
-      error: error.message
+      error: friendlyAuthError(error, "تعذر إنشاء الحساب. راجع البيانات وحاول مرة أخرى.")
     };
 
   }
@@ -98,11 +100,45 @@ export async function loginUser(email, password) {
 
     return {
       success: false,
-      error: error.message
+      error: friendlyAuthError(error, "تعذر تسجيل الدخول. حاول مرة أخرى.")
     };
 
   }
 
+}
+
+export async function requestPasswordReset(email) {
+  const normalizedEmail = String(email || "").trim();
+
+  if (!normalizedEmail || normalizedEmail.length > 254 || !normalizedEmail.includes("@")) {
+    return {
+      success: false,
+      error: "راجع البريد الإلكتروني وتأكد أنه مكتوب بشكل صحيح."
+    };
+  }
+
+  try {
+    await sendPasswordResetEmail(auth, normalizedEmail);
+
+    return {
+      success: true,
+      message: "لو البريد مسجل عندنا، هيوصلك رابط لتغيير كلمة المرور. راجع صندوق الوارد والرسائل غير المرغوب فيها."
+    };
+  } catch (error) {
+    const code = String(error?.code || "").toLowerCase();
+
+    if (code.includes("auth/user-not-found")) {
+      return {
+        success: true,
+        message: "لو البريد مسجل عندنا، هيوصلك رابط لتغيير كلمة المرور. راجع صندوق الوارد والرسائل غير المرغوب فيها."
+      };
+    }
+
+    return {
+      success: false,
+      error: friendlyAuthError(error, "تعذر إرسال رابط استعادة كلمة المرور. حاول مرة أخرى بعد قليل.")
+    };
+  }
 }
 
 
