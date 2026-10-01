@@ -2235,7 +2235,54 @@ service cloud.firestore {
       )
     );
 
-   allow update: if (
+   function validLaundryTrackingUpdate(){
+    let nextOrder = getAfter(orderPath(resource.data.orderId)).data;
+    return (
+      isAdmin()
+      || isProjectOperator(resource.data.projectId)
+    )
+    && request.resource.data.trackingToken == resource.data.trackingToken
+    && request.resource.data.orderId == resource.data.orderId
+    && request.resource.data.projectId == resource.data.projectId
+    && request.resource.data.templateType == "laundry"
+    && request.resource.data.createdAt == resource.data.createdAt
+    && nextOrder.projectId == resource.data.projectId
+    && nextOrder.templateType == "laundry"
+    && request.resource.data.status == laundryTrackingStatus(nextOrder)
+    && request.resource.data.items == nextOrder.items
+    && request.resource.data.subtotal == nextOrder.price
+    && request.resource.data.deliveryFee == 0
+    && request.resource.data.total == nextOrder.price
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+      "status",
+      "items",
+      "subtotal",
+      "deliveryFee",
+      "total",
+      "updatedAt",
+      "deliveredAt"
+    ])
+    && request.resource.data.keys().hasOnly([
+      "trackingToken",
+      "orderId",
+      "projectId",
+      "templateType",
+      "status",
+      "items",
+      "subtotal",
+      "deliveryFee",
+      "total",
+      "createdAt",
+      "updatedAt",
+      "deliveredAt"
+    ]);
+   }
+
+   allow update: if resource.data.templateType == "laundry"
+    && validLaundryTrackingUpdate();
+
+   allow update: if resource.data.templateType != "laundry"
+    && (
       isAdmin()
       || isProjectOperator(resource.data.projectId)
     )
@@ -2287,8 +2334,7 @@ service cloud.firestore {
       "createdAt",
       "updatedAt",
       "deliveredAt"
-    ]);
-
+    ];
    allow delete: if false;
   }
 
