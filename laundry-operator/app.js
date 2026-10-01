@@ -10,6 +10,8 @@ import { assignWorkerAndPrepareWhatsApp, rollbackPreparedAssignment } from "../c
 import { buildWorkerWhatsAppUrl, openWhatsAppPlaceholder, navigatePreparedWhatsAppWindow } from "../core/whatsapp/dispatch-service.js";
 import { listLaundryOperationalOrders,listLaundryHistoryPage,countLaundryDeliveredOrders,currentLaundryStage,allowedLaundryNextStages,changeLaundryStage } from "../core/laundry/order-service.js";
 import { getOrderOperationalAlert, summarizeOperationalAlerts } from "../core/orders/operational-alerts.js";
+import { createGuide } from "../core/onboarding/guide.js";
+import { buildOperatorGuide } from "../core/onboarding/guide-state.js";
 
 import {createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut,onAuthStateChanged} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {doc,getDoc,updateDoc} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -21,6 +23,21 @@ const inviteToken=params.get("invite")||"";
 const inviteAuthEmail=buildOperatorAuthEmail(inviteToken);
 let user=null,operator=null,agreement=null,laundry=null,workers=[],orders=[];
 let operationalOrders=[],historyOrders=[],historyCursor=null,historyHasMore=false;
+let operatorGuide=null,currentPriceConfig={};
+function refreshOperatorFirstRunGuide({autoOpen=false}={}){
+  const activePickup=workers.some(w=>w.isActive===true&&w.role==="pickup_agent");
+  const activeDelivery=workers.some(w=>w.isActive===true&&w.role==="delivery_agent");
+  const contentReady=Object.values(currentPriceConfig||{}).some(value=>Number(value)>0);
+  const journey=buildOperatorGuide({
+    templateId:"laundry",
+    partner:laundry||{},
+    contentReady,
+    teamReady:activePickup&&activeDelivery
+  });
+  if(operatorGuide)operatorGuide.update(journey,{autoOpen});
+  else operatorGuide=createGuide(journey,{autoOpen:true});
+}
+
 const money=v=>`${Number(v||0).toLocaleString("ar-EG")} جنيه`;
 const esc=v=>String(v??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;");
 const setVisible=(id,on)=>$(id).classList.toggle("hidden",!on);
@@ -72,22 +89,24 @@ async function loadOperations(){
   $("laundryTitle").innerText=laundry?.name||operator?.name||"المغسلة";$("statCommission").innerText=money(agreement?.currentAmount||0);
   $("settingsName").value=laundry?.name||"";$("settingsPhone").value=laundry?.phone||"";$("settingsWhatsapp").value=laundry?.whatsapp||"";$("settingsAddress").value=laundry?.address||"";$("settingsLocation").value=laundry?.location||"";$("settingsInstapay").value=laundry?.instapayLink||"";$("acceptingOrders").checked=laundry?.isAcceptingOrders===true;
   const url=new URL("../templates/laundry/",location.href);url.searchParams.set("project",projectId);$("customerOrderLink").value=url;
-  const projectSnap=await getDoc(doc(db,"projects",projectId));renderPricing(projectSnap.data()?.priceConfig||{});
+  const projectSnap=await getDoc(doc(db,"projects",projectId));currentPriceConfig=projectSnap.data()?.priceConfig||{};renderPricing(currentPriceConfig);
   await Promise.all([loadWorkers(),loadOrders()]);
   await renderOperatorFinancePanel({
     container:$("operationsPanel"),
     projectId,
     operatorUid:user.uid
   });
+  refreshOperatorFirstRunGuide({autoOpen:true});
 }
-$("saveSettingsBtn").onclick=async()=>{try{await updateLaundrySettings(projectId,{name:$("settingsName").value,phone:$("settingsPhone").value,whatsapp:$("settingsWhatsapp").value,address:$("settingsAddress").value,location:$("settingsLocation").value,instapayLink:$("settingsInstapay").value,isAcceptingOrders:$("acceptingOrders").checked});$("settingsMessage").innerText="تم الحفظ ✅";}catch(e){$("settingsMessage").innerText=e.message;}};
+$("saveSettingsBtn").onclick=async()=>{try{await updateLaundrySettings(projectId,{name:$("settingsName").value,phone:$("settingsPhone").value,whatsapp:$("settingsWhatsapp").value,address:$("settingsAddress").value,location:$("settingsLocation").value,instapayLink:$("settingsInstapay").value,isAcceptingOrders:$("acceptingOrders").checked});$("settingsMessage").innerText="تم الحفظ ✅";laundry=await getLaundry(projectId);refreshOperatorFirstRunGuide();}catch(e){$("settingsMessage").innerText=e.message;}};
 $("copyCustomerLinkBtn").onclick=async()=>{try{await navigator.clipboard.writeText($("customerOrderLink").value);}catch{$("customerOrderLink").select();document.execCommand("copy");}$("settingsMessage").innerText="تم نسخ رابط العملاء ✅";};
-$("savePricingBtn").onclick=async()=>{const config={};document.querySelectorAll("[data-price]").forEach(i=>config[i.dataset.price]=Number(i.value));if(Object.values(config).some(v=>!Number.isFinite(v)||v<0)){$("pricingMessage").innerText="راجع الأسعار.";return;}try{await updateDoc(doc(db,"projects",projectId),{priceConfig:config});$("pricingMessage").innerText="تم حفظ الأسعار ✅";}catch(e){$("pricingMessage").innerText=e.message;}};
+$("savePricingBtn").onclick=async()=>{const config={};document.querySelectorAll("[data-price]").forEach(i=>config[i.dataset.price]=Number(i.value));if(Object.values(config).some(v=>!Number.isFinite(v)||v<0)){$("pricingMessage").innerText="راجع الأسعار.";return;}try{await updateDoc(doc(db,"projects",projectId),{priceConfig:config});currentPriceConfig=config;$("pricingMessage").innerText="تم حفظ الأسعار ✅";refreshOperatorFirstRunGuide();}catch(e){$("pricingMessage").innerText=e.message;}};
 
 async function loadWorkers(){
   workers=await listProjectWorkers(projectId,{activeOnly:false});
   $("workersList").innerHTML=workers.length?workers.map(w=>`<article class="rowCard"><div class="rowTop"><div><b>${esc(w.name)}</b><div class="muted">${w.role==="pickup_agent"?"استلام":"توصيل"} · ${esc(w.whatsapp)}</div></div><span class="pill">${w.isActive?"نشط":"متوقف"}</span></div><button class="secondary toggleWorker" data-worker="${w.workerId}">${w.isActive?"إيقاف":"تفعيل"}</button></article>`).join(""):'<p class="muted">أضف أول مندوب استلام أو توصيل.</p>';
   document.querySelectorAll(".toggleWorker").forEach(btn=>btn.onclick=async()=>{const w=workers.find(x=>x.workerId===btn.dataset.worker);await setWorkerActive({workerId:w.workerId,projectId,actorUid:user.uid,isActive:!w.isActive});await loadWorkers();});
+  if(operatorGuide)refreshOperatorFirstRunGuide();
 }
 $("addWorkerBtn").onclick=async()=>{try{await createWorker({projectId,actorUid:user.uid,name:$("workerName").value,whatsapp:$("workerWhatsapp").value,role:$("workerRole").value});$("workerName").value="";$("workerWhatsapp").value="";$("workerMessage").innerText="تمت الإضافة ✅";await loadWorkers();}catch(e){$("workerMessage").innerText=e.message;}};
 
