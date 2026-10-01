@@ -948,7 +948,8 @@ test("operator earns supermarket commission atomically when a ready order is ass
   await assertSucceeds(batch.commit());
 
   const orderSnap = await getDoc(orderRef);
-  const ledgerSnap = await getDoc(ledgerRef);
+  const ownerDb = testEnv.authenticatedContext(ownerId).firestore();
+  const ledgerSnap = await getDoc(doc(ownerDb, "commissionLedger", "project_order_" + orderId));
   assert.equal(orderSnap.data().status, "assigned");
   assert.equal(orderSnap.data().commissionLocked, true);
   assert.equal(orderSnap.data().commissionAmount, 5);
