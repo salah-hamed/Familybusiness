@@ -267,3 +267,121 @@ export function buildPartnerProjectGuide({ templateId, bundle } = {}) {
     ]
   };
 }
+
+
+const operatorGuideLabels = {
+  supermarket: {
+    partner: "السوبرماركت",
+    contentTitle: "راجع المنتجات والأسعار",
+    contentDescription: "أضف منتجًا واحدًا على الأقل واضبط السعر والتوفر قبل استقبال الطلبات.",
+    contentSelector: "#openProductLibraryBtn"
+  },
+  restaurant: {
+    partner: "المطعم",
+    contentTitle: "جهّز المنيو والأسعار",
+    contentDescription: "أضف طبقًا واحدًا على الأقل واجعله متاحًا للعملاء قبل بدء التشغيل.",
+    contentSelector: "#openMenuBtn"
+  },
+  bakery: {
+    partner: "المخبز",
+    contentTitle: "جهّز المخبوزات والأسعار",
+    contentDescription: "أضف صنفًا واحدًا على الأقل واجعله متاحًا للعملاء قبل بدء التشغيل.",
+    contentSelector: "#openMenuBtn"
+  },
+  laundry: {
+    partner: "المغسلة",
+    contentTitle: "راجع أسعار الخدمات",
+    contentDescription: "أدخل أسعار خدمة واحدة على الأقل قبل استقبال أول طلب.",
+    contentSelector: "#pricingSection"
+  }
+};
+
+function operatorStepStatus(ready, blockedByPrevious) {
+  if (ready) return "done";
+  return blockedByPrevious ? "pending" : "current";
+}
+
+export function buildOperatorGuide({
+  templateId,
+  partner = {},
+  contentReady = false,
+  teamReady = false
+} = {}) {
+  const labels = operatorGuideLabels[templateId] || {
+    partner: "جهة التشغيل",
+    contentTitle: "راجع المنتجات أو الخدمات",
+    contentDescription: "تأكد أن المنتجات أو الخدمات والأسعار جاهزة للعملاء.",
+    contentSelector: ""
+  };
+
+  const settingsReady = Boolean(
+    String(partner?.name || "").trim()
+    && String(partner?.whatsapp || partner?.phone || "").trim()
+    && String(partner?.address || "").trim()
+  );
+  const acceptingOrders = partner?.isAcceptingOrders === true;
+
+  const settingsStatus = operatorStepStatus(settingsReady, false);
+  const contentStatus = operatorStepStatus(contentReady, !settingsReady);
+  const teamStatus = operatorStepStatus(teamReady, !settingsReady || !contentReady);
+  const acceptingStatus = operatorStepStatus(
+    acceptingOrders,
+    !settingsReady || !contentReady || !teamReady
+  );
+  const launchReady = settingsReady && contentReady && teamReady && acceptingOrders;
+
+  return {
+    id: `operator-first-run-${templateId || "partner"}`,
+    title: launchReady ? "التشغيل جاهز" : "جهّز التشغيل خطوة بخطوة",
+    intro: launchReady
+      ? `${labels.partner} جاهز لاستقبال الطلبات. شارك رابط العملاء وابدأ المتابعة من لوحة الطلبات.`
+      : "الدعوة والعمولة تم تفعيلهما. أكمل خطوات التشغيل الأساسية قبل مشاركة الرابط على نطاق واسع.",
+    steps: [
+      step(
+        "operator-access",
+        "تفعيل الدخول والعمولة",
+        "تم تفعيل حساب التشغيل وقبول اتفاق العمولة.",
+        "done"
+      ),
+      step(
+        "business-settings",
+        "راجع بيانات النشاط",
+        "تأكد من الاسم ووسيلة التواصل والعنوان ثم احفظ الإعدادات.",
+        settingsStatus,
+        { selector: "#settingsSection", actionLabel: "افتح الإعدادات" }
+      ),
+      step(
+        "content",
+        labels.contentTitle,
+        labels.contentDescription,
+        contentStatus,
+        { selector: labels.contentSelector, actionLabel: "راجع المنتجات والخدمات" }
+      ),
+      step(
+        "delivery-team",
+        templateId === "laundry" ? "جهّز الاستلام والتوصيل" : "أضف مندوب توصيل",
+        templateId === "laundry"
+          ? "لازم يكون عندك عامل استلام نشط وعامل توصيل نشط حتى يكتمل مسار الطلب."
+          : "أضف مندوبًا نشطًا واحدًا على الأقل حتى تقدر ترسل الطلبات للتوصيل.",
+        teamStatus,
+        { selector: "#ridersSection", actionLabel: "راجع فريق التوصيل" }
+      ),
+      step(
+        "accepting-orders",
+        "فعّل استقبال الطلبات",
+        "شغّل خيار «استقبال الطلبات» بعد التأكد أن التشغيل والأسعار والفريق جاهزين.",
+        acceptingStatus,
+        { selector: "#acceptingOrders", actionLabel: "راجع استقبال الطلبات" }
+      ),
+      step(
+        "share-customer-link",
+        "شارك رابط العملاء",
+        launchReady
+          ? "كل الأساسيات جاهزة. انسخ رابط العملاء وشاركه، ثم تابع الطلبات والتنبيهات من اللوحة."
+          : "الرابط موجود، لكن الأفضل إكمال خطوات الجاهزية السابقة قبل نشره للعملاء.",
+        launchReady ? "current" : "pending",
+        { selector: "#customerOrderLink", actionLabel: launchReady ? "اعرض رابط العملاء" : "" }
+      )
+    ]
+  };
+}
