@@ -9,6 +9,8 @@ import { assignWorkerAndPrepareWhatsApp, rollbackPreparedAssignment } from "../c
 import { buildWorkerWhatsAppUrl, openWhatsAppPlaceholder, navigatePreparedWhatsAppWindow } from "../core/whatsapp/dispatch-service.js";
 import { allowedNextSupermarketStatuses, listSupermarketOperationalOrders, listSupermarketHistoryPage, countSupermarketDeliveredOrders, acceptSupermarketOrder, changeSupermarketOrderStatus } from "../core/supermarket/order-service.js";
 import { getOrderOperationalAlert, summarizeOperationalAlerts } from "../core/orders/operational-alerts.js";
+import { createGuide } from "../core/onboarding/guide.js";
+import { buildOperatorGuide } from "../core/onboarding/guide-state.js";
 
 import {
   createUserWithEmailAndPassword,
@@ -32,6 +34,18 @@ let operationalOrders=[];
 let historyOrders=[];
 let historyCursor=null;
 let historyHasMore=false;
+let operatorGuide=null;
+
+function refreshOperatorFirstRunGuide({autoOpen=false}={}){
+  const journey=buildOperatorGuide({
+    templateId:"supermarket",
+    partner:currentStore||{},
+    contentReady:Number(currentStore?.catalogProductCount||0)>0,
+    teamReady:riders.some(r=>r.isActive===true)
+  });
+  if(operatorGuide)operatorGuide.update(journey,{autoOpen});
+  else operatorGuide=createGuide(journey,{autoOpen:true});
+}
 
 function money(v){return `${Number(v||0).toLocaleString("ar-EG")} جنيه`;}
 function escapeHTML(v){return String(v??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;");}
@@ -188,6 +202,7 @@ async function loadOperations(){
     projectId,
     operatorUid:currentUser.uid
   });
+  refreshOperatorFirstRunGuide({autoOpen:true});
 }
 
 $("copyCustomerLinkBtn").onclick=async()=>{
@@ -209,6 +224,8 @@ $("saveSettingsBtn").onclick=async()=>{
       isAcceptingOrders:$("acceptingOrders").checked
     });
     $("settingsMessage").innerText="تم حفظ الإعدادات ✅";
+    currentStore=await getSupermarket(projectId);
+    refreshOperatorFirstRunGuide();
   }catch(e){$("settingsMessage").innerText=e.message;}
 };
 
@@ -224,6 +241,7 @@ async function loadRiders(){
     await setWorkerActive({workerId:rider.workerId,projectId,actorUid:currentUser.uid,isActive:!rider.isActive});
     await loadRiders();
   });
+  if(operatorGuide)refreshOperatorFirstRunGuide();
 }
 $("addRiderBtn").onclick=async()=>{
   $("riderMessage").innerText="جاري الإضافة...";
