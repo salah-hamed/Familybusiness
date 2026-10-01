@@ -930,7 +930,16 @@ service cloud.firestore {
     && request.resource.data.reviewedAt == request.time
     && request.resource.data.reviewedBy == request.auth.uid
     && (
-      (request.resource.data.status == "approved" && request.resource.data.rejectionReason == "")
+      (
+        request.resource.data.status == "approved"
+        && request.resource.data.rejectionReason == ""
+        && existsAfter(userPath(resource.data.userId))
+        && getAfter(userPath(resource.data.userId)).data.isActive == true
+        && getAfter(userPath(resource.data.userId)).data.subscriptionStatus == "active"
+        && getAfter(userPath(resource.data.userId)).data.lastSubscriptionPaymentId == paymentId
+        && getAfter(userPath(resource.data.userId)).data.lastPaymentType == resource.data.paymentType
+        && getAfter(userPath(resource.data.userId)).data.lastPaymentAmount == resource.data.amount
+      )
       || (
         request.resource.data.status == "rejected"
         && request.resource.data.rejectionReason is string
