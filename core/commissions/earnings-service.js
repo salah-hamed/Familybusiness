@@ -1,4 +1,5 @@
 import db from "../firebase/firebase-db.js";
+import { getProjectPaymentSummary } from "./settlement-service.js";
 
 import {
   collection,
@@ -92,34 +93,14 @@ export async function getProjectCommissionSummary(userId, projectId) {
   if (!uid) throw new Error("USER_ID_REQUIRED");
   if (!pid) throw new Error("PROJECT_ID_REQUIRED");
 
-  const base = collection(db, "commissionLedger");
-  const projectScope = [
-    where("userId", "==", uid),
-    where("sourceType", "==", "project_order"),
-    where("projectId", "==", pid)
-  ];
-
-  const [all, paidByStatus, paidByTimestamp, paidOverlap] = await Promise.all([
-    aggregateLedger(query(base, ...projectScope)),
-    aggregateLedger(query(base, ...projectScope, where("status", "==", "paid"))),
-    aggregateLedger(query(base, ...projectScope, where("paidAt", "!=", null))),
-    aggregateLedger(query(
-      base,
-      ...projectScope,
-      where("status", "==", "paid"),
-      where("paidAt", "!=", null)
-    ))
-  ]);
-
-  const paidAmount = Math.max(
-    0,
-    paidByStatus.totalAmount + paidByTimestamp.totalAmount - paidOverlap.totalAmount
-  );
+  const summary = await getProjectPaymentSummary(pid, { ownerId: uid });
 
   return {
-    completedOrderCount: all.entryCount,
-    earnedAmount: all.totalAmount,
-    paidAmount,
-    outstandingAmount: Math.max(0, all.totalAmount - paidAmount)
+    completedOrderCount: summary.earnedCount,
+    earnedAmount: summary.earnedAmount,
+    paidAmount: summary.paidAmount,
+    outstandingAmount: summary.outstandingAmount,
+    pendingPaymentAmount: summary.pendingAmount,
+    pendingPaymentCount: summary.pendingCount
   };
 }

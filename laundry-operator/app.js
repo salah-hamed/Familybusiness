@@ -2,6 +2,7 @@ import auth from "../core/firebase/firebase-auth.js";
 import db from "../core/firebase/firebase-db.js";
 import { claimOperatorAccess,getOperator,operatorCanOperate,buildOperatorAuthEmail } from "../core/partners/partner-service.js";
 import { acceptPendingCommission,rejectPendingCommission,getCommissionAgreement } from "../core/commissions/commission-service.js";
+import { renderOperatorFinancePanel } from "../core/commissions/finance-panel.js";
 import { getLaundry,updateLaundrySettings } from "../core/laundry/laundry-service.js";
 import { WORKER_ROLES,createWorker,listProjectWorkers,setWorkerActive } from "../core/workers/worker-service.js";
 import { assignWorkerAndPrepareWhatsApp } from "../core/workers/worker-dispatch-service.js";
@@ -49,11 +50,11 @@ async function refreshAccount(){
   setVisible("authPanel",false);$("logoutBtn").classList.remove("hidden");
   const pending=agreement?.pendingStatus==="pending"&&agreement?.pendingAmount!=null;
   setVisible("agreementPanel",pending);
-  if(pending){$("agreementText").innerText=`${agreement.currentAmount!=null?`العمولة الحالية ${money(agreement.currentAmount)} — المقترح الجديد`:"العمولة المقترحة"}: ${money(agreement.pendingAmount)} لكل طلب مكتمل`;}
+  if(pending){$("agreementText").innerText=`${agreement.currentAmount!=null?`العمولة الحالية ${money(agreement.currentAmount)} — المقترح الجديد`:"العمولة المقترحة"}: ${money(agreement.pendingAmount)} لكل طلب يتم إرساله للتوصيل`;}
   const canOperate=operatorCanOperate(operator)&&agreement?.status==="accepted"&&agreement?.currentAmount!=null;
   setVisible("operationsPanel",canOperate);
   $("pageStatus").innerText=canOperate?`مرحبًا ${operator?.name||"بالمغسلة"} — التشغيل جاهز.`:"التشغيل متوقف لحد قبول أول اتفاق عمولة.";
-  if(canOperate)await loadOperations();
+  if(canOperate) await loadOperations();
 }
 
 onAuthStateChanged(auth,async current=>{user=current;if(!projectId||!inviteAuthEmail){setVisible("authPanel",false);setVisible("agreementPanel",false);setVisible("operationsPanel",false);$("logoutBtn").classList.add("hidden");$("pageStatus").innerText="دعوة واتساب غير مكتملة أو غير صالحة.";return;}if(current&&String(current.email||"").toLowerCase()!==inviteAuthEmail.toLowerCase()){await signOut(auth);return;}if(!current){setVisible("authPanel",true);setVisible("agreementPanel",false);setVisible("operationsPanel",false);$("logoutBtn").classList.add("hidden");$("pageStatus").innerText="فعّل الدعوة بكلمة مرور أول مرة، أو سجل دخولك لو فعلتها قبل كده.";return;}refreshAccount();});
@@ -70,6 +71,11 @@ async function loadOperations(){
   const url=new URL("../templates/laundry/",location.href);url.searchParams.set("project",projectId);$("customerOrderLink").value=url;
   const projectSnap=await getDoc(doc(db,"projects",projectId));renderPricing(projectSnap.data()?.priceConfig||{});
   await Promise.all([loadWorkers(),loadOrders()]);
+  await renderOperatorFinancePanel({
+    container:$("operationsPanel"),
+    projectId,
+    operatorUid:user.uid
+  });
 }
 $("saveSettingsBtn").onclick=async()=>{try{await updateLaundrySettings(projectId,{name:$("settingsName").value,phone:$("settingsPhone").value,whatsapp:$("settingsWhatsapp").value,address:$("settingsAddress").value,location:$("settingsLocation").value,instapayLink:$("settingsInstapay").value,isAcceptingOrders:$("acceptingOrders").checked});$("settingsMessage").innerText="تم الحفظ ✅";}catch(e){$("settingsMessage").innerText=e.message;}};
 $("copyCustomerLinkBtn").onclick=async()=>{try{await navigator.clipboard.writeText($("customerOrderLink").value);}catch{$("customerOrderLink").select();document.execCommand("copy");}$("settingsMessage").innerText="تم نسخ رابط العملاء ✅";};

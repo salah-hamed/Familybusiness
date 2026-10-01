@@ -6,6 +6,7 @@ import { ensureOperatorInviteAccess, getOperatorInviteToken, rotateOperatorInvit
 import { normalizeWhatsAppPhone } from "../core/whatsapp/dispatch-service.js";
 import { proposeCommission } from "../core/commissions/commission-service.js";
 import { getProjectCommissionSummary } from "../core/commissions/earnings-service.js";
+import { renderOwnerFinancePanel } from "../core/commissions/finance-panel.js";
 import { createGuide } from "../core/onboarding/guide.js";
 import { buildPartnerProjectGuide } from "../core/onboarding/guide-state.js";
 
@@ -81,7 +82,7 @@ function render(){
   ].map(([k,v])=>`<div class="metaItem"><b>${escapeHTML(k)}</b><div>${escapeHTML(v)}</div></div>`).join("");
 
   if(pending && agreement?.pendingAmount!=null){
-    $("commissionMessage").innerText=`في انتظار موافقة السوبرماركت على ${money(agreement.pendingAmount)} لكل طلب مكتمل.`;
+    $("commissionMessage").innerText=`في انتظار موافقة السوبرماركت على ${money(agreement.pendingAmount)} لكل طلب يتم إرساله للتوصيل.`;
   } else {
     $("commissionMessage").innerText="";
   }
@@ -107,7 +108,15 @@ async function refresh(){
     bundle.operator=await ensureOperatorInviteAccess(projectId,currentUser.uid);
   }
   render();
-  if(bundle.supermarket) await loadEarnings();
+  if(bundle.supermarket){
+    await loadEarnings();
+    await renderOwnerFinancePanel({
+      container:$("projectSection"),
+      projectId,
+      ownerId:currentUser.uid,
+      onBalanceChanged:loadEarnings
+    });
+  }
 }
 
 protectPage(async user=>{

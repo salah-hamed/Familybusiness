@@ -1,6 +1,7 @@
 import auth from "../core/firebase/firebase-auth.js";
 import { claimOperatorAccess, getOperator, operatorCanOperate, buildOperatorAuthEmail } from "../core/partners/partner-service.js";
 import { acceptPendingCommission, rejectPendingCommission, getCommissionAgreement } from "../core/commissions/commission-service.js";
+import { renderOperatorFinancePanel } from "../core/commissions/finance-panel.js";
 import { getSupermarket, updateSupermarketSettings } from "../core/supermarket/supermarket-service.js";
 import { WORKER_ROLES, createWorker, listProjectWorkers, setWorkerActive } from "../core/workers/worker-service.js";
 import { assignWorkerAndPrepareWhatsApp } from "../core/workers/worker-dispatch-service.js";
@@ -77,7 +78,7 @@ async function refreshAccount(){
     const prefix=currentAgreement.currentAmount!=null
       ? `العمولة الحالية ${money(currentAgreement.currentAmount)} — التعديل المقترح`
       :"العمولة المقترحة";
-    $("agreementText").innerText=`${prefix}: ${money(currentAgreement.pendingAmount)} لكل طلب مكتمل`;
+    $("agreementText").innerText=`${prefix}: ${money(currentAgreement.pendingAmount)} لكل طلب يتم إرساله للتوصيل`;
   }
 
   const canOperate=operatorCanOperate(currentOperator)&&currentAgreement?.status==="accepted"&&currentAgreement?.currentAmount!=null;
@@ -179,6 +180,11 @@ async function loadOperations(){
   if(ordersResult.status==="rejected"){
     $("ordersList").innerHTML=`<p class="message">تعذر تحميل الطلبات: ${escapeHTML(ordersResult.reason?.message||"UNKNOWN_ERROR")}</p>`;
   }
+  await renderOperatorFinancePanel({
+    container:$("operationsPanel"),
+    projectId,
+    operatorUid:currentUser.uid
+  });
 }
 
 $("copyCustomerLinkBtn").onclick=async()=>{

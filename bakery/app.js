@@ -6,6 +6,7 @@ import { ensureOperatorInviteAccess, getOperatorInviteToken, rotateOperatorInvit
 import { normalizeWhatsAppPhone } from "../core/whatsapp/dispatch-service.js";
 import { proposeCommission } from "../core/commissions/commission-service.js";
 import { getProjectCommissionSummary } from "../core/commissions/earnings-service.js";
+import { renderOwnerFinancePanel } from "../core/commissions/finance-panel.js";
 import { createGuide } from "../core/onboarding/guide.js";
 import { buildPartnerProjectGuide } from "../core/onboarding/guide-state.js";
 
@@ -81,7 +82,7 @@ function render(){
   ].map(([k,v])=>`<div class="metaItem"><b>${escapeHTML(k)}</b><div>${escapeHTML(v)}</div></div>`).join("");
 
   $("commissionMessage").innerText=pending&&agreement?.pendingAmount!=null
-    ? `في انتظار موافقة المخبز على ${money(agreement.pendingAmount)} لكل طلب مكتمل.`
+    ? `في انتظار موافقة المخبز على ${money(agreement.pendingAmount)} لكل طلب يتم إرساله للتوصيل.`
     :"";
 
   const operatorUrl=new URL("../bakery-operator/",location.href);
@@ -105,7 +106,15 @@ async function refresh(){
     bundle.operator=await ensureOperatorInviteAccess(projectId,currentUser.uid);
   }
   render();
-  if(bundle.restaurant)await loadEarnings();
+  if(bundle.restaurant){
+    await loadEarnings();
+    await renderOwnerFinancePanel({
+      container:$("projectSection"),
+      projectId,
+      ownerId:currentUser.uid,
+      onBalanceChanged:loadEarnings
+    });
+  }
 }
 
 protectPage(async user=>{
