@@ -8,6 +8,7 @@ import { WORKER_ROLES, createWorker, listProjectWorkers, setWorkerActive } from 
 import { assignWorkerAndPrepareWhatsApp, rollbackPreparedAssignment } from "../core/workers/worker-dispatch-service.js";
 import { buildWorkerWhatsAppUrl, openWhatsAppPlaceholder, navigatePreparedWhatsAppWindow } from "../core/whatsapp/dispatch-service.js";
 import { allowedNextRestaurantStatuses, listRestaurantOperationalOrders, listRestaurantHistoryPage, countRestaurantDeliveredOrders, acceptRestaurantOrder, changeRestaurantOrderStatus } from "../core/restaurant/order-service.js";
+import { getOrderOperationalAlert, summarizeOperationalAlerts } from "../core/orders/operational-alerts.js";
 
 import {
   createUserWithEmailAndPassword,
@@ -397,6 +398,8 @@ async function loadOrders({appendHistory=false}={}){
   $("statNew").innerText=operationalOrders.filter(o=>o.status==="new").length;
   $("statActive").innerText=operationalOrders.filter(o=>o.status!=="new").length;
   $("loadOlderOrdersBtn").classList.toggle("hidden",!historyHasMore);
+  const alerts=operationalOrders.map(order=>getOrderOperationalAlert(order)).filter(Boolean);
+  $("ordersMessage").innerText=summarizeOperationalAlerts(alerts);
 
   $("ordersList").innerHTML=orders.length?orders.map(o=>{
     const items=(o.items||[]).map(i=>`${Number(i.quantity||0)} × ${escapeHTML(i.name)}`).join("<br>");
@@ -417,6 +420,7 @@ async function loadOrders({appendHistory=false}={}){
 
     return `<article class="rowCard orderCard" data-order="${o.orderId}">
       <div class="rowTop"><div><b>طلب #${o.orderId.slice(0,7)}</b><div class="muted">${escapeHTML(o.customerName)} · ${escapeHTML(o.customerPhone)}</div></div><span class="pill">${statusLabel(o.status)}</span></div>
+      ${getOrderOperationalAlert(o)?`<div class="message">${escapeHTML(getOrderOperationalAlert(o).message)}</div>`:""}
       <div class="orderItems">${items||"لا توجد تفاصيل"}</div>
       <div class="muted">${escapeHTML(o.customerAddress||"")} · الإجمالي <b>${money(o.total||o.price)}</b></div>
       ${o.assignedWorkerName?`<div class="muted">المندوب: <b>${escapeHTML(o.assignedWorkerName)}</b></div>`:""}
