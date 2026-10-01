@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ar" dir="rtl">
 <head>
   <link rel="stylesheet" href="/Familybusiness/core/ui/theme.css">
   <link rel="stylesheet" href="style.css">
@@ -30,19 +30,23 @@
 أنت على بُعد دقيقة واحدة من امتلاك شركتك.
 </p>
 <div id="nameGroup">
-<input type="text" id="name" placeholder="الاسم">
+<input type="text" id="name" placeholder="الاسم" autocomplete="name" aria-label="الاسم">
 </div>
 
-<input type="email" id="email" placeholder="البريد الإلكتروني">
+<input type="email" id="email" placeholder="البريد الإلكتروني" autocomplete="email" inputmode="email" aria-label="البريد الإلكتروني">
 
 
-<input type="password" id="password" placeholder="كلمة المرور">
+<input type="password" id="password" placeholder="كلمة المرور" autocomplete="new-password" aria-label="كلمة المرور">
 <div id="confirmPasswordGroup">
   <input
     type="password"
     id="confirmPassword"
-    placeholder="تأكيد كلمة المرور">
+    placeholder="تأكيد كلمة المرور"
+    autocomplete="new-password"
+    aria-label="تأكيد كلمة المرور">
 </div>
+
+<button id="forgotPasswordBtn" class="text-action hidden" type="button">نسيت كلمة المرور؟</button>
 
 <button id="registerBtn">
     🚀 امتلك شركتك
@@ -50,7 +54,7 @@
 
 <p class="switch-mode">
 
-    لديك حساب بالفعل؟
+    <span id="switchPrompt">لديك حساب بالفعل؟</span>
 
     <a href="#" id="loginBtn">
 
