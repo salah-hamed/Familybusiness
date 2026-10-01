@@ -9,6 +9,7 @@ import { WORKER_ROLES,createWorker,listProjectWorkers,setWorkerActive } from "..
 import { assignWorkerAndPrepareWhatsApp, rollbackPreparedAssignment } from "../core/workers/worker-dispatch-service.js";
 import { buildWorkerWhatsAppUrl, openWhatsAppPlaceholder, navigatePreparedWhatsAppWindow } from "../core/whatsapp/dispatch-service.js";
 import { listLaundryOperationalOrders,listLaundryHistoryPage,countLaundryDeliveredOrders,currentLaundryStage,allowedLaundryNextStages,changeLaundryStage } from "../core/laundry/order-service.js";
+import { getOrderOperationalAlert, summarizeOperationalAlerts } from "../core/orders/operational-alerts.js";
 
 import {createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut,onAuthStateChanged} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {doc,getDoc,updateDoc} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -186,6 +187,8 @@ async function loadOrders({appendHistory=false}={}){
   operationalOrders.forEach(o=>{const s=currentLaundryStage(o);if(s==="new")newCount++;else if(s!=="canceled")activeCount++;});
   $("statNew").innerText=newCount;$("statActive").innerText=activeCount;
   $("loadOlderOrdersBtn").classList.toggle("hidden",!historyHasMore);
+  const alerts=operationalOrders.map(order=>getOrderOperationalAlert(order)).filter(Boolean);
+  $("ordersMessage").innerText=summarizeOperationalAlerts(alerts);
   $("ordersList").innerHTML=orders.length?orders.map(order=>{
     const stage=currentLaundryStage(order),next=allowedLaundryNextStages(order);let controls="";
     if(stage==="new")controls+='<button class="primary stageBtn" data-stage="accepted">قبول الطلب</button>';
@@ -198,7 +201,7 @@ async function loadOrders({appendHistory=false}={}){
     if(order.assignedWorkerWhatsapp&&["pickup_assigned","out_for_delivery"].includes(stage))controls+='<button class="secondary resendWhatsapp">إعادة إرسال واتساب</button>';
     if(order.status==="canceled"&&order.commissionLocked===true)controls+=`<select class="reversalReasonSelect">${reversalReasonOptions()}</select><button class="secondary requestReversal">طلب عكس العمولة</button>`;
     if(next.includes("canceled"))controls+='<button class="danger stageBtn" data-stage="canceled">إلغاء</button>';
-    return `<article class="orderCard" data-order="${order.orderId}"><div class="orderTop"><div><b>${esc(order.customerName||"عميل")}</b><div class="muted">${esc(order.customerPhone||"")} · ${esc(order.customerAddress||"")}</div></div><span class="pill">${stageLabel(stage)}</span></div><div class="orderItems">${itemSummary(order)}</div><b>${money(order.price)}</b><div class="orderActions">${controls}</div></article>`;
+    return `<article class="orderCard" data-order="${order.orderId}"><div class="orderTop"><div><b>${esc(order.customerName||"عميل")}</b><div class="muted">${esc(order.customerPhone||"")} · ${esc(order.customerAddress||"")}</div></div><span class="pill">${stageLabel(stage)}</span></div>${getOrderOperationalAlert(order)?`<div class="message">${esc(getOrderOperationalAlert(order).message)}</div>`:""}<div class="orderItems">${itemSummary(order)}</div><b>${money(order.price)}</b><div class="orderActions">${controls}</div></article>`;
   }).join(""):'<p class="muted">لا توجد طلبات بعد.</p>';
 
   document.querySelectorAll(".orderCard").forEach(card=>{
