@@ -26,11 +26,11 @@ export async function registerUser(name, email, password, referredByUserId = "")
     const normalizedEmail = String(email || "").trim();
 
     if (!normalizedName || normalizedName.length > 100) {
-      return { success: false, error: "INVALID_NAME" };
+      return { success: false, error: "اكتب اسمًا صحيحًا لا يزيد عن 100 حرف." };
     }
 
     if (!normalizedEmail || normalizedEmail.length > 254) {
-      return { success: false, error: "INVALID_EMAIL" };
+      return { success: false, error: "راجع البريد الإلكتروني وتأكد أنه مكتوب بشكل صحيح." };
     }
 
     const userCredential =
