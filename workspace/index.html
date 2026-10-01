@@ -48,6 +48,44 @@
       <div class="subscriptionIcon">⚡</div>
     </section>
 
+
+    <section id="subscriptionPaymentPanel" class="paymentCard hidden" aria-labelledby="paymentCardTitle">
+      <div class="paymentCardHead">
+        <div>
+          <span class="cardEyebrow">تفعيل الاشتراك</span>
+          <h2 id="paymentCardTitle">حوّل على InstaPay وارفع الإثبات</h2>
+          <p id="paymentRequiredText">جاري تحديد قيمة الاشتراك...</p>
+        </div>
+        <span id="paymentBadge" class="paymentBadge">بانتظار الدفع</span>
+      </div>
+
+      <div class="paymentInstructions">
+        <div>
+          <small>حساب InstaPay للمنصة</small>
+          <strong id="platformInstapayAccount">جاري التحميل...</strong>
+        </div>
+        <div>
+          <small>المطلوب</small>
+          <strong id="paymentAmount">—</strong>
+        </div>
+      </div>
+
+      <div id="paymentForm">
+        <label class="paymentField">
+          <span>مرجع عملية InstaPay</span>
+          <input id="paymentReference" type="text" maxlength="120" autocomplete="off" placeholder="اكتب رقم أو مرجع التحويل">
+        </label>
+        <label class="paymentField">
+          <span>صورة إثبات التحويل</span>
+          <input id="paymentProofFile" type="file" accept="image/jpeg,image/png,image/webp">
+          <small>JPG أو PNG أو WebP — بحد أقصى 5 MB.</small>
+        </label>
+        <button id="submitPaymentProofBtn" type="button">إرسال الإثبات للمراجعة</button>
+      </div>
+
+      <p id="paymentReviewStatus" class="paymentReviewStatus"></p>
+    </section>
+
     <section class="projectsSection">
       <div class="sectionHeading">
         <div>
