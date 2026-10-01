@@ -7,6 +7,7 @@ import {
 } from "../core/config/platform-config.js";
 import { escapeHTML } from "../core/utils/helpers.js";
 import { listRecentCommissionSettlements } from "../core/commissions/settlement-service.js";
+import { getOrderOperationalAlert } from "../core/orders/operational-alerts.js";
 
 import {
   collection,
@@ -32,6 +33,7 @@ import {
 const $ = id => document.getElementById(id);
 const PAGE_SIZE = 50;
 const SEARCH_LIMIT = 50;
+const ACTIVE_EXCEPTION_STATUSES = ["new","accepted","preparing","ready","assigned","out_for_delivery"];
 
 let adminSession = null;
 let searchTimer = null;
@@ -41,6 +43,7 @@ const state = {
   projects: { rows: [], cursor: null, hasMore: false, loading: false, search: "", template: "all" },
   operators: { rows: [], cursor: null, hasMore: false, loading: false, search: "" },
   orders: { rows: [], cursor: null, hasMore: false, loading: false, search: "", status: "all" },
+  exceptions: { rows: [], cursor: null, hasMore: false, loading: false, template: "all", level: "all" },
   commissions: { rows: [], cursor: null, hasMore: false, loading: false, search: "", status: "all" },
   settlements: { rows: [], cursor: null, hasMore: false, loading: false, search: "", status: "all" },
   reversals: { rows: [], cursor: null, hasMore: false, loading: false, search: "", status: "all" }
@@ -51,6 +54,7 @@ const sectionLoaded = {
   projectsSection: false,
   operatorsSection: false,
   ordersSection: false,
+  exceptionsSection: false,
   commissionsSection: false,
   settlementsSection: false,
   reversalsSection: false
@@ -93,6 +97,14 @@ function statusPill(status) {
     rejected: "مرفوض",
     reversed: "تم عكس العمولة",
     new: "جديد",
+    preparing: "جاري التحضير",
+    ready: "جاهز",
+    assigned: "تم تعيين مندوب",
+    out_for_delivery: "خرج للتوصيل",
+    pickup_assigned: "تم تعيين الاستلام",
+    picked_up: "تم الاستلام",
+    processing: "جاري التجهيز",
+    ready_delivery: "جاهز للتوصيل",
     delivered: "تم التوصيل",
     done: "مكتمل",
     canceled: "ملغي"
@@ -658,6 +670,98 @@ function renderAdminOrders() {
   `).join("") : '<tr><td colspan="6">لا توجد طلبات مطابقة.</td></tr>';
 }
 
+
+function visibleOperationalExceptions() {
+  const s = state.exceptions;
+  return [...s.rows]
+    .filter(row => s.template === "all" || row.templateType === s.template)
+    .filter(row => s.level === "all" || row.operationalAlert?.level === s.level)
+    .sort((a, b) => {
+      const levelDelta = (b.operationalAlert?.level === "critical" ? 1 : 0)
+        - (a.operationalAlert?.level === "critical" ? 1 : 0);
+      if (levelDelta) return levelDelta;
+      return Number(b.operationalAlert?.ageMinutes || 0) - Number(a.operationalAlert?.ageMinutes || 0);
+    });
+}
+
+function updateOperationalExceptionsMessage() {
+  const visible = visibleOperationalExceptions().length;
+  const loaded = state.exceptions.rows.length;
+  $("exceptionsMessage").innerText = loaded
+    ? `المعروض ${visible} تنبيه من ${loaded} طلب متأخر محمّل. القائمة مرتبة حسب شدة التأخير.`
+    : "لا توجد طلبات متأخرة في الدفعة المحمّلة.";
+}
+
+async function loadOperationalExceptions({ append = false } = {}) {
+  const s = state.exceptions;
+  if (s.loading) return;
+  s.loading = true;
+  $("loadMoreExceptionsBtn").disabled = true;
+  $("exceptionsMessage").innerText = "جاري فحص أقدم الطلبات المفتوحة...";
+
+  try {
+    const cutoff = Timestamp.fromMillis(Date.now() - 15 * 60 * 1000);
+    const constraints = [
+      where("status", "in", ACTIVE_EXCEPTION_STATUSES),
+      where("createdAt", "<=", cutoff),
+      orderBy("createdAt", "asc")
+    ];
+
+    if (append && s.cursor) constraints.push(startAfter(s.cursor));
+    constraints.push(limit(PAGE_SIZE));
+
+    const snap = await getDocs(query(collection(db, "orders"), ...constraints));
+    const rows = snap.docs
+      .map(item => ({ orderId: item.id, ...item.data() }))
+      .map(order => {
+        const operationalAlert = getOrderOperationalAlert(order);
+        return operationalAlert ? { ...order, operationalAlert } : null;
+      })
+      .filter(Boolean);
+
+    s.rows = append ? mergeRows(s.rows, rows, "orderId") : rows;
+    s.cursor = snap.docs.length ? snap.docs[snap.docs.length - 1] : null;
+    s.hasMore = snap.docs.length === PAGE_SIZE;
+
+    renderOperationalExceptions();
+    updateOperationalExceptionsMessage();
+    $("loadMoreExceptionsBtn").classList.toggle("hidden", !s.hasMore);
+    sectionLoaded.exceptionsSection = true;
+  } catch (error) {
+    console.error(error);
+    const code = String(error?.code || "").toLowerCase();
+    $("exceptionsMessage").innerText = code.includes("failed-precondition") && String(error?.message || "").toLowerCase().includes("index")
+      ? "تنبيهات التشغيل تحتاج نشر Firestore Index النهائي قبل استخدامها Live. باقي لوحة الإدارة تعمل بشكل طبيعي."
+      : `تعذر تحميل تنبيهات التشغيل: ${error.message}`;
+  } finally {
+    s.loading = false;
+    $("loadMoreExceptionsBtn").disabled = false;
+  }
+}
+
+function renderOperationalExceptions() {
+  const rows = visibleOperationalExceptions();
+  $("exceptionsTableBody").innerHTML = rows.length ? rows.map(order => {
+    const alert = order.operationalAlert;
+    const severity = alert.level === "critical" ? "متأخر جدًا" : "متأخر";
+    const severityClass = alert.level === "critical" ? "exceptionCritical" : "exceptionWarning";
+
+    return `
+      <tr>
+        <td><span class="pill ${severityClass}">${severity}</span><br><small>${escapeHTML(alert.message)}</small></td>
+        <td><b>#${escapeHTML(order.orderId.slice(0,8))}</b><br><small>${formatDate(order.createdAt,true)}</small></td>
+        <td>${escapeHTML(order.templateType || "—")}<br><small class="codeText">${escapeHTML(order.projectId || "—")}</small></td>
+        <td>${escapeHTML(order.customerName || "—")}<br><small>${escapeHTML(order.customerPhone || "")}</small></td>
+        <td>${statusPill(order.status || "—")}<br><small>${escapeHTML(order.laundryStage || "")}</small></td>
+        <td>
+          <small>آخر تحديث: ${formatDate(order.statusUpdatedAt || order.createdAt,true)}</small><br>
+          <button class="secondaryBtn" type="button" data-action="open-exception-order" data-order="${escapeHTML(order.orderId)}">فتح الطلب</button>
+        </td>
+      </tr>
+    `;
+  }).join("") : '<tr><td colspan="6">لا توجد تنبيهات مطابقة للفلاتر الحالية.</td></tr>';
+}
+
 async function loadCommissions({ append = false } = {}) {
   const s = state.commissions;
   if (s.loading) return;
@@ -913,6 +1017,7 @@ async function ensureSectionLoaded(sectionId) {
   if (sectionId === "projectsSection") await loadProjects();
   if (sectionId === "operatorsSection") await loadOperators();
   if (sectionId === "ordersSection") await loadAdminOrders();
+  if (sectionId === "exceptionsSection") await loadOperationalExceptions();
   if (sectionId === "commissionsSection") await loadCommissions();
   if (sectionId === "settlementsSection") await loadSettlements();
   if (sectionId === "reversalsSection") await loadReversals();
@@ -935,6 +1040,7 @@ async function refreshLoadedSections() {
   if (sectionLoaded.projectsSection) jobs.push(loadProjects());
   if (sectionLoaded.operatorsSection) jobs.push(loadOperators());
   if (sectionLoaded.ordersSection) jobs.push(loadAdminOrders());
+  if (sectionLoaded.exceptionsSection) jobs.push(loadOperationalExceptions());
   if (sectionLoaded.commissionsSection) jobs.push(loadCommissions());
   if (sectionLoaded.settlementsSection) jobs.push(loadSettlements());
   if (sectionLoaded.reversalsSection) jobs.push(loadReversals());
@@ -954,6 +1060,7 @@ $("refreshAllBtn").addEventListener("click", refreshLoadedSections);
 $("refreshProjectsBtn").addEventListener("click", () => loadProjects());
 $("refreshOperatorsBtn").addEventListener("click", () => loadOperators());
 $("refreshOrdersAdminBtn").addEventListener("click", () => loadAdminOrders());
+$("refreshExceptionsBtn").addEventListener("click", () => loadOperationalExceptions());
 $("refreshCommissionsBtn").addEventListener("click", () => loadCommissions());
 $("refreshSettlementsBtn").addEventListener("click", () => loadSettlements());
 $("refreshReversalsBtn").addEventListener("click", () => loadReversals());
@@ -1000,6 +1107,27 @@ $("ordersStatusFilter").addEventListener("change", event => {
   loadAdminOrders();
 });
 $("loadMoreOrdersBtn").addEventListener("click", () => loadAdminOrders({ append: true }));
+
+$("exceptionsTemplateFilter").addEventListener("change", event => {
+  state.exceptions.template = event.target.value;
+  renderOperationalExceptions();
+  updateOperationalExceptionsMessage();
+});
+$("exceptionsLevelFilter").addEventListener("change", event => {
+  state.exceptions.level = event.target.value;
+  renderOperationalExceptions();
+  updateOperationalExceptionsMessage();
+});
+$("loadMoreExceptionsBtn").addEventListener("click", () => loadOperationalExceptions({ append: true }));
+$("exceptionsTableBody").addEventListener("click", async event => {
+  const button = event.target.closest("[data-action=\"open-exception-order\"][data-order]");
+  if (!button) return;
+  state.orders.search = button.dataset.order;
+  state.orders.cursor = null;
+  $("ordersSearch").value = button.dataset.order;
+  switchSection("ordersSection");
+  await loadAdminOrders();
+});
 
 $("commissionsSearch").addEventListener("input", event => {
   state.commissions.search = clean(event.target.value);

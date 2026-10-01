@@ -40,7 +40,7 @@ button{cursor:pointer}
 .cardHead{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
 .cardHead h3{margin:0 0 5px}.cardHead p{margin:0;color:var(--muted);word-break:break-word}
 .pill{display:inline-flex;align-items:center;padding:6px 9px;border-radius:999px;background:#eef3ef;font-size:12px;font-weight:800}
-.pill.active,.pill.paid{background:#e3f7e9;color:#13602e}.pill.pending{background:#fff4d6;color:#7b5700}.pill.inactive,.pill.void{background:#f3ecec;color:#7d3636}
+.pill.active,.pill.paid{background:#e3f7e9;color:#13602e}.pill.pending{background:#fff4d6;color:#7b5700}.pill.inactive,.pill.void{background:#f3ecec;color:#7d3636}\n.pill.exceptionWarning{background:#fff4d6;color:#7b5700}.pill.exceptionCritical{background:#fde5e3;color:#8d2424}
 .metaGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:13px 0}
 .metaGrid span{background:#f7f9f7;border-radius:10px;padding:9px;font-size:13px;word-break:break-word}
 .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
