@@ -4,7 +4,8 @@ import { acceptPendingCommission, rejectPendingCommission, getCommissionAgreemen
 import { renderOperatorFinancePanel } from "../core/commissions/finance-panel.js";
 import { getSupermarket, updateSupermarketSettings } from "../core/supermarket/supermarket-service.js";
 import { WORKER_ROLES, createWorker, listProjectWorkers, setWorkerActive } from "../core/workers/worker-service.js";
-import { assignWorkerAndPrepareWhatsApp } from "../core/workers/worker-dispatch-service.js";
+import { assignWorkerAndPrepareWhatsApp, rollbackPreparedAssignment } from "../core/workers/worker-dispatch-service.js";
+import { buildWorkerWhatsAppUrl, openWhatsAppPlaceholder, navigatePreparedWhatsAppWindow } from "../core/whatsapp/dispatch-service.js";
 import { allowedNextSupermarketStatuses, listSupermarketOperationalOrders, listSupermarketHistoryPage, countSupermarketDeliveredOrders, acceptSupermarketOrder, changeSupermarketOrderStatus } from "../core/supermarket/order-service.js";
 
 import {
@@ -306,20 +307,60 @@ async function loadOrders({appendHistory=false}={}){
     card.querySelector(".assignRider")?.addEventListener("click",async()=>{
       const workerId=card.querySelector(".riderSelect").value;
       if(!workerId){alert("اختار المندوب الأول");return;}
+
+      const popup=openWhatsAppPlaceholder();
+
       try{
-        const result=await assignWorkerAndPrepareWhatsApp({projectId,orderId:order.orderId,workerId,actorUid:currentUser.uid});
-        await changeSupermarketOrderStatus({projectId,orderId:order.orderId,actorUid:currentUser.uid,nextStatus:"assigned"});
-        window.open(result.whatsappUrl,"_blank","noopener");
+        const result=await assignWorkerAndPrepareWhatsApp({
+          projectId,
+          orderId:order.orderId,
+          workerId,
+          actorUid:currentUser.uid,
+          businessName:currentStore?.name||""
+        });
+
+        try{
+          await changeSupermarketOrderStatus({
+            projectId,
+            orderId:order.orderId,
+            actorUid:currentUser.uid,
+            nextStatus:"assigned"
+          });
+        }catch(statusError){
+          await rollbackPreparedAssignment({
+            projectId,
+            orderId:order.orderId,
+            actorUid:currentUser.uid
+          });
+          throw statusError;
+        }
+
+        const opened=navigatePreparedWhatsAppWindow(popup,result.whatsappUrl);
         await loadOrders();
-      }catch(e){alert(e.message);}
+
+        if(!opened){
+          alert("تم تعيين المندوب واحتساب العمولة، لكن المتصفح منع فتح واتساب. اضغط «إعادة إرسال واتساب» من الطلب.");
+        }
+      }catch(e){
+        try{popup?.close();}catch{}
+        alert(e.message);
+      }
     });
 
     card.querySelector(".resendWhatsapp")?.addEventListener("click",()=>{
-      const rider=riders.find(r=>r.workerId===order.assignedWorkerId);
-      if(!rider)return;
-      import("../core/whatsapp/dispatch-service.js").then(({buildWorkerWhatsAppUrl})=>{
-        window.open(buildWorkerWhatsAppUrl({templateId:"supermarket",orderId:order.orderId,order,worker:rider}),"_blank","noopener");
+      const worker={
+        name:order.assignedWorkerName,
+        whatsapp:order.assignedWorkerWhatsapp
+      };
+      const url=buildWorkerWhatsAppUrl({
+        templateId:"supermarket",
+        orderId:order.orderId,
+        order,
+        worker,
+        businessName:currentStore?.name||""
       });
+      const opened=window.open(url,"_blank","noopener");
+      if(!opened) alert("المتصفح منع فتح واتساب. اسمح بالنوافذ المنبثقة وحاول مرة أخرى.");
     });
   });
 }

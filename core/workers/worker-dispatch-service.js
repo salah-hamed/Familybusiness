@@ -1,5 +1,6 @@
 import {
-  assignWorkerToOrder
+  assignWorkerToOrder,
+  clearWorkerAssignment
 } from "./assignment-service.js";
 
 import {
@@ -10,7 +11,8 @@ export async function assignWorkerAndPrepareWhatsApp({
   projectId,
   orderId,
   workerId,
-  actorUid
+  actorUid,
+  businessName = ""
 }) {
   const assignment = await assignWorkerToOrder({
     projectId,
@@ -25,21 +27,33 @@ export async function assignWorkerAndPrepareWhatsApp({
     whatsapp: assignment.workerWhatsapp
   };
 
-  const whatsappUrl = buildWorkerWhatsAppUrl({
-    templateId: assignment.templateId,
-    orderId,
-    order: assignment.order,
-    worker
-  });
+  try {
+    const whatsappUrl = buildWorkerWhatsAppUrl({
+      templateId: assignment.templateId,
+      orderId,
+      order: assignment.order,
+      worker,
+      businessName
+    });
 
-  return {
-    ...assignment,
-    whatsappUrl
-  };
+    return {
+      ...assignment,
+      whatsappUrl
+    };
+  } catch (error) {
+    try {
+      await clearWorkerAssignment({ projectId, orderId, actorUid });
+    } catch (rollbackError) {
+      console.error("WORKER_ASSIGNMENT_ROLLBACK_FAILED", rollbackError);
+    }
+    throw error;
+  }
 }
 
-export async function assignWorkerAndOpenWhatsApp(payload) {
-  const result = await assignWorkerAndPrepareWhatsApp(payload);
-  window.open(result.whatsappUrl, "_blank", "noopener");
-  return result;
+export async function rollbackPreparedAssignment({
+  projectId,
+  orderId,
+  actorUid
+}) {
+  await clearWorkerAssignment({ projectId, orderId, actorUid });
 }

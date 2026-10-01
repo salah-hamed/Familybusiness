@@ -5,7 +5,8 @@ import { acceptPendingCommission,rejectPendingCommission,getCommissionAgreement 
 import { renderOperatorFinancePanel } from "../core/commissions/finance-panel.js";
 import { getLaundry,updateLaundrySettings } from "../core/laundry/laundry-service.js";
 import { WORKER_ROLES,createWorker,listProjectWorkers,setWorkerActive } from "../core/workers/worker-service.js";
-import { assignWorkerAndPrepareWhatsApp } from "../core/workers/worker-dispatch-service.js";
+import { assignWorkerAndPrepareWhatsApp, rollbackPreparedAssignment } from "../core/workers/worker-dispatch-service.js";
+import { buildWorkerWhatsAppUrl, openWhatsAppPlaceholder, navigatePreparedWhatsAppWindow } from "../core/whatsapp/dispatch-service.js";
 import { listLaundryOperationalOrders,listLaundryHistoryPage,countLaundryDeliveredOrders,currentLaundryStage,allowedLaundryNextStages,changeLaundryStage } from "../core/laundry/order-service.js";
 
 import {createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut,onAuthStateChanged} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
@@ -91,12 +92,47 @@ $("addWorkerBtn").onclick=async()=>{try{await createWorker({projectId,actorUid:u
 function itemSummary(order){return (order.items||[]).filter(x=>Number(x.quantity||0)>0).map(x=>`${Number(x.quantity)} × ${esc(x.label||x.key)} — ${esc(x.serviceLabel||x.service)}`).join("<br>");}
 function workerSelect(role,orderId){const list=workers.filter(w=>w.isActive&&w.role===role);return `<select data-worker-select="${orderId}"><option value="">اختر العامل</option>${list.map(w=>`<option value="${w.workerId}">${esc(w.name)}</option>`).join("")}</select>`;}
 async function assignAndDispatch(order,role,nextStage){
-  const select=document.querySelector(`[data-worker-select="${order.orderId}"]`);const workerId=select?.value;if(!workerId){alert("اختار العامل أولًا");return;}
+  const select=document.querySelector(`[data-worker-select="${order.orderId}"]`);
+  const workerId=select?.value;
+  if(!workerId){alert("اختار العامل أولًا");return;}
+
+  const popup=openWhatsAppPlaceholder();
+
   try{
-    const result=await assignWorkerAndPrepareWhatsApp({projectId,orderId:order.orderId,workerId,actorUid:user.uid});
-    await changeLaundryStage({projectId,orderId:order.orderId,actorUid:user.uid,nextStage});
-    window.open(result.whatsappUrl,"_blank","noopener");await loadOrders();
-  }catch(e){alert(e.message);}
+    const result=await assignWorkerAndPrepareWhatsApp({
+      projectId,
+      orderId:order.orderId,
+      workerId,
+      actorUid:user.uid,
+      businessName:laundry?.name||""
+    });
+
+    try{
+      await changeLaundryStage({
+        projectId,
+        orderId:order.orderId,
+        actorUid:user.uid,
+        nextStage
+      });
+    }catch(stageError){
+      await rollbackPreparedAssignment({
+        projectId,
+        orderId:order.orderId,
+        actorUid:user.uid
+      });
+      throw stageError;
+    }
+
+    const opened=navigatePreparedWhatsAppWindow(popup,result.whatsappUrl);
+    await loadOrders();
+
+    if(!opened){
+      alert("تم تعيين المندوب وتحديث الطلب، لكن المتصفح منع فتح واتساب. اضغط «إعادة إرسال واتساب» من الطلب.");
+    }
+  }catch(e){
+    try{popup?.close();}catch{}
+    alert(e.message);
+  }
 }
 
 function orderTime(order){
@@ -143,6 +179,7 @@ async function loadOrders({appendHistory=false}={}){
     if(stage==="processing")controls+='<button class="primary stageBtn" data-stage="ready_delivery">جاهز للتوصيل</button>';
     if(stage==="ready_delivery")controls+=workerSelect("delivery_agent",order.orderId)+'<button class="primary deliveryBtn">تعيين التوصيل + واتساب</button>';
     if(stage==="out_for_delivery")controls+='<button class="primary stageBtn" data-stage="delivered">تم التوصيل</button>';
+    if(order.assignedWorkerWhatsapp&&["pickup_assigned","out_for_delivery"].includes(stage))controls+='<button class="secondary resendWhatsapp">إعادة إرسال واتساب</button>';
     if(next.includes("canceled"))controls+='<button class="danger stageBtn" data-stage="canceled">إلغاء</button>';
     return `<article class="orderCard" data-order="${order.orderId}"><div class="orderTop"><div><b>${esc(order.customerName||"عميل")}</b><div class="muted">${esc(order.customerPhone||"")} · ${esc(order.customerAddress||"")}</div></div><span class="pill">${stageLabel(stage)}</span></div><div class="orderItems">${itemSummary(order)}</div><b>${money(order.price)}</b><div class="orderActions">${controls}</div></article>`;
   }).join(""):'<p class="muted">لا توجد طلبات بعد.</p>';
@@ -152,6 +189,21 @@ async function loadOrders({appendHistory=false}={}){
     card.querySelectorAll(".stageBtn").forEach(btn=>btn.onclick=async()=>{try{await changeLaundryStage({projectId,orderId:order.orderId,actorUid:user.uid,nextStage:btn.dataset.stage});await loadOrders();}catch(e){alert(e.message);}});
     card.querySelector(".pickupBtn")?.addEventListener("click",()=>assignAndDispatch(order,"pickup_agent","pickup_assigned"));
     card.querySelector(".deliveryBtn")?.addEventListener("click",()=>assignAndDispatch(order,"delivery_agent","out_for_delivery"));
+    card.querySelector(".resendWhatsapp")?.addEventListener("click",()=>{
+      const worker={
+        name:order.assignedWorkerName,
+        whatsapp:order.assignedWorkerWhatsapp
+      };
+      const url=buildWorkerWhatsAppUrl({
+        templateId:"laundry",
+        orderId:order.orderId,
+        order,
+        worker,
+        businessName:laundry?.name||""
+      });
+      const opened=window.open(url,"_blank","noopener");
+      if(!opened)alert("المتصفح منع فتح واتساب. اسمح بالنوافذ المنبثقة وحاول مرة أخرى.");
+    });
   });
 }
 $("refreshOrdersBtn").onclick=()=>loadOrders();

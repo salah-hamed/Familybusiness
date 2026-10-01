@@ -6,7 +6,7 @@
     "test:safe-html": "node --test tests/safe-html.test.mjs",
     "test:rules": "firebase emulators:exec --project family-business-rules-test --only firestore \"node --test --test-concurrency=1 tests/firestore.rules.test.mjs tests/order-query.test.mjs tests/earnings-query.test.mjs tests/admin-users-pagination.test.mjs\"",
     "test": "npm run test:safe-html && npm run test:source && npm run test:rules",
-    "test:source": "node --test tests/source-regressions.test.mjs tests/onboarding-guide.test.mjs tests/supermarket-catalog.test.mjs tests/operator-access-recovery.test.mjs tests/billing-commission-integrity.test.mjs"
+    "test:source": "node --test tests/source-regressions.test.mjs tests/onboarding-guide.test.mjs tests/supermarket-catalog.test.mjs tests/operator-access-recovery.test.mjs tests/billing-commission-integrity.test.mjs tests/dispatch-whatsapp.test.mjs"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "5.0.2",
