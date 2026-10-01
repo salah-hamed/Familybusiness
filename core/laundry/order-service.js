@@ -286,9 +286,7 @@ export async function changeLaundryStage({projectId,orderId,actorUid,nextStage})
       commissionEligible:true,
       commissionLocked:true,
       commissionAmount:commission.amount,
-      commissionAgreementVersion:commission.version,
-      commissionTrigger:"legacy_delivery",
-      commissionEarnedAt:earnedAt
+      commissionAgreementVersion:commission.version
     });
 
     transaction.set(ledgerRef,{
@@ -302,7 +300,7 @@ export async function changeLaundryStage({projectId,orderId,actorUid,nextStage})
       amount:commission.amount,
       currency:"EGP",
       status:"earned",
-      trigger:"legacy_delivery",
+      trigger: "legacy_delivery",
       createdAt:earnedAt,
       earnedAt,
       paidAt:null
