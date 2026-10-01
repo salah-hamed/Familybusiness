@@ -608,3 +608,65 @@ test("FB-LAUNCH03 finance indexes support peer balances and scalable admin drill
     assert.equal(signatures.includes(signature), true, signature);
   }
 });
+
+
+test("FB-LAUNCH04 bakery is treated as a full itemized WhatsApp order", () => {
+  const source = readFileSync("core/whatsapp/dispatch-service.js", "utf8");
+
+  assert.equal(source.includes('["supermarket", "restaurant", "bakery"].includes(templateId)'), true);
+  assert.equal(source.includes('"قيمة المنتجات"'), true);
+  assert.equal(source.includes('"التوصيل"'), true);
+  assert.equal(source.includes('"إجمالي التحصيل"'), true);
+  assert.equal(source.includes('"النشاط"'), true);
+});
+
+test("FB-LAUNCH04 every partner operator has resend WhatsApp and popup-block recovery", () => {
+  for (const path of [
+    "supermarket-operator/app.js",
+    "restaurant-operator/app.js",
+    "bakery-operator/app.js",
+    "laundry-operator/app.js"
+  ]) {
+    const source = readFileSync(path, "utf8");
+    assert.equal(source.includes("resendWhatsapp"), true, path);
+    assert.equal(source.includes("openWhatsAppPlaceholder"), true, path);
+    assert.equal(source.includes("navigatePreparedWhatsAppWindow"), true, path);
+    assert.equal(source.includes("المتصفح منع فتح واتساب"), true, path);
+  }
+});
+
+test("FB-LAUNCH04 dispatch rolls back worker assignment when status/commission transition fails", () => {
+  const workerDispatch = readFileSync("core/workers/worker-dispatch-service.js", "utf8");
+
+  assert.equal(workerDispatch.includes("rollbackPreparedAssignment"), true);
+  assert.equal(workerDispatch.includes("clearWorkerAssignment"), true);
+
+  for (const path of [
+    "supermarket-operator/app.js",
+    "restaurant-operator/app.js",
+    "bakery-operator/app.js",
+    "laundry-operator/app.js"
+  ]) {
+    const source = readFileSync(path, "utf8");
+    assert.equal(source.includes("rollbackPreparedAssignment"), true, path);
+  }
+});
+
+test("FB-LAUNCH04 resend never reassigns worker or reruns commission transition", () => {
+  for (const path of [
+    "supermarket-operator/app.js",
+    "restaurant-operator/app.js",
+    "bakery-operator/app.js",
+    "laundry-operator/app.js"
+  ]) {
+    const source = readFileSync(path, "utf8");
+    const marker = 'card.querySelector(".resendWhatsapp")';
+    const start = source.indexOf(marker);
+    assert.notEqual(start, -1, path);
+    const block = source.slice(start, start + 1400);
+    assert.equal(block.includes("assignWorkerAndPrepareWhatsApp"), false, path);
+    assert.equal(block.includes('nextStatus:"assigned"'), false, path);
+    assert.equal(block.includes('nextStage:"out_for_delivery"'), false, path);
+    assert.equal(block.includes("buildWorkerWhatsAppUrl"), true, path);
+  }
+});
