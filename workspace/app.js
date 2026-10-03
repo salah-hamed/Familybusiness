@@ -17,10 +17,12 @@ import {
 import { PLATFORM_BILLING, REFERRAL_CONFIG, formatEgp } from "../core/config/platform-config.js";
 import { isSubscriptionActive, subscriptionExpiryDate } from "../core/subscriptions/subscription-service.js";
 import {
+  buildWhatsAppProofMessage,
+  buildWhatsAppProofUrl,
   getLatestSubscriptionPayment,
   paymentStatusCopy,
-  requiredSubscriptionPayment,
-  submitSubscriptionPaymentProof
+  prepareSubscriptionPaymentWhatsApp,
+  requiredSubscriptionPayment
 } from "../core/subscriptions/payment-service.js";
 import { createGuide } from "../core/onboarding/guide.js";
 import { buildWorkspaceGuide } from "../core/onboarding/guide-state.js";
@@ -44,8 +46,8 @@ const paymentRequiredText = document.getElementById("paymentRequiredText");
 const paymentAmount = document.getElementById("paymentAmount");
 const paymentBadge = document.getElementById("paymentBadge");
 const paymentReference = document.getElementById("paymentReference");
-const paymentProofFile = document.getElementById("paymentProofFile");
 const submitPaymentProofBtn = document.getElementById("submitPaymentProofBtn");
+const reopenPaymentWhatsappBtn = document.getElementById("reopenPaymentWhatsappBtn");
 const paymentReviewStatus = document.getElementById("paymentReviewStatus");
 const paymentForm = document.getElementById("paymentForm");
 
@@ -57,13 +59,7 @@ function paymentErrorMessage(error) {
   if (message === "INVALID_PAYMENT_REFERENCE") {
     return "راجع مرجع عملية InstaPay واكتبه كما يظهر في التحويل.";
   }
-  if (message.startsWith("ارفع ") || message.startsWith("صيغة ") || message.startsWith("حجم ") || message.startsWith("ملف ")) {
-    return message;
-  }
-  if (String(error?.code || "").includes("storage/unauthorized")) {
-    return "تعذر رفع الإثبات حاليًا بسبب صلاحيات التخزين. حاول بعد تحديث إعدادات المنصة.";
-  }
-  return "تعذر إرسال إثبات الدفع. تأكد من الإنترنت وحاول مرة أخرى.";
+  return "تعذر تسجيل الدفعة أو فتح واتساب. تأكد من الإنترنت وحاول مرة أخرى.";
 }
 
 async function renderSubscriptionPayment(user, userData, subscriptionActive) {
@@ -77,8 +73,13 @@ async function renderSubscriptionPayment(user, userData, subscriptionActive) {
   paymentRequiredText.innerText = required.paymentType === "initial"
     ? "أول تفعيل للحساب. بعد اعتماد الدفعة تقدر تشغّل المشاريع الأربعة."
     : "تجديد الاشتراك الشهري لإعادة تشغيل المشاريع.";
+
   platformInstapayAccount.innerText = PLATFORM_BILLING.instapayAccount || "لم يتم ضبط حساب التحويل بعد";
-  submitPaymentProofBtn.disabled = !PLATFORM_BILLING.instapayAccount;
+
+  const paymentConfigReady = Boolean(
+    PLATFORM_BILLING.instapayAccount
+    && PLATFORM_BILLING.paymentWhatsapp
+  );
 
   let latest = null;
   try {
@@ -87,40 +88,76 @@ async function renderSubscriptionPayment(user, userData, subscriptionActive) {
     console.error(error);
     paymentReviewStatus.innerText = String(error?.code || "").includes("failed-precondition")
       ? "سجل الدفع يحتاج نشر Firestore Index النهائي قبل استخدامه Live."
-      : "تعذر تحميل حالة آخر إثبات دفع.";
+      : "تعذر تحميل حالة آخر دفعة.";
   }
 
   const pending = latest?.status === "pending_review";
   paymentForm.classList.toggle("hidden", pending);
+  reopenPaymentWhatsappBtn.classList.toggle("hidden", !pending);
   paymentBadge.className = `paymentBadge ${latest?.status || ""}`;
   paymentBadge.innerText = pending
     ? "قيد المراجعة"
     : latest?.status === "rejected"
       ? "يحتاج إثبات جديد"
       : "بانتظار الدفع";
+
   paymentReviewStatus.innerText = paymentStatusCopy(latest)
-    || (PLATFORM_BILLING.instapayAccount
-      ? "بعد التحويل اكتب مرجع العملية وارفع صورة الإثبات للمراجعة."
-      : "يجب ضبط حساب InstaPay للمنصة قبل استقبال دفعات حقيقية.");
+    || (paymentConfigReady
+      ? "بعد التحويل اكتب مرجع العملية. سنجهز لك رسالة واتساب فيها كود الدفع، وأنت أرفق Screenshot التحويل ثم أرسلها."
+      : "يجب ضبط حساب InstaPay ورقم واتساب الدفع للمنصة قبل استقبال دفعات حقيقية.");
+
+  function openWhatsappForPayment(payment) {
+    const message = buildWhatsAppProofMessage({
+      paymentCode: payment.paymentCode,
+      paymentType: payment.paymentType,
+      amount: payment.amount,
+      currency: payment.currency,
+      paymentReference: payment.paymentReference,
+      userEmail: user.email || ""
+    });
+    const url = buildWhatsAppProofUrl(PLATFORM_BILLING.paymentWhatsapp, message);
+    if (!url) {
+      paymentReviewStatus.innerText = "رقم واتساب الدفع غير مضبوط بعد.";
+      return;
+    }
+    window.location.href = url;
+  }
+
+  reopenPaymentWhatsappBtn.onclick = () => {
+    if (latest) openWhatsappForPayment(latest);
+  };
+
+  submitPaymentProofBtn.disabled = !paymentConfigReady;
 
   submitPaymentProofBtn.onclick = async () => {
+    if (!paymentConfigReady) return;
+
     submitPaymentProofBtn.disabled = true;
-    paymentReviewStatus.innerText = "جاري رفع الإثبات وتسجيل الدفعة...";
+    paymentReviewStatus.innerText = "جاري تسجيل الدفعة وتجهيز رسالة واتساب...";
+
     try {
-      await submitSubscriptionPaymentProof({
+      const result = await prepareSubscriptionPaymentWhatsApp({
         user,
         userData,
-        paymentReference: paymentReference.value,
-        proofFile: paymentProofFile.files?.[0]
+        paymentReference: paymentReference.value
       });
+
+      latest = {
+        ...result,
+        userId: user.uid,
+        userEmail: user.email || ""
+      };
+
       paymentForm.classList.add("hidden");
+      reopenPaymentWhatsappBtn.classList.remove("hidden");
       paymentBadge.className = "paymentBadge pending";
       paymentBadge.innerText = "قيد المراجعة";
-      paymentReviewStatus.innerText = "تم استلام إثبات التحويل وهو الآن بانتظار مراجعة الإدارة.";
+      paymentReviewStatus.innerText = paymentStatusCopy(latest);
+      openWhatsappForPayment(latest);
     } catch (error) {
       console.error(error);
       paymentReviewStatus.innerText = paymentErrorMessage(error);
-      submitPaymentProofBtn.disabled = !PLATFORM_BILLING.instapayAccount;
+      submitPaymentProofBtn.disabled = !paymentConfigReady;
     }
   };
 }
@@ -318,7 +355,7 @@ getDiscoverableProjects().forEach(project => {
     if (subscriptionHint) {
       subscriptionHint.innerText = subscriptionActive
         ? "أداتك جاهزة. اختار مشروع من تحت وابدأ ربط أول نشاط شغال حواليك."
-        : "ارفع إثبات التحويل من بطاقة الدفع أسفل حالة الاشتراك. بعد المراجعة سيتفعل الحساب.";
+        : "حوّل عبر InstaPay ثم سجّل مرجع العملية وابعت Screenshot التحويل على واتساب. بعد المراجعة سيتفعل الحساب.";
     }
 
     await renderSubscriptionPayment(user, data, subscriptionActive);
