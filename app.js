@@ -49,7 +49,7 @@ if (platformSupportWhatsapp) {
   const supportNumber = String(PLATFORM_BILLING.supportWhatsapp || "").replace(/[^0-9]/g, "");
   const message = "مرحبًا، محتاج دعم بخصوص حساب Family Business.";
   platformSupportWhatsapp.href = supportNumber ? "https://wa.me/" + supportNumber + "?text=" + encodeURIComponent(message) : "#";
-  platformSupportWhatsapp.textContent = "واتساب الدعم والتفعيل: " + (PLATFORM_BILLING.supportWhatsappDisplay || "01508830993");
+  platformSupportWhatsapp.textContent = "💬 الدعم والتفعيل عبر واتساب";
 }
 let currentMode = "register";
 const guideController = createGuide(buildAuthGuide({ mode: currentMode }), { autoOpen: true });
