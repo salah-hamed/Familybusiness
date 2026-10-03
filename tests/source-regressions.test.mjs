@@ -296,7 +296,7 @@ test("FINAL02 marketing page leads with the existing-business commission story",
   assert.equal(html.includes("بدوسة زرار… يبقى عندك"), true);
   assert.equal(html.includes("المحل موجود. الزباين موجودين. التشغيل موجود."), true);
   assert.equal(html.includes("5 مصادر فلوس"), true);
-  assert.equal(html.includes("الإحالات حلوة… بس العمولات هي اللعبة الكبيرة."), true);
+  assert.equal(html.includes("كل شخص تعرفه ممكن يبقى عمولة إحالة جديدة."), true);
   assert.equal(html.includes('href="/register/"'), false);
   assert.equal(html.includes('href="/login/"'), false);
 });
