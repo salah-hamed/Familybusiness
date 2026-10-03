@@ -1,0 +1,16 @@
+name: Export LAUNCH13 Firestore Rules
+on:
+  push:
+    branches:
+      - export-launch13-current-rules
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: family-business-firestore-rules-launch13
+          path: firestore.rules
+          if-no-files-found: error
