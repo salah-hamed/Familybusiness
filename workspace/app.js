@@ -35,6 +35,7 @@ const templatesContainer =
 document.getElementById("templatesContainer");
 const referralLink = document.getElementById("referralLink");
 const copyReferralBtn = document.getElementById("copyReferralBtn");
+const shareReferralWhatsappBtn = document.getElementById("shareReferralWhatsappBtn");
 const referralStatus = document.getElementById("referralStatus");
 const logoutBtn = document.getElementById("logoutBtn");
 const projectCount = document.getElementById("projectCount");
@@ -234,7 +235,7 @@ protectPage(async (user) => {
     );
 
     if (referralLink) {
-      const referralUrl = new URL("../", window.location.href);
+      const referralUrl = new URL("../home/", window.location.href);
       referralUrl.search = "";
       referralUrl.hash = "";
       referralUrl.searchParams.set("ref", user.uid);
@@ -245,12 +246,24 @@ protectPage(async (user) => {
       copyReferralBtn.onclick = async () => {
         try {
           await navigator.clipboard.writeText(referralLink.value);
-          referralStatus.innerText = `تم نسخ الرابط — عمولة الإحالة المؤهلة ${formatEgp(REFERRAL_CONFIG.qualifiedReferralReward)}`;
+          referralStatus.innerText = `تم نسخ الرابط — كل تفعيل مدفوع مؤهل من لينكك يضيف ${formatEgp(REFERRAL_CONFIG.qualifiedReferralReward)} عمولة إحالة`;
         } catch {
           referralLink.select();
           document.execCommand("copy");
           referralStatus.innerText = "تم نسخ رابط الإحالة";
         }
+      };
+    }
+    if (shareReferralWhatsappBtn) {
+      shareReferralWhatsappBtn.onclick = () => {
+        const message = [
+          "شوفت Family Business؟",
+          "منصة بتخليك تربط نفسك بسوبرماركت ومطعم ومخبز ومغسلة شغالين بالفعل، وتتابع عمولتك على الطلبات من موبايلك.",
+          "",
+          "ادخل شوف الفكرة بالتفصيل من هنا:",
+          referralLink.value
+        ].join("\n");
+        window.location.href = `https://wa.me/?text=${encodeURIComponent(message)}`;
       };
     }
 

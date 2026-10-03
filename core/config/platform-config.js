@@ -4,7 +4,9 @@ export const PLATFORM_BILLING = Object.freeze({
   monthlyRenewalFee: 59,
   subscriptionDays: 30,
   instapayAccount: "",
-  paymentWhatsapp: ""
+  paymentWhatsapp: "201508830993",
+  supportWhatsapp: "201508830993",
+  supportWhatsappDisplay: "01508830993"
 });
 
 export const REFERRAL_CONFIG = Object.freeze({
@@ -20,5 +22,6 @@ export function formatEgp(amount) {
 export const LAUNCH_PROMO = Object.freeze({
   campaignId: "launch50",
   limit: 50,
-  subscriptionDays: 30
+  subscriptionDays: 30,
+  selectionMode: "admin_selected"
 });
