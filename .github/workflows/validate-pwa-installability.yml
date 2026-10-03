@@ -1,0 +1,17 @@
+name: Validate PWA Installability
+on:
+  push:
+    branches:
+      - validate-pwa-installability
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - name: PWA installability tests
+        run: node --test tests/pwa-installability.test.mjs
