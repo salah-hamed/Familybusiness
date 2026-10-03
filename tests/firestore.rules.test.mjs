@@ -1439,9 +1439,11 @@ function subscriptionPaymentRecord(uid, paymentId, extra = {}) {
     currency: "EGP",
     paymentMethod: "instapay",
     paymentReference: "REF-12345",
-    proofPath: `subscription-proofs/${uid}/${paymentId}`,
+    paymentCode: "FB-TEST-12345",
+    proofChannel: "whatsapp",
     status: "pending_review",
     submittedAt: serverTimestamp(),
+    whatsappPreparedAt: serverTimestamp(),
     reviewedAt: null,
     reviewedBy: "",
     rejectionReason: "",
@@ -1787,5 +1789,134 @@ test("laundry tracking update cannot claim a stage different from the order", as
       total: order.price,
       updatedAt: serverTimestamp()
     })
+  );
+});
+
+
+async function seedPromoFixture(suffix = "promo", counterCount = null) {
+  const uid = `promo_user_${suffix}`;
+  const adminId = `promo_admin_${suffix}`;
+
+  await testEnv.withSecurityRulesDisabled(async context => {
+    const db = context.firestore();
+    await setDoc(doc(db, "users", uid), {
+      uid,
+      name: "Promo User",
+      email: `${uid}@example.com`,
+      isActive: false,
+      subscriptionStatus: "pending",
+      initialActivationPaid: false,
+      billingCycle: "initial",
+      referredByUserId: "",
+      referralQualified: false
+    });
+    await setDoc(doc(db, "users", adminId), {
+      uid: adminId,
+      name: "Promo Admin",
+      email: `${adminId}@example.com`,
+      role: "admin",
+      isActive: true,
+      subscriptionStatus: "active"
+    });
+    if (counterCount !== null) {
+      await setDoc(doc(db, "platformCounters", "launch50"), {
+        campaignId: "launch50",
+        count: counterCount,
+        limit: 50,
+        lastGrantedUserId: "seed_user",
+        updatedAt: new Date("2026-10-01T10:00:00Z")
+      });
+    }
+  });
+
+  return { uid, adminId };
+}
+
+function promoGrantRecord(uid, adminId) {
+  return {
+    grantId: `launch50_${uid}`,
+    userId: uid,
+    campaignId: "launch50",
+    status: "granted",
+    paymentRequired: false,
+    value: 350,
+    currency: "EGP",
+    subscriptionDays: 30,
+    grantedAt: serverTimestamp(),
+    grantedBy: adminId
+  };
+}
+
+function promoUserActivation(uid) {
+  return {
+    isActive: true,
+    subscriptionStatus: "active",
+    initialActivationPaid: false,
+    billingCycle: "monthly",
+    subscriptionStartedAt: serverTimestamp(),
+    subscriptionExpiresAt: Timestamp.fromDate(new Date("2099-01-01T00:00:00Z")),
+    activatedAt: serverTimestamp(),
+    lastActivationSource: "launch_promo",
+    lastSubscriptionGrantId: `launch50_${uid}`,
+    launchPromoCampaignId: "launch50"
+  };
+}
+
+test("admin can atomically grant one Launch 50 subscription without payment proof", async () => {
+  const { uid, adminId } = await seedPromoFixture("success", null);
+  const db = testEnv.authenticatedContext(adminId).firestore();
+  const batch = writeBatch(db);
+
+  batch.set(doc(db, "subscriptionGrants", `launch50_${uid}`), promoGrantRecord(uid, adminId));
+  batch.set(doc(db, "platformCounters", "launch50"), {
+    campaignId: "launch50",
+    count: 1,
+    limit: 50,
+    lastGrantedUserId: uid,
+    updatedAt: serverTimestamp()
+  });
+  batch.update(doc(db, "users", uid), promoUserActivation(uid));
+
+  await assertSucceeds(batch.commit());
+
+  const userSnap = await getDoc(doc(db, "users", uid));
+  assert.equal(userSnap.data().subscriptionStatus, "active");
+  assert.equal(userSnap.data().initialActivationPaid, false);
+  assert.equal(userSnap.data().lastActivationSource, "launch_promo");
+});
+
+test("Launch 50 activation fails if grant/counter are not written atomically", async () => {
+  const { uid, adminId } = await seedPromoFixture("missing_grant", null);
+  const db = testEnv.authenticatedContext(adminId).firestore();
+
+  await assertFails(
+    updateDoc(doc(db, "users", uid), promoUserActivation(uid))
+  );
+});
+
+test("Launch 50 cannot exceed the first 50 users", async () => {
+  const { uid, adminId } = await seedPromoFixture("full", 50);
+  const db = testEnv.authenticatedContext(adminId).firestore();
+  const batch = writeBatch(db);
+
+  batch.set(doc(db, "subscriptionGrants", `launch50_${uid}`), promoGrantRecord(uid, adminId));
+  batch.update(doc(db, "platformCounters", "launch50"), {
+    campaignId: "launch50",
+    count: 51,
+    limit: 50,
+    lastGrantedUserId: uid,
+    updatedAt: serverTimestamp()
+  });
+  batch.update(doc(db, "users", uid), promoUserActivation(uid));
+
+  await assertFails(batch.commit());
+});
+
+test("subscriber cannot grant themselves Launch 50", async () => {
+  const { uid, adminId } = await seedPromoFixture("self", null);
+  const db = testEnv.authenticatedContext(uid).firestore();
+
+  await assertFails(
+    setDoc(doc(db, "subscriptionGrants", `launch50_${uid}`), promoGrantRecord(uid, adminId))
   );
 });
