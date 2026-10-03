@@ -28,11 +28,34 @@ const initialPrice = document.getElementById("initialActivationPrice");
 const renewalPrice = document.getElementById("monthlyRenewalPrice");
 const referralAmount = document.getElementById("referralAmount");
 const faqReferralAmount = document.getElementById("faqReferralAmount");
+const referralFocusAmount = document.getElementById("referralFocusAmount");
+const referralLandingBanner = document.getElementById("referralLandingBanner");
+const supportWhatsAppLink = document.getElementById("supportWhatsAppLink");
+const supportWhatsAppNumber = document.getElementById("supportWhatsAppNumber");
 
 if (initialPrice) initialPrice.textContent = formatEgp(PLATFORM_BILLING.initialActivationFee);
 if (renewalPrice) renewalPrice.textContent = formatEgp(PLATFORM_BILLING.monthlyRenewalFee);
 if (referralAmount) referralAmount.textContent = `+ ${formatEgp(REFERRAL_CONFIG.qualifiedReferralReward)}`;
 if (faqReferralAmount) faqReferralAmount.textContent = formatEgp(REFERRAL_CONFIG.qualifiedReferralReward);
+if (referralFocusAmount) referralFocusAmount.textContent = formatEgp(REFERRAL_CONFIG.qualifiedReferralReward) + " عمولة إحالة";
+
+const referralUserId = new URLSearchParams(window.location.search).get("ref") || "";
+
+if (referralUserId) {
+  referralLandingBanner?.classList.remove("hidden");
+  document.querySelectorAll('a[href="../"]').forEach(link => {
+    const authUrl = new URL("../", window.location.href);
+    authUrl.searchParams.set("ref", referralUserId);
+    link.href = authUrl.toString();
+  });
+}
+
+if (supportWhatsAppNumber) supportWhatsAppNumber.textContent = PLATFORM_BILLING.supportWhatsappDisplay || "01508830993";
+if (supportWhatsAppLink) {
+  const supportNumber = String(PLATFORM_BILLING.supportWhatsapp || "").replace(/[^0-9]/g, "");
+  const message = "مرحبًا، محتاج مساعدة بخصوص Family Business.";
+  supportWhatsAppLink.href = supportNumber ? "https://wa.me/" + supportNumber + "?text=" + encodeURIComponent(message) : "#";
+}
 
 document.querySelectorAll(".faqItem button").forEach(button => {
   button.addEventListener("click", () => {
