@@ -11,10 +11,14 @@ const authApp = readFileSync("app.js", "utf8");
 const adminJs = readFileSync("admin/admin.js", "utf8");
 const adminHtml = readFileSync("admin/index.html", "utf8");
 
-test("platform WhatsApp is centralized and normalized for wa.me", () => {
+test("platform WhatsApp is centralized for routing without rendering the phone number", () => {
   assert.match(config, /paymentWhatsapp:\s*"201508830993"/);
   assert.match(config, /supportWhatsapp:\s*"201508830993"/);
-  assert.match(config, /supportWhatsappDisplay:\s*"01508830993"/);
+  assert.doesNotMatch(config, /supportWhatsappDisplay/);
+  assert.doesNotMatch(homeHtml, /01508830993|201508830993/);
+  assert.doesNotMatch(authApp, /01508830993|201508830993/);
+  assert.match(homeHtml, /تواصل مع دعم Family Business على واتساب/);
+  assert.match(authApp, /الدعم والتفعيل عبر واتساب/);
 });
 
 test("platform WhatsApp stays separate from subscriber/operator business contacts", () => {

@@ -5,8 +5,7 @@ export const PLATFORM_BILLING = Object.freeze({
   subscriptionDays: 30,
   instapayAccount: "",
   paymentWhatsapp: "201508830993",
-  supportWhatsapp: "201508830993",
-  supportWhatsappDisplay: "01508830993"
+  supportWhatsapp: "201508830993"
 });
 
 export const REFERRAL_CONFIG = Object.freeze({

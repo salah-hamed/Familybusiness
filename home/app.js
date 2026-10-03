@@ -31,7 +31,6 @@ const faqReferralAmount = document.getElementById("faqReferralAmount");
 const referralFocusAmount = document.getElementById("referralFocusAmount");
 const referralLandingBanner = document.getElementById("referralLandingBanner");
 const supportWhatsAppLink = document.getElementById("supportWhatsAppLink");
-const supportWhatsAppNumber = document.getElementById("supportWhatsAppNumber");
 
 if (initialPrice) initialPrice.textContent = formatEgp(PLATFORM_BILLING.initialActivationFee);
 if (renewalPrice) renewalPrice.textContent = formatEgp(PLATFORM_BILLING.monthlyRenewalFee);
@@ -50,7 +49,6 @@ if (referralUserId) {
   });
 }
 
-if (supportWhatsAppNumber) supportWhatsAppNumber.textContent = PLATFORM_BILLING.supportWhatsappDisplay || "01508830993";
 if (supportWhatsAppLink) {
   const supportNumber = String(PLATFORM_BILLING.supportWhatsapp || "").replace(/[^0-9]/g, "");
   const message = "مرحبًا، محتاج مساعدة بخصوص Family Business.";
