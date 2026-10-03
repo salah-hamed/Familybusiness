@@ -1,5 +1,4 @@
 import db from "../firebase/firebase-db.js";
-import storage from "../firebase/firebase-storage.js";
 import {
   collection,
   doc,
@@ -12,17 +11,20 @@ import {
   where
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
-  deleteObject,
-  ref,
-  uploadBytes
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
-import {
+  buildPaymentCode,
+  buildWhatsAppProofMessage,
+  buildWhatsAppProofUrl,
   paymentStatusCopy,
-  requiredSubscriptionPayment,
-  validatePaymentProofFile
+  requiredSubscriptionPayment
 } from "./payment-policy.js";
 
-export { paymentStatusCopy, requiredSubscriptionPayment, validatePaymentProofFile };
+export {
+  buildPaymentCode,
+  buildWhatsAppProofMessage,
+  buildWhatsAppProofUrl,
+  paymentStatusCopy,
+  requiredSubscriptionPayment
+};
 
 export async function getLatestSubscriptionPayment(userId) {
   const snap = await getDocs(query(
@@ -36,11 +38,10 @@ export async function getLatestSubscriptionPayment(userId) {
   return { paymentId: item.id, ...item.data() };
 }
 
-export async function submitSubscriptionPaymentProof({
+export async function prepareSubscriptionPaymentWhatsApp({
   user,
   userData,
-  paymentReference,
-  proofFile
+  paymentReference
 }) {
   if (!user?.uid) throw new Error("AUTH_REQUIRED");
 
@@ -49,48 +50,41 @@ export async function submitSubscriptionPaymentProof({
     throw new Error("INVALID_PAYMENT_REFERENCE");
   }
 
-  const fileError = validatePaymentProofFile(proofFile);
-  if (fileError) throw new Error(fileError);
-
   const latest = await getLatestSubscriptionPayment(user.uid);
   if (latest?.status === "pending_review") {
     throw new Error("PAYMENT_ALREADY_PENDING");
   }
 
   const required = requiredSubscriptionPayment(userData);
-  const paymentId = `${user.uid}_${Date.now()}`;
-  const proofPath = `subscription-proofs/${user.uid}/${paymentId}`;
-  const proofRef = ref(storage, proofPath);
+  const timestamp = Date.now();
+  const paymentId = `${user.uid}_${timestamp}`;
+  const paymentCode = buildPaymentCode(user.uid, timestamp);
 
-  await uploadBytes(proofRef, proofFile, {
-    contentType: proofFile.type,
-    customMetadata: {
-      ownerUid: user.uid,
-      paymentId
-    }
+  await setDoc(doc(db, "subscriptionPayments", paymentId), {
+    paymentId,
+    paymentCode,
+    userId: user.uid,
+    userEmail: String(user.email || "").trim(),
+    paymentType: required.paymentType,
+    amount: required.amount,
+    currency: required.currency,
+    paymentMethod: "instapay",
+    paymentReference: reference,
+    proofChannel: "whatsapp",
+    status: "pending_review",
+    submittedAt: serverTimestamp(),
+    whatsappPreparedAt: serverTimestamp(),
+    reviewedAt: null,
+    reviewedBy: "",
+    rejectionReason: ""
   });
 
-  try {
-    await setDoc(doc(db, "subscriptionPayments", paymentId), {
-      paymentId,
-      userId: user.uid,
-      userEmail: String(user.email || "").trim(),
-      paymentType: required.paymentType,
-      amount: required.amount,
-      currency: required.currency,
-      paymentMethod: "instapay",
-      paymentReference: reference,
-      proofPath,
-      status: "pending_review",
-      submittedAt: serverTimestamp(),
-      reviewedAt: null,
-      reviewedBy: "",
-      rejectionReason: ""
-    });
-  } catch (error) {
-    await deleteObject(proofRef).catch(() => {});
-    throw error;
-  }
-
-  return { paymentId, ...required, status: "pending_review" };
+  return {
+    paymentId,
+    paymentCode,
+    ...required,
+    paymentReference: reference,
+    proofChannel: "whatsapp",
+    status: "pending_review"
+  };
 }
