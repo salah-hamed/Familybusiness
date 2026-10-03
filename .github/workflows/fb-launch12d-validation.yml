@@ -22,8 +22,8 @@ jobs:
         run: |
           node --check workspace/app.js
           node --check core/config/platform-config.js
-          if grep -R "instapayAccount" --exclude-dir=.git --exclude=fb-launch12d-validation.yml .; then
-            echo "Found obsolete instapayAccount reference"
+          if grep -R "instapayAccount" core workspace --include="*.js" --include="*.html"; then
+            echo "Found obsolete instapayAccount reference in production source"
             exit 1
           fi
       - name: Full test suite
