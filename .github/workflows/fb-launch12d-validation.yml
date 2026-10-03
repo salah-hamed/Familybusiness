@@ -1,0 +1,30 @@
+name: FB-LAUNCH12D validation
+on:
+  push:
+    branches:
+      - fb-launch12d-instapay-payment-button
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - run: npm install
+      - name: Syntax checks
+        run: |
+          node --check workspace/app.js
+          node --check core/config/platform-config.js
+          if grep -R "instapayAccount" --exclude-dir=.git --exclude=fb-launch12d-validation.yml .; then
+            echo "Found obsolete instapayAccount reference"
+            exit 1
+          fi
+      - name: Full test suite
+        run: npm test
