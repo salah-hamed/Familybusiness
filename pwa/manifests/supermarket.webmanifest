@@ -1,24 +1,23 @@
 {
-  "name": "Family Business",
-  "short_name": "Family Business",
+  "name": "تطبيق السوبرماركت | Family Business",
+  "short_name": "السوبرماركت",
   "lang": "ar",
   "dir": "rtl",
-  "id": "../home/",
-  "start_url": "../home/?source=pwa",
-  "scope": "../",
+  "id": "../../templates/supermarket/",
+  "start_url": "../../templates/supermarket/?source=pwa",
+  "scope": "../../templates/supermarket/",
   "display": "standalone",
   "background_color": "#f8fafc",
   "theme_color": "#16a34a",
-  "description": "منصة Family Business لإدارة المشاريع والعمولات.",
   "icons": [
     {
-      "src": "./icons/icon-192.png",
+      "src": "../icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "./icons/icon-512.png",
+      "src": "../icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
