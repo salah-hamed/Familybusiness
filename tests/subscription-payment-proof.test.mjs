@@ -69,6 +69,13 @@ test("workspace uses WhatsApp proof handoff and has no Storage upload input", ()
   assert.match(source,/prepareSubscriptionPaymentWhatsApp/);
   assert.match(source,/buildWhatsAppProofUrl/);
   assert.match(config,/paymentWhatsapp/);
+  assert.match(config,/instapayPaymentUrl:\s*"https:\/\/ipn\.eg\/S\/salah\.hamed3646\/instapay\/9opJbq"/);
+  assert.match(html,/id="payWithInstapayBtn"/);
+  assert.match(html,/target="_blank"/);
+  assert.match(html,/ادفع الآن عبر InstaPay/);
+  assert.doesNotMatch(html,/https:\/\/ipn\.eg\/S\/salah\.hamed3646\/instapay\/9opJbq/);
+  assert.match(source,/PLATFORM_BILLING\.instapayPaymentUrl/);
+  assert.doesNotMatch(source,/instapayAccount/);
   assert.doesNotMatch(service,/firebase-storage|uploadBytes|proofPath|deleteObject/);
 });
 
@@ -77,4 +84,25 @@ test("payment records identify WhatsApp as the proof channel", () => {
   assert.match(service,/proofChannel: "whatsapp"/);
   assert.match(service,/paymentCode/);
   assert.match(service,/whatsappPreparedAt/);
+});
+
+
+test("same InstaPay CTA serves initial activation and renewal with dynamic amount", () => {
+  const html = readFileSync("workspace/index.html", "utf8");
+  const source = readFileSync("workspace/app.js", "utf8");
+  assert.equal((html.match(/id="payWithInstapayBtn"/g) || []).length, 1);
+  assert.match(source, /requiredSubscriptionPayment\(userData\)/);
+  assert.match(source, /paymentAmount\.innerText = formatEgp\(required\.amount\)/);
+  assert.match(source, /payWithInstapayBtn\.href = instapayPaymentUrl/);
+  assert.match(source, /required\.paymentType === "initial"/);
+  assert.match(source, /تجديد الاشتراك الشهري/);
+});
+
+test("InstaPay payment URL is centralized and never printed as raw payment text", () => {
+  const config = readFileSync("core/config/platform-config.js", "utf8");
+  const html = readFileSync("workspace/index.html", "utf8");
+  assert.match(config, /instapayPaymentUrl/);
+  assert.doesNotMatch(config, /instapayAccount/);
+  assert.doesNotMatch(html, /حساب InstaPay للمنصة/);
+  assert.doesNotMatch(html, /ipn\.eg\/S\//);
 });

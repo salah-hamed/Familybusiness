@@ -407,3 +407,31 @@ body{
   .referralLinkRow input{grid-column:1 / -1}
   .referralLinkRow button{padding:11px 10px}
 }
+
+.instapayActionBox{display:grid;gap:7px}
+.instapayActionBox em{font-style:normal;color:var(--ws-muted);font-size:10px;line-height:1.5}
+.instapayPayBtn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  width:100%;
+  min-height:44px;
+  padding:11px 14px;
+  border-radius:13px;
+  text-decoration:none;
+  background:linear-gradient(135deg,#6d28d9,#7c3aed);
+  color:#fff;
+  font-size:13px;
+  font-weight:950;
+  box-shadow:0 9px 20px rgba(109,40,217,.18);
+}
+.instapayPayBtn:hover{transform:translateY(-1px)}
+.instapayPayBtn.disabled{
+  pointer-events:none;
+  opacity:.5;
+  box-shadow:none;
+}
+@media(max-width:620px){
+  .paymentInstructions{grid-template-columns:1fr}
+}
