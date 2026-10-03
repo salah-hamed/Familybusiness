@@ -328,7 +328,7 @@ function renderUsers() {
         <div class="actions">
           <button class="primaryBtn" data-action="view-user-payments" data-uid="${escapeHTML(user.uid)}">راجع دفعات الاشتراك</button>
           ${!initialAlreadyPaid && user.subscriptionStatus !== "active"
-            ? `<button class="secondaryBtn" data-action="grant-launch-promo" data-uid="${escapeHTML(user.uid)}">🎁 تفعيل مجاني Launch 50</button>`
+            ? `<button class="secondaryBtn" data-action="grant-launch-promo" data-uid="${escapeHTML(user.uid)}">🎁 منحة مجانية من رصيد Launch 50</button>`
             : ""}
           ${user.subscriptionStatus === "active"
             ? `<button class="secondaryBtn" data-action="deactivate-user" data-uid="${escapeHTML(user.uid)}">إيقاف الاشتراك</button>`
@@ -1470,7 +1470,7 @@ $("usersContainer").addEventListener("click", async event => {
   }
 
   if (button.dataset.action === "grant-launch-promo") {
-    const confirmed = confirm(`تفعيل اشتراك مجاني لمدة ${LAUNCH_PROMO.subscriptionDays} يوم ضمن أول ${LAUNCH_PROMO.limit} مستخدم؟ هذا التفعيل لا يُحسب كدفعة مدفوعة ولا يؤهل عمولة إحالة.`);
+    const confirmed = confirm(`منح هذا المستخدم اشتراكًا مجانيًا لمدة ${LAUNCH_PROMO.subscriptionDays} يوم من رصيد ${LAUNCH_PROMO.limit} منحة؟ يمكنك توزيع المنح في أي وقت وعلى المستخدمين الذين تختارهم. هذا التفعيل لا يُحسب كدفعة مدفوعة ولا يؤهل عمولة إحالة.`);
     if (!confirmed) return;
 
     button.disabled = true;
@@ -1483,7 +1483,7 @@ $("usersContainer").addEventListener("click", async event => {
       const code = String(error?.message || "");
       $("usersMessage").innerText =
         code === "PROMO_FULL"
-          ? "اكتمل عرض Launch 50 — تم استخدام 50 اشتراكًا مجانيًا."
+          ? "تم استخدام كل منح Launch 50 المجانية المتاحة."
           : code === "PROMO_ALREADY_GRANTED"
             ? "هذا المستخدم حصل على العرض بالفعل."
             : code === "PROMO_NOT_ELIGIBLE"
