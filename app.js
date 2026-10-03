@@ -6,6 +6,7 @@
       requestPasswordReset
     } from './core/auth/auth.js';
 import { createGuide } from './core/onboarding/guide.js';
+import { PLATFORM_BILLING } from './core/config/platform-config.js';
 import { buildAuthGuide } from './core/onboarding/guide-state.js';
 
     const nameInput =
@@ -43,6 +44,13 @@ const switchPrompt =
 const forgotPasswordBtn =
   document.getElementById("forgotPasswordBtn");
 const referralUserId = new URLSearchParams(window.location.search).get("ref") || "";
+const platformSupportWhatsapp = document.getElementById("platformSupportWhatsapp");
+if (platformSupportWhatsapp) {
+  const supportNumber = String(PLATFORM_BILLING.supportWhatsapp || "").replace(/[^0-9]/g, "");
+  const message = "مرحبًا، محتاج دعم بخصوص حساب Family Business.";
+  platformSupportWhatsapp.href = supportNumber ? "https://wa.me/" + supportNumber + "?text=" + encodeURIComponent(message) : "#";
+  platformSupportWhatsapp.textContent = "واتساب الدعم والتفعيل: " + (PLATFORM_BILLING.supportWhatsappDisplay || "01508830993");
+}
 let currentMode = "register";
 const guideController = createGuide(buildAuthGuide({ mode: currentMode }), { autoOpen: true });
 
