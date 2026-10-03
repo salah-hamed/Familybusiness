@@ -379,3 +379,25 @@ body{
   .paymentBadge{display:inline-block;margin-top:10px}
   .paymentInstructions{grid-template-columns:1fr}
 }
+
+.paymentWhatsappHint{
+  margin-top:12px;
+  padding:12px 13px;
+  border-radius:14px;
+  background:#f0fdf4;
+  border:1px solid #bbf7d0;
+}
+.paymentWhatsappHint b,
+.paymentWhatsappHint small{display:block}
+.paymentWhatsappHint b{color:#166534;margin-bottom:4px}
+.paymentWhatsappHint small{color:#475569;line-height:1.7}
+.secondaryPaymentBtn{
+  width:100%;
+  margin-top:10px;
+  border-radius:14px;
+  padding:12px 14px;
+  background:#f8fafc;
+  color:#0f172a;
+  border:1px solid #cbd5e1;
+  font-weight:900;
+}

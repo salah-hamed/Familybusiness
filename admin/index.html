@@ -41,6 +41,7 @@
       <section id="overviewCards" class="metricGrid" aria-label="مؤشرات المنصة">
         <article class="metricCard"><span>المستخدمون</span><b id="metricUsers">—</b><small id="metricUsersMeta">—</small></article>
         <article class="metricCard"><span>دفعات اشتراك للمراجعة</span><b id="metricPendingSubscriptionPayments">—</b><small>إثباتات InstaPay تحتاج قرار</small></article>
+        <article class="metricCard"><span>Launch 50</span><b id="metricLaunchPromo">0 / 50</b><small>اشتراكات أول تفعيل مجانية</small></article>
         <article class="metricCard"><span>المشاريع</span><b id="metricProjects">—</b><small>كل المشاريع المسجلة</small></article>
         <article class="metricCard"><span>المشغّلون</span><b id="metricOperators">—</b><small id="metricOperatorsMeta">—</small></article>
         <article class="metricCard"><span>الطلبات</span><b id="metricOrders">—</b><small id="metricOrdersMeta">—</small></article>
@@ -85,10 +86,10 @@
 
       <section id="subscriptionPaymentsSection" class="adminSection">
         <div class="sectionHead">
-          <div><span class="sectionKicker">Subscription Review Queue</span><h2>دفعات الاشتراك وإثباتات InstaPay</h2></div>
+          <div><span class="sectionKicker">Subscription Review Queue</span><h2>دفعات الاشتراك وإثباتات InstaPay على واتساب</h2></div>
           <button id="refreshSubscriptionPaymentsBtn" class="secondaryBtn" type="button">تحديث</button>
         </div>
-        <p class="hintBox">التفعيل يتم من هنا فقط بعد مراجعة مرجع التحويل والصورة. قبول الدفعة يفعّل الاشتراك في نفس العملية، والرفض لا يغيّر حالة الحساب.</p>
+        <p class="hintBox">للدفعات المدفوعة: طابق كود الدفع ومرجع InstaPay مع Screenshot المرسل على واتساب ثم اعتمد أو ارفض. عرض Launch 50 يتم من بطاقة المستخدم ولا يحتاج إثبات دفع.</p>
         <div class="filterGrid">
           <input id="subscriptionPaymentsSearch" type="search" placeholder="بحث مباشر: Payment ID أو User UID أو مرجع التحويل">
           <select id="subscriptionPaymentsStatusFilter">

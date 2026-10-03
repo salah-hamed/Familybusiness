@@ -53,7 +53,7 @@
       <div class="paymentCardHead">
         <div>
           <span class="cardEyebrow">تفعيل الاشتراك</span>
-          <h2 id="paymentCardTitle">حوّل على InstaPay وارفع الإثبات</h2>
+          <h2 id="paymentCardTitle">حوّل على InstaPay وابعت الإثبات على واتساب</h2>
           <p id="paymentRequiredText">جاري تحديد قيمة الاشتراك...</p>
         </div>
         <span id="paymentBadge" class="paymentBadge">بانتظار الدفع</span>
@@ -75,14 +75,14 @@
           <span>مرجع عملية InstaPay</span>
           <input id="paymentReference" type="text" maxlength="120" autocomplete="off" placeholder="اكتب رقم أو مرجع التحويل">
         </label>
-        <label class="paymentField">
-          <span>صورة إثبات التحويل</span>
-          <input id="paymentProofFile" type="file" accept="image/jpeg,image/png,image/webp">
-          <small>JPG أو PNG أو WebP — بحد أقصى 5 MB.</small>
-        </label>
-        <button id="submitPaymentProofBtn" type="button">إرسال الإثبات للمراجعة</button>
+        <div class="paymentWhatsappHint">
+          <b>الخطوة الأخيرة على واتساب</b>
+          <small>بعد الضغط هنجهز لك رسالة فيها كود الدفع ومرجع InstaPay. افتح واتساب وأرفق Screenshot التحويل بنفسك ثم أرسل الرسالة.</small>
+        </div>
+        <button id="submitPaymentProofBtn" type="button">سجّل الدفعة وافتح واتساب</button>
       </div>
 
+      <button id="reopenPaymentWhatsappBtn" class="secondaryPaymentBtn hidden" type="button">افتح واتساب مرة تانية</button>
       <p id="paymentReviewStatus" class="paymentReviewStatus"></p>
     </section>
 

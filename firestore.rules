@@ -16,6 +16,8 @@ service cloud.firestore {
   function commissionLedgerPath(entryId){ return /databases/$(database)/documents/commissionLedger/$(entryId); }
   function commissionReversalPath(reversalId){ return /databases/$(database)/documents/commissionReversals/$(reversalId); }
   function subscriptionPaymentPath(paymentId){ return /databases/$(database)/documents/subscriptionPayments/$(paymentId); }
+  function subscriptionGrantPath(grantId){ return /databases/$(database)/documents/subscriptionGrants/$(grantId); }
+  function platformCounterPath(counterId){ return /databases/$(database)/documents/platformCounters/$(counterId); }
   function userExists(uid){ return exists(userPath(uid)); }
   function userData(uid){ return get(userPath(uid)).data; }
   function isAdmin(){ return signedIn() && userExists(request.auth.uid) && userData(request.auth.uid).role == "admin"; }
@@ -1011,6 +1013,32 @@ service cloud.firestore {
           "lastRenewalAt","activatedAt","referralQualified"
         ])
       )
+      ||
+      (
+        request.resource.data.isActive == true
+        && request.resource.data.subscriptionStatus == "active"
+        && resource.data.initialActivationPaid == false
+        && request.resource.data.initialActivationPaid == false
+        && request.resource.data.billingCycle == "monthly"
+        && request.resource.data.lastActivationSource == "launch_promo"
+        && request.resource.data.lastSubscriptionGrantId == "launch50_" + uid
+        && request.resource.data.launchPromoCampaignId == "launch50"
+        && request.resource.data.subscriptionExpiresAt > request.time
+        && existsAfter(subscriptionGrantPath(request.resource.data.lastSubscriptionGrantId))
+        && getAfter(subscriptionGrantPath(request.resource.data.lastSubscriptionGrantId)).data.status == "granted"
+        && getAfter(subscriptionGrantPath(request.resource.data.lastSubscriptionGrantId)).data.userId == uid
+        && getAfter(subscriptionGrantPath(request.resource.data.lastSubscriptionGrantId)).data.campaignId == "launch50"
+        && getAfter(subscriptionGrantPath(request.resource.data.lastSubscriptionGrantId)).data.paymentRequired == false
+        && getAfter(subscriptionGrantPath(request.resource.data.lastSubscriptionGrantId)).data.grantedBy == request.auth.uid
+        && existsAfter(platformCounterPath("launch50"))
+        && getAfter(platformCounterPath("launch50")).data.count <= 50
+        && getAfter(platformCounterPath("launch50")).data.lastGrantedUserId == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "isActive","subscriptionStatus","initialActivationPaid","billingCycle",
+          "subscriptionStartedAt","subscriptionExpiresAt","activatedAt",
+          "lastActivationSource","lastSubscriptionGrantId","launchPromoCampaignId"
+        ])
+      )
     )
    ) || (
     signedIn()
@@ -1040,16 +1068,20 @@ service cloud.firestore {
     && request.resource.data.paymentReference is string
     && request.resource.data.paymentReference.size() >= 4
     && request.resource.data.paymentReference.size() <= 120
-    && request.resource.data.proofPath == "subscription-proofs/" + request.auth.uid + "/" + paymentId
+    && request.resource.data.paymentCode is string
+    && request.resource.data.paymentCode.size() >= 8
+    && request.resource.data.paymentCode.size() <= 40
+    && request.resource.data.proofChannel == "whatsapp"
     && request.resource.data.status == "pending_review"
     && request.resource.data.submittedAt == request.time
+    && request.resource.data.whatsappPreparedAt == request.time
     && request.resource.data.reviewedAt == null
     && request.resource.data.reviewedBy == ""
     && request.resource.data.rejectionReason == ""
     && request.resource.data.keys().hasOnly([
-      "paymentId","userId","userEmail","paymentType","amount","currency",
-      "paymentMethod","paymentReference","proofPath","status","submittedAt",
-      "reviewedAt","reviewedBy","rejectionReason"
+      "paymentId","paymentCode","userId","userEmail","paymentType","amount","currency",
+      "paymentMethod","paymentReference","proofChannel","status","submittedAt",
+      "whatsappPreparedAt","reviewedAt","reviewedBy","rejectionReason"
     ]);
    allow get, list: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
    allow update: if isAdmin()
@@ -1062,8 +1094,10 @@ service cloud.firestore {
     && request.resource.data.currency == resource.data.currency
     && request.resource.data.paymentMethod == resource.data.paymentMethod
     && request.resource.data.paymentReference == resource.data.paymentReference
-    && request.resource.data.proofPath == resource.data.proofPath
+    && request.resource.data.paymentCode == resource.data.paymentCode
+    && request.resource.data.proofChannel == resource.data.proofChannel
     && request.resource.data.submittedAt == resource.data.submittedAt
+    && request.resource.data.whatsappPreparedAt == resource.data.whatsappPreparedAt
     && request.resource.data.status in ["approved","rejected"]
     && request.resource.data.reviewedAt == request.time
     && request.resource.data.reviewedBy == request.auth.uid
@@ -1088,6 +1122,78 @@ service cloud.firestore {
     && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
       "status","reviewedAt","reviewedBy","rejectionReason"
     ]);
+   allow delete: if false;
+  }
+
+
+  match /subscriptionGrants/{grantId} {
+   allow get, list: if isAdmin()
+    || (signedIn() && resource.data.userId == request.auth.uid);
+
+   allow create: if isAdmin()
+    && request.resource.data.grantId == grantId
+    && request.resource.data.userId is string
+    && request.resource.data.userId.size() > 0
+    && grantId == "launch50_" + request.resource.data.userId
+    && request.resource.data.campaignId == "launch50"
+    && request.resource.data.status == "granted"
+    && request.resource.data.paymentRequired == false
+    && request.resource.data.value == 350
+    && request.resource.data.currency == "EGP"
+    && request.resource.data.subscriptionDays == 30
+    && request.resource.data.grantedAt == request.time
+    && request.resource.data.grantedBy == request.auth.uid
+    && request.resource.data.keys().hasOnly([
+      "grantId","userId","campaignId","status","paymentRequired","value",
+      "currency","subscriptionDays","grantedAt","grantedBy"
+    ])
+    && existsAfter(userPath(request.resource.data.userId))
+    && getAfter(userPath(request.resource.data.userId)).data.isActive == true
+    && getAfter(userPath(request.resource.data.userId)).data.subscriptionStatus == "active"
+    && getAfter(userPath(request.resource.data.userId)).data.lastActivationSource == "launch_promo"
+    && getAfter(userPath(request.resource.data.userId)).data.lastSubscriptionGrantId == grantId
+    && existsAfter(platformCounterPath("launch50"))
+    && getAfter(platformCounterPath("launch50")).data.count <= 50
+    && getAfter(platformCounterPath("launch50")).data.lastGrantedUserId == request.resource.data.userId;
+
+   allow update, delete: if false;
+  }
+
+  match /platformCounters/{counterId} {
+   allow get, list: if isAdmin();
+
+   allow create: if isAdmin()
+    && counterId == "launch50"
+    && request.resource.data.campaignId == "launch50"
+    && request.resource.data.count == 1
+    && request.resource.data.limit == 50
+    && request.resource.data.lastGrantedUserId is string
+    && request.resource.data.lastGrantedUserId.size() > 0
+    && request.resource.data.updatedAt == request.time
+    && request.resource.data.keys().hasOnly([
+      "campaignId","count","limit","lastGrantedUserId","updatedAt"
+    ])
+    && existsAfter(subscriptionGrantPath("launch50_" + request.resource.data.lastGrantedUserId))
+    && getAfter(subscriptionGrantPath("launch50_" + request.resource.data.lastGrantedUserId)).data.status == "granted";
+
+   allow update: if isAdmin()
+    && counterId == "launch50"
+    && resource.data.campaignId == "launch50"
+    && resource.data.limit == 50
+    && resource.data.count < 50
+    && request.resource.data.campaignId == resource.data.campaignId
+    && request.resource.data.limit == resource.data.limit
+    && request.resource.data.count == resource.data.count + 1
+    && request.resource.data.count <= 50
+    && request.resource.data.lastGrantedUserId is string
+    && request.resource.data.lastGrantedUserId.size() > 0
+    && request.resource.data.updatedAt == request.time
+    && request.resource.data.keys().hasOnly([
+      "campaignId","count","limit","lastGrantedUserId","updatedAt"
+    ])
+    && existsAfter(subscriptionGrantPath("launch50_" + request.resource.data.lastGrantedUserId))
+    && getAfter(subscriptionGrantPath("launch50_" + request.resource.data.lastGrantedUserId)).data.status == "granted";
+
    allow delete: if false;
   }
 

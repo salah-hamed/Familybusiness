@@ -3,7 +3,8 @@ export const PLATFORM_BILLING = Object.freeze({
   initialActivationFee: 350,
   monthlyRenewalFee: 59,
   subscriptionDays: 30,
-  instapayAccount: ""
+  instapayAccount: "",
+  paymentWhatsapp: ""
 });
 
 export const REFERRAL_CONFIG = Object.freeze({
@@ -14,3 +15,10 @@ export const REFERRAL_CONFIG = Object.freeze({
 export function formatEgp(amount) {
   return `${Number(amount || 0).toLocaleString("ar-EG")} جنيه`;
 }
+
+
+export const LAUNCH_PROMO = Object.freeze({
+  campaignId: "launch50",
+  limit: 50,
+  subscriptionDays: 30
+});
