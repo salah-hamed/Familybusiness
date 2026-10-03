@@ -55,10 +55,10 @@ test("rejection records reason without activating the subscriber", () => {
   assert.doesNotMatch(block, /subscriptionStatus|isActive/);
 });
 
-test("admin proof viewer reads protected Storage object instead of public URL", () => {
-  assert.match(adminJs, /getBlob/);
-  assert.match(adminJs, /storageRef\(storage, path\)/);
-  assert.doesNotMatch(adminJs, /getDownloadURL/);
+test("admin reviews WhatsApp proof by payment code instead of Firebase Storage", () => {
+  assert.match(adminJs, /copy-payment-code/);
+  assert.match(adminJs, /paymentCode/);
+  assert.doesNotMatch(adminJs, /getBlob|storageRef|firebase-storage/);
 });
 
 test("rules bind approved payment and active subscriber atomically", () => {
@@ -66,4 +66,30 @@ test("rules bind approved payment and active subscriber atomically", () => {
   assert.match(rules, /getAfter\(subscriptionPaymentPath/);
   assert.match(rules, /getAfter\(userPath\(resource\.data\.userId\)\)/);
   assert.match(rules, /lastSubscriptionPaymentId/);
+});
+
+
+test("admin exposes capped Launch 50 activation without restoring direct paid activation", () => {
+  assert.match(adminJs, /grantLaunchPromo/);
+  assert.match(adminJs, /grant-launch-promo/);
+  assert.match(adminJs, /LAUNCH_PROMO\.limit/);
+  assert.match(adminHtml, /id="metricLaunchPromo"/);
+  assert.doesNotMatch(adminJs, /data-action="activate-user"/);
+});
+
+test("Launch 50 activation is modeled as a grant, not a zero-value payment", () => {
+  const start = adminJs.indexOf("async function grantLaunchPromo");
+  const end = adminJs.indexOf("async function approveSubscriptionPayment", start);
+  const block = adminJs.slice(start, end);
+  assert.match(block, /subscriptionGrants/);
+  assert.match(block, /platformCounters/);
+  assert.match(block, /paymentRequired: false/);
+  assert.match(block, /lastActivationSource: "launch_promo"/);
+  assert.doesNotMatch(block, /subscriptionPayments/);
+  assert.doesNotMatch(block, /referralQualified/);
+});
+
+test("Storage deployment is removed from Firebase config", () => {
+  const firebaseConfig = JSON.parse(readFileSync("firebase.json", "utf8"));
+  assert.equal(firebaseConfig.storage, undefined);
 });
