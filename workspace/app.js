@@ -42,7 +42,7 @@ const projectCount = document.getElementById("projectCount");
 const workspaceAccountState = document.getElementById("workspaceAccountState");
 const subscriptionHint = document.getElementById("subscriptionHint");
 const subscriptionPaymentPanel = document.getElementById("subscriptionPaymentPanel");
-const platformInstapayAccount = document.getElementById("platformInstapayAccount");
+const payWithInstapayBtn = document.getElementById("payWithInstapayBtn");
 const paymentRequiredText = document.getElementById("paymentRequiredText");
 const paymentAmount = document.getElementById("paymentAmount");
 const paymentBadge = document.getElementById("paymentBadge");
@@ -75,12 +75,25 @@ async function renderSubscriptionPayment(user, userData, subscriptionActive) {
     ? "أول تفعيل للحساب. بعد اعتماد الدفعة تقدر تشغّل المشاريع الأربعة."
     : "تجديد الاشتراك الشهري لإعادة تشغيل المشاريع.";
 
-  platformInstapayAccount.innerText = PLATFORM_BILLING.instapayAccount || "لم يتم ضبط حساب التحويل بعد";
-
+  const instapayPaymentUrl = String(PLATFORM_BILLING.instapayPaymentUrl || "").trim();
   const paymentConfigReady = Boolean(
-    PLATFORM_BILLING.instapayAccount
+    instapayPaymentUrl
     && PLATFORM_BILLING.paymentWhatsapp
   );
+
+  if (payWithInstapayBtn) {
+    payWithInstapayBtn.href = instapayPaymentUrl || "#";
+    payWithInstapayBtn.classList.toggle("disabled", !instapayPaymentUrl);
+    payWithInstapayBtn.setAttribute("aria-disabled", instapayPaymentUrl ? "false" : "true");
+    payWithInstapayBtn.onclick = event => {
+      if (!instapayPaymentUrl) {
+        event.preventDefault();
+        paymentReviewStatus.innerText = "رابط الدفع عبر InstaPay غير مضبوط بعد.";
+        return;
+      }
+      paymentReviewStatus.innerText = "بعد إتمام التحويل ارجع للصفحة واكتب مرجع العملية كما يظهر في InstaPay.";
+    };
+  }
 
   let latest = null;
   try {
@@ -105,7 +118,7 @@ async function renderSubscriptionPayment(user, userData, subscriptionActive) {
   paymentReviewStatus.innerText = paymentStatusCopy(latest)
     || (paymentConfigReady
       ? "بعد التحويل اكتب مرجع العملية. سنجهز لك رسالة واتساب فيها كود الدفع، وأنت أرفق Screenshot التحويل ثم أرسلها."
-      : "يجب ضبط حساب InstaPay ورقم واتساب الدفع للمنصة قبل استقبال دفعات حقيقية.");
+      : "يجب ضبط رابط InstaPay ورقم واتساب الدفع للمنصة قبل استقبال دفعات حقيقية.");
 
   function openWhatsappForPayment(payment) {
     const message = buildWhatsAppProofMessage({
