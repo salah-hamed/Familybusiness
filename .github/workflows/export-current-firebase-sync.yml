@@ -1,0 +1,41 @@
+name: Export Current Firebase Sync
+on:
+  push:
+    branches:
+      - export-final-firebase-sync-current
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare current Firebase sync bundle
+        run: |
+          cat > FIREBASE_SYNC_STEPS.txt <<'EOF'
+          FAMILY BUSINESS — FINAL FIREBASE PRODUCTION SYNC
+          Source main SHA: b29c268efc8921f15ecf7a20138a3d8b2b567135
+
+          1) FIRESTORE RULES
+             Firebase Console -> Firestore Database -> Rules
+             Replace the current rules completely with firestore.rules
+             Click Publish.
+
+          2) FIRESTORE INDEXES
+             Publish firestore.indexes.json.
+             Preferred method from Firebase CLI:
+             firebase deploy --only firestore:indexes
+
+          NOTE:
+          Firebase Storage is no longer used by the platform.
+          Do NOT publish storage.rules.
+          firebase.json now references Firestore rules and indexes only.
+          EOF
+      - uses: actions/upload-artifact@v4
+        with:
+          name: family-business-final-firebase-sync
+          path: |
+            firestore.rules
+            firestore.indexes.json
+            firebase.json
+            FIREBASE_SYNC_STEPS.txt
+          if-no-files-found: error
