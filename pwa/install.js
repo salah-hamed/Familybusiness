@@ -12,6 +12,11 @@ const isIos = () =>
   /iphone|ipad|ipod/i.test(navigator.userAgent || "")
   || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
+function isLikelyMobile(){
+  return /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent || "")
+    || window.matchMedia?.("(max-width: 820px)")?.matches === true;
+}
+
 const installKey = `familybusiness:pwa:launch:${surface}`;
 const dismissKey = `familybusiness:pwa:dismissed:${surface}`;
 let deferredPrompt = null;
@@ -170,7 +175,7 @@ if(restoreTemplateLaunch()) {
     localStorage.removeItem(dismissKey);
   });
 
-  if(isIos() && !isStandalone()){
+  if(isLikelyMobile() && !isStandalone()){
     window.setTimeout(showInstallUi, 900);
   }
 }
