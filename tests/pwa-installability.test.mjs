@@ -127,7 +127,7 @@ test("install UI uses the native prompt when available and iOS Home Screen instr
 test("customer PWA remembers the exact project before install and restores it on standalone launch", () => {
   const source = readFileSync("pwa/install.js", "utf8");
   assert.match(source, /familybusiness:pwa:launch:/);
-  assert.match(source, /searchParams\.get\("project"\)/);
+  assert.match(source, /new URLSearchParams\(location\.search\)\.get\("project"\)/);
   assert.match(source, /localStorage\.setItem\(installKey/);
   assert.match(source, /isStandalone\(\)/);
   assert.match(source, /location\.replace\(target\.toString\(\)\)/);
