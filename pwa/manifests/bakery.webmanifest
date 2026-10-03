@@ -1,0 +1,26 @@
+{
+  "name": "تطبيق المخبز | Family Business",
+  "short_name": "المخبز",
+  "lang": "ar",
+  "dir": "rtl",
+  "id": "../../templates/bakery/",
+  "start_url": "../../templates/bakery/?source=pwa",
+  "scope": "../../templates/bakery/",
+  "display": "standalone",
+  "background_color": "#fffbeb",
+  "theme_color": "#D97706",
+  "icons": [
+    {
+      "src": "../icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "../icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
