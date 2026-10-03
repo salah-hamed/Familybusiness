@@ -1371,15 +1371,49 @@ service cloud.firestore {
     && request.resource.data.laundryStage == "delivered"
     && validTrackedLaundryDeliveryUpdate(orderId);
 
+   // Cheap state guards keep unrelated partner-order updates from evaluating
+   // the expensive commission rules and exhausting Firestore's expression budget.
    allow update: if !(
       resource.data.templateType == "laundry"
       && ("trackingToken" in resource.data)
+    )
+    && resource.data.templateType in ["supermarket","restaurant","bakery","laundry"]
+    && (
+      (
+        resource.data.templateType in ["supermarket","restaurant","bakery"]
+        && resource.data.status == "ready"
+        && request.resource.data.status == "assigned"
+      )
+      ||
+      (
+        resource.data.templateType == "laundry"
+        && resource.data.status == "accepted"
+        && resource.data.laundryStage == "ready_delivery"
+        && request.resource.data.status == "accepted"
+        && request.resource.data.laundryStage == "out_for_delivery"
+      )
     )
     && validDispatchCommissionUpdate(orderId);
 
    allow update: if !(
       resource.data.templateType == "laundry"
       && ("trackingToken" in resource.data)
+    )
+    && resource.data.templateType in ["supermarket","restaurant","bakery","laundry"]
+    && (
+      (
+        resource.data.templateType in ["supermarket","restaurant","bakery"]
+        && resource.data.status == "out_for_delivery"
+        && request.resource.data.status == "delivered"
+      )
+      ||
+      (
+        resource.data.templateType == "laundry"
+        && resource.data.status == "accepted"
+        && resource.data.laundryStage == "out_for_delivery"
+        && request.resource.data.status == "done"
+        && request.resource.data.laundryStage == "delivered"
+      )
     )
     && validLockedCommissionDeliveryUpdate(orderId);
 
