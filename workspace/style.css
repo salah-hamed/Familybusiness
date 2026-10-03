@@ -283,7 +283,7 @@ body{
 
 .referralLinkRow{
   display:grid;
-  grid-template-columns:1fr auto;
+  grid-template-columns:1fr auto auto;
   gap:8px;
   margin-top:16px;
 }
@@ -400,4 +400,10 @@ body{
   color:#0f172a;
   border:1px solid #cbd5e1;
   font-weight:900;
+}
+
+@media(max-width:560px){
+  .referralLinkRow{grid-template-columns:1fr 1fr}
+  .referralLinkRow input{grid-column:1 / -1}
+  .referralLinkRow button{padding:11px 10px}
 }
