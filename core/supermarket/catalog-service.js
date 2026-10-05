@@ -15,7 +15,7 @@ import {
   deleteDoc,
   writeBatch,
   serverTimestamp
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+} from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 
 function productsCollection(projectId) {
   return collection(db, "supermarkets", projectId, "products");
