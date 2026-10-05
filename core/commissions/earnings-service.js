@@ -12,7 +12,7 @@ import {
   getAggregateFromServer,
   sum,
   count
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+} from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 
 function normalizePageSize(value, fallback = 50) {
   return Math.max(1, Math.min(100, Number(value) || fallback));
