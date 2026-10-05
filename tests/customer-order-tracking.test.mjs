@@ -92,3 +92,11 @@ test("laundry tracking never exposes customer phone or address", () => {
   const publicRecord = laundryService.slice(start, end);
   assert.doesNotMatch(publicRecord, /customerPhone|customerAddress|location|notes/);
 });
+
+
+test("public tracking access expires after 30 days", () => {
+  const rules = readFileSync("firestore.rules", "utf8");
+  assert.match(rules, /resource\.data\.createdAt \+ duration\.value\(30, 'd'\) > request\.time/);
+  assert.match(rules, /request\.resource\.data\.createdAt == request\.time/);
+  assert.match(rules, /request\.resource\.data\.updatedAt == request\.time/);
+});
