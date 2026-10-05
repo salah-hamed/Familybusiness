@@ -10,6 +10,7 @@ export function friendlyOperatorError(error, fallback = "تعذر تنفيذ ا�
   if (
     upper === "OPERATOR_ALREADY_CLAIMED"
     || upper === "OPERATOR_INVITE_MISMATCH"
+    || upper === "OPERATOR_INVITE_EXPIRED"
   ) {
     return "رابط الدخول ده اتلغى أو تم استبداله. اطلب رابط دخول جديد من صاحب المشروع.";
   }
