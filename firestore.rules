@@ -2318,6 +2318,8 @@ service cloud.firestore {
         (
           resource.data.authLoginEmail is string
           && resource.data.authLoginEmail.size() > 0
+          && resource.data.inviteExpiresAt is timestamp
+          && resource.data.inviteExpiresAt > request.time
           && request.auth.token.email == resource.data.authLoginEmail
         )
         ||
@@ -2339,6 +2341,12 @@ service cloud.firestore {
     && request.resource.data.authUid == ""
     && request.resource.data.authLoginEmail is string
     && request.resource.data.authLoginEmail.size() > 0
+    && request.resource.data.inviteIssuedAt == request.time
+    && request.resource.data.inviteExpiresAt is timestamp
+    && request.resource.data.inviteExpiresAt > request.time
+    && request.resource.data.inviteExpiresAt <= request.time + duration.value(49, 'h')
+    && request.resource.data.inviteVersion == 1
+    && request.resource.data.inviteClaimedAt == null
     && request.resource.data.status == "pending_invite"
     && request.resource.data.agreementStatus == "not_proposed"
     && request.resource.data.isActive == false
@@ -2362,15 +2370,7 @@ service cloud.firestore {
         resource.data.authUid == ""
         || request.resource.data.email == resource.data.email
       )
-      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name","contactName","phone","whatsapp","email","authLoginEmail","agreementStatus","updatedAt"])
-      && (
-        !request.resource.data.diff(resource.data).affectedKeys().hasAny(["authLoginEmail"])
-        || (
-          resource.data.authUid == ""
-          && request.resource.data.authLoginEmail is string
-          && request.resource.data.authLoginEmail.size() > 0
-        )
-      )
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name","contactName","phone","whatsapp","email","agreementStatus","updatedAt"])
       && (
         request.resource.data.agreementStatus == resource.data.agreementStatus
         || (
@@ -2391,14 +2391,25 @@ service cloud.firestore {
       && request.resource.data.authLoginEmail is string
       && request.resource.data.authLoginEmail.size() > 0
       && request.resource.data.authLoginEmail != resource.data.authLoginEmail
+      && request.resource.data.inviteIssuedAt == request.time
+      && request.resource.data.inviteExpiresAt is timestamp
+      && request.resource.data.inviteExpiresAt > request.time
+      && request.resource.data.inviteExpiresAt <= request.time + duration.value(49, 'h')
+      && request.resource.data.inviteVersion == (("inviteVersion" in resource.data) ? resource.data.inviteVersion + 1 : 1)
+      && request.resource.data.inviteClaimedAt == null
       && request.resource.data.status == resource.data.status
       && request.resource.data.agreementStatus == resource.data.agreementStatus
       && request.resource.data.isActive == resource.data.isActive
-      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["authLoginEmail","authUid","updatedAt"])
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        "authLoginEmail","authUid","inviteIssuedAt","inviteExpiresAt",
+        "inviteVersion","inviteClaimedAt","updatedAt"
+      ])
     )
     || (
       signedIn()
       && resource.data.authUid == ""
+      && resource.data.inviteExpiresAt is timestamp
+      && resource.data.inviteExpiresAt > request.time
       && (
         (
           resource.data.authLoginEmail is string
@@ -2412,7 +2423,8 @@ service cloud.firestore {
         )
       )
       && request.resource.data.authUid == request.auth.uid
-      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["authUid","status","updatedAt"])
+      && request.resource.data.inviteClaimedAt == request.time
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["authUid","status","inviteClaimedAt","updatedAt"])
       && (
         (resource.data.agreementStatus == "accepted" && request.resource.data.status == "active")
         || (resource.data.agreementStatus != "accepted" && request.resource.data.status == "pending_agreement")
