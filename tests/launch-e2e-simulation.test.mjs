@@ -53,6 +53,19 @@ function registrationProfile(uid, referredByUserId = "") {
   };
 }
 
+function initialPaymentReferenceClaim(uid, paymentId) {
+  return {
+    referenceId: "IPN-E2E-12345",
+    paymentReference: "IPN-E2E-12345",
+    paymentId,
+    userId: uid,
+    status: "pending_review",
+    createdAt: serverTimestamp(),
+    reviewedAt: null,
+    reviewedBy: ""
+  };
+}
+
 function initialPayment(uid, paymentId) {
   return {
     paymentId,
@@ -137,9 +150,16 @@ test("paid referral path: register -> WhatsApp proof record -> admin approval ->
   await assertSucceeds(
     setDoc(doc(userDb, "users", uid), registrationProfile(uid, referrerId))
   );
-  await assertSucceeds(
-    setDoc(doc(userDb, "subscriptionPayments", paymentId), initialPayment(uid, paymentId))
+  const submitPayment = writeBatch(userDb);
+  submitPayment.set(
+    doc(userDb, "subscriptionPayments", paymentId),
+    initialPayment(uid, paymentId)
   );
+  submitPayment.set(
+    doc(userDb, "paymentReferenceClaims", "IPN-E2E-12345"),
+    initialPaymentReferenceClaim(uid, paymentId)
+  );
+  await assertSucceeds(submitPayment.commit());
 
   const adminDb = testEnv.authenticatedContext(adminId).firestore();
   const batch = writeBatch(adminDb);
@@ -149,6 +169,11 @@ test("paid referral path: register -> WhatsApp proof record -> admin approval ->
     reviewedAt: serverTimestamp(),
     reviewedBy: adminId,
     rejectionReason: ""
+  });
+  batch.update(doc(adminDb, "paymentReferenceClaims", "IPN-E2E-12345"), {
+    status: "approved",
+    reviewedAt: serverTimestamp(),
+    reviewedBy: adminId
   });
 
   batch.update(doc(adminDb, "users", uid), {
