@@ -488,17 +488,25 @@ async function seedClaimedOperatorRecoveryFixture(suffix = "recovery") {
   return { ownerId, projectId, oldAuthUid, oldEmail };
 }
 
+function rotatedOperatorInvitePatch(authLoginEmail) {
+  return {
+    authLoginEmail,
+    authUid: "",
+    inviteIssuedAt: serverTimestamp(),
+    inviteExpiresAt: Timestamp.fromMillis(Date.now() + 48 * 60 * 60 * 1000),
+    inviteVersion: 1,
+    inviteClaimedAt: null,
+    updatedAt: serverTimestamp()
+  };
+}
+
 test("project owner can rotate claimed operator access without changing business state", async () => {
   const { ownerId, projectId } = await seedClaimedOperatorRecoveryFixture("owner_reset");
   const db = testEnv.authenticatedContext(ownerId).firestore();
   const newEmail = "operator.new.owner-reset@familybusiness.local";
 
   await assertSucceeds(
-    updateDoc(doc(db, "operators", projectId), {
-      authLoginEmail: newEmail,
-      authUid: "",
-      updatedAt: serverTimestamp()
-    })
+    updateDoc(doc(db, "operators", projectId), rotatedOperatorInvitePatch(newEmail))
   );
 
   const snap = await getDoc(doc(db, "operators", projectId));
@@ -514,11 +522,10 @@ test("non-owner cannot rotate operator access", async () => {
   const db = testEnv.authenticatedContext("stranger_user").firestore();
 
   await assertFails(
-    updateDoc(doc(db, "operators", projectId), {
-      authLoginEmail: "operator.new.stranger@familybusiness.local",
-      authUid: "",
-      updatedAt: serverTimestamp()
-    })
+    updateDoc(
+      doc(db, "operators", projectId),
+      rotatedOperatorInvitePatch("operator.new.stranger@familybusiness.local")
+    )
   );
 });
 
@@ -528,11 +535,7 @@ test("old operator loses access immediately after owner rotates invite", async (
   const newEmail = "operator.new.old-revoked@familybusiness.local";
 
   await assertSucceeds(
-    updateDoc(doc(ownerDb, "operators", projectId), {
-      authLoginEmail: newEmail,
-      authUid: "",
-      updatedAt: serverTimestamp()
-    })
+    updateDoc(doc(ownerDb, "operators", projectId), rotatedOperatorInvitePatch(newEmail))
   );
 
   const oldDb = testEnv.authenticatedContext(oldAuthUid, {
@@ -565,6 +568,7 @@ test("new rotated invite can claim once and a second uid cannot take over", asyn
     updateDoc(doc(newDb, "operators", projectId), {
       authUid: "operator_new_claim",
       status: "active",
+      inviteClaimedAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     })
   );
