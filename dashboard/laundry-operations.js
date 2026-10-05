@@ -1,5 +1,5 @@
 import db from "../core/firebase/firebase-db.js";
-import { collection, query, where, getDocs, doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { collection, query, where, getDocs, doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 
 const params = new URLSearchParams(location.search);
 const projectDocId = params.get("project") || "";
