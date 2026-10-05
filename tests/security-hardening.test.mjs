@@ -87,3 +87,14 @@ test("public tracking tokens expire and unknown Firestore paths stay denied", ()
   assert.match(rules, /duration\.value\(30, 'd'\)/);
   assert.match(rules, /match \/\{document=\*\*\} \{ allow read, write: if false; \}/);
 });
+
+
+test("App Check is initialized before Firebase services", () => {
+  const appCheck = readFileSync("core/firebase/firebase-app-check.js", "utf8");
+  const auth = readFileSync("core/firebase/firebase-auth.js", "utf8");
+  const db = readFileSync("core/firebase/firebase-db.js", "utf8");
+  assert.match(appCheck, /ReCaptchaEnterpriseProvider/);
+  assert.match(appCheck, /isTokenAutoRefreshEnabled: true/);
+  assert.match(auth, /firebase-app-check\.js/);
+  assert.match(db, /firebase-app-check\.js/);
+});
