@@ -6,12 +6,12 @@ import {
   browserSessionPersistence,
   setPersistence,
   signOut
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+} from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
 
 import {
   doc,
   getDoc
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+} from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 
 const ADMIN_IDLE_TIMEOUT_MS = 20 * 60 * 1000;
 let idleGuardInstalled = false;
