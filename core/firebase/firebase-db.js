@@ -1,3 +1,4 @@
+import "./firebase-app-check.js";
 import app from "./firebase-config.js";
 
 import {
