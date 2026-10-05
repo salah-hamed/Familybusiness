@@ -14,8 +14,8 @@ import { getOrderOperationalAlert, summarizeOperationalAlerts } from "../core/or
 import { createGuide } from "../core/onboarding/guide.js";
 import { buildOperatorGuide } from "../core/onboarding/guide-state.js";
 
-import {createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut,onAuthStateChanged} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import {doc,getDoc,updateDoc} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import {createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut,onAuthStateChanged} from "https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js";
+import {doc,getDoc,updateDoc} from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 
 const $=id=>document.getElementById(id);
 const params=new URLSearchParams(location.search);
