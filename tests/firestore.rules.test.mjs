@@ -1429,6 +1429,20 @@ test("commission reversal cannot be requested before the order is canceled", asy
 });
 
 
+function paymentReferenceClaimRecord(uid, paymentId, reference = "REF-12345", extra = {}) {
+  return {
+    referenceId: reference,
+    paymentReference: reference,
+    paymentId,
+    userId: uid,
+    status: "pending_review",
+    createdAt: serverTimestamp(),
+    reviewedAt: null,
+    reviewedBy: "",
+    ...extra
+  };
+}
+
 function subscriptionPaymentRecord(uid, paymentId, extra = {}) {
   return {
     paymentId,
@@ -1461,12 +1475,36 @@ test("subscriber can create a valid initial subscription payment proof record", 
   });
   const db = testEnv.authenticatedContext(uid).firestore();
 
-  await assertSucceeds(
-    setDoc(
-      doc(db, "subscriptionPayments", paymentId),
-      subscriptionPaymentRecord(uid, paymentId)
-    )
+  const batch = writeBatch(db);
+  batch.set(
+    doc(db, "subscriptionPayments", paymentId),
+    subscriptionPaymentRecord(uid, paymentId)
   );
+  batch.set(
+    doc(db, "paymentReferenceClaims", "REF-12345"),
+    paymentReferenceClaimRecord(uid, paymentId)
+  );
+  await assertSucceeds(batch.commit());
+});
+
+test("same InstaPay reference cannot be claimed by a second payment", async () => {
+  const uid = "payment_replay_owner";
+  await seedUser(uid, {
+    isActive: false,
+    subscriptionStatus: "pending",
+    initialActivationPaid: false
+  });
+  const db = testEnv.authenticatedContext(uid).firestore();
+
+  const first = writeBatch(db);
+  first.set(doc(db, "subscriptionPayments", uid + "_first"), subscriptionPaymentRecord(uid, uid + "_first"));
+  first.set(doc(db, "paymentReferenceClaims", "REF-12345"), paymentReferenceClaimRecord(uid, uid + "_first"));
+  await assertSucceeds(first.commit());
+
+  const second = writeBatch(db);
+  second.set(doc(db, "subscriptionPayments", uid + "_second"), subscriptionPaymentRecord(uid, uid + "_second"));
+  second.set(doc(db, "paymentReferenceClaims", "REF-12345"), paymentReferenceClaimRecord(uid, uid + "_second"));
+  await assertFails(second.commit());
 });
 
 test("subscriber cannot forge subscription payment amount or owner", async () => {
@@ -1552,6 +1590,12 @@ async function seedPendingSubscriptionReviewFixture(suffix = "review") {
         submittedAt: new Date("2026-10-01T10:00:00Z")
       })
     );
+    await setDoc(
+      doc(db, "paymentReferenceClaims", "REF-12345"),
+      paymentReferenceClaimRecord(uid, paymentId, "REF-12345", {
+        createdAt: new Date("2026-10-01T10:00:00Z")
+      })
+    );
   });
 
   return { uid, adminId, paymentId };
@@ -1608,6 +1652,11 @@ test("admin can atomically approve payment and activate subscriber with matching
     reviewedBy: adminId,
     rejectionReason: ""
   });
+  batch.update(doc(adminDb, "paymentReferenceClaims", "REF-12345"), {
+    status: "approved",
+    reviewedAt: serverTimestamp(),
+    reviewedBy: adminId
+  });
   batch.update(doc(adminDb, "users", uid), initialActivationUpdate(paymentId));
 
   await assertSucceeds(batch.commit());
@@ -1633,6 +1682,11 @@ test("payment approval and activation fail when amount snapshot does not match",
     reviewedBy: adminId,
     rejectionReason: ""
   });
+  batch.update(doc(adminDb, "paymentReferenceClaims", "REF-12345"), {
+    status: "approved",
+    reviewedAt: serverTimestamp(),
+    reviewedBy: adminId
+  });
   batch.update(doc(adminDb, "users", uid), initialActivationUpdate(paymentId, 59));
 
   await assertFails(batch.commit());
@@ -1652,14 +1706,19 @@ test("admin can reject pending proof without activating subscriber and subscribe
     })
   );
 
-  await assertSucceeds(
-    updateDoc(doc(adminDb, "subscriptionPayments", paymentId), {
-      status: "rejected",
-      reviewedAt: serverTimestamp(),
-      reviewedBy: adminId,
-      rejectionReason: "صورة التحويل غير واضحة"
-    })
-  );
+  const rejectBatch = writeBatch(adminDb);
+  rejectBatch.update(doc(adminDb, "subscriptionPayments", paymentId), {
+    status: "rejected",
+    reviewedAt: serverTimestamp(),
+    reviewedBy: adminId,
+    rejectionReason: "صورة التحويل غير واضحة"
+  });
+  rejectBatch.update(doc(adminDb, "paymentReferenceClaims", "REF-12345"), {
+    status: "rejected",
+    reviewedAt: serverTimestamp(),
+    reviewedBy: adminId
+  });
+  await assertSucceeds(rejectBatch.commit());
 
   const userSnap = await getDoc(doc(adminDb, "users", uid));
   assert.equal(userSnap.data().subscriptionStatus, "pending");
