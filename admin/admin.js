@@ -420,6 +420,17 @@ async function approveSubscriptionPayment(paymentId) {
     const payment = paymentSnap.data();
     if (payment.status !== "pending_review") throw new Error("PAYMENT_ALREADY_REVIEWED");
 
+    const claimRef = doc(db, "paymentReferenceClaims", clean(payment.paymentReference));
+    const claimSnap = await transaction.get(claimRef);
+    if (
+      !claimSnap.exists()
+      || claimSnap.data().paymentId !== paymentId
+      || claimSnap.data().userId !== payment.userId
+      || claimSnap.data().status !== "pending_review"
+    ) {
+      throw new Error("PAYMENT_REFERENCE_CLAIM_MISMATCH");
+    }
+
     const uid = clean(payment.userId);
     const userRef = doc(db, "users", uid);
     const userSnap = await transaction.get(userRef);
@@ -471,6 +482,12 @@ async function approveSubscriptionPayment(paymentId) {
       reviewedAt: serverTimestamp(),
       reviewedBy: adminSession.user.uid,
       rejectionReason: ""
+    });
+
+    transaction.update(claimRef, {
+      status: "approved",
+      reviewedAt: serverTimestamp(),
+      reviewedBy: adminSession.user.uid
     });
 
     transaction.update(userRef, {
@@ -534,11 +551,35 @@ async function rejectSubscriptionPayment(paymentId, reason) {
     throw new Error("REJECTION_REASON_REQUIRED");
   }
 
-  await updateDoc(doc(db, "subscriptionPayments", paymentId), {
-    status: "rejected",
-    reviewedAt: serverTimestamp(),
-    reviewedBy: adminSession.user.uid,
-    rejectionReason: cleanReason
+  await runTransaction(db, async transaction => {
+    const paymentRef = doc(db, "subscriptionPayments", paymentId);
+    const paymentSnap = await transaction.get(paymentRef);
+    if (!paymentSnap.exists()) throw new Error("PAYMENT_NOT_FOUND");
+    const payment = paymentSnap.data();
+    if (payment.status !== "pending_review") throw new Error("PAYMENT_ALREADY_REVIEWED");
+
+    const claimRef = doc(db, "paymentReferenceClaims", clean(payment.paymentReference));
+    const claimSnap = await transaction.get(claimRef);
+    if (
+      !claimSnap.exists()
+      || claimSnap.data().paymentId !== paymentId
+      || claimSnap.data().userId !== payment.userId
+      || claimSnap.data().status !== "pending_review"
+    ) {
+      throw new Error("PAYMENT_REFERENCE_CLAIM_MISMATCH");
+    }
+
+    transaction.update(paymentRef, {
+      status: "rejected",
+      reviewedAt: serverTimestamp(),
+      reviewedBy: adminSession.user.uid,
+      rejectionReason: cleanReason
+    });
+    transaction.update(claimRef, {
+      status: "rejected",
+      reviewedAt: serverTimestamp(),
+      reviewedBy: adminSession.user.uid
+    });
   });
 }
 
@@ -1363,7 +1404,9 @@ $("subscriptionPaymentsContainer").addEventListener("click", async event => {
           ? "الدفعة لا تطابق حالة الاشتراك الحالية. راجع نوع الدفعة والمبلغ."
           : message === "PAYMENT_ALREADY_REVIEWED"
             ? "تمت مراجعة هذه الدفعة بالفعل. حدّث القائمة."
-            : "تعذر تنفيذ مراجعة الدفعة. حدّث البيانات وحاول مرة أخرى.";
+            : message === "PAYMENT_REFERENCE_CLAIM_MISMATCH"
+              ? "مرجع التحويل لا يملك سجل حماية مطابقًا. لا تعتمد الدفعة وتحقق منها يدويًا."
+              : "تعذر تنفيذ مراجعة الدفعة. حدّث البيانات وحاول مرة أخرى.";
   } finally {
     button.disabled = false;
   }
