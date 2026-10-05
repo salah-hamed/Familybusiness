@@ -1,3 +1,4 @@
+import auth from "../core/firebase/firebase-auth.js";
 import db from "../core/firebase/firebase-db.js";
 import { protectAdmin } from "../core/auth/admin-guard.js";
 import {
@@ -30,10 +31,24 @@ import {
   serverTimestamp,
   Timestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 const $ = id => document.getElementById(id);
 const PAGE_SIZE = 50;
 const SEARCH_LIMIT = 50;
+const ADMIN_RECENT_LOGIN_MS = 30 * 60 * 1000;
+
+async function requireRecentAdminLogin() {
+  const user = adminSession?.user;
+  if (!user) throw new Error("ADMIN_SESSION_REQUIRED");
+  const lastSignIn = Date.parse(user.metadata?.lastSignInTime || "");
+  if (!Number.isFinite(lastSignIn) || Date.now() - lastSignIn > ADMIN_RECENT_LOGIN_MS) {
+    try { await signOut(auth); } catch {}
+    alert("انتهت مهلة الأمان للعملية الحساسة. سجل دخول الإدارة من جديد ثم أعد المحاولة.");
+    window.location.replace("/Familybusiness/");
+    throw new Error("ADMIN_REAUTH_REQUIRED");
+  }
+}
 const ACTIVE_EXCEPTION_STATUSES = ["new","accepted","preparing","ready","assigned","out_for_delivery"];
 
 let adminSession = null;
@@ -340,6 +355,7 @@ function renderUsers() {
 }
 
 async function grantLaunchPromo(uid) {
+  await requireRecentAdminLogin();
   if (!adminSession?.user?.uid) throw new Error("ADMIN_SESSION_REQUIRED");
 
   const grantId = `${LAUNCH_PROMO.campaignId}_${uid}`;
@@ -410,6 +426,7 @@ async function grantLaunchPromo(uid) {
 }
 
 async function approveSubscriptionPayment(paymentId) {
+  await requireRecentAdminLogin();
   if (!adminSession?.user?.uid) throw new Error("ADMIN_SESSION_REQUIRED");
 
   await runTransaction(db, async transaction => {
@@ -545,6 +562,7 @@ async function approveSubscriptionPayment(paymentId) {
 }
 
 async function rejectSubscriptionPayment(paymentId, reason) {
+  await requireRecentAdminLogin();
   if (!adminSession?.user?.uid) throw new Error("ADMIN_SESSION_REQUIRED");
   const cleanReason = clean(reason);
   if (cleanReason.length < 3 || cleanReason.length > 300) {
