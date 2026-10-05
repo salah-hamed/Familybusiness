@@ -7,7 +7,7 @@ import {
   orderBy,
   query,
   serverTimestamp,
-  setDoc,
+  runTransaction,
   where
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
@@ -15,7 +15,9 @@ import {
   buildWhatsAppProofMessage,
   buildWhatsAppProofUrl,
   paymentStatusCopy,
-  requiredSubscriptionPayment
+  requiredSubscriptionPayment,
+  normalizePaymentReference,
+  paymentReferenceClaimId
 } from "./payment-policy.js";
 
 export {
@@ -23,7 +25,9 @@ export {
   buildWhatsAppProofMessage,
   buildWhatsAppProofUrl,
   paymentStatusCopy,
-  requiredSubscriptionPayment
+  requiredSubscriptionPayment,
+  normalizePaymentReference,
+  paymentReferenceClaimId
 };
 
 export async function getLatestSubscriptionPayment(userId) {
@@ -45,8 +49,9 @@ export async function prepareSubscriptionPaymentWhatsApp({
 }) {
   if (!user?.uid) throw new Error("AUTH_REQUIRED");
 
-  const reference = String(paymentReference || "").trim();
-  if (reference.length < 4 || reference.length > 120) {
+  const reference = normalizePaymentReference(paymentReference);
+  const referenceClaimId = paymentReferenceClaimId(reference);
+  if (!referenceClaimId) {
     throw new Error("INVALID_PAYMENT_REFERENCE");
   }
 
@@ -60,23 +65,44 @@ export async function prepareSubscriptionPaymentWhatsApp({
   const paymentId = `${user.uid}_${timestamp}`;
   const paymentCode = buildPaymentCode(user.uid, timestamp);
 
-  await setDoc(doc(db, "subscriptionPayments", paymentId), {
-    paymentId,
-    paymentCode,
-    userId: user.uid,
-    userEmail: String(user.email || "").trim(),
-    paymentType: required.paymentType,
-    amount: required.amount,
-    currency: required.currency,
-    paymentMethod: "instapay",
-    paymentReference: reference,
-    proofChannel: "whatsapp",
-    status: "pending_review",
-    submittedAt: serverTimestamp(),
-    whatsappPreparedAt: serverTimestamp(),
-    reviewedAt: null,
-    reviewedBy: "",
-    rejectionReason: ""
+  const paymentRef = doc(db, "subscriptionPayments", paymentId);
+  const claimRef = doc(db, "paymentReferenceClaims", referenceClaimId);
+
+  await runTransaction(db, async transaction => {
+    const claimSnap = await transaction.get(claimRef);
+    if (claimSnap.exists()) {
+      throw new Error("PAYMENT_REFERENCE_ALREADY_USED");
+    }
+
+    transaction.set(paymentRef, {
+      paymentId,
+      paymentCode,
+      userId: user.uid,
+      userEmail: String(user.email || "").trim(),
+      paymentType: required.paymentType,
+      amount: required.amount,
+      currency: required.currency,
+      paymentMethod: "instapay",
+      paymentReference: reference,
+      proofChannel: "whatsapp",
+      status: "pending_review",
+      submittedAt: serverTimestamp(),
+      whatsappPreparedAt: serverTimestamp(),
+      reviewedAt: null,
+      reviewedBy: "",
+      rejectionReason: ""
+    });
+
+    transaction.set(claimRef, {
+      referenceId: referenceClaimId,
+      paymentReference: reference,
+      paymentId,
+      userId: user.uid,
+      status: "pending_review",
+      createdAt: serverTimestamp(),
+      reviewedAt: null,
+      reviewedBy: ""
+    });
   });
 
   return {
