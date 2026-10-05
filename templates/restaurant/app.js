@@ -9,7 +9,7 @@ import { listRestaurantMenuPage } from "../../core/restaurant/menu-service.js";
 import {
   doc,
   getDoc
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+} from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 
 const $=id=>document.getElementById(id);
 const projectId=new URLSearchParams(location.search).get("project")||"";
