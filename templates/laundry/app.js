@@ -1,6 +1,6 @@
 import { createOrder, getLaundryOrderTracking, subscribeLaundryOrderTracking } from "./orders.js";
 import db from "../../core/firebase/firebase-db.js";
-import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { doc, getDoc } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 
 const $ = id => document.getElementById(id);
 let currentProjectId = "";
