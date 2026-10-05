@@ -15,6 +15,11 @@ test("operator claim is transactional and recovery rotates the synthetic login",
   assert.ok(rotateBody.includes('authUid: ""'));
   assert.ok(rotateBody.includes("authLoginEmail"));
   assert.ok(rotateBody.includes("OPERATOR_OWNER_MISMATCH"));
+  assert.ok(source.includes("inviteExpiresAt"));
+  assert.ok(source.includes("inviteIssuedAt"));
+  assert.ok(source.includes("inviteVersion"));
+  assert.ok(source.includes("OPERATOR_INVITE_EXPIRED"));
+  assert.ok(claimBody.includes("inviteClaimedAt"));
 });
 
 for (const path of [
@@ -86,4 +91,12 @@ test("operator pages no longer ignore OPERATOR_ALREADY_CLAIMED and continue", ()
       path
     );
   }
+});
+
+
+test("Firestore rules require unclaimed operator invites to be unexpired", () => {
+  const rules = readFileSync("firestore.rules", "utf8");
+  assert.match(rules, /resource\.data\.inviteExpiresAt > request\.time/);
+  assert.match(rules, /request\.resource\.data\.inviteClaimedAt == request\.time/);
+  assert.match(rules, /duration\.value\(49, 'h'\)/);
 });
