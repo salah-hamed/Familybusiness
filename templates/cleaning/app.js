@@ -4,7 +4,7 @@ import db from "../../core/firebase/firebase-db.js";
 import {
   doc,
   getDoc
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+} from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 
 const rooms = document.getElementById("rooms");
 const bathrooms = document.getElementById("bathrooms");
