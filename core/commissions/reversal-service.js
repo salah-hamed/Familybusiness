@@ -12,7 +12,7 @@ import {
   limit,
   runTransaction,
   serverTimestamp
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+} from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 
 const ALLOWED_REVERSAL_REASONS = Object.freeze([
   "customer_canceled_after_dispatch",
