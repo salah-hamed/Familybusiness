@@ -2569,6 +2569,8 @@ service cloud.firestore {
   match /orderTracking/{trackingToken} {
    allow get: if resource.data.trackingToken == trackingToken
     && resource.data.templateType in ["supermarket","restaurant","bakery","laundry"]
+    && resource.data.createdAt is timestamp
+    && resource.data.createdAt + duration.value(30, 'd') > request.time
     && trackingTemplateReady(resource.data.projectId, resource.data.templateType);
 
    allow list: if false;
@@ -2579,6 +2581,8 @@ service cloud.firestore {
     && request.resource.data.projectId is string
     && request.resource.data.orderId is string
     && request.resource.data.status == "new"
+    && request.resource.data.createdAt == request.time
+    && request.resource.data.updatedAt == request.time
     && request.resource.data.items is list
     && request.resource.data.subtotal is number
     && request.resource.data.deliveryFee is number
