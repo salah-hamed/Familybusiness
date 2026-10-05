@@ -7,7 +7,7 @@ import {
   updateDoc,
   serverTimestamp,
   Timestamp
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+} from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 
 const OPERATOR_AUTH_DOMAIN = "familybusiness.local";
 const OPERATOR_AUTH_PREFIX = "operator.";
