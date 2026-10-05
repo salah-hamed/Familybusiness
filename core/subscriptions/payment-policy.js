@@ -13,6 +13,15 @@ export function requiredSubscriptionPayment(userData = {}) {
   };
 }
 
+export function normalizePaymentReference(value) {
+  return clean(value).toUpperCase().replace(/\s+/g, "");
+}
+
+export function paymentReferenceClaimId(value) {
+  const normalized = normalizePaymentReference(value);
+  return /^[A-Z0-9._:-]{4,120}$/.test(normalized) ? normalized : "";
+}
+
 export function buildPaymentCode(userId, timestamp = Date.now()) {
   const uidPart = clean(userId).replace(/[^A-Za-z0-9]/g, "").slice(-6).toUpperCase() || "USER";
   const timePart = Number(timestamp).toString(36).slice(-6).toUpperCase();
