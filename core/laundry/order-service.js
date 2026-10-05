@@ -3,7 +3,7 @@ import { getEffectiveCommissionSnapshot, getProjectCommissionLedgerId } from "..
 
 import {
   collection,query,where,orderBy,startAfter,limit,getDocs,getCountFromServer,doc,getDoc,addDoc,updateDoc,writeBatch,onSnapshot,runTransaction,serverTimestamp
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+} from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 
 const FLOW=Object.freeze({
   new:["accepted","canceled"],
