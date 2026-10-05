@@ -5,11 +5,23 @@ import {
   getDoc,
   runTransaction,
   updateDoc,
-  serverTimestamp
+  serverTimestamp,
+  Timestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const OPERATOR_AUTH_DOMAIN = "familybusiness.local";
 const OPERATOR_AUTH_PREFIX = "operator.";
+const OPERATOR_INVITE_TTL_MS = 48 * 60 * 60 * 1000;
+
+function inviteExpiryTimestamp() {
+  return Timestamp.fromMillis(Date.now() + OPERATOR_INVITE_TTL_MS);
+}
+
+function inviteIsActive(operator = {}) {
+  const expiresAt = operator.inviteExpiresAt;
+  const millis = typeof expiresAt?.toMillis === "function" ? expiresAt.toMillis() : 0;
+  return millis > Date.now();
+}
 
 function createInviteToken() {
   const bytes = new Uint8Array(20);
@@ -108,6 +120,10 @@ export async function createOperator({
       email: "",
       authLoginEmail,
       authUid: "",
+      inviteIssuedAt: serverTimestamp(),
+      inviteExpiresAt: inviteExpiryTimestamp(),
+      inviteVersion: 1,
+      inviteClaimedAt: null,
       status: "pending_invite",
       agreementStatus: "not_proposed",
       isActive: false,
@@ -138,13 +154,6 @@ export async function ensureOperatorInviteAccess(operatorId, ownerId) {
     throw new Error("OPERATOR_OWNER_MISMATCH");
   }
 
-  if (operator.authLoginEmail) {
-    return {
-      operatorId,
-      ...operator
-    };
-  }
-
   if (operator.authUid) {
     return {
       operatorId,
@@ -152,17 +161,30 @@ export async function ensureOperatorInviteAccess(operatorId, ownerId) {
     };
   }
 
+  if (operator.authLoginEmail && inviteIsActive(operator)) {
+    return {
+      operatorId,
+      ...operator
+    };
+  }
+
   const authLoginEmail = buildOperatorAuthEmail(createInviteToken());
+  const inviteVersion = Math.max(0, Number(operator.inviteVersion || 0)) + 1;
 
   await updateDoc(operatorRef, {
     authLoginEmail,
+    inviteIssuedAt: serverTimestamp(),
+    inviteExpiresAt: inviteExpiryTimestamp(),
+    inviteVersion,
+    inviteClaimedAt: null,
     updatedAt: serverTimestamp()
   });
 
   return {
     operatorId,
     ...operator,
-    authLoginEmail
+    authLoginEmail,
+    inviteVersion
   };
 }
 
@@ -219,6 +241,19 @@ export async function claimOperatorAccess(operatorId, authUser) {
     }
 
     const operator = operatorSnap.data();
+
+    if (operator.authUid === authUser.uid) {
+      return;
+    }
+
+    if (operator.authUid && operator.authUid !== authUser.uid) {
+      throw new Error("OPERATOR_ALREADY_CLAIMED");
+    }
+
+    if (!inviteIsActive(operator)) {
+      throw new Error("OPERATOR_INVITE_EXPIRED");
+    }
+
     const inviteLoginEmail = String(operator.authLoginEmail || "").trim().toLowerCase();
     const legacyEmail = String(operator.email || "").trim().toLowerCase();
     const expectedEmail = inviteLoginEmail || legacyEmail;
@@ -231,16 +266,9 @@ export async function claimOperatorAccess(operatorId, authUser) {
       throw new Error("VERIFIED_OPERATOR_EMAIL_REQUIRED");
     }
 
-    if (operator.authUid && operator.authUid !== authUser.uid) {
-      throw new Error("OPERATOR_ALREADY_CLAIMED");
-    }
-
-    if (operator.authUid === authUser.uid) {
-      return;
-    }
-
     transaction.update(operatorRef, {
       authUid: authUser.uid,
+      inviteClaimedAt: serverTimestamp(),
       status: operator.agreementStatus === "accepted" ? "active" : "pending_agreement",
       updatedAt: serverTimestamp()
     });
@@ -281,6 +309,10 @@ export async function rotateOperatorInviteAccess(operatorId, ownerId) {
     transaction.update(operatorRef, {
       authLoginEmail,
       authUid: "",
+      inviteIssuedAt: serverTimestamp(),
+      inviteExpiresAt: inviteExpiryTimestamp(),
+      inviteVersion: Math.max(0, Number(operator.inviteVersion || 0)) + 1,
+      inviteClaimedAt: null,
       updatedAt: serverTimestamp()
     });
   });
