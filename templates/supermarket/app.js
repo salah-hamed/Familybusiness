@@ -99,7 +99,9 @@ async function init(){
     store={supermarketId:storeSnap.id,...storeSnap.data()};
     if(store.isAcceptingOrders!==true){showClosed("السوبرماركت موقف استقبال الطلبات مؤقتًا.");return;}
 
-    $("storeName").innerText=store.name||"السوبرماركت";
+    const installName=store.name||"السوبرماركت";
+    $("storeName").innerText=installName;
+    window.FamilyBusinessPwa?.setBrand(installName);
     $("storeAddress").innerText=store.address||"";
     $("deliveryBadge").innerText=`التوصيل ${money(store.deliveryFee||0)}`;
 
