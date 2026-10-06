@@ -10,56 +10,76 @@ permissions:
   contents: read
 
 jobs:
-  security-regression:
+  source-gates:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 15
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "22"
-
-      - name: Install test dependencies
-        run: npm install --ignore-scripts
-
+      - run: npm install --ignore-scripts
       - name: Safe HTML gate
         run: npm run test:safe-html
-
       - name: Source security and regression gate
         run: npm run test:source
-
-      - name: Rules diagnostic - operator access
-        id: rules_operator
-        continue-on-error: true
-        run: npx firebase emulators:exec --project family-business-rules-test --only firestore "node --test --test-concurrency=1 --test-name-pattern='operator|invite|claim|rotate' tests/firestore.rules.test.mjs"
-
-      - name: Rules diagnostic - subscription payments
-        id: rules_payment
-        continue-on-error: true
-        run: npx firebase emulators:exec --project family-business-rules-test --only firestore "node --test --test-concurrency=1 --test-name-pattern='payment|subscription|InstaPay|Launch 50|promo' tests/firestore.rules.test.mjs"
-
-      - name: Rules diagnostic - tracking
-        id: rules_tracking
-        continue-on-error: true
-        run: npx firebase emulators:exec --project family-business-rules-test --only firestore "node --test --test-concurrency=1 --test-name-pattern='tracking' tests/firestore.rules.test.mjs"
-
-      - name: Rules diagnostic - remaining rules
-        id: rules_remaining
-        continue-on-error: true
-        run: npx firebase emulators:exec --project family-business-rules-test --only firestore "node --test --test-concurrency=1 --test-name-pattern='^(?!.*(operator|invite|claim|rotate|payment|subscription|InstaPay|Launch 50|promo|tracking)).*$' tests/firestore.rules.test.mjs"
-
-      - name: Fail if a Rules diagnostic failed
-        if: steps.rules_operator.outcome != 'success' || steps.rules_payment.outcome != 'success' || steps.rules_tracking.outcome != 'success' || steps.rules_remaining.outcome != 'success'
-        run: exit 1
-
-      - name: Firestore query gates
-        run: npx firebase emulators:exec --project family-business-rules-test --only firestore "node --test --test-concurrency=1 tests/order-query.test.mjs tests/earnings-query.test.mjs tests/admin-users-pagination.test.mjs"
-
-      - name: Launch E2E gate
-        run: npx firebase emulators:exec --project family-business-rules-test --only firestore "node --test --test-concurrency=1 tests/launch-e2e-simulation.test.mjs"
-
       - name: Dependency vulnerability audit
         run: npm audit --audit-level=high
+
+  rules-operator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install --ignore-scripts
+      - run: npx firebase emulators:exec --project family-business-rules-test --only firestore "node --test --test-concurrency=1 --test-name-pattern='operator|invite|claim|rotate' tests/firestore.rules.test.mjs"
+
+  rules-payment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install --ignore-scripts
+      - run: npx firebase emulators:exec --project family-business-rules-test --only firestore "node --test --test-concurrency=1 --test-name-pattern='payment|subscription|InstaPay|Launch 50|promo' tests/firestore.rules.test.mjs"
+
+  rules-tracking:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install --ignore-scripts
+      - run: npx firebase emulators:exec --project family-business-rules-test --only firestore "node --test --test-concurrency=1 --test-name-pattern='tracking' tests/firestore.rules.test.mjs"
+
+  rules-remaining:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install --ignore-scripts
+      - run: npx firebase emulators:exec --project family-business-rules-test --only firestore "node --test --test-concurrency=1 --test-name-pattern='^(?!.*(operator|invite|claim|rotate|payment|subscription|InstaPay|Launch 50|promo|tracking)).*$' tests/firestore.rules.test.mjs"
+
+  query-and-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install --ignore-scripts
+      - name: Query gates
+        run: npx firebase emulators:exec --project family-business-rules-test --only firestore "node --test --test-concurrency=1 tests/order-query.test.mjs tests/earnings-query.test.mjs tests/admin-users-pagination.test.mjs"
+      - name: Launch E2E
+        run: npx firebase emulators:exec --project family-business-rules-test --only firestore "node --test --test-concurrency=1 tests/launch-e2e-simulation.test.mjs"
