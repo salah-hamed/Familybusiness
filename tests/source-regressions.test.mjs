@@ -801,3 +801,37 @@ test("FB-LAUNCH05B admin overview reports net commission after confirmed reversa
   assert.equal(source.includes("const netCommission = Math.max(0, totalCommission.totalAmount - reversedCommission.totalAmount)"), true);
   assert.equal(source.includes('$("metricEarned").innerText = money(netCommission)'), true);
 });
+
+
+test("Firebase Hosting publishes runtime assets only and applies baseline security headers", () => {
+  const config = JSON.parse(readFileSync("firebase.json", "utf8"));
+  assert.equal(config.hosting?.public, ".");
+
+  const ignored = new Set(config.hosting?.ignore || []);
+  for (const entry of [
+    "firebase.json",
+    ".firebaserc",
+    ".github/**",
+    "tests/**",
+    "docs/**",
+    "firestore.rules",
+    "firestore.indexes.json",
+    "package.json",
+    "**/*.md"
+  ]) {
+    assert.equal(ignored.has(entry), true, entry);
+  }
+
+  const globalHeaders = (config.hosting?.headers || [])
+    .find(item => item.source === "**")?.headers || [];
+  const headerMap = Object.fromEntries(globalHeaders.map(item => [item.key, item.value]));
+
+  assert.equal(headerMap["X-Content-Type-Options"], "nosniff");
+  assert.equal(headerMap["X-Frame-Options"], "DENY");
+  assert.match(headerMap["Content-Security-Policy"] || "", /frame-ancestors 'none'/);
+  assert.equal(headerMap["Referrer-Policy"], "strict-origin-when-cross-origin");
+
+  const laundry = readFileSync("templates/laundry/index.html", "utf8");
+  assert.equal(laundry.includes("salah-hamed.github.io/Familybusiness"), false);
+  assert.equal(laundry.includes('class="platformCtaLink" href="../../"'), true);
+});
