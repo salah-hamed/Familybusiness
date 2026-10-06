@@ -122,3 +122,33 @@ test("legacy verified-email operator recovery is not forced through synthetic in
   assert.match(partner, /if \(inviteLoginEmail && !inviteIsActive\(operator\)\)/);
   assert.match(partner, /!inviteLoginEmail && authUser\.emailVerified !== true/);
 });
+
+
+test("launch surfaces enforce a browser CSP and strict referrer policy", () => {
+  for (const path of [
+    "index.html",
+    "home/index.html",
+    "workspace/index.html",
+    "admin/index.html",
+    "dashboard/index.html",
+    "my-projects/index.html",
+    "supermarket-operator/index.html",
+    "supermarket-operator/products.html",
+    "restaurant-operator/index.html",
+    "restaurant-operator/menu.html",
+    "bakery-operator/index.html",
+    "bakery-operator/menu.html",
+    "laundry-operator/index.html",
+    "templates/supermarket/index.html",
+    "templates/restaurant/index.html",
+    "templates/bakery/index.html",
+    "templates/laundry/index.html"
+  ]) {
+    const html = readFileSync(path, "utf8");
+    assert.match(html, /http-equiv="Content-Security-Policy"/, path);
+    assert.match(html, /object-src 'none'/, path);
+    assert.match(html, /base-uri 'self'/, path);
+    assert.doesNotMatch(html, /script-src[^;]*'unsafe-inline'/, path);
+    assert.match(html, /name="referrer" content="strict-origin-when-cross-origin"/, path);
+  }
+});
