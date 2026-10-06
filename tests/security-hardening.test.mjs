@@ -152,3 +152,23 @@ test("launch surfaces enforce a browser CSP and strict referrer policy", () => {
     assert.match(html, /name="referrer" content="strict-origin-when-cross-origin"/, path);
   }
 });
+
+
+test("browser runtime avoids dangerous dynamic-code sinks and inline event handlers", () => {
+  const forbidden = [
+    { label: "eval", pattern: /\beval\s*\(/ },
+    { label: "new Function", pattern: /\bnew\s+Function\s*\(/ },
+    { label: "document.write", pattern: /document\.write\s*\(/ },
+    { label: "javascript URL", pattern: /javascript\s*:/i },
+    { label: "inline event handler", pattern: /\son[a-z]+\s*=/i }
+  ];
+
+  const hits = [];
+  for (const path of files.filter(path => /\.(js|html)$/.test(path))) {
+    const source = readFileSync(path, "utf8");
+    for (const rule of forbidden) {
+      if (rule.pattern.test(source)) hits.push(`${path}: ${rule.label}`);
+    }
+  }
+  assert.deepEqual(hits, []);
+});
