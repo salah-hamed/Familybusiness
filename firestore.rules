@@ -15,7 +15,8 @@ service cloud.firestore {
   function laundryPath(projectId){ return /databases/$(database)/documents/laundries/$(projectId); }
   function commissionLedgerPath(entryId){ return /databases/$(database)/documents/commissionLedger/$(entryId); }
   function commissionReversalPath(reversalId){ return /databases/$(database)/documents/commissionReversals/$(reversalId); }
-  function subscriptionPaymentPath(paymentId){ return /databases/$(database)/documents/subscriptionPayments/$(paymentId); }\n  function paymentReferenceClaimPath(referenceId){ return /databases/$(database)/documents/paymentReferenceClaims/$(referenceId); }
+  function subscriptionPaymentPath(paymentId){ return /databases/$(database)/documents/subscriptionPayments/$(paymentId); }
+  function paymentReferenceClaimPath(referenceId){ return /databases/$(database)/documents/paymentReferenceClaims/$(referenceId); }
   function subscriptionGrantPath(grantId){ return /databases/$(database)/documents/subscriptionGrants/$(grantId); }
   function platformCounterPath(counterId){ return /databases/$(database)/documents/platformCounters/$(counterId); }
   function userExists(uid){ return exists(userPath(uid)); }
