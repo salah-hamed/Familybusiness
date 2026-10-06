@@ -23,6 +23,7 @@ jobs:
         with:
           node-version: "20"
 
+      # firebase-tools 15.x requires Java 21+
       - name: Set up Java for Firestore Emulator
         uses: actions/setup-java@v5
         with:
