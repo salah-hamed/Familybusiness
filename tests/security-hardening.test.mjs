@@ -98,3 +98,27 @@ test("App Check is initialized before Firebase services", () => {
   assert.match(auth, /firebase-app-check\.js/);
   assert.match(db, /firebase-app-check\.js/);
 });
+
+
+test("claimed operator invite tokens are removed from browser URLs and internal navigation", () => {
+  for (const path of [
+    "supermarket-operator/app.js",
+    "supermarket-operator/products.js",
+    "restaurant-operator/app.js",
+    "restaurant-operator/menu.js",
+    "bakery-operator/app.js",
+    "bakery-operator/menu.js",
+    "laundry-operator/app.js"
+  ]) {
+    const source = readFileSync(path, "utf8");
+    assert.match(source, /clearInviteFromAddressBar/);
+    assert.match(source, /searchParams\.delete\("invite"\)/);
+    assert.doesNotMatch(source, /searchParams\.set\("invite",\s*inviteToken\)/);
+  }
+});
+
+test("legacy verified-email operator recovery is not forced through synthetic invite expiry", () => {
+  const partner = readFileSync("core/partners/partner-service.js", "utf8");
+  assert.match(partner, /if \(inviteLoginEmail && !inviteIsActive\(operator\)\)/);
+  assert.match(partner, /!inviteLoginEmail && authUser\.emailVerified !== true/);
+});
