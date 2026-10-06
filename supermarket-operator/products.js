@@ -34,6 +34,12 @@ const params = new URLSearchParams(location.search);
 const projectId = params.get("project") || "";
 const inviteToken = params.get("invite") || "";
 const inviteAuthEmail = buildOperatorAuthEmail(inviteToken);
+function clearInviteFromAddressBar(){
+  if(!inviteToken)return;
+  const url=new URL(location.href);
+  url.searchParams.delete("invite");
+  history.replaceState(null,"",url.toString());
+}
 
 let currentUser = null;
 let operator = null;
@@ -83,7 +89,6 @@ function categoryEmoji(category) {
 function dashboardUrl() {
   const url = new URL("./", location.href);
   url.searchParams.set("project", projectId);
-  if (inviteToken) url.searchParams.set("invite", inviteToken);
   return url.toString();
 }
 
@@ -136,10 +141,11 @@ function attachImageFallbacks() {
 }
 
 async function authorize() {
-  if (!currentUser || !projectId || !inviteAuthEmail) return false;
+  if (!currentUser || !projectId) return false;
 
   try {
     await claimOperatorAccess(projectId, currentUser);
+    clearInviteFromAddressBar();
   } catch (error) {
     const code = String(error?.code || "");
     const message = String(error?.message || "");
@@ -911,12 +917,12 @@ onAuthStateChanged(auth, async user => {
   currentUser = user;
   $("backToDashboard").href = dashboardUrl();
 
-  if (!projectId || !inviteAuthEmail) {
+  if (!projectId) {
     $("pageStatus").innerText = "رابط كتالوج المنتجات غير مكتمل.";
     return;
   }
 
-  if (user && String(user.email || "").toLowerCase() !== inviteAuthEmail.toLowerCase()) {
+  if (user && inviteAuthEmail && String(user.email || "").toLowerCase() !== inviteAuthEmail.toLowerCase()) {
     await signOut(auth);
     return;
   }
