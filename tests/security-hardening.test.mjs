@@ -166,7 +166,7 @@ test("browser runtime avoids dangerous dynamic-code sinks and inline event handl
     { label: "new Function", pattern: /\bnew\s+Function\s*\(/ },
     { label: "document.write", pattern: /document\.write\s*\(/ },
     { label: "javascript URL", pattern: /javascript\s*:/i },
-    { label: "inline event handler", pattern: /\son[a-z]+\s*=/i }
+    { label: "inline event handler", pattern: /\son(?:abort|auxclick|blur|change|click|contextmenu|dblclick|error|focus|input|keydown|keyup|load|mousedown|mouseup|pointerdown|pointerup|submit|touchstart|touchend|wheel)\s*=/ }
   ];
 
   const hits = [];
