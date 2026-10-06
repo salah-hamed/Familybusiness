@@ -240,7 +240,7 @@ for (const [templateId, version] of [
 
 
 for (const templateType of ["supermarket", "restaurant", "bakery"]) {
-  test(\`public customer can use \${templateType} runtime without reading private project root\`, async () => {
+  test(`public customer can use ${templateType} runtime without reading private project root`, async () => {
     const { projectId } = await seedPartnerRuntime(templateType, "public_projection");
     const db = testEnv.unauthenticatedContext().firestore();
 
