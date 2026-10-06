@@ -25,6 +25,12 @@ const params=new URLSearchParams(location.search);
 const projectId=params.get("project")||"";
 const inviteToken=params.get("invite")||"";
 const inviteAuthEmail=buildOperatorAuthEmail(inviteToken);
+function clearInviteFromAddressBar(){
+  if(!inviteToken)return;
+  const url=new URL(location.href);
+  url.searchParams.delete("invite");
+  history.replaceState(null,"",url.toString());
+}
 
 let currentUser=null;
 let currentOperator=null;
@@ -62,6 +68,7 @@ async function refreshAccount(){
 
   try{
     await claimOperatorAccess(projectId,currentUser);
+    clearInviteFromAddressBar();
   }catch(e){
     $("pageStatus").innerText=operatorAccessErrorMessage(e);
     setVisible("operationsPanel",false);
@@ -99,18 +106,24 @@ async function refreshAccount(){
 onAuthStateChanged(auth,async user=>{
   currentUser=user;
 
-  if(!projectId||!inviteAuthEmail){
+  if(!projectId){
     setVisible("authPanel",false);setVisible("agreementPanel",false);setVisible("operationsPanel",false);
     $("pageStatus").innerText="دعوة واتساب غير مكتملة أو غير صالحة.";
     return;
   }
 
-  if(user&&String(user.email||"").toLowerCase()!==inviteAuthEmail.toLowerCase()){
+  if(user&&inviteAuthEmail&&String(user.email||"").toLowerCase()!==inviteAuthEmail.toLowerCase()){
     await signOut(auth);
     return;
   }
 
   if(!user){
+    if(!inviteAuthEmail){
+      setVisible("authPanel",false);setVisible("agreementPanel",false);setVisible("operationsPanel",false);
+      $("logoutBtn").classList.add("hidden");
+      $("pageStatus").innerText="انتهت جلسة الدخول. اطلب رابط دخول جديد من صاحب المشروع.";
+      return;
+    }
     setVisible("authPanel",true);setVisible("agreementPanel",false);setVisible("operationsPanel",false);
     $("logoutBtn").classList.add("hidden");
     $("pageStatus").innerText="فعّل الدعوة بكلمة مرور أول مرة، أو سجل دخولك لو فعلتها قبل كده.";
@@ -249,7 +262,6 @@ async function loadOperations(){
 
   const menuUrl=new URL("./menu.html",location.href);
   menuUrl.searchParams.set("project",projectId);
-  if(inviteToken)menuUrl.searchParams.set("invite",inviteToken);
   $("menuLink").href=menuUrl.toString();
   $("openMenuBtn").href=menuUrl.toString();
 
