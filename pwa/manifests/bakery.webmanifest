@@ -1,5 +1,5 @@
 {
-  "name": "تطبيق المخبز | Family Business",
+  "name": "المخبز",
   "short_name": "المخبز",
   "lang": "ar",
   "dir": "rtl",
@@ -11,13 +11,13 @@
   "theme_color": "#D97706",
   "icons": [
     {
-      "src": "../icons/icon-192.png",
+      "src": "../icons/bakery-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "../icons/icon-512.png",
+      "src": "../icons/bakery-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
