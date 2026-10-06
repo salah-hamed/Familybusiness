@@ -12,7 +12,7 @@ permissions:
 jobs:
   security-regression:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,19 +25,14 @@ jobs:
       - name: Install test dependencies
         run: npm install --ignore-scripts
 
-      - name: Full regression + Firestore Rules + E2E
-        shell: bash
-        run: |
-          set +e
-          npm test 2>&1 | tee security-test-output.txt
-          code=${PIPESTATUS[0]}
-          {
-            echo "## Security regression output"
-            echo '~~~text'
-            tail -n 250 security-test-output.txt
-            echo '~~~'
-          } >> "$GITHUB_STEP_SUMMARY"
-          exit "$code"
+      - name: Safe HTML gate
+        run: npm run test:safe-html
+
+      - name: Source security and regression gate
+        run: npm run test:source
+
+      - name: Firestore Rules and E2E gate
+        run: npm run test:rules
 
       - name: Dependency vulnerability audit
         run: npm audit --audit-level=high
