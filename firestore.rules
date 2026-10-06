@@ -1199,7 +1199,15 @@ service cloud.firestore {
 
 
   match /projects/{projectId} {
-   allow get: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid) || (resource.data.isActive == true && resource.data.status == "active" && subscriptionActive(resource.data.ownerId));
+   allow get: if isAdmin()
+    || (signedIn() && resource.data.ownerId == request.auth.uid)
+    || isLinkedProjectOperator(projectId)
+    || (
+      resource.data.template in ["laundry","cleaning","carwash"]
+      && resource.data.isActive == true
+      && resource.data.status == "active"
+      && subscriptionActive(resource.data.ownerId)
+    );
    allow list: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid);
    allow create: if signedIn() && subscriptionActive(request.auth.uid) && validActiveProjectCreate(projectId);
    allow update: if isAdmin() || (
@@ -1885,7 +1893,10 @@ service cloud.firestore {
    allow get: if isAdmin()
     || ownsProject(supermarketId)
     || isLinkedProjectOperator(supermarketId)
-    || supermarketPartnerReady(supermarketId);
+    || (
+      supermarketPartnerReady(supermarketId)
+      && resource.data.isAcceptingOrders == true
+    );
 
    allow list: if isAdmin()
     || ownsProject(resource.data.projectId)
@@ -1968,7 +1979,10 @@ service cloud.firestore {
     allow get, list: if isAdmin()
      || ownsProject(supermarketId)
      || isProjectOperator(supermarketId)
-     || supermarketPartnerReady(supermarketId);
+     || (
+       supermarketPartnerReady(supermarketId)
+       && supermarketData(supermarketId).isAcceptingOrders == true
+     );
 
     allow create: if (
        isAdmin()
@@ -2053,7 +2067,10 @@ service cloud.firestore {
    allow get: if isAdmin()
     || ownsProject(restaurantId)
     || isLinkedProjectOperator(restaurantId)
-    || restaurantPartnerReady(restaurantId);
+    || (
+      restaurantPartnerReady(restaurantId)
+      && resource.data.isAcceptingOrders == true
+    );
 
    allow list: if isAdmin()
     || ownsProject(resource.data.projectId)
@@ -2123,7 +2140,10 @@ service cloud.firestore {
     allow get, list: if isAdmin()
      || ownsProject(restaurantId)
      || isProjectOperator(restaurantId)
-     || restaurantPartnerReady(restaurantId);
+     || (
+       restaurantPartnerReady(restaurantId)
+       && restaurantData(restaurantId).isAcceptingOrders == true
+     );
 
     allow create: if (isAdmin() || isProjectOperator(restaurantId))
      && request.resource.data.itemId == itemId

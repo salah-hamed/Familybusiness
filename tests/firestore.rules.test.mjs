@@ -238,6 +238,80 @@ for (const [templateId, version] of [
   });
 }
 
+
+for (const templateType of ["supermarket", "restaurant", "bakery"]) {
+  test(`public customer can use ${templateType} runtime without reading private project root`, async () => {
+    const { projectId } = await seedPartnerRuntime(templateType, "public_projection");
+    const db = testEnv.unauthenticatedContext().firestore();
+
+    await assertFails(getDoc(doc(db, "projects", projectId)));
+
+    const runtimeRef = templateType === "supermarket"
+      ? doc(db, "supermarkets", projectId)
+      : doc(db, "restaurants", projectId);
+
+    await assertSucceeds(getDoc(runtimeRef));
+  });
+}
+
+test("paused supermarket hides its public runtime and products", async () => {
+  const { projectId } = await seedPartnerRuntime("supermarket", "paused_public");
+  await testEnv.withSecurityRulesDisabled(async context => {
+    const db = context.firestore();
+    await updateDoc(doc(db, "supermarkets", projectId), { isAcceptingOrders: false });
+    await setDoc(doc(db, "supermarkets", projectId, "products", "milk"), {
+      productId: "milk",
+      projectId,
+      name: "Milk",
+      category: "Dairy",
+      size: "1L",
+      barcode: "",
+      image: "",
+      price: 40,
+      inStock: true,
+      isActive: true,
+      source: "test",
+      masterId: "milk",
+      createdBy: "seed",
+      createdAt: Timestamp.now(),
+      updatedBy: "seed",
+      updatedAt: Timestamp.now()
+    });
+  });
+
+  const db = testEnv.unauthenticatedContext().firestore();
+  await assertFails(getDoc(doc(db, "supermarkets", projectId)));
+  await assertFails(getDoc(doc(db, "supermarkets", projectId, "products", "milk")));
+});
+
+test("paused restaurant hides its public runtime and menu", async () => {
+  const { projectId } = await seedPartnerRuntime("restaurant", "paused_public");
+  await testEnv.withSecurityRulesDisabled(async context => {
+    const db = context.firestore();
+    await updateDoc(doc(db, "restaurants", projectId), { isAcceptingOrders: false });
+    await setDoc(doc(db, "restaurants", projectId, "menu", "meal"), {
+      itemId: "meal",
+      projectId,
+      name: "Meal",
+      category: "Main",
+      description: "",
+      unit: "قطعة",
+      price: 80,
+      image: "",
+      isAvailable: true,
+      isActive: true,
+      createdBy: "seed",
+      createdAt: Timestamp.now(),
+      updatedBy: "seed",
+      updatedAt: Timestamp.now()
+    });
+  });
+
+  const db = testEnv.unauthenticatedContext().firestore();
+  await assertFails(getDoc(doc(db, "restaurants", projectId)));
+  await assertFails(getDoc(doc(db, "restaurants", projectId, "menu", "meal")));
+});
+
 test("subscriber cannot bypass registry to create paused Cleaning", async () => {
   const uid = "owner_cleaning";
   await seedUser(uid);
