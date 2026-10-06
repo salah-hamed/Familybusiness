@@ -18,7 +18,13 @@
       "firestore.indexes.json",
       "package.json",
       "package-lock.json",
-      "**/*.md"
+      "**/*.md",
+      ".env",
+      ".env.*",
+      "service-account*.json",
+      "*serviceAccount*.json",
+      "firebase-adminsdk-*.json",
+      "google-application-credentials*.json"
     ],
     "headers": [
       {
