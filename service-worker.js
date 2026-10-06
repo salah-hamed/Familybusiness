@@ -1,4 +1,4 @@
-const CACHE_NAME = "family-business-pwa-v1";
+const CACHE_NAME = "family-business-pwa-v2";
 const ROOT = new URL("./", self.location.href).pathname;
 
 const PRECACHE = [
@@ -6,7 +6,15 @@ const PRECACHE = [
   ROOT + "pwa/install.css",
   ROOT + "pwa/offline.html",
   ROOT + "pwa/icons/icon-192.png",
-  ROOT + "pwa/icons/icon-512.png"
+  ROOT + "pwa/icons/icon-512.png",
+  ROOT + "pwa/icons/supermarket-192.png",
+  ROOT + "pwa/icons/supermarket-512.png",
+  ROOT + "pwa/icons/restaurant-192.png",
+  ROOT + "pwa/icons/restaurant-512.png",
+  ROOT + "pwa/icons/bakery-192.png",
+  ROOT + "pwa/icons/bakery-512.png",
+  ROOT + "pwa/icons/laundry-192.png",
+  ROOT + "pwa/icons/laundry-512.png"
 ];
 
 self.addEventListener("install", event => {

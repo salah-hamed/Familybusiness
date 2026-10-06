@@ -258,7 +258,9 @@ async function init(){
   if(laundry.isAcceptingOrders!==true){unavailable("المغسلة غير متاحة لاستقبال طلبات جديدة حاليًا.");return;}
   if(!hasConfiguredPricing(data.priceConfig||{})){unavailable("المغسلة لم تجهز أسعار الغسيل والمكواة بعد. يرجى المحاولة لاحقًا.");return;}
 
-  $("businessTitle").innerText=laundry.name||data.businessName||"غسيل ومكواة الملابس";
+  const installName=laundry.name||data.businessName||"غسيل ومكواة الملابس";
+  $("businessTitle").innerText=installName;
+  window.FamilyBusinessPwa?.setBrand(installName);
   priceConfig={...priceConfig,...data.priceConfig};
   renderItems();fillSaved();refreshOrdersButton();
   if(laundry.whatsapp)$("whatsappBtn").href=`https://wa.me/${normalizeEgyptWhatsapp(laundry.whatsapp)}`;else $("whatsappBtn").style.display="none";

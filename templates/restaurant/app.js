@@ -99,7 +99,9 @@ function applyIdentity(){
   document.documentElement.style.setProperty("--brand",primary);
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content",primary);
 
-  $("restaurantName").innerText=restaurant.name||"المطعم";
+  const installName=restaurant.name||"المطعم";
+  $("restaurantName").innerText=installName;
+  window.FamilyBusinessPwa?.setBrand(installName);
   $("restaurantSlogan").innerText=restaurant.slogan||"";
   $("cuisineText").innerText=restaurant.cuisine||"";
   $("restaurantAddress").innerText=restaurant.address||"";

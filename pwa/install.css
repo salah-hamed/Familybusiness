@@ -14,3 +14,5 @@
 .fbPwaIosCard ol{margin:0;padding-right:22px;color:#334155;line-height:2}
 .fbPwaIosClose{position:absolute;left:14px;top:12px;font-size:18px}
 @media(max-width:640px){.fbPwaInstall{grid-template-columns:auto 1fr auto}.fbPwaInstallBtn{grid-column:2 / 4;width:100%}.fbPwaDismissBtn{position:absolute;left:10px;top:8px}.fbPwaInstallCopy{padding-left:18px}}
+
+.fbPwaInstallIcon img{width:100%;height:100%;display:block;object-fit:cover;border-radius:inherit}

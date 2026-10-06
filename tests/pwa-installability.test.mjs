@@ -149,3 +149,57 @@ test("PWA service worker does not intercept Firebase cross-origin traffic", () =
   const source = readFileSync("service-worker.js", "utf8");
   assert.match(source, /if\(request\.method !== "GET" \|\| !sameOrigin\(request\)\) return/);
 });
+
+
+test("customer PWA uses one install identity per project and supports white-label names", () => {
+  const source = readFileSync("pwa/install.js", "utf8");
+  assert.match(source, /function stableProjectToken/);
+  assert.match(source, /storageIdentity = projectToken \? surface \+ ":" \+ projectToken : surface/);
+  assert.match(source, /id: new URL\("pwa\/apps\/" \+ surface \+ "\/" \+ projectToken, repoRoot\)\.href/);
+  assert.match(source, /start\.searchParams\.set\("project", projectId\)/);
+  assert.match(source, /window\.FamilyBusinessPwa = Object\.freeze/);
+  assert.match(source, /setBrand: setProjectBrand/);
+  assert.match(source, /application\/manifest\+json/);
+});
+
+test("customer manifests and install UI use default icons per business type", () => {
+  const customerManifests = {
+    supermarket: "pwa/manifests/supermarket.webmanifest",
+    restaurant: "pwa/manifests/restaurant.webmanifest",
+    bakery: "pwa/manifests/bakery.webmanifest",
+    laundry: "pwa/manifests/laundry.webmanifest"
+  };
+
+  for (const [surface, path] of Object.entries(customerManifests)) {
+    const manifest = JSON.parse(readFileSync(path, "utf8"));
+    assert.ok(manifest.icons.some(icon => icon.src.includes(surface + "-192.png")), path);
+    assert.ok(manifest.icons.some(icon => icon.src.includes(surface + "-512.png")), path);
+
+    for (const size of [192, 512]) {
+      const iconPath = "pwa/icons/" + surface + "-" + size + ".png";
+      assert.equal(existsSync(iconPath), true, iconPath);
+      const data = readFileSync(iconPath);
+      assert.ok(data.length > 700, iconPath);
+      assert.equal(data.subarray(0, 8).toString("hex"), "89504e470d0a1a0a", iconPath);
+    }
+  }
+
+  const installer = readFileSync("pwa/install.js", "utf8");
+  assert.match(installer, /iconUrl\(192\)/);
+  assert.match(installer, /apple-touch-icon/);
+  assert.match(installer, /fbPwaInstallIcon/);
+});
+
+test("customer pages pass the real business name to the PWA identity", () => {
+  const appPaths = [
+    "templates/supermarket/app.js",
+    "templates/restaurant/app.js",
+    "templates/bakery/app.js",
+    "templates/laundry/app.js"
+  ];
+
+  for (const path of appPaths) {
+    const source = readFileSync(path, "utf8");
+    assert.match(source, /window\.FamilyBusinessPwa\?\.setBrand\(installName\)/, path);
+  }
+});
