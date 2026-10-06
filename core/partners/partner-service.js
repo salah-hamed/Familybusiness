@@ -250,12 +250,12 @@ export async function claimOperatorAccess(operatorId, authUser) {
       throw new Error("OPERATOR_ALREADY_CLAIMED");
     }
 
-    if (!inviteIsActive(operator)) {
-      throw new Error("OPERATOR_INVITE_EXPIRED");
-    }
-
     const inviteLoginEmail = String(operator.authLoginEmail || "").trim().toLowerCase();
     const legacyEmail = String(operator.email || "").trim().toLowerCase();
+
+    if (inviteLoginEmail && !inviteIsActive(operator)) {
+      throw new Error("OPERATOR_INVITE_EXPIRED");
+    }
     const expectedEmail = inviteLoginEmail || legacyEmail;
 
     if (!expectedEmail || expectedEmail !== actualEmail) {
