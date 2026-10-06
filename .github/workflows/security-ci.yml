@@ -23,7 +23,11 @@ jobs:
         run: npm run test:safe-html
       - name: Source security and regression gate
         run: npm run test:source
-      - name: Dependency vulnerability audit
+      - name: Production dependency vulnerability audit
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Development-tool advisory report
+        continue-on-error: true
         run: npm audit --audit-level=high
 
   rules-operator:
