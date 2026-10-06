@@ -6,7 +6,7 @@ import { join } from "node:path";
 const roots = [
   "admin","core","dashboard","home","laundry","laundry-operator","my-projects",
   "restaurant","restaurant-operator","supermarket","supermarket-operator",
-  "templates","workspace"
+  "templates","workspace","pwa"
 ];
 
 function walk(dir, out = []) {
@@ -142,7 +142,13 @@ test("launch surfaces enforce a browser CSP and strict referrer policy", () => {
     "templates/supermarket/index.html",
     "templates/restaurant/index.html",
     "templates/bakery/index.html",
-    "templates/laundry/index.html"
+    "templates/laundry/index.html",
+    "bakery/index.html",
+    "laundry/index.html",
+    "restaurant/index.html",
+    "supermarket/index.html",
+    "templates/carwash/index.html",
+    "templates/cleaning/index.html"
   ]) {
     const html = readFileSync(path, "utf8");
     assert.match(html, /http-equiv="Content-Security-Policy"/, path);
@@ -171,4 +177,13 @@ test("browser runtime avoids dangerous dynamic-code sinks and inline event handl
     }
   }
   assert.deepEqual(hits, []);
+});
+
+
+test("offline fallback forbids all script execution", () => {
+  const html = readFileSync("pwa/offline.html", "utf8");
+  assert.match(html, /script-src 'none'/);
+  assert.match(html, /object-src 'none'/);
+  assert.match(html, /name="referrer" content="no-referrer"/);
+  assert.doesNotMatch(html, /\son[a-z]+\s*=/i);
 });
