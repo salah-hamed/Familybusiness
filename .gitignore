@@ -1,0 +1,28 @@
+# Dependencies and local tooling
+node_modules/
+.firebase/
+.gcloud/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Firebase / Google credentials (never commit)
+service-account*.json
+*serviceAccount*.json
+firebase-adminsdk-*.json
+google-application-credentials*.json
+application_default_credentials.json
+
+# CLI / emulator logs
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
+*.log
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
