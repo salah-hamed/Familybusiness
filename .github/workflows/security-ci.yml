@@ -12,7 +12,7 @@ permissions:
 jobs:
   security-regression:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,8 +31,29 @@ jobs:
       - name: Source security and regression gate
         run: npm run test:source
 
-      - name: Firestore core Rules gate
-        run: npx firebase emulators:exec --project family-business-rules-test --only firestore "node --test --test-concurrency=1 tests/firestore.rules.test.mjs"
+      - name: Rules diagnostic - operator access
+        id: rules_operator
+        continue-on-error: true
+        run: npx firebase emulators:exec --project family-business-rules-test --only firestore "node --test --test-concurrency=1 --test-name-pattern='operator|invite|claim|rotate' tests/firestore.rules.test.mjs"
+
+      - name: Rules diagnostic - subscription payments
+        id: rules_payment
+        continue-on-error: true
+        run: npx firebase emulators:exec --project family-business-rules-test --only firestore "node --test --test-concurrency=1 --test-name-pattern='payment|subscription|InstaPay|Launch 50|promo' tests/firestore.rules.test.mjs"
+
+      - name: Rules diagnostic - tracking
+        id: rules_tracking
+        continue-on-error: true
+        run: npx firebase emulators:exec --project family-business-rules-test --only firestore "node --test --test-concurrency=1 --test-name-pattern='tracking' tests/firestore.rules.test.mjs"
+
+      - name: Rules diagnostic - remaining rules
+        id: rules_remaining
+        continue-on-error: true
+        run: npx firebase emulators:exec --project family-business-rules-test --only firestore "node --test --test-concurrency=1 --test-name-pattern='^(?!.*(operator|invite|claim|rotate|payment|subscription|InstaPay|Launch 50|promo|tracking)).*$' tests/firestore.rules.test.mjs"
+
+      - name: Fail if a Rules diagnostic failed
+        if: steps.rules_operator.outcome != 'success' || steps.rules_payment.outcome != 'success' || steps.rules_tracking.outcome != 'success' || steps.rules_remaining.outcome != 'success'
+        run: exit 1
 
       - name: Firestore query gates
         run: npx firebase emulators:exec --project family-business-rules-test --only firestore "node --test --test-concurrency=1 tests/order-query.test.mjs tests/earnings-query.test.mjs tests/admin-users-pagination.test.mjs"
