@@ -197,7 +197,7 @@ function renderMenu(){
   $("menuGrid").innerHTML=visible.map(item=>{
     const qty=qtyFor(item.itemId);
     const image=item.image
-      ?`<img src="${escapeHTML(item.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.textContent='${categoryEmoji(item.category)}'">`
+      ?`<img src="${escapeHTML(item.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-fallback="${escapeHTML(categoryEmoji(item.category))}">`
       :categoryEmoji(item.category);
 
     return `<article class="menuCard">
@@ -217,6 +217,12 @@ function renderMenu(){
       </div>
     </article>`;
   }).join("");
+
+  document.querySelectorAll(".menuImage img").forEach(image=>{
+    image.addEventListener("error",()=>{
+      image.parentElement.textContent=image.dataset.fallback||"🖼️";
+    },{once:true});
+  });
 
   document.querySelectorAll("[data-plus]").forEach(btn=>btn.onclick=()=>changeQty(btn.dataset.plus,1));
   document.querySelectorAll("[data-minus]").forEach(btn=>btn.onclick=()=>changeQty(btn.dataset.minus,-1));
