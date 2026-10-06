@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: security-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   source-gates:
     runs-on: ubuntu-latest
