@@ -26,7 +26,18 @@ jobs:
         run: npm install --ignore-scripts
 
       - name: Full regression + Firestore Rules + E2E
-        run: npm test
+        shell: bash
+        run: |
+          set +e
+          npm test 2>&1 | tee security-test-output.txt
+          code=${PIPESTATUS[0]}
+          {
+            echo "## Security regression output"
+            echo '~~~text'
+            tail -n 250 security-test-output.txt
+            echo '~~~'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$code"
 
       - name: Dependency vulnerability audit
         run: npm audit --audit-level=high
