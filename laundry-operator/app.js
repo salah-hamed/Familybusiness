@@ -22,6 +22,12 @@ const params=new URLSearchParams(location.search);
 const projectId=params.get("project")||"";
 const inviteToken=params.get("invite")||"";
 const inviteAuthEmail=buildOperatorAuthEmail(inviteToken);
+function clearInviteFromAddressBar(){
+  if(!inviteToken)return;
+  const url=new URL(location.href);
+  url.searchParams.delete("invite");
+  history.replaceState(null,"",url.toString());
+}
 let user=null,operator=null,agreement=null,laundry=null,workers=[],orders=[];
 let operationalOrders=[],historyOrders=[],historyCursor=null,historyHasMore=false;
 let operatorGuide=null,currentPriceConfig={};
@@ -60,7 +66,7 @@ function renderPricing(config={}){
 async function refreshAccount(){
   if(!user)return;
   if(!projectId){$("pageStatus").innerText="الرابط غير مكتمل.";return;}
-  try{await claimOperatorAccess(projectId,user);}catch(e){$("pageStatus").innerText=operatorAccessErrorMessage(e);setVisible("operationsPanel",false);return;}
+  try{await claimOperatorAccess(projectId,user);clearInviteFromAddressBar();}catch(e){$("pageStatus").innerText=operatorAccessErrorMessage(e);setVisible("operationsPanel",false);return;}
   operator=await getOperator(projectId);agreement=await getCommissionAgreement(projectId);laundry=await getLaundry(projectId);
   setVisible("authPanel",false);$("logoutBtn").classList.remove("hidden");
   const pending=agreement?.pendingStatus==="pending"&&agreement?.pendingAmount!=null;
@@ -72,7 +78,7 @@ async function refreshAccount(){
   if(canOperate) await loadOperations();
 }
 
-onAuthStateChanged(auth,async current=>{user=current;if(!projectId||!inviteAuthEmail){setVisible("authPanel",false);setVisible("agreementPanel",false);setVisible("operationsPanel",false);$("logoutBtn").classList.add("hidden");$("pageStatus").innerText="دعوة واتساب غير مكتملة أو غير صالحة.";return;}if(current&&String(current.email||"").toLowerCase()!==inviteAuthEmail.toLowerCase()){await signOut(auth);return;}if(!current){setVisible("authPanel",true);setVisible("agreementPanel",false);setVisible("operationsPanel",false);$("logoutBtn").classList.add("hidden");$("pageStatus").innerText="فعّل الدعوة بكلمة مرور أول مرة، أو سجل دخولك لو فعلتها قبل كده.";return;}refreshAccount();});
+onAuthStateChanged(auth,async current=>{user=current;if(!projectId){setVisible("authPanel",false);setVisible("agreementPanel",false);setVisible("operationsPanel",false);$("logoutBtn").classList.add("hidden");$("pageStatus").innerText="دعوة واتساب غير مكتملة أو غير صالحة.";return;}if(current&&inviteAuthEmail&&String(current.email||"").toLowerCase()!==inviteAuthEmail.toLowerCase()){await signOut(auth);return;}if(!current){if(!inviteAuthEmail){setVisible("authPanel",false);setVisible("agreementPanel",false);setVisible("operationsPanel",false);$("logoutBtn").classList.add("hidden");$("pageStatus").innerText="انتهت جلسة الدخول. اطلب رابط دخول جديد من صاحب المشروع.";return;}setVisible("authPanel",true);setVisible("agreementPanel",false);setVisible("operationsPanel",false);$("logoutBtn").classList.add("hidden");$("pageStatus").innerText="فعّل الدعوة بكلمة مرور أول مرة، أو سجل دخولك لو فعلتها قبل كده.";return;}refreshAccount();});
 $("registerBtn").onclick=async()=>{try{await createUserWithEmailAndPassword(auth,inviteAuthEmail,$("authPassword").value);$("authMessage").innerText="تم تفعيل الدعوة ✅";}catch(e){$("authMessage").innerText=e.code==="auth/email-already-in-use"?"الدعوة مفعلة بالفعل. استخدم تسجيل الدخول بنفس كلمة المرور.":friendlyOperatorError(e,"تعذر تفعيل الدعوة. راجع كلمة المرور وحاول مرة أخرى.");}};
 $("loginBtn").onclick=async()=>{try{await signInWithEmailAndPassword(auth,inviteAuthEmail,$("authPassword").value);$("authMessage").innerText="";}catch(e){$("authMessage").innerText="تعذر الدخول. راجع كلمة المرور أو تأكد أنك تستخدم نفس رابط الدعوة.";}};
 $("logoutBtn").onclick=()=>signOut(auth);
