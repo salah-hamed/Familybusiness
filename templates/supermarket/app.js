@@ -85,15 +85,11 @@ function categoryEmoji(value){
 }
 
 async function init(){
-  if(!projectId){showClosed("رابط المشروع غير مكتمل.");return;}
+  if(!projectId||!projectId.endsWith("_supermarket")){showClosed("رابط المشروع غير مكتمل.");return;}
 
   try{
-    const [projectSnap,storeSnap]=await Promise.all([
-      getDoc(doc(db,"projects",projectId)),
-      getDoc(doc(db,"supermarkets",projectId))
-    ]);
+    const storeSnap=await getDoc(doc(db,"supermarkets",projectId));
 
-    if(!projectSnap.exists()||projectSnap.data().template!=="supermarket"){showClosed("المشروع غير متاح.");return;}
     if(!storeSnap.exists()){showClosed("السوبرماركت لسه ماكملش الإعداد.");return;}
 
     store={supermarketId:storeSnap.id,...storeSnap.data()};
