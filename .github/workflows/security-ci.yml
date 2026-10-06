@@ -12,7 +12,7 @@ permissions:
 jobs:
   security-regression:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,8 +31,14 @@ jobs:
       - name: Source security and regression gate
         run: npm run test:source
 
-      - name: Firestore Rules and E2E gate
-        run: npm run test:rules
+      - name: Firestore core Rules gate
+        run: npx firebase emulators:exec --project family-business-rules-test --only firestore "node --test --test-concurrency=1 tests/firestore.rules.test.mjs"
+
+      - name: Firestore query gates
+        run: npx firebase emulators:exec --project family-business-rules-test --only firestore "node --test --test-concurrency=1 tests/order-query.test.mjs tests/earnings-query.test.mjs tests/admin-users-pagination.test.mjs"
+
+      - name: Launch E2E gate
+        run: npx firebase emulators:exec --project family-business-rules-test --only firestore "node --test --test-concurrency=1 tests/launch-e2e-simulation.test.mjs"
 
       - name: Dependency vulnerability audit
         run: npm audit --audit-level=high
