@@ -552,11 +552,7 @@ test("new rotated invite can claim once and a second uid cannot take over", asyn
   const newEmail = "operator.new.claim@familybusiness.local";
 
   await assertSucceeds(
-    updateDoc(doc(ownerDb, "operators", projectId), {
-      authLoginEmail: newEmail,
-      authUid: "",
-      updatedAt: serverTimestamp()
-    })
+    updateDoc(doc(ownerDb, "operators", projectId), rotatedOperatorInvitePatch(newEmail))
   );
 
   const newDb = testEnv.authenticatedContext("operator_new_claim", {
