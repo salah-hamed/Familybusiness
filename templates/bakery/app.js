@@ -53,18 +53,11 @@ function availableCategories(){
 }
 
 async function init(){
-  if(!projectId){showClosed("رابط المشروع غير مكتمل.");return;}
+  if(!projectId||!projectId.endsWith("_bakery")){showClosed("رابط المشروع غير مكتمل.");return;}
 
   try{
-    const [projectSnap,restaurantSnap]=await Promise.all([
-      getDoc(doc(db,"projects",projectId)),
-      getDoc(doc(db,"restaurants",projectId))
-    ]);
+    const restaurantSnap=await getDoc(doc(db,"restaurants",projectId));
 
-    if(!projectSnap.exists()||projectSnap.data().template!=="bakery"){
-      showClosed("المشروع غير متاح.");
-      return;
-    }
     if(!restaurantSnap.exists()){
       showClosed("المخبز لسه ماكملش الإعداد.");
       return;
