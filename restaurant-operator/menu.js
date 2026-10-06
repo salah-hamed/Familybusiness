@@ -162,7 +162,7 @@ function renderMenu(){
     <article class="rowCard productManagerCard" data-item-id="${item.itemId}">
       <div class="menuItemWithImage">
         <div class="menuItemThumb">
-          ${item.image?`<img src="${escapeHTML(item.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.parentElement.textContent='🍽️'">`:"🍽️"}
+          ${item.image?`<img src="${escapeHTML(item.image)}" alt="" loading="lazy" referrerpolicy="no-referrer">`:"🍽️"}
         </div>
         <div>
           <b>${escapeHTML(item.name)}</b>
@@ -187,6 +187,12 @@ function renderMenu(){
       </div>
     </article>
   `).join(""):'<p class="muted">لا توجد أصناف مطابقة.</p>';
+
+  document.querySelectorAll(".menuItemThumb img").forEach(image=>{
+    image.addEventListener("error",()=>{
+      image.parentElement.textContent="🍽️";
+    },{once:true});
+  });
 
   document.querySelectorAll("[data-item-id]").forEach(card=>{
     const itemId=card.dataset.itemId;
