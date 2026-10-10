@@ -26,7 +26,7 @@ import {
 } from "../core/subscriptions/payment-service.js";
 import { createGuide } from "../core/onboarding/guide.js";
 import { buildWorkspaceGuide } from "../core/onboarding/guide-state.js";
-import { getProjectCommissionSummary, subscribeLatestUserCommission, subscribeProjectPaymentState } from "../core/commissions/earnings-service.js";
+import { getProjectCommissionSummary, subscribeLatestUserCommission, subscribeProjectPaymentState } from "../core/commissions/earnings-service.js?v=20261010-commission1";
 const userName =
 document.getElementById("userName");
 
