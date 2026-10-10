@@ -70,3 +70,28 @@ test("owner dashboard cache keys are bumped for the finance refresh", () => {
     assert.match(html, /app\.js\?v=20261010-commission1/, path);
   }
 });
+
+
+test("commission aggregation indexes cover production sum(amount) queries", () => {
+  const config = JSON.parse(readFileSync("firestore.indexes.json", "utf8"));
+
+  const signatures = new Set(config.indexes.map(index => [
+    index.collectionGroup,
+    ...index.fields.map(field => `${field.fieldPath}:${field.order || field.arrayConfig}`)
+  ].join("|")));
+
+  const required = [
+    "commissionLedger|projectId:ASCENDING|sourceType:ASCENDING|userId:ASCENDING|amount:ASCENDING",
+    "commissionLedger|projectId:ASCENDING|sourceType:ASCENDING|userId:ASCENDING|status:ASCENDING|amount:ASCENDING",
+    "commissionLedger|projectId:ASCENDING|sourceType:ASCENDING|amount:ASCENDING",
+    "commissionLedger|projectId:ASCENDING|sourceType:ASCENDING|status:ASCENDING|amount:ASCENDING",
+    "commissionLedger|userId:ASCENDING|amount:ASCENDING",
+    "commissionLedger|userId:ASCENDING|sourceType:ASCENDING|amount:ASCENDING",
+    "commissionLedger|userId:ASCENDING|sourceType:ASCENDING|status:ASCENDING|amount:ASCENDING",
+    "commissionSettlements|projectId:ASCENDING|status:ASCENDING|amount:ASCENDING"
+  ];
+
+  for (const signature of required) {
+    assert.ok(signatures.has(signature), `missing aggregate index: ${signature}`);
+  }
+});
