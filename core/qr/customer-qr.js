@@ -150,7 +150,7 @@ function canvasBlob(canvas) {
   });
 }
 
-function createPanel(input) {
+function createPanel(input, mount = null) {
   ensureStyles();
 
   const panel = document.createElement("section");
@@ -173,8 +173,12 @@ function createPanel(input) {
     </div>
   `;
 
-  const host = input.closest(".linkBox") || input.parentElement;
-  host.insertAdjacentElement("afterend", panel);
+  if (mount) {
+    mount.replaceChildren(panel);
+  } else {
+    const host = input.closest(".linkBox") || input.parentElement;
+    host.insertAdjacentElement("afterend", panel);
+  }
 
   const canvas = panel.querySelector(".customerQrCanvas");
   const status = panel.querySelector(".customerQrStatus");
@@ -290,13 +294,16 @@ function createPanel(input) {
 
 export function renderCustomerQr({
   inputId = "customerLink",
-  projectName = "المشروع"
+  projectName = "المشروع",
+  mountId = "customerQrMount"
 } = {}) {
   const input = document.getElementById(inputId);
   if (!input) return null;
 
-  let panel = input.closest(".card")?.querySelector(".customerQrPanel");
-  if (!panel) panel = createPanel(input);
+  const mount = document.getElementById(mountId);
+  let panel = mount?.querySelector(".customerQrPanel")
+    || input.closest(".card")?.querySelector(".customerQrPanel");
+  if (!panel) panel = createPanel(input, mount);
 
   const link = String(input.value || "").trim();
   panel.dataset.qrLink = link;
