@@ -142,11 +142,16 @@ $("registerBtn").onclick=async()=>{
 
 $("loginBtn").onclick=async()=>{
   $("authMessage").innerText="جاري تسجيل الدخول...";
+  $("loginBtn").disabled=true;
   try{
+    const activeEmail=String(auth.currentUser?.email||"").toLowerCase();
+    if(auth.currentUser&&activeEmail!==inviteAuthEmail.toLowerCase())await signOut(auth);
     await signInWithEmailAndPassword(auth,inviteAuthEmail,$("authPassword").value);
     $("authMessage").innerText="";
-  }catch{
-    $("authMessage").innerText="تعذر الدخول. راجع كلمة المرور أو رابط الدعوة.";
+  }catch(e){
+    $("authMessage").innerText="تعذر الدخول. راجع كلمة المرور أو تأكد أنك تستخدم نفس رابط الدعوة.";
+  }finally{
+    $("loginBtn").disabled=false;
   }
 };
 
