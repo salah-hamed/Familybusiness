@@ -9,7 +9,7 @@ import { getLaundry,updateLaundrySettings } from "../core/laundry/laundry-servic
 import { WORKER_ROLES,createWorker,listProjectWorkers,setWorkerActive } from "../core/workers/worker-service.js";
 import { assignWorkerAndPrepareWhatsApp, rollbackPreparedAssignment } from "../core/workers/worker-dispatch-service.js";
 import { buildWorkerWhatsAppUrl, openWhatsAppPlaceholder, navigatePreparedWhatsAppWindow } from "../core/whatsapp/dispatch-service.js";
-import { listLaundryOperationalOrders,listLaundryHistoryPage,countLaundryDeliveredOrders,currentLaundryStage,allowedLaundryNextStages,changeLaundryStage } from "../core/laundry/order-service.js";
+import { listLaundryOperationalOrders,subscribeLaundryOperationalOrders,listLaundryHistoryPage,countLaundryDeliveredOrders,currentLaundryStage,allowedLaundryNextStages,changeLaundryStage } from "../core/laundry/order-service.js";
 import { getOrderOperationalAlert, summarizeOperationalAlerts } from "../core/orders/operational-alerts.js";
 import { createGuide } from "../core/onboarding/guide.js";
 import { buildOperatorGuide } from "../core/onboarding/guide-state.js";
@@ -26,6 +26,7 @@ const inviteAuthEmail=buildOperatorAuthEmail(inviteToken);
 let user=null,operator=null,agreement=null,laundry=null,workers=[],orders=[];
 let operationalOrders=[],historyOrders=[],historyCursor=null,historyHasMore=false;
 let operatorGuide=null,currentPriceConfig={};
+let stopOrdersLive=()=>{};
 function refreshOperatorFirstRunGuide({autoOpen=false}={}){
   const activePickup=workers.some(w=>w.isActive===true&&w.role==="pickup_agent");
   const activeDelivery=workers.some(w=>w.isActive===true&&w.role==="delivery_agent");
@@ -73,9 +74,48 @@ async function refreshAccount(){
   if(canOperate) await loadOperations();
 }
 
-onAuthStateChanged(auth,async current=>{user=current;if(!projectId||!inviteAuthEmail){setVisible("authPanel",false);setVisible("agreementPanel",false);setVisible("operationsPanel",false);$("logoutBtn").classList.add("hidden");$("pageStatus").innerText="دعوة واتساب غير مكتملة أو غير صالحة.";return;}if(current&&String(current.email||"").toLowerCase()!==inviteAuthEmail.toLowerCase()){await signOut(auth);return;}if(!current){setVisible("authPanel",true);setVisible("agreementPanel",false);setVisible("operationsPanel",false);$("logoutBtn").classList.add("hidden");$("pageStatus").innerText="فعّل الدعوة بكلمة مرور أول مرة، أو سجل دخولك لو فعلتها قبل كده.";return;}refreshAccount();});
+onAuthStateChanged(auth,async current=>{
+  user=current;
+  if(!projectId||!inviteAuthEmail){
+    stopOrdersLive();
+    setVisible("authPanel",false);setVisible("agreementPanel",false);setVisible("operationsPanel",false);
+    $("logoutBtn").classList.add("hidden");
+    $("pageStatus").innerText="دعوة واتساب غير مكتملة أو غير صالحة.";
+    return;
+  }
+  if(current&&String(current.email||"").toLowerCase()!==inviteAuthEmail.toLowerCase()){
+    stopOrdersLive();
+    user=null;
+    setVisible("authPanel",true);setVisible("agreementPanel",false);setVisible("operationsPanel",false);
+    $("logoutBtn").classList.add("hidden");
+    $("pageStatus").innerText="يوجد حساب Family Business مختلف مفتوح في المتصفح. لن يتم تسجيل خروجه تلقائيًا.";
+    $("authMessage").innerText="اضغط تسجيل الدخول هنا لتبديل الحساب إلى مشغل هذا المشروع.";
+    return;
+  }
+  if(!current){
+    stopOrdersLive();
+    setVisible("authPanel",true);setVisible("agreementPanel",false);setVisible("operationsPanel",false);
+    $("logoutBtn").classList.add("hidden");
+    $("pageStatus").innerText="فعّل الدعوة بكلمة مرور أول مرة، أو سجل دخولك لو فعلتها قبل كده.";
+    return;
+  }
+  refreshAccount();
+});
 $("registerBtn").onclick=async()=>{try{await createUserWithEmailAndPassword(auth,inviteAuthEmail,$("authPassword").value);$("authMessage").innerText="تم تفعيل الدعوة ✅";}catch(e){$("authMessage").innerText=e.code==="auth/email-already-in-use"?"الدعوة مفعلة بالفعل. استخدم تسجيل الدخول بنفس كلمة المرور.":friendlyOperatorError(e,"تعذر تفعيل الدعوة. راجع كلمة المرور وحاول مرة أخرى.");}};
-$("loginBtn").onclick=async()=>{try{await signInWithEmailAndPassword(auth,inviteAuthEmail,$("authPassword").value);$("authMessage").innerText="";}catch(e){$("authMessage").innerText="تعذر الدخول. راجع كلمة المرور أو تأكد أنك تستخدم نفس رابط الدعوة.";}};
+$("loginBtn").onclick=async()=>{
+  $("authMessage").innerText="جاري تسجيل الدخول...";
+  $("loginBtn").disabled=true;
+  try{
+    const activeEmail=String(auth.currentUser?.email||"").toLowerCase();
+    if(auth.currentUser&&activeEmail!==inviteAuthEmail.toLowerCase())await signOut(auth);
+    await signInWithEmailAndPassword(auth,inviteAuthEmail,$("authPassword").value);
+    $("authMessage").innerText="";
+  }catch(e){
+    $("authMessage").innerText="تعذر الدخول. راجع كلمة المرور أو تأكد أنك تستخدم نفس رابط الدعوة.";
+  }finally{
+    $("loginBtn").disabled=false;
+  }
+};
 $("logoutBtn").onclick=()=>signOut(auth);
 $("acceptAgreementBtn").onclick=async()=>{try{await acceptPendingCommission({projectDocId:projectId,operatorAuthUid:user.uid});await refreshAccount();}catch(e){$("agreementMessage").innerText=friendlyOperatorError(e,"تعذر تحديث اتفاق العمولة.");}};
 $("rejectAgreementBtn").onclick=async()=>{try{await rejectPendingCommission({projectDocId:projectId,operatorAuthUid:user.uid});await refreshAccount();}catch(e){$("agreementMessage").innerText=friendlyOperatorError(e,"تعذر تحديث اتفاق العمولة.");}};
@@ -87,6 +127,7 @@ async function loadOperations(){
   const url=new URL("../templates/laundry/",location.href);url.searchParams.set("project",projectId);$("customerOrderLink").value=url.toString();renderCustomerQr({inputId:"customerOrderLink",mountId:"operatorCustomerQrMount",projectName:laundry?.name||operator?.name||"المغسلة"});
   const projectSnap=await getDoc(doc(db,"projects",projectId));currentPriceConfig=projectSnap.data()?.priceConfig||{};renderPricing(currentPriceConfig);
   await Promise.all([loadWorkers(),loadOrders()]);
+  startOrdersLive();
   await renderOperatorFinancePanel({
     container:$("operationsPanel"),
     projectId,
@@ -197,6 +238,10 @@ async function loadOrders({appendHistory=false}={}){
     $("statDone").innerText=deliveredCount;
   }
 
+  renderOrders();
+}
+
+function renderOrders(){
   orders=mergeVisibleOrders();
   let newCount=0,activeCount=0;
   operationalOrders.forEach(o=>{const s=currentLaundryStage(o);if(s==="new")newCount++;else if(s!=="canceled")activeCount++;});
@@ -265,5 +310,22 @@ async function loadOrders({appendHistory=false}={}){
     });
   });
 }
+
+function startOrdersLive(){
+  stopOrdersLive();
+  stopOrdersLive=subscribeLaundryOperationalOrders(
+    projectId,
+    liveOrders=>{
+      operationalOrders=liveOrders;
+      renderOrders();
+    },
+    error=>{
+      console.error("Laundry realtime orders failed",error);
+      $("ordersMessage").innerText=friendlyOperatorError(error,"تعذر التحديث اللحظي للطلبات. استخدم زر تحديث مؤقتًا.");
+    }
+  );
+}
+
+window.addEventListener("pagehide",()=>stopOrdersLive());
 $("refreshOrdersBtn").onclick=()=>loadOrders();
 $("loadOlderOrdersBtn").onclick=async()=>{const btn=$("loadOlderOrdersBtn");btn.disabled=true;try{await loadOrders({appendHistory:true});}finally{btn.disabled=false;}};
