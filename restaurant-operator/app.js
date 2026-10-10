@@ -9,7 +9,7 @@ import { getRestaurant, updateRestaurantSettings } from "../core/restaurant/rest
 import { WORKER_ROLES, createWorker, listProjectWorkers, setWorkerActive } from "../core/workers/worker-service.js";
 import { assignWorkerAndPrepareWhatsApp, rollbackPreparedAssignment } from "../core/workers/worker-dispatch-service.js";
 import { buildWorkerWhatsAppUrl, openWhatsAppPlaceholder, navigatePreparedWhatsAppWindow } from "../core/whatsapp/dispatch-service.js";
-import { allowedNextRestaurantStatuses, listRestaurantOperationalOrders, listRestaurantHistoryPage, countRestaurantDeliveredOrders, acceptRestaurantOrder, changeRestaurantOrderStatus } from "../core/restaurant/order-service.js";
+import { allowedNextRestaurantStatuses, listRestaurantOperationalOrders, subscribeRestaurantOperationalOrders, listRestaurantHistoryPage, countRestaurantDeliveredOrders, acceptRestaurantOrder, changeRestaurantOrderStatus } from "../core/restaurant/order-service.js";
 import { getOrderOperationalAlert, summarizeOperationalAlerts } from "../core/orders/operational-alerts.js";
 import { createGuide } from "../core/onboarding/guide.js";
 import { buildOperatorGuide } from "../core/onboarding/guide-state.js";
@@ -38,6 +38,7 @@ let historyOrders=[];
 let historyCursor=null;
 let historyHasMore=false;
 let operatorGuide=null;
+let stopOrdersLive=()=>{};
 
 function refreshOperatorFirstRunGuide({autoOpen=false}={}){
   const journey=buildOperatorGuide({
@@ -107,11 +108,17 @@ onAuthStateChanged(auth,async user=>{
   }
 
   if(user&&String(user.email||"").toLowerCase()!==inviteAuthEmail.toLowerCase()){
-    await signOut(auth);
+    stopOrdersLive();
+    currentUser=null;
+    setVisible("authPanel",true);setVisible("agreementPanel",false);setVisible("operationsPanel",false);
+    $("logoutBtn").classList.add("hidden");
+    $("pageStatus").innerText="يوجد حساب Family Business مختلف مفتوح في المتصفح. لن يتم تسجيل خروجه تلقائيًا.";
+    $("authMessage").innerText="اضغط تسجيل الدخول هنا لتبديل الحساب إلى مشغل هذا المشروع.";
     return;
   }
 
   if(!user){
+    stopOrdersLive();
     setVisible("authPanel",true);setVisible("agreementPanel",false);setVisible("operationsPanel",false);
     $("logoutBtn").classList.add("hidden");
     $("pageStatus").innerText="فعّل الدعوة بكلمة مرور أول مرة، أو سجل دخولك لو فعلتها قبل كده.";
@@ -135,11 +142,16 @@ $("registerBtn").onclick=async()=>{
 
 $("loginBtn").onclick=async()=>{
   $("authMessage").innerText="جاري تسجيل الدخول...";
+  $("loginBtn").disabled=true;
   try{
+    const activeEmail=String(auth.currentUser?.email||"").toLowerCase();
+    if(auth.currentUser&&activeEmail!==inviteAuthEmail.toLowerCase())await signOut(auth);
     await signInWithEmailAndPassword(auth,inviteAuthEmail,$("authPassword").value);
     $("authMessage").innerText="";
-  }catch{
-    $("authMessage").innerText="تعذر الدخول. راجع كلمة المرور أو رابط الدعوة.";
+  }catch(e){
+    $("authMessage").innerText="تعذر الدخول. راجع كلمة المرور أو تأكد أنك تستخدم نفس رابط الدعوة.";
+  }finally{
+    $("loginBtn").disabled=false;
   }
 };
 
@@ -266,6 +278,8 @@ async function loadOperations(){
 
   if(ordersResult.status==="rejected"){
     $("ordersMessage").innerText=friendlyOperatorError(ordersResult.reason,"تعذر تحميل الطلبات. اضغط تحديث وحاول مرة أخرى.");
+  }else{
+    startOrdersLive();
   }
   await renderOperatorFinancePanel({
     container:$("operationsPanel"),
@@ -404,6 +418,10 @@ async function loadOrders({appendHistory=false}={}){
     $("statDelivered").innerText=deliveredCount;
   }
 
+  renderOrders();
+}
+
+function renderOrders(){
   orders=mergeVisibleOrders();
   $("statNew").innerText=operationalOrders.filter(o=>o.status==="new").length;
   $("statActive").innerText=operationalOrders.filter(o=>o.status!=="new").length;
@@ -533,6 +551,22 @@ async function loadOrders({appendHistory=false}={}){
   });
 }
 
+function startOrdersLive(){
+  stopOrdersLive();
+  stopOrdersLive=subscribeRestaurantOperationalOrders(
+    projectId,
+    liveOrders=>{
+      operationalOrders=liveOrders;
+      renderOrders();
+    },
+    error=>{
+      console.error("Restaurant realtime orders failed",error);
+      $("ordersMessage").innerText=friendlyOperatorError(error,"تعذر التحديث اللحظي للطلبات. استخدم زر تحديث مؤقتًا.");
+    }
+  );
+}
+
+window.addEventListener("pagehide",()=>stopOrdersLive());
 $("refreshOrdersBtn").onclick=async()=>{
   $("ordersMessage").innerText="جاري تحديث الطلبات...";
   try{

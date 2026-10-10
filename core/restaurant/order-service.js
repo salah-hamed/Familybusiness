@@ -412,6 +412,28 @@ export async function listRestaurantOperationalOrders(
   }
 }
 
+export function subscribeRestaurantOperationalOrders(
+  projectId,
+  onChange,
+  onError = null,
+  { templateType = "restaurant" } = {}
+) {
+  const activeStatuses = ["new","accepted","preparing","ready","assigned","out_for_delivery"];
+  const liveQuery = query(
+    collection(db, "orders"),
+    where("projectId", "==", projectId),
+    where("templateType", "==", templateType),
+    where("status", "in", activeStatuses),
+    orderBy("createdAt", "desc")
+  );
+
+  return onSnapshot(
+    liveQuery,
+    snap => onChange?.(snap.docs.map(item => ({ orderId: item.id, ...item.data() }))),
+    error => onError?.(error)
+  );
+}
+
 export async function listRestaurantHistoryPage(
   projectId,
   { pageSize = 50, templateType = "restaurant", cursor = null } = {}

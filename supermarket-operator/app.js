@@ -9,7 +9,7 @@ import { getSupermarket, updateSupermarketSettings } from "../core/supermarket/s
 import { WORKER_ROLES, createWorker, listProjectWorkers, setWorkerActive } from "../core/workers/worker-service.js";
 import { assignWorkerAndPrepareWhatsApp, rollbackPreparedAssignment } from "../core/workers/worker-dispatch-service.js";
 import { buildWorkerWhatsAppUrl, openWhatsAppPlaceholder, navigatePreparedWhatsAppWindow } from "../core/whatsapp/dispatch-service.js";
-import { allowedNextSupermarketStatuses, listSupermarketOperationalOrders, listSupermarketHistoryPage, countSupermarketDeliveredOrders, acceptSupermarketOrder, changeSupermarketOrderStatus } from "../core/supermarket/order-service.js";
+import { allowedNextSupermarketStatuses, listSupermarketOperationalOrders, subscribeSupermarketOperationalOrders, listSupermarketHistoryPage, countSupermarketDeliveredOrders, acceptSupermarketOrder, changeSupermarketOrderStatus } from "../core/supermarket/order-service.js";
 import { getOrderOperationalAlert, summarizeOperationalAlerts } from "../core/orders/operational-alerts.js";
 import { createGuide } from "../core/onboarding/guide.js";
 import { buildOperatorGuide } from "../core/onboarding/guide-state.js";
@@ -37,6 +37,7 @@ let historyOrders=[];
 let historyCursor=null;
 let historyHasMore=false;
 let operatorGuide=null;
+let stopOrdersLive=()=>{};
 
 function refreshOperatorFirstRunGuide({autoOpen=false}={}){
   const journey=buildOperatorGuide({
@@ -111,11 +112,17 @@ onAuthStateChanged(auth,async user=>{
   }
 
   if(user&&String(user.email||"").toLowerCase()!==inviteAuthEmail.toLowerCase()){
-    await signOut(auth);
+    stopOrdersLive();
+    currentUser=null;
+    setVisible("authPanel",true);setVisible("agreementPanel",false);setVisible("operationsPanel",false);
+    $("logoutBtn").classList.add("hidden");
+    $("pageStatus").innerText="يوجد حساب Family Business مختلف مفتوح في المتصفح. لن يتم تسجيل خروجه تلقائيًا.";
+    $("authMessage").innerText="اضغط تسجيل الدخول هنا لتبديل الحساب إلى مشغل هذا المشروع.";
     return;
   }
 
   if(!user){
+    stopOrdersLive();
     setVisible("authPanel",true);setVisible("agreementPanel",false);setVisible("operationsPanel",false);
     $("logoutBtn").classList.add("hidden");
     $("pageStatus").innerText="افتح الدعوة وأنشئ كلمة مرور أول مرة، أو سجل دخولك لو فعلتها قبل كده.";
@@ -138,10 +145,17 @@ $("registerBtn").onclick=async()=>{
 };
 $("loginBtn").onclick=async()=>{
   $("authMessage").innerText="جاري تسجيل الدخول...";
+  $("loginBtn").disabled=true;
   try{
+    const activeEmail=String(auth.currentUser?.email||"").toLowerCase();
+    if(auth.currentUser&&activeEmail!==inviteAuthEmail.toLowerCase())await signOut(auth);
     await signInWithEmailAndPassword(auth,inviteAuthEmail,$("authPassword").value);
     $("authMessage").innerText="";
-  }catch(e){$("authMessage").innerText="تعذر الدخول. راجع كلمة المرور أو تأكد أنك تستخدم نفس رابط الدعوة.";}
+  }catch(e){
+    $("authMessage").innerText="تعذر الدخول. راجع كلمة المرور أو تأكد أنك تستخدم نفس رابط الدعوة.";
+  }finally{
+    $("loginBtn").disabled=false;
+  }
 };
 $("logoutBtn").onclick=()=>signOut(auth);
 
@@ -190,6 +204,8 @@ async function loadOperations(){
 
   if(ordersResult.status==="rejected"){
     $("ordersList").innerHTML=`<p class="message">${escapeHTML(friendlyOperatorError(ordersResult.reason,"تعذر تحميل الطلبات. اضغط تحديث وحاول مرة أخرى."))}</p>`;
+  }else{
+    startOrdersLive();
   }
   await renderOperatorFinancePanel({
     container:$("operationsPanel"),
@@ -292,6 +308,10 @@ async function loadOrders({appendHistory=false}={}){
     $("statDelivered").innerText=deliveredCount;
   }
 
+  renderOrders();
+}
+
+function renderOrders(){
   orders=mergeVisibleOrders();
   const active=operationalOrders.filter(o=>o.status!=="new").length;
   $("statNew").innerText=operationalOrders.filter(o=>o.status==="new").length;
@@ -423,6 +443,23 @@ async function loadOrders({appendHistory=false}={}){
     });
   });
 }
+
+function startOrdersLive(){
+  stopOrdersLive();
+  stopOrdersLive=subscribeSupermarketOperationalOrders(
+    projectId,
+    liveOrders=>{
+      operationalOrders=liveOrders;
+      renderOrders();
+    },
+    error=>{
+      console.error("Supermarket realtime orders failed",error);
+      $("ordersMessage").innerText=friendlyOperatorError(error,"تعذر التحديث اللحظي للطلبات. استخدم زر تحديث مؤقتًا.");
+    }
+  );
+}
+
+window.addEventListener("pagehide",()=>stopOrdersLive());
 $("refreshOrdersBtn").onclick=()=>loadOrders();
 $("loadOlderOrdersBtn").onclick=async()=>{const btn=$("loadOlderOrdersBtn");btn.disabled=true;try{await loadOrders({appendHistory:true});}finally{btn.disabled=false;}};
 
