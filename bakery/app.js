@@ -5,7 +5,7 @@ import { createOrResumeRestaurantSetup, getRestaurantProjectBundle } from "../co
 import { ensureOperatorInviteAccess, getOperatorInviteToken, rotateOperatorInviteAccess } from "../core/partners/partner-service.js";
 import { normalizeWhatsAppPhone } from "../core/whatsapp/dispatch-service.js";
 import { proposeCommission } from "../core/commissions/commission-service.js";
-import { getProjectCommissionSummary } from "../core/commissions/earnings-service.js";
+import { getProjectCommissionSummary, subscribeLatestUserCommission, subscribeProjectPaymentState } from "../core/commissions/earnings-service.js";
 import { renderOwnerFinancePanel } from "../core/commissions/finance-panel.js";
 import { createGuide } from "../core/onboarding/guide.js";
 import { buildPartnerProjectGuide } from "../core/onboarding/guide-state.js";
@@ -21,6 +21,9 @@ const projectId=new URLSearchParams(location.search).get("project")||"";
 let currentUser=null;
 let currentProject=null;
 let bundle=null;
+let stopLatestCommission=()=>{};
+let stopPaymentState=()=>{};
+let financeRefreshTimer=null;
 
 const guideController = createGuide(
   buildPartnerProjectGuide({ templateId: "bakery", bundle: null }),
@@ -45,6 +48,64 @@ async function loadEarnings(){
   $("paidCommission").innerText=money(summary.paidAmount);
   $("outstandingCommission").innerText=money(summary.outstandingAmount);
 }
+
+async function refreshOwnerFinance(){
+  await loadEarnings();
+  await renderOwnerFinancePanel({
+    container:$("projectSection"),
+    projectId,
+    ownerId:currentUser.uid,
+    onBalanceChanged:loadEarnings
+  });
+}
+
+function scheduleOwnerFinanceRefresh(){
+  clearTimeout(financeRefreshTimer);
+  financeRefreshTimer=setTimeout(()=>{
+    if(document.hidden||!currentUser)return;
+    refreshOwnerFinance().catch(error=>console.error("Owner finance refresh failed",error));
+  },120);
+}
+
+function startOwnerFinanceLiveRefresh(){
+  stopLatestCommission();
+  stopPaymentState();
+
+  let latestReady=false;
+  stopLatestCommission=subscribeLatestUserCommission(
+    currentUser.uid,
+    entry=>{
+      if(!latestReady){latestReady=true;return;}
+      if(entry?.sourceType==="project_order"&&entry.projectId===projectId){
+        scheduleOwnerFinanceRefresh();
+      }
+    },
+    error=>console.error("Commission live update failed",error)
+  );
+
+  let paymentReady=false;
+  stopPaymentState=subscribeProjectPaymentState(
+    projectId,
+    ()=>{
+      if(!paymentReady){paymentReady=true;return;}
+      scheduleOwnerFinanceRefresh();
+    },
+    error=>console.error("Payment-state live update failed",error)
+  );
+}
+
+function stopOwnerFinanceLiveRefresh(){
+  clearTimeout(financeRefreshTimer);
+  stopLatestCommission();
+  stopPaymentState();
+  stopLatestCommission=()=>{};
+  stopPaymentState=()=>{};
+}
+
+window.addEventListener("pagehide",stopOwnerFinanceLiveRefresh);
+document.addEventListener("visibilitychange",()=>{
+  if(!document.hidden&&currentUser)scheduleOwnerFinanceRefresh();
+});
 
 function render(){
   const {restaurant,operator,agreement}=bundle;
@@ -109,13 +170,7 @@ async function refresh(){
   }
   render();
   if(bundle.restaurant){
-    await loadEarnings();
-    await renderOwnerFinancePanel({
-      container:$("projectSection"),
-      projectId,
-      ownerId:currentUser.uid,
-      onBalanceChanged:loadEarnings
-    });
+    await refreshOwnerFinance();
   }
 }
 
@@ -133,6 +188,7 @@ protectPage(async user=>{
   }
 
   await refresh();
+  startOwnerFinanceLiveRefresh();
 });
 
 $("createSetupBtn").onclick=async()=>{
