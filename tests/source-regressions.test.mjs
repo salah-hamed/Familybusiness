@@ -201,14 +201,15 @@ test("PF03 earnings service paginates commission ledger by user and createdAt", 
   assert.equal(source.includes("count()"), true);
 });
 
-test("PF03 does not invent an earnings screen when none existed before the task", () => {
+test("PF03 workspace stays lightweight and does not load a full earnings history screen", () => {
   const html = readFileSync("workspace/index.html", "utf8");
   const source = readFileSync("workspace/app.js", "utf8");
 
   assert.equal(html.includes('id="earningsList"'), false);
   assert.equal(html.includes('class="earningsCard"'), false);
-  assert.equal(source.includes("earnings-service.js"), false);
   assert.equal(source.includes("listUserCommissionLedgerPage"), false);
+  assert.equal(source.includes("getProjectCommissionSummary"), true);
+  assert.equal(source.includes("subscribeLatestUserCommission"), true);
 });
 
 test("PF03 ledger pagination index is version controlled", () => {
