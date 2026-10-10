@@ -241,6 +241,41 @@ body{
 
 .projectInfo h3{font-size:21px;margin:13px 0 6px}
 .projectInfo p{margin:0 0 17px;color:var(--ws-muted);font-size:13px;line-height:1.75}
+
+.projectCommissionMini{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+  margin:0 0 14px;
+  padding:11px;
+  border-radius:14px;
+  background:rgba(255,255,255,.76);
+  border:1px solid rgba(15,23,42,.07);
+}
+.projectCommissionMini>div{
+  min-width:0;
+}
+.projectCommissionMini span,
+.projectCommissionMini strong{
+  display:block;
+}
+.projectCommissionMini span{
+  color:var(--ws-muted);
+  font-size:10px;
+  margin-bottom:3px;
+}
+.projectCommissionMini strong{
+  color:var(--ws-ink);
+  font-size:15px;
+}
+.projectCommissionMini small{
+  grid-column:1/-1;
+  color:var(--ws-muted);
+  font-size:10px;
+}
+.projectCommissionMini.loading{
+  opacity:.7;
+}
 .projectBtn{margin-top:auto;border-radius:14px;padding:13px;font-size:13px}
 .project-supermarket .projectBtn{background:linear-gradient(135deg,#16a34a,#15803d)}
 .project-restaurant .projectBtn{background:linear-gradient(135deg,#f97316,#ea580c)}

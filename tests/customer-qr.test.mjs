@@ -66,7 +66,7 @@ test("owner dashboards expose a fixed QR mount and bust stale app cache", () => 
   ]) {
     const html = readFileSync(path, "utf8");
     assert.match(html, /id="customerQrMount"/, path);
-    assert.match(html, /src="\.\/app\.js\?v=20261010-qr2"/, path);
+    assert.match(html, /src="\.\/app\.js\?v=20261010-commission1"/, path);
   }
 
   const source = readFileSync("core/qr/customer-qr.js", "utf8");

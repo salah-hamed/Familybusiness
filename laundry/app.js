@@ -2,7 +2,7 @@ import db from "../core/firebase/firebase-db.js";
 import { protectPage } from "../core/auth/auth-guard.js";
 import { createOrResumeLaundrySetup, getLaundryBundle, migrateLegacyLaundryProject } from "../core/laundry/laundry-service.js";
 import { proposeCommission } from "../core/commissions/commission-service.js";
-import { getProjectCommissionSummary } from "../core/commissions/earnings-service.js";
+import { getProjectCommissionSummary, subscribeLatestUserCommission, subscribeProjectPaymentState } from "../core/commissions/earnings-service.js?v=20261010-commission1";
 import { renderOwnerFinancePanel } from "../core/commissions/finance-panel.js";
 import { ensureOperatorInviteAccess, getOperatorInviteToken, rotateOperatorInviteAccess } from "../core/partners/partner-service.js";
 import { normalizeWhatsAppPhone } from "../core/whatsapp/dispatch-service.js";
@@ -15,6 +15,9 @@ import {doc,getDoc} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-fi
 const $=id=>document.getElementById(id);
 const projectId=new URLSearchParams(location.search).get("project")||"";
 let user=null,project=null,bundle=null;
+let stopLatestCommission=()=>{};
+let stopPaymentState=()=>{};
+let financeRefreshTimer=null;
 
 const guideController = createGuide(
   buildPartnerProjectGuide({ templateId: "laundry", bundle: null }),
@@ -41,6 +44,64 @@ async function loadEarnings(){
   $("paidCommission").innerText=money(summary.paidAmount);
   $("outstandingCommission").innerText=money(summary.outstandingAmount);
 }
+
+async function refreshOwnerFinance(){
+  await loadEarnings();
+  await renderOwnerFinancePanel({
+    container:$("projectSection"),
+    projectId,
+    ownerId:user.uid,
+    onBalanceChanged:loadEarnings
+  });
+}
+
+function scheduleOwnerFinanceRefresh(){
+  clearTimeout(financeRefreshTimer);
+  financeRefreshTimer=setTimeout(()=>{
+    if(document.hidden||!user)return;
+    refreshOwnerFinance().catch(error=>console.error("Owner finance refresh failed",error));
+  },120);
+}
+
+function startOwnerFinanceLiveRefresh(){
+  stopLatestCommission();
+  stopPaymentState();
+
+  let latestReady=false;
+  stopLatestCommission=subscribeLatestUserCommission(
+    user.uid,
+    entry=>{
+      if(!latestReady){latestReady=true;return;}
+      if(entry?.sourceType==="project_order"&&entry.projectId===projectId){
+        scheduleOwnerFinanceRefresh();
+      }
+    },
+    error=>console.error("Commission live update failed",error)
+  );
+
+  let paymentReady=false;
+  stopPaymentState=subscribeProjectPaymentState(
+    projectId,
+    ()=>{
+      if(!paymentReady){paymentReady=true;return;}
+      scheduleOwnerFinanceRefresh();
+    },
+    error=>console.error("Payment-state live update failed",error)
+  );
+}
+
+function stopOwnerFinanceLiveRefresh(){
+  clearTimeout(financeRefreshTimer);
+  stopLatestCommission();
+  stopPaymentState();
+  stopLatestCommission=()=>{};
+  stopPaymentState=()=>{};
+}
+
+window.addEventListener("pagehide",stopOwnerFinanceLiveRefresh);
+document.addEventListener("visibilitychange",()=>{
+  if(!document.hidden&&user)scheduleOwnerFinanceRefresh();
+});
 
 function render(){
   const {laundry,operator,agreement}=bundle;
@@ -71,7 +132,7 @@ function render(){
   $("linksHint").innerText=accepted&&operator.isActive?"المغسلة جاهزة للتشغيل.":"رابط العملاء يتفعل بعد قبول أول اتفاق عمولة وتفعيل حساب المغسلة.";
 }
 
-async function refresh(){bundle=await getLaundryBundle(projectId);if(bundle?.operator&&!bundle.operator.authLoginEmail&&!bundle.operator.authUid){bundle.operator=await ensureOperatorInviteAccess(projectId,user.uid);}render();if(bundle.laundry)await loadEarnings();}
+async function refresh(){bundle=await getLaundryBundle(projectId);if(bundle?.operator&&!bundle.operator.authLoginEmail&&!bundle.operator.authUid){bundle.operator=await ensureOperatorInviteAccess(projectId,user.uid);}render();if(bundle.laundry)await refreshOwnerFinance();}
 
 protectPage(async current=>{
   user=current;
@@ -94,6 +155,7 @@ protectPage(async current=>{
   }
 
   await refresh();
+  startOwnerFinanceLiveRefresh();
 });
 
 $("createSetupBtn").onclick=async()=>{
