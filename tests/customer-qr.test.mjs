@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { qrcode } from "../core/qr/vendor/qrcode.mjs";
 
 test("local QR generator produces a valid matrix for a customer project URL", () => {
@@ -99,7 +100,7 @@ test("all four operator dashboards expose the same customer QR tools", () => {
     const html = readFileSync(path, "utf8");
     assert.match(html, /id="customerOrderLink"/, path);
     assert.match(html, /id="operatorCustomerQrMount"/, path);
-    assert.match(html, /src="\.\/app\.js\?v=20261010-operator-qr1"/, path);
+    assert.match(html, /src="\.\/app\.js\?v=20261010-operator-qr2"/, path);
   }
 
   const appPaths = [
@@ -114,6 +115,23 @@ test("all four operator dashboards expose the same customer QR tools", () => {
     assert.match(source, /renderCustomerQr/, path);
     assert.match(source, /inputId:"customerOrderLink"/, path);
     assert.match(source, /mountId:"operatorCustomerQrMount"/, path);
-    assert.match(source, /customer-qr\.js\?v=20261010-operator-qr1/, path);
+    assert.match(source, /customer-qr\.js\?v=20261010-operator-qr2/, path);
+  }
+});
+
+
+test("operator app entry files are valid JavaScript modules", () => {
+  for (const path of [
+    "supermarket-operator/app.js",
+    "restaurant-operator/app.js",
+    "bakery-operator/app.js",
+    "laundry-operator/app.js"
+  ]) {
+    const result = spawnSync(process.execPath, ["--check", path], { encoding: "utf8" });
+    assert.equal(
+      result.status,
+      0,
+      `${path} syntax error:\n${result.stderr || result.stdout}`
+    );
   }
 });
