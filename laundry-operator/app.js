@@ -16,6 +16,7 @@ import { buildOperatorGuide } from "../core/onboarding/guide-state.js";
 
 import {createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut,onAuthStateChanged} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {doc,getDoc,updateDoc} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { renderCustomerQr } from "../core/qr/customer-qr.js?v=20261010-operator-qr1";
 
 const $=id=>document.getElementById(id);
 const params=new URLSearchParams(location.search);
@@ -83,7 +84,7 @@ async function loadOperations(){
   laundry=await getLaundry(projectId);agreement=await getCommissionAgreement(projectId);
   $("laundryTitle").innerText=laundry?.name||operator?.name||"المغسلة";$("statCommission").innerText=money(agreement?.currentAmount||0);
   $("settingsName").value=laundry?.name||"";$("settingsPhone").value=laundry?.phone||"";$("settingsWhatsapp").value=laundry?.whatsapp||"";$("settingsAddress").value=laundry?.address||"";$("settingsLocation").value=laundry?.location||"";$("settingsInstapay").value=laundry?.instapayLink||"";$("acceptingOrders").checked=laundry?.isAcceptingOrders===true;
-  const url=new URL("../templates/laundry/",location.href);url.searchParams.set("project",projectId);$("customerOrderLink").value=url;
+  const url=new URL("../templates/laundry/",location.href);url.searchParams.set("project",projectId);$("customerOrderLink").value=url.toString();renderCustomerQr({inputId:"customerOrderLink",mountId:"operatorCustomerQrMount",projectName:laundry?.name||operator?.name||"المغسلة"});
   const projectSnap=await getDoc(doc(db,"projects",projectId));currentPriceConfig=projectSnap.data()?.priceConfig||{};renderPricing(currentPriceConfig);
   await Promise.all([loadWorkers(),loadOrders()]);
   await renderOperatorFinancePanel({
