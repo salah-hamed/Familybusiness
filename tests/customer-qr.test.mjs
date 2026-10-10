@@ -85,3 +85,35 @@ test("owner apps bypass stale cached QR module", () => {
     assert.match(source, /customer-qr\.js\?v=20261010-qr2/, path);
   }
 });
+
+
+test("all four operator dashboards expose the same customer QR tools", () => {
+  const htmlPaths = [
+    "supermarket-operator/index.html",
+    "restaurant-operator/index.html",
+    "bakery-operator/index.html",
+    "laundry-operator/index.html"
+  ];
+
+  for (const path of htmlPaths) {
+    const html = readFileSync(path, "utf8");
+    assert.match(html, /id="customerOrderLink"/, path);
+    assert.match(html, /id="operatorCustomerQrMount"/, path);
+    assert.match(html, /src="\.\/app\.js\?v=20261010-operator-qr1"/, path);
+  }
+
+  const appPaths = [
+    "supermarket-operator/app.js",
+    "restaurant-operator/app.js",
+    "bakery-operator/app.js",
+    "laundry-operator/app.js"
+  ];
+
+  for (const path of appPaths) {
+    const source = readFileSync(path, "utf8");
+    assert.match(source, /renderCustomerQr/, path);
+    assert.match(source, /inputId:"customerOrderLink"/, path);
+    assert.match(source, /mountId:"operatorCustomerQrMount"/, path);
+    assert.match(source, /customer-qr\.js\?v=20261010-operator-qr1/, path);
+  }
+});
