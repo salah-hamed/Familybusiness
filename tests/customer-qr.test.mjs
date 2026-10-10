@@ -54,3 +54,34 @@ test("PWA cache includes the local QR generator", () => {
   assert.match(source, /core\/qr\/customer-qr\.js/);
   assert.match(source, /core\/qr\/vendor\/qrcode\.mjs/);
 });
+
+
+test("owner dashboards expose a fixed QR mount and bust stale app cache", () => {
+  for (const path of [
+    "supermarket/index.html",
+    "restaurant/index.html",
+    "bakery/index.html",
+    "laundry/index.html"
+  ]) {
+    const html = readFileSync(path, "utf8");
+    assert.match(html, /id="customerQrMount"/, path);
+    assert.match(html, /src="\.\/app\.js\?v=20261010-qr2"/, path);
+  }
+
+  const source = readFileSync("core/qr/customer-qr.js", "utf8");
+  assert.match(source, /mountId = "customerQrMount"/);
+  assert.match(source, /mount\.replaceChildren\(panel\)/);
+});
+
+
+test("owner apps bypass stale cached QR module", () => {
+  for (const path of [
+    "supermarket/app.js",
+    "restaurant/app.js",
+    "bakery/app.js",
+    "laundry/app.js"
+  ]) {
+    const source = readFileSync(path, "utf8");
+    assert.match(source, /customer-qr\.js\?v=20261010-qr2/, path);
+  }
+});
