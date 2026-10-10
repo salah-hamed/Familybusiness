@@ -3,6 +3,7 @@ import { getProjectPaymentSummary } from "./settlement-service.js";
 
 import {
   collection,
+  doc,
   query,
   where,
   orderBy,
@@ -10,12 +11,49 @@ import {
   limit,
   getDocs,
   getAggregateFromServer,
+  onSnapshot,
   sum,
   count
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 function normalizePageSize(value, fallback = 50) {
   return Math.max(1, Math.min(100, Number(value) || fallback));
+}
+
+export function subscribeLatestUserCommission(userId, onChange, onError = null) {
+  const uid = String(userId || "").trim();
+  if (!uid) throw new Error("USER_ID_REQUIRED");
+
+  const latestQuery = query(
+    collection(db, "commissionLedger"),
+    where("userId", "==", uid),
+    orderBy("createdAt", "desc"),
+    limit(1)
+  );
+
+  return onSnapshot(
+    latestQuery,
+    snap => {
+      if (snap.empty) {
+        onChange?.(null);
+        return;
+      }
+      const item = snap.docs[0];
+      onChange?.({ entryId: item.id, ...item.data() });
+    },
+    error => onError?.(error)
+  );
+}
+
+export function subscribeProjectPaymentState(projectId, onChange, onError = null) {
+  const pid = String(projectId || "").trim();
+  if (!pid) throw new Error("PROJECT_ID_REQUIRED");
+
+  return onSnapshot(
+    doc(db, "commissionPaymentStates", pid),
+    snap => onChange?.(snap.exists() ? { projectId: pid, ...snap.data() } : null),
+    error => onError?.(error)
+  );
 }
 
 export async function listUserCommissionLedgerPage(
