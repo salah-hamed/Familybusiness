@@ -9,6 +9,7 @@ import { getProjectCommissionSummary } from "../core/commissions/earnings-servic
 import { renderOwnerFinancePanel } from "../core/commissions/finance-panel.js";
 import { createGuide } from "../core/onboarding/guide.js";
 import { buildPartnerProjectGuide } from "../core/onboarding/guide-state.js";
+import { renderCustomerQr } from "../core/qr/customer-qr.js";
 
 import {
   doc,
@@ -95,6 +96,7 @@ function render(){
   const customerUrl=new URL("../templates/restaurant/",location.href);
   customerUrl.searchParams.set("project",projectId);
   $("customerLink").value=accepted&&operator.isActive?customerUrl.toString():"";
+  renderCustomerQr({ inputId:"customerLink", projectName:restaurant.name||operator.name||"المطعم" });
   $("linksHint").innerText=accepted&&operator.isActive
     ?"المطعم جاهز. ابعت له رابط لوحته، وهو يشارك رابط الطلب مع عملائه."
     :"رابط العملاء سيتفعل بعد قبول اتفاق العمولة وتفعيل حساب المطعم.";
