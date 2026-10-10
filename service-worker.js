@@ -1,4 +1,4 @@
-const CACHE_NAME = "family-business-pwa-v2";
+const CACHE_NAME = "family-business-pwa-v3";
 const ROOT = new URL("./", self.location.href).pathname;
 
 const PRECACHE = [
@@ -14,7 +14,9 @@ const PRECACHE = [
   ROOT + "pwa/icons/bakery-192.png",
   ROOT + "pwa/icons/bakery-512.png",
   ROOT + "pwa/icons/laundry-192.png",
-  ROOT + "pwa/icons/laundry-512.png"
+  ROOT + "pwa/icons/laundry-512.png",
+  ROOT + "core/qr/customer-qr.js",
+  ROOT + "core/qr/vendor/qrcode.mjs"
 ];
 
 self.addEventListener("install", event => {
