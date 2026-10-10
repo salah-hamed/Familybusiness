@@ -72,3 +72,16 @@ test("owner dashboards expose a fixed QR mount and bust stale app cache", () => 
   assert.match(source, /mountId = "customerQrMount"/);
   assert.match(source, /mount\.replaceChildren\(panel\)/);
 });
+
+
+test("owner apps bypass stale cached QR module", () => {
+  for (const path of [
+    "supermarket/app.js",
+    "restaurant/app.js",
+    "bakery/app.js",
+    "laundry/app.js"
+  ]) {
+    const source = readFileSync(path, "utf8");
+    assert.match(source, /customer-qr\.js\?v=20261010-qr2/, path);
+  }
+});
