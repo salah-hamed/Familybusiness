@@ -226,3 +226,59 @@ test("another user cannot aggregate someone else's project commission ledger", a
     { totalAmount: sum("amount"), entryCount: count() }
   ));
 });
+
+
+test("project owner can run the exact settlement aggregation queries used by commission summary", async () => {
+  const ownerId = "settlement_summary_owner";
+  const projectId = ownerId + "_supermarket";
+
+  await testEnv.withSecurityRulesDisabled(async context => {
+    const db = context.firestore();
+    await setDoc(doc(db, "projects", projectId), {
+      projectId,
+      ownerId,
+      template: "supermarket",
+      isActive: true,
+      status: "active"
+    });
+
+    const rows = [
+      ["confirmed_1", "confirmed", 10],
+      ["legacy_paid_1", "paid", 20],
+      ["pending_1", "pending_owner_confirmation", 30]
+    ];
+
+    for (const [id, status, amount] of rows) {
+      await setDoc(doc(db, "commissionSettlements", id), {
+        settlementId: id,
+        projectId,
+        ownerId,
+        amount,
+        status,
+        createdAt: Timestamp.fromMillis(amount * 1000)
+      });
+    }
+  });
+
+  const db = testEnv.authenticatedContext(ownerId).firestore();
+  const payments = collection(db, "commissionSettlements");
+
+  const aggregate = async status => assertSucceeds(getAggregateFromServer(
+    query(
+      payments,
+      where("projectId", "==", projectId),
+      where("status", "==", status)
+    ),
+    { totalAmount: sum("amount"), entryCount: count() }
+  ));
+
+  const [confirmed, legacyPaid, pending] = await Promise.all([
+    aggregate("confirmed"),
+    aggregate("paid"),
+    aggregate("pending_owner_confirmation")
+  ]);
+
+  assert.equal(confirmed.data().totalAmount, 10);
+  assert.equal(legacyPaid.data().totalAmount, 20);
+  assert.equal(pending.data().totalAmount, 30);
+});
