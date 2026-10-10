@@ -26,6 +26,7 @@ import {
 } from "../core/subscriptions/payment-service.js";
 import { createGuide } from "../core/onboarding/guide.js";
 import { buildWorkspaceGuide } from "../core/onboarding/guide-state.js";
+import { getProjectCommissionSummary, subscribeLatestUserCommission, subscribeProjectPaymentState } from "../core/commissions/earnings-service.js";
 const userName =
 document.getElementById("userName");
 
@@ -51,6 +52,89 @@ const submitPaymentProofBtn = document.getElementById("submitPaymentProofBtn");
 const reopenPaymentWhatsappBtn = document.getElementById("reopenPaymentWhatsappBtn");
 const paymentReviewStatus = document.getElementById("paymentReviewStatus");
 const paymentForm = document.getElementById("paymentForm");
+let stopWorkspaceLatestCommission=()=>{};
+let stopWorkspacePaymentStates=[];
+let workspaceFinanceProjectIds=new Set();
+let workspaceFinanceUserId="";
+
+function workspaceCommissionNode(projectDocId){
+  return [...document.querySelectorAll("[data-project-commission]")]
+    .find(node=>node.dataset.projectCommission===projectDocId)||null;
+}
+
+function renderWorkspaceCommission(projectDocId,summary){
+  const node=workspaceCommissionNode(projectDocId);
+  if(!node)return;
+  node.querySelector("[data-earned]").innerText=formatEgp(summary.earnedAmount);
+  node.querySelector("[data-due]").innerText=formatEgp(summary.outstandingAmount);
+  node.querySelector("[data-count]").innerText=`${Number(summary.completedOrderCount||0).toLocaleString("ar-EG")} طلب محتسب`;
+  node.classList.remove("loading");
+}
+
+async function refreshWorkspaceCommission(userId,projectDocId){
+  const node=workspaceCommissionNode(projectDocId);
+  if(!node)return;
+  try{
+    const summary=await getProjectCommissionSummary(userId,projectDocId);
+    renderWorkspaceCommission(projectDocId,summary);
+  }catch(error){
+    console.error("Workspace commission refresh failed",error);
+    node.querySelector("[data-earned]").innerText="—";
+    node.querySelector("[data-due]").innerText="—";
+    node.querySelector("[data-count]").innerText="تعذر تحديث العمولة";
+    node.classList.remove("loading");
+  }
+}
+
+function stopWorkspaceFinanceLive(){
+  stopWorkspaceLatestCommission();
+  stopWorkspaceLatestCommission=()=>{};
+  stopWorkspacePaymentStates.forEach(stop=>stop());
+  stopWorkspacePaymentStates=[];
+  workspaceFinanceProjectIds=new Set();
+  workspaceFinanceUserId="";
+}
+
+function startWorkspaceFinanceLive(user,projectDocIds){
+  stopWorkspaceFinanceLive();
+  const ids=[...new Set(projectDocIds.filter(Boolean))];
+  workspaceFinanceProjectIds=new Set(ids);
+  workspaceFinanceUserId=user.uid;
+  if(!ids.length)return;
+
+  let latestReady=false;
+  stopWorkspaceLatestCommission=subscribeLatestUserCommission(
+    user.uid,
+    entry=>{
+      if(!latestReady){latestReady=true;return;}
+      if(entry?.sourceType==="project_order"&&workspaceFinanceProjectIds.has(entry.projectId)){
+        refreshWorkspaceCommission(user.uid,entry.projectId);
+      }
+    },
+    error=>console.error("Workspace commission live update failed",error)
+  );
+
+  stopWorkspacePaymentStates=ids.map(projectDocId=>{
+    let paymentReady=false;
+    return subscribeProjectPaymentState(
+      projectDocId,
+      ()=>{
+        if(!paymentReady)paymentReady=true;
+        refreshWorkspaceCommission(user.uid,projectDocId);
+      },
+      error=>console.error("Workspace payment-state live update failed",error)
+    );
+  });
+}
+
+window.addEventListener("pagehide",stopWorkspaceFinanceLive);
+document.addEventListener("visibilitychange",()=>{
+  if(document.hidden||!workspaceFinanceUserId)return;
+  workspaceFinanceProjectIds.forEach(projectDocId=>{
+    refreshWorkspaceCommission(workspaceFinanceUserId,projectDocId);
+  });
+});
+
 
 function paymentErrorMessage(error) {
   const message = String(error?.message || "");
@@ -307,6 +391,14 @@ getDiscoverableProjects().forEach(project => {
         <h3>${project.title}</h3>
         <p>${projectCopy[project.id] || project.description || ""}</p>
 
+        ${created ? `
+          <div class="projectCommissionMini loading" data-project-commission="${projectDocId}">
+            <div><span>إجمالي العمولة</span><strong data-earned>جاري التحديث...</strong></div>
+            <div><span>المستحق لك</span><strong data-due>جاري التحديث...</strong></div>
+            <small data-count>جاري حساب الطلبات...</small>
+          </div>
+        ` : ""}
+
         <button
           class="projectBtn"
           data-template-id="${project.id}"
@@ -369,6 +461,11 @@ getDiscoverableProjects().forEach(project => {
   };
 
 });
+    const visibleProjectDocIds = myProjects
+      .map(item => item.projectDocId)
+      .filter(projectDocId => workspaceCommissionNode(projectDocId));
+    startWorkspaceFinanceLive(user, visibleProjectDocIds);
+
     userName.innerText = `أهلاً ${data.name} 👋`;
     if (projectCount) projectCount.innerText = `${myProjects.length} / 4`;
     if (workspaceAccountState) workspaceAccountState.innerText = subscriptionActive ? "جاهز للتشغيل" : "بانتظار التفعيل";
