@@ -16,7 +16,7 @@ import { buildOperatorGuide } from "../core/onboarding/guide-state.js";
 
 import {createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut,onAuthStateChanged} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {doc,getDoc,updateDoc} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { renderCustomerQr } from "../core/qr/customer-qr.js?v=20261010-operator-qr1";
+import { renderCustomerQr } from "../core/qr/customer-qr.js?v=20261010-operator-qr2";
 
 const $=id=>document.getElementById(id);
 const params=new URLSearchParams(location.search);
