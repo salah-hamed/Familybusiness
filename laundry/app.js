@@ -8,7 +8,7 @@ import { ensureOperatorInviteAccess, getOperatorInviteToken, rotateOperatorInvit
 import { normalizeWhatsAppPhone } from "../core/whatsapp/dispatch-service.js";
 import { createGuide } from "../core/onboarding/guide.js";
 import { buildPartnerProjectGuide } from "../core/onboarding/guide-state.js";
-import { renderCustomerQr } from "../core/qr/customer-qr.js";
+import { renderCustomerQr } from "../core/qr/customer-qr.js?v=20261010-qr2";
 
 import {doc,getDoc} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
