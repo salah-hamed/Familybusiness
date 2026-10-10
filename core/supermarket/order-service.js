@@ -463,6 +463,23 @@ export async function listSupermarketOperationalOrders(projectId) {
   }
 }
 
+export function subscribeSupermarketOperationalOrders(projectId, onChange, onError = null) {
+  const activeStatuses = ["new","accepted","preparing","ready","assigned","out_for_delivery"];
+  const liveQuery = query(
+    collection(db, "orders"),
+    where("projectId", "==", projectId),
+    where("templateType", "==", "supermarket"),
+    where("status", "in", activeStatuses),
+    orderBy("createdAt", "desc")
+  );
+
+  return onSnapshot(
+    liveQuery,
+    snap => onChange?.(snap.docs.map(item => ({ orderId: item.id, ...item.data() }))),
+    error => onError?.(error)
+  );
+}
+
 export async function listSupermarketHistoryPage(
   projectId,
   { pageSize = 50, cursor = null } = {}
