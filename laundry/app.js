@@ -8,6 +8,7 @@ import { ensureOperatorInviteAccess, getOperatorInviteToken, rotateOperatorInvit
 import { normalizeWhatsAppPhone } from "../core/whatsapp/dispatch-service.js";
 import { createGuide } from "../core/onboarding/guide.js";
 import { buildPartnerProjectGuide } from "../core/onboarding/guide-state.js";
+import { renderCustomerQr } from "../core/qr/customer-qr.js";
 
 import {doc,getDoc} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
@@ -65,7 +66,8 @@ function render(){
   $("commissionMessage").innerText=pending&&agreement?.pendingAmount!=null?`في انتظار موافقة المغسلة على ${money(agreement.pendingAmount)}.`:"";
   const operatorUrl=new URL("../laundry-operator/",location.href);operatorUrl.searchParams.set("project",projectId);const inviteToken=getOperatorInviteToken(operator);if(inviteToken)operatorUrl.searchParams.set("invite",inviteToken);$("operatorLink").value=operatorUrl.toString();$("sendOperatorWhatsappBtn").disabled=!(inviteToken&&(operator.whatsapp||operator.phone));
   const customerUrl=new URL("../templates/laundry/",location.href);customerUrl.searchParams.set("project",projectId);
-  $("customerLink").value=accepted&&operator.isActive?customerUrl:"";
+  $("customerLink").value=accepted&&operator.isActive?customerUrl.toString():"";
+  renderCustomerQr({ inputId:"customerLink", projectName:laundry.name||operator.name||"المغسلة" });
   $("linksHint").innerText=accepted&&operator.isActive?"المغسلة جاهزة للتشغيل.":"رابط العملاء يتفعل بعد قبول أول اتفاق عمولة وتفعيل حساب المغسلة.";
 }
 
