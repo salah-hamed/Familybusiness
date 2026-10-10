@@ -227,6 +227,23 @@ export async function listLaundryOperationalOrders(projectId){
   }
 }
 
+export function subscribeLaundryOperationalOrders(projectId,onChange,onError=null){
+  const activeStatuses=["new","accepted"];
+  const liveQuery=query(
+    collection(db,"orders"),
+    where("projectId","==",projectId),
+    where("templateType","==","laundry"),
+    where("status","in",activeStatuses),
+    orderBy("createdAt","desc")
+  );
+
+  return onSnapshot(
+    liveQuery,
+    snap=>onChange?.(snap.docs.map(d=>({orderId:d.id,...d.data()}))),
+    error=>onError?.(error)
+  );
+}
+
 export async function listLaundryHistoryPage(projectId,{pageSize=50,cursor=null}={}){
   const size=Math.max(1,Math.min(100,Number(pageSize)||50));
   const historyStatuses=["done","canceled"];
