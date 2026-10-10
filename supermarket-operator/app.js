@@ -1,5 +1,6 @@
 import auth from "../core/firebase/firebase-auth.js";
-import { friendlyOperatorError } from "../core/operators/operator-errors.js";
+import {
+import { renderCustomerQr } from "../core/qr/customer-qr.js?v=20261010-operator-qr1"; friendlyOperatorError } from "../core/operators/operator-errors.js";
 import { claimOperatorAccess, getOperator, operatorCanOperate, buildOperatorAuthEmail } from "../core/partners/partner-service.js";
 import { acceptPendingCommission, rejectPendingCommission, getCommissionAgreement } from "../core/commissions/commission-service.js";
 import { renderOperatorFinancePanel } from "../core/commissions/finance-panel.js";
@@ -172,6 +173,7 @@ async function loadOperations(){
     const customerUrl=new URL("../templates/supermarket/",location.href);
     customerUrl.searchParams.set("project",projectId);
     $("customerOrderLink").value=customerUrl.toString();
+    renderCustomerQr({ inputId:"customerOrderLink", mountId:"operatorCustomerQrMount", projectName:currentStore.name||"السوبرماركت" });
   }
 
   const productsUrl=new URL("./products.html",location.href);
