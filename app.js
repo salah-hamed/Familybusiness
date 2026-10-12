@@ -117,11 +117,11 @@ registerBtn.addEventListener("click", async () => {
     if (result.success) {
 
       status.innerText = referralUserId
-        ? "✅ تم إنشاء الحساب وربط الإحالة بنجاح. في انتظار تفعيل الاشتراك."
-        : "✅ تم إنشاء الحساب بنجاح. في انتظار تفعيل الاشتراك.";
+        ? "✅ تم إنشاء الحساب وربط الإحالة. حسابك جاهز الآن."
+        : "✅ تم إنشاء الحساب. حسابك جاهز الآن.";
 
-      guideController.update(buildAuthGuide({ mode: "registered" }), { autoOpen: true });
-      guideController.open();
+      guideController.update(buildAuthGuide({ mode: "registered" }), { autoOpen: false });
+      window.location.href = "./workspace/";
 
     } else {
 
