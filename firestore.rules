@@ -590,6 +590,27 @@ service cloud.firestore {
       || (request.resource.data.notes is string && request.resource.data.notes.size() <= 1000));
   }
 
+  // Legacy creates remain valid; new merchant assignments are immutable on create.
+  function validInitialMerchantMetadata(){
+   let data = request.resource.data;
+   let fields = [
+    "merchantId","originalSubscriberId","assignedSubscriberId",
+    "assignmentStatus","platformManaged","linkedAt","assignmentUpdatedAt"
+   ];
+   return !data.keys().hasAny(fields)
+    || (
+     data.keys().hasAll(fields)
+     && data.merchantId is string
+     && data.merchantId.matches('^m_[0-9a-f]{32}$')
+     && data.originalSubscriberId == request.auth.uid
+     && data.assignedSubscriberId == request.auth.uid
+     && data.assignmentStatus == "assigned_to_subscriber"
+     && data.platformManaged == false
+     && data.linkedAt == null
+     && data.assignmentUpdatedAt == null
+    );
+  }
+
   function validActiveProjectCreate(projectDocId){
    let templateId = request.resource.data.projectId;
    return templateId in ["supermarket","restaurant","bakery","laundry"]
@@ -621,11 +642,14 @@ service cloud.firestore {
     && request.resource.data.primaryColor.size() <= 32
     && request.resource.data.priceConfig is map
     && request.resource.data.priceConfig.keys().hasOnly([])
+    && validInitialMerchantMetadata()
     && request.resource.data.keys().hasOnly([
       "ownerId","projectId","template","operatingModel","templateVersion",
       "operatorId","partnerSetupStatus","businessName","status","isActive",
       "createdAt","whatsappNumber","instapayLink","logo","coverImage",
-      "primaryColor","priceConfig"
+      "primaryColor","priceConfig",
+      "merchantId","originalSubscriberId","assignedSubscriberId",
+      "assignmentStatus","platformManaged","linkedAt","assignmentUpdatedAt"
     ]);
   }
 

@@ -218,6 +218,84 @@ function activePartnerProject(uid, templateId, version = 1) {
   };
 }
 
+// Phase A: new identity is additive, authenticated and immutable to subscribers.
+function merchantFields(uid) {
+  return {
+    merchantId: "m_" + "a".repeat(32),
+    originalSubscriberId: uid,
+    assignedSubscriberId: uid,
+    assignmentStatus: "assigned_to_subscriber",
+    platformManaged: false,
+    linkedAt: null,
+    assignmentUpdatedAt: null
+  };
+}
+
+test("new project accepts central merchant metadata while keeping legacy project ID", async () => {
+  const uid = "central_owner";
+  await seedUser(uid);
+  const db = testEnv.authenticatedContext(uid).firestore();
+  await assertSucceeds(setDoc(doc(db, "projects", `${uid}_supermarket`), {
+    ...activePartnerProject(uid, "supermarket"),
+    ...merchantFields(uid)
+  }));
+  const snapshot = await getDoc(doc(db, "projects", `${uid}_supermarket`));
+  assert.equal(snapshot.data().ownerId, uid);
+  assert.equal(snapshot.data().merchantId, merchantFields(uid).merchantId);
+});
+
+test("subscriber cannot forge central merchant identity during create", async () => {
+  const uid = "central_forgery";
+  await seedUser(uid);
+  const db = testEnv.authenticatedContext(uid).firestore();
+  const base = { ...activePartnerProject(uid, "supermarket"), ...merchantFields(uid) };
+  const ref = doc(db, "projects", `${uid}_supermarket`);
+  for (const changes of [
+    { merchantId: "attacker-selected" },
+    { originalSubscriberId: "another_user" },
+    { assignedSubscriberId: "another_user" },
+    { assignmentStatus: "platform_managed" },
+    { platformManaged: true },
+    { linkedAt: Timestamp.now() },
+    { assignmentUpdatedAt: Timestamp.now() }
+  ]) {
+    await assertFails(setDoc(ref, { ...base, ...changes }));
+  }
+  const { merchantId, ...withoutId } = base;
+  await assertFails(setDoc(ref, withoutId));
+});
+
+test("subscriber cannot edit merchant assignment or backfill identity on old project", async () => {
+  const uid = "central_change";
+  await seedUser(uid);
+  await seedProject(`${uid}_supermarket`, {
+    ...activePartnerProject(uid, "supermarket"),
+    ...merchantFields(uid)
+  });
+  const db = testEnv.authenticatedContext(uid).firestore();
+  const ref = doc(db, "projects", `${uid}_supermarket`);
+  for (const change of [
+    { assignedSubscriberId: "other" },
+    { originalSubscriberId: "other" },
+    { merchantId: "m_" + "b".repeat(32) },
+    { platformManaged: true },
+    { assignmentStatus: "platform_managed" },
+    { linkedAt: Timestamp.now() }
+  ]) {
+    await assertFails(updateDoc(ref, change));
+  }
+});
+
+test("legacy project data remains readable and safe to update normally", async () => {
+  const uid = "central_legacy";
+  await seedUser(uid);
+  await seedProject(`${uid}_restaurant`, activePartnerProject(uid, "restaurant"));
+  const db = testEnv.authenticatedContext(uid).firestore();
+  const ref = doc(db, "projects", `${uid}_restaurant`);
+  await assertSucceeds(getDoc(ref));
+  await assertSucceeds(updateDoc(ref, { businessName: "Renamed local restaurant" }));
+});
+
 for (const [templateId, version] of [
   ["supermarket", 1],
   ["restaurant", 1],

@@ -4,6 +4,7 @@ import {
 } from "../../core/projects/project-service.js";
 import { canCreateTemplate } from "../projects.js";
 import { isSubscriptionActive } from "../../core/subscriptions/subscription-service.js";
+import { buildInitialMerchantIdentity } from "../../core/merchants/merchant-identity.js";
 
 import {
   doc,
@@ -36,9 +37,12 @@ export async function createProject(ownerId, project) {
 
   const projectDocId = getProjectDocId(ownerId, project.id);
 
-  await setDoc(doc(db, "projects", projectDocId), {
+  const projectRef = doc(db, "projects", projectDocId);
+  const initialProject = {
 
     ownerId,
+
+    ...buildInitialMerchantIdentity(ownerId),
 
     projectId: project.id,
 
@@ -71,7 +75,29 @@ isActive: true,
 
     priceConfig: {}
 
-  });
+  };
+
+  try {
+    // This is accepted after the accompanying Firestore Rules are deployed.
+    await setDoc(projectRef, initialProject);
+  } catch (error) {
+    if (error?.code !== "permission-denied") throw error;
+
+    // Rolling deployment safety: production may still run the legacy Rules.
+    // The old create schema remains usable; the legacy merchant projection
+    // allows a later audited backfill without modifying the runtime ID.
+    const {
+      merchantId,
+      originalSubscriberId,
+      assignedSubscriberId,
+      assignmentStatus,
+      platformManaged,
+      linkedAt,
+      assignmentUpdatedAt,
+      ...legacyProject
+    } = initialProject;
+    await setDoc(projectRef, legacyProject);
+  }
 
   return projectDocId;
 
