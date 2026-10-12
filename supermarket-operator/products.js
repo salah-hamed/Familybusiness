@@ -3,7 +3,7 @@ import { friendlyOperatorError } from "../core/operators/operator-errors.js";
 import { claimOperatorAccess, getOperator, operatorCanOperate, buildOperatorAuthEmail } from "../core/partners/partner-service.js";
 import { getCommissionAgreement } from "../core/commissions/commission-service.js";
 import { getSupermarket } from "../core/supermarket/supermarket-service.js";
-import { SUPERMARKET_MASTER_CATALOG, MASTER_PRICE_META, canonicalMasterId } from "../core/supermarket/master-catalog.js";
+import { SUPERMARKET_MASTER_CATALOG, MASTER_PRICE_META, canonicalMasterId } from "../core/supermarket/master-catalog.js?v=20261012-neutral-catalog1";
 import {
   addStoreProduct,
   bulkAddMasterProducts,
@@ -17,12 +17,12 @@ import {
   bulkUpdateStoreProducts,
   bulkDeleteStoreProducts,
   refreshSupermarketCatalogMeta
-} from "../core/supermarket/catalog-service.js";
+} from "../core/supermarket/catalog-service.js?v=20261012-neutral-catalog1";
 import {
   buildUnifiedCatalog,
   filterUnifiedCatalog,
   unifiedCatalogStats
-} from "../core/supermarket/catalog-view-model.js";
+} from "../core/supermarket/catalog-view-model.js?v=20261012-neutral-catalog1";
 
 import {
   signOut,
