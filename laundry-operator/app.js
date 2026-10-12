@@ -259,7 +259,7 @@ function renderOrders(){
     if(stage==="ready_delivery")controls+=workerSelect("delivery_agent",order.orderId)+'<button class="primary deliveryBtn">تعيين التوصيل + واتساب</button>';
     if(stage==="out_for_delivery")controls+='<button class="primary stageBtn" data-stage="delivered">تم التوصيل</button>';
     if(order.assignedWorkerWhatsapp&&["pickup_assigned","out_for_delivery"].includes(stage))controls+='<button class="secondary resendWhatsapp">إعادة إرسال واتساب</button>';
-    if(order.status==="canceled"&&order.commissionLocked===true)controls+=`<select class="reversalReasonSelect">${reversalReasonOptions()}</select><button class="secondary requestReversal">طلب عكس العمولة</button>`;
+    // Commission reversal workflow is retired from the launch UI. Historical records remain read-only.
     if(next.includes("canceled"))controls+='<button class="danger stageBtn" data-stage="canceled">إلغاء</button>';
     return `<article class="orderCard" data-order="${order.orderId}"><div class="orderTop"><div><b>${esc(order.customerName||"عميل")}</b><div class="muted">${esc(order.customerPhone||"")} · ${esc(order.customerAddress||"")}</div></div><span class="pill">${stageLabel(stage)}</span></div>${getOrderOperationalAlert(order)?`<div class="message">${esc(getOrderOperationalAlert(order).message)}</div>`:""}<div class="orderItems">${itemSummary(order)}</div><b>${money(order.price)}</b><div class="orderActions">${controls}</div></article>`;
   }).join(""):'<p class="muted">لا توجد طلبات بعد.</p>';
