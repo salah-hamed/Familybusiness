@@ -53,7 +53,7 @@ test("operator dashboards ship a fresh cache key", () => {
     "laundry-operator/index.html"
   ]) {
     const html = readFileSync(path,"utf8");
-    assert.match(html,/app\.js\?v=20261010-liveorders1/,path);
+    assert.match(html,/app\.js\?v=20261012-reversal-ui1/,path);
   }
 });
 
