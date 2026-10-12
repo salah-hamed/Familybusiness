@@ -4,6 +4,7 @@ import {
 } from "../../core/projects/project-service.js";
 import { canCreateTemplate } from "../projects.js";
 import { isSubscriptionActive } from "../../core/subscriptions/subscription-service.js";
+import { buildInitialMerchantIdentity } from "../../core/merchants/merchant-identity.js";
 
 import {
   doc,
@@ -39,6 +40,8 @@ export async function createProject(ownerId, project) {
   await setDoc(doc(db, "projects", projectDocId), {
 
     ownerId,
+
+    ...buildInitialMerchantIdentity(ownerId),
 
     projectId: project.id,
 
