@@ -5,12 +5,6 @@ import {
   confirmOwnerPayment,
   rejectOwnerPayment
 } from "./settlement-service.js";
-import {
-  listProjectCommissionReversals,
-  confirmCommissionReversal,
-  rejectCommissionReversal
-} from "./reversal-service.js";
-
 function money(value) {
   return `${Number(value || 0).toLocaleString("ar-EG")} جنيه`;
 }
@@ -155,14 +149,12 @@ export async function renderOwnerFinancePanel({
   root.innerHTML = '<p class="fbFinanceMessage">جاري تحميل حساب العمولة...</p>';
 
   try {
-    const [summary, payments, reversals] = await Promise.all([
+    const [summary, payments] = await Promise.all([
       getProjectPaymentSummary(projectId, { ownerId }),
-      listProjectPaymentRequests(projectId, { pageSize: 20 }),
-      listProjectCommissionReversals(projectId, { pageSize: 20 })
+      listProjectPaymentRequests(projectId, { pageSize: 20 })
     ]);
 
     const pending = payments.find(item => item.status === "pending_owner_confirmation");
-    const pendingReversals = reversals.filter(item => item.status === "pending_owner_confirmation");
 
     root.innerHTML = `
       <div class="fbFinanceHead">
@@ -191,67 +183,10 @@ export async function renderOwnerFinancePanel({
           </div>
         </div>
       ` : '<div class="fbFinanceMessage">لا توجد دفعة بانتظار تأكيدك الآن.</div>'}
-      <h3>طلبات عكس العمولة</h3>
-      ${pendingReversals.length ? pendingReversals.map(item => `
-        <div class="fbPendingBox">
-          <b>المشغّل طلب عكس عمولة ${money(item.amount)} عن الطلب #${esc(String(item.orderId || "").slice(0, 8))}</b>
-          <div class="fbPaymentMeta">
-            السبب: ${esc(reversalReasonText(item.reasonCode))}
-            ${item.note ? `<br>${esc(item.note)}` : ""}
-          </div>
-          <div class="fbFinanceActions" style="margin-top:10px">
-            <button class="fbFinanceBtn" data-reversal-action="confirm" data-id="${esc(item.reversalId)}">موافقة على عكس العمولة</button>
-            <button class="fbFinanceBtn danger" data-reversal-action="reject" data-id="${esc(item.reversalId)}">رفض طلب العكس</button>
-          </div>
-        </div>
-      `).join("") : '<div class="fbFinanceMessage">لا توجد طلبات عكس عمولة بانتظار قرارك.</div>'}
-      <div class="fbPaymentList">${renderReversalHistory(reversals)}</div>
-      <h3>طلبات عكس العمولة</h3>
-      <div class="fbPaymentList">${renderReversalHistory(reversals)}</div>
       <h3>آخر عمليات الدفع</h3>
       <div class="fbPaymentList">${renderHistory(payments)}</div>
       <p class="fbFinanceMessage" data-finance-message></p>
     `;
-
-    root.querySelectorAll("[data-reversal-action]").forEach(button => {
-      button.addEventListener("click", async () => {
-        const message = root.querySelector("[data-finance-message]");
-        button.disabled = true;
-
-        try {
-          if (button.dataset.reversalAction === "confirm") {
-            message.textContent = "جاري عكس العمولة...";
-            await confirmCommissionReversal({
-              reversalId: button.dataset.id,
-              ownerUid: ownerId
-            });
-            message.textContent = "تم تأكيد عكس العمولة وتحديث الرصيد.";
-          } else {
-            message.textContent = "جاري رفض طلب العكس...";
-            await rejectCommissionReversal({
-              reversalId: button.dataset.id,
-              ownerUid: ownerId
-            });
-            message.textContent = "تم رفض طلب عكس العمولة.";
-          }
-
-          if (typeof onBalanceChanged === "function") {
-            await onBalanceChanged();
-          }
-
-          await renderOwnerFinancePanel({
-            container,
-            projectId,
-            ownerId,
-            onBalanceChanged
-          });
-        } catch (error) {
-          message.textContent = `تعذر تنفيذ الإجراء: ${error.message}`;
-        } finally {
-          button.disabled = false;
-        }
-      });
-    });
 
     root.querySelectorAll("[data-finance-action]").forEach(button => {
       button.addEventListener("click", async () => {
@@ -307,10 +242,9 @@ export async function renderOperatorFinancePanel({
   root.innerHTML = '<p class="fbFinanceMessage">جاري تحميل حساب العمولة...</p>';
 
   try {
-    const [summary, payments, reversals] = await Promise.all([
+    const [summary, payments] = await Promise.all([
       getProjectPaymentSummary(projectId),
-      listProjectPaymentRequests(projectId, { pageSize: 20 }),
-      listProjectCommissionReversals(projectId, { pageSize: 20 })
+      listProjectPaymentRequests(projectId, { pageSize: 20 })
     ]);
 
     const pending = payments.find(item => item.status === "pending_owner_confirmation");
