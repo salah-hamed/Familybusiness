@@ -15,7 +15,12 @@ import {
   getProjectDocId
 } from "../core/projects/project-service.js";
 import { PLATFORM_BILLING, REFERRAL_CONFIG, formatEgp } from "../core/config/platform-config.js";
-import { isSubscriptionActive, subscriptionExpiryDate } from "../core/subscriptions/subscription-service.js";
+import {
+  isSubscriptionActive,
+  subscriptionExpiryDate,
+  subscriptionAccessState,
+  remainingWholeDays
+} from "../core/subscriptions/subscription-service.js";
 import {
   buildWhatsAppProofMessage,
   buildWhatsAppProofUrl,
@@ -147,17 +152,27 @@ function paymentErrorMessage(error) {
   return "تعذر تسجيل الدفعة أو فتح واتساب. تأكد من الإنترنت وحاول مرة أخرى.";
 }
 
-async function renderSubscriptionPayment(user, userData, subscriptionActive) {
+async function renderSubscriptionPayment(user, userData, accessState) {
   if (!subscriptionPaymentPanel) return;
 
-  subscriptionPaymentPanel.classList.toggle("hidden", subscriptionActive);
-  if (subscriptionActive) return;
+  const networkV2 = userData.subscriptionModel === "network_v2";
+  const state = accessState?.state || userData.subscriptionStatus || "inactive";
+  const paymentDue = networkV2
+    ? ["merchant_linked_payment_due","suspended_payment_due","expired"].includes(state)
+    : !accessState?.hasAccess;
+
+  subscriptionPaymentPanel.classList.toggle("hidden", !paymentDue);
+  if (!paymentDue) return;
 
   const required = requiredSubscriptionPayment(userData);
   paymentAmount.innerText = formatEgp(required.amount);
-  paymentRequiredText.innerText = required.paymentType === "initial"
-    ? "أول تفعيل للحساب. بعد اعتماد الدفعة تقدر تشغّل المشاريع الأربعة."
-    : "تجديد الاشتراك الشهري لإعادة تشغيل المشاريع.";
+  paymentRequiredText.innerText = networkV2
+    ? (state === "merchant_linked_payment_due"
+      ? "تم ربط أول مشروع ✅ سدّد أول اشتراك شهري خلال المهلة لاستمرار الإدارة."
+      : "سدّد الاشتراك الشهري لإعادة تشغيل إدارة مشاريعك.")
+    : (required.paymentType === "initial"
+      ? "دفعة تفعيل قديمة لحساب تم إنشاؤه قبل نظام الاشتراك الجديد."
+      : "تجديد الاشتراك الشهري لإعادة تشغيل المشاريع.");
 
   const instapayPaymentUrl = String(PLATFORM_BILLING.instapayPaymentUrl || "").trim();
   const paymentConfigReady = Boolean(
@@ -179,113 +194,86 @@ async function renderSubscriptionPayment(user, userData, subscriptionActive) {
     };
   }
 
-  let latest = null;
-  try {
-    latest = await getLatestSubscriptionPayment(user.uid);
-  } catch (error) {
-    console.error(error);
-    paymentReviewStatus.innerText = String(error?.code || "").includes("failed-precondition")
-      ? "سجل الدفع يحتاج نشر Firestore Index النهائي قبل استخدامه Live."
-      : "تعذر تحميل حالة آخر دفعة.";
+  if (submitPaymentProofBtn) {
+    submitPaymentProofBtn.disabled = !paymentConfigReady;
   }
 
-  const pending = latest?.status === "pending_review";
-  paymentForm.classList.toggle("hidden", pending);
-  reopenPaymentWhatsappBtn.classList.toggle("hidden", !pending);
-  paymentBadge.className = `paymentBadge ${latest?.status || ""}`;
-  paymentBadge.innerText = pending
-    ? "قيد المراجعة"
-    : latest?.status === "rejected"
-      ? "يحتاج إثبات جديد"
-      : "بانتظار الدفع";
-
-  paymentReviewStatus.innerText = paymentStatusCopy(latest)
-    || (paymentConfigReady
-      ? "بعد التحويل اكتب مرجع العملية. سنجهز لك رسالة واتساب فيها كود الدفع، وأنت أرفق Screenshot التحويل ثم أرسلها."
-      : "يجب ضبط رابط InstaPay ورقم واتساب الدفع للمنصة قبل استقبال دفعات حقيقية.");
-
-  function openWhatsappForPayment(payment) {
-    const message = buildWhatsAppProofMessage({
-      paymentCode: payment.paymentCode,
-      paymentType: payment.paymentType,
-      amount: payment.amount,
-      currency: payment.currency,
-      paymentReference: payment.paymentReference,
-      userEmail: user.email || ""
-    });
-    const url = buildWhatsAppProofUrl(PLATFORM_BILLING.paymentWhatsapp, message);
-    if (!url) {
-      paymentReviewStatus.innerText = "رقم واتساب الدفع غير مضبوط بعد.";
-      return;
-    }
-    window.location.href = url;
+  if (paymentForm) {
+    paymentForm.classList.toggle("disabled", !paymentConfigReady);
   }
 
-  reopenPaymentWhatsappBtn.onclick = () => {
-    if (latest) openWhatsappForPayment(latest);
-  };
+  const latest = await getLatestSubscriptionPayment(user.uid);
 
-  submitPaymentProofBtn.disabled = !paymentConfigReady;
+  if (latest) {
+    paymentBadge.innerText = latest.status === "pending_review"
+      ? "بانتظار المراجعة"
+      : latest.status === "approved"
+        ? "معتمد"
+        : latest.status === "rejected"
+          ? "مرفوض"
+          : "جاهز للدفع";
+    paymentReviewStatus.innerText = paymentStatusCopy(latest);
+  } else {
+    paymentBadge.innerText = "جاهز للدفع";
+    paymentReviewStatus.innerText = "";
+  }
 
-  submitPaymentProofBtn.onclick = async () => {
-    if (!paymentConfigReady) return;
+  let lastPrepared = null;
 
-    submitPaymentProofBtn.disabled = true;
-    paymentReviewStatus.innerText = "جاري تسجيل الدفعة وتجهيز رسالة واتساب...";
+  if (submitPaymentProofBtn) {
+    submitPaymentProofBtn.onclick = async () => {
+      submitPaymentProofBtn.disabled = true;
+      paymentReviewStatus.innerText = "جاري تجهيز كود الدفع...";
+      try {
+        const prepared = await prepareSubscriptionPaymentWhatsApp({
+          user,
+          userData,
+          paymentReference: paymentReference?.value
+        });
+        lastPrepared = prepared;
 
-    try {
-      const result = await prepareSubscriptionPaymentWhatsApp({
-        user,
-        userData,
-        paymentReference: paymentReference.value
+        const message = buildWhatsAppProofMessage({
+          paymentCode: prepared.paymentCode,
+          paymentType: prepared.paymentType,
+          amount: prepared.amount,
+          currency: prepared.currency,
+          paymentReference: prepared.paymentReference,
+          userEmail: user.email
+        });
+        const url = buildWhatsAppProofUrl(PLATFORM_BILLING.paymentWhatsapp, message);
+        paymentBadge.innerText = "بانتظار المراجعة";
+        paymentReviewStatus.innerText = paymentStatusCopy(prepared);
+
+        if (url) window.open(url, "_blank", "noopener");
+      } catch (error) {
+        paymentReviewStatus.innerText = paymentErrorMessage(error);
+      } finally {
+        submitPaymentProofBtn.disabled = false;
+      }
+    };
+  }
+
+  if (reopenPaymentWhatsappBtn) {
+    reopenPaymentWhatsappBtn.onclick = () => {
+      const item = lastPrepared || latest;
+      if (!item) {
+        paymentReviewStatus.innerText = "سجّل الدفعة أولًا علشان نجهز رسالة واتساب.";
+        return;
+      }
+      const message = buildWhatsAppProofMessage({
+        paymentCode: item.paymentCode,
+        paymentType: item.paymentType,
+        amount: item.amount,
+        currency: item.currency,
+        paymentReference: item.paymentReference,
+        userEmail: user.email
       });
-
-      latest = {
-        ...result,
-        userId: user.uid,
-        userEmail: user.email || ""
-      };
-
-      paymentForm.classList.add("hidden");
-      reopenPaymentWhatsappBtn.classList.remove("hidden");
-      paymentBadge.className = "paymentBadge pending";
-      paymentBadge.innerText = "قيد المراجعة";
-      paymentReviewStatus.innerText = paymentStatusCopy(latest);
-      openWhatsappForPayment(latest);
-    } catch (error) {
-      console.error(error);
-      paymentReviewStatus.innerText = paymentErrorMessage(error);
-      submitPaymentProofBtn.disabled = !paymentConfigReady;
-    }
-  };
+      const url = buildWhatsAppProofUrl(PLATFORM_BILLING.paymentWhatsapp, message);
+      if (url) window.open(url, "_blank", "noopener");
+    };
+  }
 }
 
-const projectCopy = {
-  supermarket: "حوّل سوبرماركت شغال بالفعل لقناة طلبات أونلاين وتابع عمولتك على الأوردرات المكتملة.",
-  restaurant: "اربط مطعم قائم عنده زباينه ومنيوه، وخليه يستقبل الطلبات من تطبيق جاهز.",
-  bakery: "اربط مخبز أو فرن قائم، وخليه يعرض منتجاته ويستقبل الطلبات من عملائه.",
-  laundry: "اربط مغسلة شغالة بالفعل، وخليها تدير الاستلام والتشغيل والتوصيل من تطبيقها."
-};
-
-const projectClass = {
-  supermarket: "project-supermarket",
-  restaurant: "project-restaurant",
-  bakery: "project-bakery",
-  laundry: "project-laundry"
-};
-
-if (logoutBtn) {
-  logoutBtn.onclick = async () => {
-    logoutBtn.disabled = true;
-    try {
-      await logoutUser();
-      window.location.href = "../";
-    } finally {
-      logoutBtn.disabled = false;
-    }
-  };
-}
-const guideController = createGuide(buildWorkspaceGuide({ loading: true }), { autoOpen: false });
 function projectManagementUrl(templateId, projectDocId) {
   if (templateId === "supermarket") {
     return `../supermarket/?project=${encodeURIComponent(projectDocId)}`;
@@ -323,7 +311,8 @@ protectPage(async (user) => {
 
     const data =
     userSnap.data();
-    const subscriptionActive = isSubscriptionActive(data);
+    const accessState = subscriptionAccessState(data);
+    const subscriptionActive = accessState.hasAccess;
     const myProjects = await loadUserProjects(user.uid);
 
     guideController.update(
@@ -449,7 +438,7 @@ getDiscoverableProjects().forEach(project => {
     } catch (error) {
       subscriptionStatus.innerText =
         error.message === "SUBSCRIPTION_NOT_ACTIVE"
-          ? "⏳ يجب تفعيل الاشتراك أولاً"
+          ? "⛔ الحساب متوقف حسب مهلة الربط أو الاشتراك"
           : "حدث خطأ أثناء إنشاء المشروع";
       return;
     }
@@ -468,20 +457,50 @@ getDiscoverableProjects().forEach(project => {
 
     userName.innerText = `أهلاً ${data.name} 👋`;
     if (projectCount) projectCount.innerText = `${myProjects.length} / 4`;
-    if (workspaceAccountState) workspaceAccountState.innerText = subscriptionActive ? "جاهز للتشغيل" : "بانتظار التفعيل";
-
+    const networkV2 = data.subscriptionModel === "network_v2";
+    const daysLeft = remainingWholeDays(accessState.deadline);
     const expiry = subscriptionExpiryDate(data);
-    subscriptionStatus.innerText = subscriptionActive
-      ? `✅ الاشتراك مفعل${expiry ? ` حتى ${expiry.toLocaleDateString("ar-EG")}` : ""}`
-      : "⏳ الاشتراك قيد المراجعة أو غير مفعل";
 
-    if (subscriptionHint) {
-      subscriptionHint.innerText = subscriptionActive
-        ? "أداتك جاهزة. اختار مشروع من تحت وابدأ ربط أول نشاط شغال حواليك."
-        : "حوّل عبر InstaPay ثم سجّل مرجع العملية وابعت Screenshot التحويل على واتساب. بعد المراجعة سيتفعل الحساب.";
+    if (workspaceAccountState) {
+      workspaceAccountState.innerText = ({
+        onboarding_active: "جاهز لربط أول مشروع",
+        merchant_linked_payment_due: "المشروع مرتبط — الاشتراك مستحق",
+        active_paid: "اشتراك نشط",
+        suspended_no_merchant: "متوقف لعدم ربط مشروع",
+        suspended_payment_due: "متوقف لعدم سداد الاشتراك",
+        expired: "الاشتراك منتهي"
+      })[accessState.state] || (subscriptionActive ? "جاهز للتشغيل" : "متوقف");
     }
 
-    await renderSubscriptionPayment(user, data, subscriptionActive);
+    if (networkV2) {
+      if (accessState.state === "onboarding_active") {
+        subscriptionStatus.innerText = `✅ الحساب مفعل تلقائيًا — باقي ${daysLeft ?? "—"} يوم لربط أول مشروع`;
+        if (subscriptionHint) subscriptionHint.innerText = "اربط أول محل حقيقي خلال 7 أيام. لا يوجد أي مبلغ مطلوب قبل نجاح الربط.";
+      } else if (accessState.state === "merchant_linked_payment_due") {
+        subscriptionStatus.innerText = `✅ تم ربط أول مشروع — باقي ${daysLeft ?? "—"} يوم لسداد أول اشتراك شهري`;
+        if (subscriptionHint) subscriptionHint.innerText = `المطلوب الآن ${formatEgp(PLATFORM_BILLING.monthlyRenewalFee)} اشتراك شهري. المشروع يظل محفوظًا على المنصة حتى لو توقف حسابك.`;
+      } else if (accessState.state === "active_paid") {
+        subscriptionStatus.innerText = `✅ الاشتراك نشط${expiry ? ` حتى ${expiry.toLocaleDateString("ar-EG")}` : ""}`;
+        if (subscriptionHint) subscriptionHint.innerText = "حسابك نشط ومشاريعك مرتبطة بشبكة Family Business.";
+      } else if (accessState.state === "suspended_no_merchant") {
+        subscriptionStatus.innerText = "⛔ انتهت مهلة ربط أول مشروع";
+        if (subscriptionHint) subscriptionHint.innerText = "تم إيقاف إدارة الحساب مؤقتًا. بياناتك محفوظة؛ تواصل مع الدعم لاستعادة مسار الربط.";
+      } else {
+        subscriptionStatus.innerText = "⛔ الاشتراك الشهري مستحق";
+        if (subscriptionHint) subscriptionHint.innerText = "تم إيقاف إدارة الحساب مؤقتًا حتى اعتماد الاشتراك الشهري. بيانات المشاريع لا تُحذف.";
+      }
+    } else {
+      subscriptionStatus.innerText = subscriptionActive
+        ? `✅ الاشتراك مفعل${expiry ? ` حتى ${expiry.toLocaleDateString("ar-EG")}` : ""}`
+        : "⏳ الحساب القديم غير نشط";
+      if (subscriptionHint) {
+        subscriptionHint.innerText = subscriptionActive
+          ? "أداتك جاهزة. اختار مشروع من تحت وابدأ ربط أول نشاط شغال حواليك."
+          : "هذا حساب قديم. راجع الاشتراك أو تواصل مع الدعم.";
+      }
+    }
+
+    await renderSubscriptionPayment(user, data, accessState);
 
   }
 
