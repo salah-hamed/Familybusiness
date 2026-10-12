@@ -197,8 +197,17 @@ function laundryOrder(projectId) {
 }
 
 function activePartnerProject(uid, templateId, version = 1) {
+  const merchantId = `${uid}_${templateId}`;
   return {
     ownerId: uid,
+    merchantId,
+    originalSubscriberId: uid,
+    assignedSubscriberId: uid,
+    assignmentStatus: "assigned_to_subscriber",
+    platformManaged: false,
+    merchantRelationshipStatus: "awaiting_operator",
+    merchantLinkedAt: null,
+    platformAgreementVersion: "network-v1",
     projectId: templateId,
     template: templateId,
     operatingModel: "partner_operated",
@@ -459,6 +468,56 @@ test("user cannot expand display name beyond the validated limit", async () => {
       doc(db, "users", uid),
       { name: "x".repeat(101) },
       { merge: true }
+    )
+  );
+});
+
+test("network v2 registration is immediately active with a bounded seven-day merchant deadline", async () => {
+  const uid = "network_v2_new_profile";
+  const db = testEnv.authenticatedContext(uid).firestore();
+  const deadline = Timestamp.fromDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
+
+  await assertSucceeds(
+    setDoc(doc(db, "users", uid), {
+      uid,
+      name: "مستخدم شبكة جديد",
+      email: "network@example.com",
+      projectType: "",
+      isActive: true,
+      subscriptionStatus: "onboarding_active",
+      subscriptionModel: "network_v2",
+      onboardingStatus: "awaiting_merchant",
+      initialActivationPaid: false,
+      billingCycle: "monthly",
+      registeredAt: serverTimestamp(),
+      merchantLinkDeadlineAt: deadline,
+      firstMerchantLinkedAt: null,
+      firstMerchantProjectId: "",
+      firstPaymentDueAt: null,
+      referredByUserId: "",
+      referralQualified: false,
+      createdAt: serverTimestamp()
+    })
+  );
+});
+
+test("network v2 subscriber cannot create a new project after the merchant-link deadline", async () => {
+  const uid = "network_v2_expired_link";
+  await seedUser(uid, {
+    isActive: true,
+    subscriptionModel: "network_v2",
+    subscriptionStatus: "onboarding_active",
+    onboardingStatus: "awaiting_merchant",
+    merchantLinkDeadlineAt: Timestamp.fromDate(new Date(Date.now() - 60 * 60 * 1000)),
+    firstMerchantLinkedAt: null,
+    firstPaymentDueAt: null
+  });
+  const db = testEnv.authenticatedContext(uid).firestore();
+
+  await assertFails(
+    setDoc(
+      doc(db, "projects", `${uid}_supermarket`),
+      activePartnerProject(uid, "supermarket", 1)
     )
   );
 });
