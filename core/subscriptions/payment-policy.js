@@ -5,10 +5,18 @@ function clean(value) {
 }
 
 export function requiredSubscriptionPayment(userData = {}) {
+  if (userData.subscriptionModel === "network_v2") {
+    return {
+      paymentType: "renewal",
+      amount: PLATFORM_BILLING.monthlyRenewalFee,
+      currency: PLATFORM_BILLING.currency
+    };
+  }
+
   const initialPaid = userData.initialActivationPaid === true || Boolean(userData.activatedAt);
   return {
     paymentType: initialPaid ? "renewal" : "initial",
-    amount: initialPaid ? PLATFORM_BILLING.monthlyRenewalFee : PLATFORM_BILLING.initialActivationFee,
+    amount: initialPaid ? PLATFORM_BILLING.monthlyRenewalFee : PLATFORM_BILLING.legacyInitialActivationFee,
     currency: PLATFORM_BILLING.currency
   };
 }
@@ -31,7 +39,7 @@ export function buildWhatsAppProofMessage({
   paymentReference,
   userEmail = ""
 } = {}) {
-  const typeLabel = paymentType === "renewal" ? "تجديد اشتراك" : "أول تفعيل";
+  const typeLabel = paymentType === "renewal" ? "اشتراك شهري" : "دفعة تفعيل قديمة";
   return [
     "إثبات اشتراك Family Business",
     `كود الدفع: ${clean(paymentCode)}`,
