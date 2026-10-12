@@ -751,7 +751,7 @@ test("FB-LAUNCH05B owner finance panel handles pending reversal decisions", () =
   }
 });
 
-test("FB-LAUNCH05B all operator dashboards request reversal only for canceled commissioned orders", () => {
+test("Phase D removes all new operator reversal controls without modifying existing finance panels", () => {
   for (const path of [
     "supermarket-operator/app.js",
     "restaurant-operator/app.js",
@@ -759,40 +759,41 @@ test("FB-LAUNCH05B all operator dashboards request reversal only for canceled co
     "laundry-operator/app.js"
   ]) {
     const source = readFileSync(path, "utf8");
-    assert.equal(source.includes("requestCommissionReversal"), true, path);
-    assert.equal(source.includes('status==="canceled"'), true, path);
-    assert.equal(source.includes("commissionLocked===true"), true, path);
-    assert.equal(source.includes("reversalReasonSelect"), true, path);
-    assert.equal(source.includes("طلب عكس العمولة"), true, path);
+    for (const forbidden of [
+      "requestCommissionReversal",
+      "reversalReasonSelect",
+      "requestReversal",
+      "reversalReasonOptions",
+      "طلب عكس العمولة"
+    ]) {
+      assert.equal(source.includes(forbidden), false, `${path}: ${forbidden}`);
+    }
+    assert.equal(source.includes("renderOperatorFinancePanel"), true, path);
   }
 });
 
-test("FB-LAUNCH05B admin monitors reversals but cannot execute reversal decisions", () => {
+test("Phase D removes admin reversal navigation, cards and queries but keeps financial history intact", () => {
   const html = readFileSync("admin/index.html", "utf8");
   const source = readFileSync("admin/admin.js", "utf8");
 
-  for (const marker of [
-    "reversalsSection",
-    "reversalsSearch",
-    "reversalsStatusFilter",
-    "loadMoreReversalsBtn",
-    "metricPendingReversals"
+  for (const forbidden of [
+    "reversalsSection", "reversalsSearch", "reversalsStatusFilter",
+    "loadMoreReversalsBtn", "metricPendingReversals"
   ]) {
-    assert.equal(html.includes(marker), true, marker);
+    assert.equal(html.includes(forbidden), false, forbidden);
+  }
+  for (const forbidden of [
+    "loadReversals", "renderReversals", "commissionReversals",
+    "metricPendingReversals", "reversalReasonLabel"
+  ]) {
+    assert.equal(source.includes(forbidden), false, forbidden);
   }
 
-  for (const marker of [
-    "loadReversals",
-    "renderReversals",
-    "commissionReversals",
-    "reversalReasonLabel"
-  ]) {
-    assert.equal(source.includes(marker), true, marker);
-  }
-
-  assert.equal(source.includes("confirmCommissionReversal"), false);
-  assert.equal(source.includes("rejectCommissionReversal"), false);
-  assert.equal(source.includes("requestCommissionReversal"), false);
+  const rules = readFileSync("firestore.rules", "utf8");
+  const legacy = readFileSync("core/commissions/reversal-service.js", "utf8");
+  assert.equal(rules.includes("match /commissionReversals/{reversalId}"), true);
+  assert.equal(legacy.includes("listProjectCommissionReversals"), true);
+  assert.equal(source.includes('aggregateAmount("commissionLedger", [where("status", "==", "reversed")])'), true);
 });
 
 test("FB-LAUNCH05B admin overview reports net commission after confirmed reversals", () => {
