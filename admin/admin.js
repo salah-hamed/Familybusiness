@@ -426,11 +426,20 @@ async function approveSubscriptionPayment(paymentId) {
     if (!userSnap.exists()) throw new Error("USER_NOT_FOUND");
 
     const data = userSnap.data();
-    const initialAlreadyPaid = hasPaidInitialActivation(data);
-    const expectedType = initialAlreadyPaid ? "renewal" : "initial";
-    const expectedAmount = initialAlreadyPaid
+    const networkV2 = data.subscriptionModel === "network_v2";
+    const legacyInitialAlreadyPaid = hasPaidInitialActivation(data);
+    const firstPaidSubscription = networkV2
+      ? !clean(data.lastSubscriptionPaymentId)
+      : !legacyInitialAlreadyPaid;
+
+    const expectedType = networkV2
+      ? "renewal"
+      : (legacyInitialAlreadyPaid ? "renewal" : "initial");
+    const expectedAmount = networkV2
       ? PLATFORM_BILLING.monthlyRenewalFee
-      : PLATFORM_BILLING.initialActivationFee;
+      : (legacyInitialAlreadyPaid
+        ? PLATFORM_BILLING.monthlyRenewalFee
+        : PLATFORM_BILLING.legacyInitialActivationFee);
 
     if (payment.paymentType !== expectedType || Number(payment.amount) !== Number(expectedAmount)) {
       throw new Error("PAYMENT_DOES_NOT_MATCH_ACCOUNT_STATE");
@@ -446,7 +455,7 @@ async function approveSubscriptionPayment(paymentId) {
     let referralRef = null;
     let referralSnap = null;
 
-    if (!initialAlreadyPaid && referrerId && referrerId !== uid) {
+    if (firstPaidSubscription && referrerId && referrerId !== uid) {
       referrerRef = doc(db, "users", referrerId);
       referralRef = doc(db, "referrals", `${referrerId}_${uid}`);
       referrerSnap = await transaction.get(referrerRef);
@@ -454,7 +463,7 @@ async function approveSubscriptionPayment(paymentId) {
     }
 
     let periodStart = now;
-    if (initialAlreadyPaid && data.subscriptionExpiresAt) {
+    if (data.subscriptionExpiresAt) {
       const currentExpiry = typeof data.subscriptionExpiresAt.toDate === "function"
         ? data.subscriptionExpiresAt.toDate()
         : new Date(data.subscriptionExpiresAt);
@@ -473,12 +482,26 @@ async function approveSubscriptionPayment(paymentId) {
       rejectionReason: ""
     });
 
-    transaction.update(userRef, {
+    const userUpdate = networkV2 ? {
+      isActive: true,
+      subscriptionStatus: "active_paid",
+      onboardingStatus: "active_paid",
+      initialActivationPaid: false,
+      billingCycle: "monthly",
+      billingStartedAt: data.billingStartedAt || Timestamp.fromDate(now),
+      subscriptionStartedAt: data.subscriptionStartedAt || Timestamp.fromDate(now),
+      subscriptionExpiresAt: Timestamp.fromDate(expiresAt),
+      lastPaymentAmount: expectedAmount,
+      lastPaymentType: expectedType,
+      lastPaymentAt: serverTimestamp(),
+      lastSubscriptionPaymentId: paymentId,
+      lastRenewalAt: firstPaidSubscription ? (data.lastRenewalAt || null) : serverTimestamp()
+    } : {
       isActive: true,
       subscriptionStatus: "active",
       initialActivationPaid: true,
       billingCycle: "monthly",
-      subscriptionStartedAt: initialAlreadyPaid
+      subscriptionStartedAt: legacyInitialAlreadyPaid
         ? (data.subscriptionStartedAt || Timestamp.fromDate(now))
         : Timestamp.fromDate(now),
       subscriptionExpiresAt: Timestamp.fromDate(expiresAt),
@@ -486,12 +509,14 @@ async function approveSubscriptionPayment(paymentId) {
       lastPaymentType: expectedType,
       lastPaymentAt: serverTimestamp(),
       lastSubscriptionPaymentId: paymentId,
-      lastRenewalAt: initialAlreadyPaid ? serverTimestamp() : (data.lastRenewalAt || null),
+      lastRenewalAt: legacyInitialAlreadyPaid ? serverTimestamp() : (data.lastRenewalAt || null),
       activatedAt: data.activatedAt || serverTimestamp()
-    });
+    };
+
+    transaction.update(userRef, userUpdate);
 
     if (
-      !initialAlreadyPaid &&
+      firstPaidSubscription &&
       referrerRef &&
       referrerSnap?.exists() &&
       referralRef &&
