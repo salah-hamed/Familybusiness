@@ -56,7 +56,7 @@
         <article class="metricCard moneyCard"><span>مدفوع</span><b id="metricPaid">—</b><small>دفعات أكدها المشتركون</small></article>
         <article class="metricCard dueCard"><span>مستحق حاليًا</span><b id="metricOutstanding">—</b><small>قبل التسوية والسداد</small></article>
         <article class="metricCard"><span>دفعات بانتظار التأكيد</span><b id="metricPendingSettlements">—</b><small id="metricPendingSettlementsMeta">—</small></article>
-        <article class="metricCard"><span>عكس عمولات معلّق</span><b id="metricPendingReversals">—</b><small id="metricPendingReversalsMeta">—</small></article>
+        <article class="metricCard hidden" aria-hidden="true"><span>عكس عمولات معلّق</span><b id="metricPendingReversals">—</b><small id="metricPendingReversalsMeta">—</small></article>
       </section>
 
       <nav class="adminTabs" aria-label="أقسام الإدارة">
@@ -68,7 +68,7 @@
         <button class="tabBtn" data-section="exceptionsSection">تنبيهات التشغيل</button>
         <button class="tabBtn" data-section="commissionsSection">العمولات</button>
         <button class="tabBtn" data-section="settlementsSection">التسويات</button>
-        <button class="tabBtn" data-section="reversalsSection">عكس العمولات</button>
+        <button class="tabBtn hidden" data-section="reversalsSection" aria-hidden="true" tabindex="-1">عكس العمولات</button>
       </nav>
 
       <section id="usersSection" class="adminSection activeSection">
@@ -241,7 +241,7 @@
         <button id="loadMoreSettlementsBtn" class="loadMore hidden" type="button">عرض 50 عملية إضافية</button>
       </section>
 
-      <section id="reversalsSection" class="adminSection">
+      <section id="reversalsSection" class="adminSection hidden" aria-hidden="true">
         <div class="sectionHead">
           <div><span class="sectionKicker">مراجعة فقط</span><h2>طلبات عكس العمولات</h2></div>
           <button id="refreshReversalsBtn" class="secondaryBtn" type="button">تحديث</button>
