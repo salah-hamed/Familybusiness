@@ -1,8 +1,11 @@
 export const PLATFORM_BILLING = Object.freeze({
   currency: "EGP",
-  initialActivationFee: 350,
+  initialActivationFee: 0,
+  legacyInitialActivationFee: 350,
   monthlyRenewalFee: 59,
   subscriptionDays: 30,
+  merchantLinkDeadlineDays: 7,
+  firstPaymentGraceDays: 3,
   instapayPaymentUrl: "https://ipn.eg/S/salah.hamed3646/instapay/9opJbq",
   paymentWhatsapp: "201508830993",
   supportWhatsapp: "201508830993"
