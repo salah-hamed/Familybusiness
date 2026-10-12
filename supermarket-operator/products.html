@@ -85,7 +85,10 @@
           <label>السعر<input id="productPrice" type="number" min="0" step="0.25"></label>
           <label>الباركود (اختياري)<input id="productBarcode" inputmode="numeric" placeholder="للبحث فقط"></label>
           <label>الحجم<input id="productSize" placeholder="1 لتر"></label>
-          <label>رابط الصورة اختياري<input id="productImage" placeholder="https://..."></label>
+          <label>صورة المنتج
+            <input id="productImageFile" type="file" accept="image/jpeg,image/png,image/webp" disabled>
+            <small>رفع الصور من الجهاز سيتفعل بعد ربط تخزين صور آمن. روابط الصور الخارجية متوقفة.</small>
+          </label>
         </div>
         <div class="actions">
           <button id="addProductBtn" class="primary" type="button">إضافة المنتج</button>
@@ -101,7 +104,7 @@
         <span><b>📥 استيراد Excel / CSV</b><small>إضافة أو إثراء المنتجات الموجودة</small></span>
       </summary>
       <div class="toolBody">
-        <p class="muted">الأعمدة المدعومة: اسم المنتج، التصنيف، السعر، الحجم، الصورة/رابط الصورة، ورقم المنتج بالمتجر. روابط الصور النصية أو Hyperlink أو دالة IMAGE يتم قراءتها. الصور المضمّنة كرسومات داخل Excel لا يمكن للمتصفح استخراجها تلقائيًا.</p>
+        <p class="muted">الأعمدة المدعومة: اسم المنتج، التصنيف، السعر، الحجم، ورقم المنتج بالمتجر. روابط الصور الخارجية لا يتم استيرادها للمنتجات المضافة خارج مكتبة Family Business.</p>
         <input id="importFile" type="file" accept=".csv,.xlsx,.xls">
         <button id="importBtn" class="secondary" type="button">استيراد المنتجات</button>
         <p id="importMessage" class="message"></p>
@@ -120,6 +123,6 @@
     </details>
   </section>
 </main>
-<script type="module" src="./products.js"></script>
+<script type="module" src="./products.js?v=20261012-network2"></script>
 </body>
 </html>
