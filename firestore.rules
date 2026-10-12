@@ -25,8 +25,35 @@ service cloud.firestore {
    let user = userData(uid);
    return userExists(uid)
     && user.isActive == true
-    && user.subscriptionStatus == "active"
-    && (!("subscriptionExpiresAt" in user) || user.subscriptionExpiresAt > request.time);
+    && (
+      (
+        user.subscriptionModel == "network_v2"
+        && (
+          (
+            user.subscriptionStatus == "onboarding_active"
+            && user.firstMerchantLinkedAt == null
+            && user.merchantLinkDeadlineAt > request.time
+          )
+          ||
+          (
+            user.subscriptionStatus == "merchant_linked_payment_due"
+            && user.firstMerchantLinkedAt != null
+            && user.firstPaymentDueAt > request.time
+          )
+          ||
+          (
+            user.subscriptionStatus in ["active_paid","active"]
+            && user.subscriptionExpiresAt > request.time
+          )
+        )
+      )
+      ||
+      (
+        !("subscriptionModel" in user)
+        && user.subscriptionStatus == "active"
+        && (!("subscriptionExpiresAt" in user) || user.subscriptionExpiresAt > request.time)
+      )
+    );
   }
   function projectExists(projectId){ return exists(projectPath(projectId)); }
   function projectData(projectId){ return get(projectPath(projectId)).data; }
@@ -36,7 +63,10 @@ service cloud.firestore {
    return projectExists(projectId)
     && project.isActive == true
     && project.status == "active"
-    && subscriptionActive(project.ownerId);
+    && (
+      (("platformManaged" in project) && project.platformManaged == true)
+      || subscriptionActive(project.ownerId)
+    );
   }
   function carwashSubscriptionExists(subscriptionId){ return exists(carwashSubscriptionPath(subscriptionId)); }
   function carwashSubscriptionData(subscriptionId){ return get(carwashSubscriptionPath(subscriptionId)).data; }
@@ -595,6 +625,14 @@ service cloud.firestore {
    return templateId in ["supermarket","restaurant","bakery","laundry"]
     && projectDocId == request.auth.uid + "_" + templateId
     && request.resource.data.ownerId == request.auth.uid
+    && request.resource.data.merchantId == projectDocId
+    && request.resource.data.originalSubscriberId == request.auth.uid
+    && request.resource.data.assignedSubscriberId == request.auth.uid
+    && request.resource.data.assignmentStatus == "assigned_to_subscriber"
+    && request.resource.data.platformManaged == false
+    && request.resource.data.merchantRelationshipStatus == "awaiting_operator"
+    && request.resource.data.merchantLinkedAt == null
+    && request.resource.data.platformAgreementVersion == "network-v1"
     && request.resource.data.template == templateId
     && request.resource.data.operatingModel == "partner_operated"
     && (
@@ -622,7 +660,10 @@ service cloud.firestore {
     && request.resource.data.priceConfig is map
     && request.resource.data.priceConfig.keys().hasOnly([])
     && request.resource.data.keys().hasOnly([
-      "ownerId","projectId","template","operatingModel","templateVersion",
+      "ownerId","merchantId","originalSubscriberId","assignedSubscriberId",
+      "assignmentStatus","platformManaged","merchantRelationshipStatus",
+      "merchantLinkedAt","platformAgreementVersion",
+      "projectId","template","operatingModel","templateVersion",
       "operatorId","partnerSetupStatus","businessName","status","isActive",
       "createdAt","whatsappNumber","instapayLink","logo","coverImage",
       "primaryColor","priceConfig"
@@ -961,21 +1002,47 @@ service cloud.firestore {
     && request.resource.data.email.size() > 0
     && request.resource.data.email.size() <= 254
     && request.resource.data.projectType == ""
-    && request.resource.data.isActive == false
-    && request.resource.data.subscriptionStatus == "pending"
-    && request.resource.data.initialActivationPaid == false
-    && request.resource.data.billingCycle == "initial"
     && request.resource.data.referralQualified == false
     && request.resource.data.referredByUserId is string
     && request.resource.data.referredByUserId.size() <= 128
     && request.resource.data.referredByUserId != request.auth.uid
     && request.resource.data.createdAt == request.time
     && !("role" in request.resource.data)
-    && request.resource.data.keys().hasOnly([
-      "uid","name","email","projectType","isActive","subscriptionStatus",
-      "initialActivationPaid","billingCycle","referredByUserId",
-      "referralQualified","createdAt"
-    ]);
+    && (
+      (
+        request.resource.data.isActive == true
+        && request.resource.data.subscriptionStatus == "onboarding_active"
+        && request.resource.data.subscriptionModel == "network_v2"
+        && request.resource.data.onboardingStatus == "awaiting_merchant"
+        && request.resource.data.initialActivationPaid == false
+        && request.resource.data.billingCycle == "monthly"
+        && request.resource.data.registeredAt == request.time
+        && request.resource.data.merchantLinkDeadlineAt > request.time + duration.value(6, "d")
+        && request.resource.data.merchantLinkDeadlineAt < request.time + duration.value(8, "d")
+        && request.resource.data.firstMerchantLinkedAt == null
+        && request.resource.data.firstMerchantProjectId == ""
+        && request.resource.data.firstPaymentDueAt == null
+        && request.resource.data.keys().hasOnly([
+          "uid","name","email","projectType","isActive","subscriptionStatus",
+          "subscriptionModel","onboardingStatus","initialActivationPaid","billingCycle",
+          "registeredAt","merchantLinkDeadlineAt","firstMerchantLinkedAt",
+          "firstMerchantProjectId","firstPaymentDueAt","referredByUserId",
+          "referralQualified","createdAt"
+        ])
+      )
+      ||
+      (
+        request.resource.data.isActive == false
+        && request.resource.data.subscriptionStatus == "pending"
+        && request.resource.data.initialActivationPaid == false
+        && request.resource.data.billingCycle == "initial"
+        && request.resource.data.keys().hasOnly([
+          "uid","name","email","projectType","isActive","subscriptionStatus",
+          "initialActivationPaid","billingCycle","referredByUserId",
+          "referralQualified","createdAt"
+        ])
+      )
+    );
    allow get: if isAdmin() || (signedIn() && request.auth.uid == uid);
    allow list: if isAdmin();
    allow update: if (
@@ -1015,6 +1082,34 @@ service cloud.firestore {
       )
       ||
       (
+        resource.data.subscriptionModel == "network_v2"
+        && request.resource.data.subscriptionModel == resource.data.subscriptionModel
+        && request.resource.data.isActive == true
+        && request.resource.data.subscriptionStatus == "active_paid"
+        && request.resource.data.onboardingStatus == "active_paid"
+        && request.resource.data.initialActivationPaid == false
+        && request.resource.data.billingCycle == "monthly"
+        && request.resource.data.lastSubscriptionPaymentId is string
+        && request.resource.data.lastSubscriptionPaymentId.size() > 0
+        && request.resource.data.lastPaymentType == "renewal"
+        && request.resource.data.lastPaymentAmount == 59
+        && request.resource.data.lastPaymentAt == request.time
+        && request.resource.data.subscriptionExpiresAt > request.time
+        && existsAfter(subscriptionPaymentPath(request.resource.data.lastSubscriptionPaymentId))
+        && getAfter(subscriptionPaymentPath(request.resource.data.lastSubscriptionPaymentId)).data.status == "approved"
+        && getAfter(subscriptionPaymentPath(request.resource.data.lastSubscriptionPaymentId)).data.userId == uid
+        && getAfter(subscriptionPaymentPath(request.resource.data.lastSubscriptionPaymentId)).data.paymentType == "renewal"
+        && getAfter(subscriptionPaymentPath(request.resource.data.lastSubscriptionPaymentId)).data.amount == 59
+        && getAfter(subscriptionPaymentPath(request.resource.data.lastSubscriptionPaymentId)).data.reviewedBy == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "isActive","subscriptionStatus","onboardingStatus","initialActivationPaid","billingCycle",
+          "billingStartedAt","subscriptionStartedAt","subscriptionExpiresAt",
+          "lastPaymentAmount","lastPaymentType","lastPaymentAt",
+          "lastSubscriptionPaymentId","lastRenewalAt","referralQualified"
+        ])
+      )
+      ||
+      (
         request.resource.data.isActive == true
         && request.resource.data.subscriptionStatus == "active"
         && resource.data.initialActivationPaid == false
@@ -1040,6 +1135,27 @@ service cloud.firestore {
         ])
       )
     )
+   ) || (
+    signedIn()
+    && resource.data.subscriptionModel == "network_v2"
+    && resource.data.firstMerchantLinkedAt == null
+    && request.resource.data.subscriptionModel == resource.data.subscriptionModel
+    && request.resource.data.isActive == true
+    && request.resource.data.subscriptionStatus == "merchant_linked_payment_due"
+    && request.resource.data.onboardingStatus == "merchant_linked_payment_due"
+    && request.resource.data.firstMerchantLinkedAt == request.time
+    && request.resource.data.firstMerchantProjectId is string
+    && request.resource.data.firstMerchantProjectId.size() > 0
+    && request.resource.data.firstPaymentDueAt > request.time + duration.value(2, "d")
+    && request.resource.data.firstPaymentDueAt < request.time + duration.value(4, "d")
+    && projectExists(request.resource.data.firstMerchantProjectId)
+    && projectData(request.resource.data.firstMerchantProjectId).ownerId == uid
+    && existsAfter(operatorPath(request.resource.data.firstMerchantProjectId))
+    && getAfter(operatorPath(request.resource.data.firstMerchantProjectId)).data.authUid == request.auth.uid
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+      "subscriptionStatus","onboardingStatus","firstMerchantLinkedAt",
+      "firstMerchantProjectId","firstPaymentDueAt"
+    ])
    ) || (
     signedIn()
     && request.auth.uid == uid
@@ -1107,7 +1223,7 @@ service cloud.firestore {
         && request.resource.data.rejectionReason == ""
         && existsAfter(userPath(resource.data.userId))
         && getAfter(userPath(resource.data.userId)).data.isActive == true
-        && getAfter(userPath(resource.data.userId)).data.subscriptionStatus == "active"
+        && getAfter(userPath(resource.data.userId)).data.subscriptionStatus in ["active","active_paid"]
         && getAfter(userPath(resource.data.userId)).data.lastSubscriptionPaymentId == paymentId
         && getAfter(userPath(resource.data.userId)).data.lastPaymentType == resource.data.paymentType
         && getAfter(userPath(resource.data.userId)).data.lastPaymentAmount == resource.data.amount
@@ -1266,6 +1382,27 @@ service cloud.firestore {
     && request.resource.data.operatingModel == resource.data.operatingModel
     && request.resource.data.operatorId == resource.data.operatorId
     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["priceConfig"])
+   );
+   allow update: if (
+    signedIn()
+    && resource.data.operatorId == projectId
+    && existsAfter(operatorPath(projectId))
+    && getAfter(operatorPath(projectId)).data.authUid == request.auth.uid
+    && request.resource.data.merchantId == projectId
+    && request.resource.data.originalSubscriberId == resource.data.ownerId
+    && request.resource.data.assignedSubscriberId == resource.data.ownerId
+    && request.resource.data.assignmentStatus == "assigned_to_subscriber"
+    && request.resource.data.platformManaged == false
+    && request.resource.data.merchantRelationshipStatus == "linked"
+    && request.resource.data.merchantLinkedAt == request.time
+    && request.resource.data.acceptedPlatformTermsAt == request.time
+    && request.resource.data.acceptedByAuthUid == request.auth.uid
+    && request.resource.data.platformAgreementVersion == "network-v1"
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+      "merchantId","originalSubscriberId","assignedSubscriberId","assignmentStatus",
+      "platformManaged","merchantRelationshipStatus","merchantLinkedAt",
+      "acceptedPlatformTermsAt","acceptedByAuthUid","platformAgreementVersion"
+    ])
    );
    allow delete: if isAdmin();
   }
@@ -2419,7 +2556,19 @@ service cloud.firestore {
         )
       )
       && request.resource.data.authUid == request.auth.uid
-      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["authUid","status","updatedAt"])
+      && request.resource.data.merchantId == resource.data.projectId
+      && request.resource.data.originalSubscriberId == resource.data.ownerId
+      && request.resource.data.assignedSubscriberId == resource.data.ownerId
+      && request.resource.data.assignmentStatus == "assigned_to_subscriber"
+      && request.resource.data.platformManaged == false
+      && request.resource.data.acceptedPlatformTermsAt == request.time
+      && request.resource.data.acceptedByAuthUid == request.auth.uid
+      && request.resource.data.platformAgreementVersion == "network-v1"
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+        "authUid","status","merchantId","originalSubscriberId","assignedSubscriberId",
+        "assignmentStatus","platformManaged","acceptedPlatformTermsAt",
+        "acceptedByAuthUid","platformAgreementVersion","updatedAt"
+      ])
       && (
         (resource.data.agreementStatus == "accepted" && request.resource.data.status == "active")
         || (resource.data.agreementStatus != "accepted" && request.resource.data.status == "pending_agreement")
