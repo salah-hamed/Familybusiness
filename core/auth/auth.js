@@ -13,7 +13,8 @@ import {
 import {
   doc,
   setDoc,
-  serverTimestamp
+  serverTimestamp,
+  Timestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 
@@ -45,21 +46,29 @@ export async function registerUser(name, email, password, referredByUserId = "")
       ? String(referredByUserId)
       : "";
 
-    // Save user in Firestore
-    await setDoc(doc(db, "users", user.uid), {
+    // Network v2 starts immediately. Payment becomes due only after the
+    // first merchant/operator relationship is actually claimed.
+    const merchantLinkDeadlineAt = Timestamp.fromMillis(Date.now() + (7 * 24 * 60 * 60 * 1000));
 
+    await setDoc(doc(db, "users", user.uid), {
       uid: user.uid,
       name: normalizedName,
       email: normalizedEmail,
       projectType: "",
-      isActive: false,
-      subscriptionStatus: "pending",
+      isActive: true,
+      subscriptionStatus: "onboarding_active",
+      subscriptionModel: "network_v2",
+      onboardingStatus: "awaiting_merchant",
       initialActivationPaid: false,
-      billingCycle: "initial",
+      billingCycle: "monthly",
+      registeredAt: serverTimestamp(),
+      merchantLinkDeadlineAt,
+      firstMerchantLinkedAt: null,
+      firstMerchantProjectId: "",
+      firstPaymentDueAt: null,
       referredByUserId: normalizedReferralId && normalizedReferralId !== user.uid ? normalizedReferralId : "",
       referralQualified: false,
       createdAt: serverTimestamp()
-
     });
 
     return {
