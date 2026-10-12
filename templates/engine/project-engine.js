@@ -39,6 +39,14 @@ export async function createProject(ownerId, project) {
   await setDoc(doc(db, "projects", projectDocId), {
 
     ownerId,
+    merchantId: projectDocId,
+    originalSubscriberId: ownerId,
+    assignedSubscriberId: ownerId,
+    assignmentStatus: "assigned_to_subscriber",
+    platformManaged: false,
+    merchantRelationshipStatus: "awaiting_operator",
+    merchantLinkedAt: null,
+    platformAgreementVersion: "network-v1",
 
     projectId: project.id,
 
