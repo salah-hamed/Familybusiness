@@ -5,7 +5,8 @@ import {
   getDoc,
   runTransaction,
   updateDoc,
-  serverTimestamp
+  serverTimestamp,
+  Timestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const OPERATOR_AUTH_DOMAIN = "familybusiness.local";
@@ -100,6 +101,11 @@ export async function createOperator({
       operatorId,
       projectId: projectDocId,
       ownerId,
+      merchantId: projectDocId,
+      originalSubscriberId: ownerId,
+      assignedSubscriberId: ownerId,
+      assignmentStatus: "assigned_to_subscriber",
+      platformManaged: false,
       templateId,
       name: normalizedName,
       contactName: String(contactName || "").trim(),
@@ -209,16 +215,24 @@ export async function claimOperatorAccess(operatorId, authUser) {
   }
 
   const operatorRef = doc(db, "operators", operatorId);
+  const projectRef = doc(db, "projects", operatorId);
   const actualEmail = String(authUser.email || "").trim().toLowerCase();
 
   await runTransaction(db, async transaction => {
-    const operatorSnap = await transaction.get(operatorRef);
+    const [operatorSnap, projectSnap] = await Promise.all([
+      transaction.get(operatorRef),
+      transaction.get(projectRef)
+    ]);
 
     if (!operatorSnap.exists()) {
       throw new Error("OPERATOR_NOT_FOUND");
     }
+    if (!projectSnap.exists()) {
+      throw new Error("PROJECT_NOT_FOUND");
+    }
 
     const operator = operatorSnap.data();
+    const project = projectSnap.data();
     const inviteLoginEmail = String(operator.authLoginEmail || "").trim().toLowerCase();
     const legacyEmail = String(operator.email || "").trim().toLowerCase();
     const expectedEmail = inviteLoginEmail || legacyEmail;
@@ -235,15 +249,60 @@ export async function claimOperatorAccess(operatorId, authUser) {
       throw new Error("OPERATOR_ALREADY_CLAIMED");
     }
 
-    if (operator.authUid === authUser.uid) {
-      return;
+    if (project.ownerId !== operator.ownerId || project.projectDocId === "") {
+      // projectDocId is not stored on legacy project docs; the ownership check is the
+      // important compatibility guard.
     }
 
-    transaction.update(operatorRef, {
-      authUid: authUser.uid,
-      status: operator.agreementStatus === "accepted" ? "active" : "pending_agreement",
-      updatedAt: serverTimestamp()
-    });
+    const ownerRef = doc(db, "users", operator.ownerId);
+    const ownerSnap = await transaction.get(ownerRef);
+    const alreadyClaimed = operator.authUid === authUser.uid;
+
+    if (!alreadyClaimed) {
+      transaction.update(operatorRef, {
+        authUid: authUser.uid,
+        status: operator.agreementStatus === "accepted" ? "active" : "pending_agreement",
+        merchantId: operator.merchantId || operatorId,
+        originalSubscriberId: operator.originalSubscriberId || operator.ownerId,
+        assignedSubscriberId: operator.assignedSubscriberId || operator.ownerId,
+        assignmentStatus: operator.assignmentStatus || "assigned_to_subscriber",
+        platformManaged: operator.platformManaged === true,
+        acceptedPlatformTermsAt: serverTimestamp(),
+        acceptedByAuthUid: authUser.uid,
+        platformAgreementVersion: "network-v1",
+        updatedAt: serverTimestamp()
+      });
+    }
+
+    const projectAlreadyLinked = Boolean(project.merchantLinkedAt);
+    if (!projectAlreadyLinked) {
+      transaction.update(projectRef, {
+        merchantId: project.merchantId || operatorId,
+        originalSubscriberId: project.originalSubscriberId || project.ownerId,
+        assignedSubscriberId: project.assignedSubscriberId || project.ownerId,
+        assignmentStatus: project.assignmentStatus || "assigned_to_subscriber",
+        platformManaged: project.platformManaged === true,
+        merchantRelationshipStatus: "linked",
+        merchantLinkedAt: serverTimestamp(),
+        acceptedPlatformTermsAt: serverTimestamp(),
+        acceptedByAuthUid: authUser.uid,
+        platformAgreementVersion: "network-v1"
+      });
+    }
+
+    if (ownerSnap.exists()) {
+      const owner = ownerSnap.data();
+      if (owner.subscriptionModel === "network_v2" && !owner.firstMerchantLinkedAt) {
+        const dueAt = Timestamp.fromMillis(Date.now() + (3 * 24 * 60 * 60 * 1000));
+        transaction.update(ownerRef, {
+          subscriptionStatus: "merchant_linked_payment_due",
+          onboardingStatus: "merchant_linked_payment_due",
+          firstMerchantLinkedAt: serverTimestamp(),
+          firstMerchantProjectId: operatorId,
+          firstPaymentDueAt: dueAt
+        });
+      }
+    }
   });
 }
 
