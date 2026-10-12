@@ -3,9 +3,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { PLATFORM_BILLING, REFERRAL_CONFIG } from "../core/config/platform-config.js";
 
-test("commercial values are 350 initial, 59 monthly, and 50 referral", () => {
-  assert.equal(PLATFORM_BILLING.initialActivationFee, 350);
+test("network v2 is free to open, keeps legacy 350 compatibility, and charges 59 monthly", () => {
+  assert.equal(PLATFORM_BILLING.initialActivationFee, 0);
+  assert.equal(PLATFORM_BILLING.legacyInitialActivationFee, 350);
   assert.equal(PLATFORM_BILLING.monthlyRenewalFee, 59);
+  assert.equal(PLATFORM_BILLING.merchantLinkDeadlineDays, 7);
+  assert.equal(PLATFORM_BILLING.firstPaymentGraceDays, 3);
   assert.equal(REFERRAL_CONFIG.qualifiedReferralReward, 50);
 });
 
@@ -13,7 +16,7 @@ test("home pricing copy no longer exposes the old 220 EGP value", () => {
   const html = readFileSync("home/index.html", "utf8");
   const source = readFileSync("home/app.js", "utf8");
   assert.equal(html.includes("220 جنيه"), false);
-  assert.equal(source.includes("PLATFORM_BILLING.initialActivationFee"), true);
+  assert.equal(source.includes('"مجاني"'), true);
   assert.equal(source.includes("PLATFORM_BILLING.monthlyRenewalFee"), true);
   assert.equal(source.includes("REFERRAL_CONFIG.qualifiedReferralReward"), true);
 });
