@@ -225,7 +225,7 @@ function shouldUseIncomingCategory(currentCategory, incomingCategory) {
   const incoming = clean(incomingCategory);
   if (!incoming) return false;
   if (!current || current === "أخرى") return true;
-  return /carrefour|buy |shop |online|super market/i.test(current);
+  return /buy |shop |online|super market/i.test(current);
 }
 
 function chooseDuplicateKeeper(items = []) {
@@ -772,7 +772,7 @@ export async function mergeDuplicateStoreProducts(projectId, actorUid) {
     const bestBarcode = clean(keeper.barcode) || clean(items.find(item => clean(item.barcode))?.barcode);
     const validCategory = item => {
       const value = clean(item?.category);
-      return value && value !== "أخرى" && !/carrefour|buy |shop |online/i.test(value);
+      return value && value !== "أخرى" && !/buy |shop |online/i.test(value);
     };
     const bestCategory =
       clean(items.find(item => item.source === "import" && validCategory(item))?.category)
