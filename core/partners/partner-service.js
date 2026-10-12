@@ -249,9 +249,8 @@ export async function claimOperatorAccess(operatorId, authUser) {
       throw new Error("OPERATOR_ALREADY_CLAIMED");
     }
 
-    if (project.ownerId !== operator.ownerId || project.projectDocId === "") {
-      // projectDocId is not stored on legacy project docs; the ownership check is the
-      // important compatibility guard.
+    if (project.ownerId !== operator.ownerId || operator.projectId !== operatorId) {
+      throw new Error("OPERATOR_PROJECT_MISMATCH");
     }
 
     const ownerRef = doc(db, "users", operator.ownerId);
