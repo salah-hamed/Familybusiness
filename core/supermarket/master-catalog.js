@@ -2,7 +2,7 @@ import {
   SHEET_MASTER_PRICE_META,
   SHEET_SUPERMARKET_MASTER_CATALOG,
   SHEET_DAILY_ESSENTIAL_MASTER_IDS
-} from "./master-catalog-data.js";
+} from "./master-catalog-data.js?v=20261012-neutral-catalog1";
 
 export const MASTER_PRICE_META = SHEET_MASTER_PRICE_META;
 

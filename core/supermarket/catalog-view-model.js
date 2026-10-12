@@ -1,3 +1,5 @@
+import { neutralCatalogProductName } from "./catalog-branding.js";
+
 export function normalizeCatalogText(value = "") {
   return String(value ?? "")
     .normalize("NFKD")
@@ -79,8 +81,8 @@ export function buildUnifiedCatalog(masterCatalog = [], storeProducts = []) {
       product,
       added,
       status: !added ? "not_added" : active ? "active" : "paused",
-      name: product?.name || master.name,
-      brand: master.brand || "",
+      name: neutralCatalogProductName(product?.name || master.name),
+      brand: neutralCatalogProductName(master.brand || ""),
       category: product?.category || master.category || "أخرى",
       size: product?.size || master.size || "",
       price: added ? Number(product?.price || 0) : Number(master.referencePrice || 0),
@@ -99,7 +101,7 @@ export function buildUnifiedCatalog(masterCatalog = [], storeProducts = []) {
       product,
       added: true,
       status: productIsActive(product) ? "active" : "paused",
-      name: product.name || "",
+      name: neutralCatalogProductName(product.name || ""),
       brand: "",
       category: product.category || "أخرى",
       size: product.size || "",

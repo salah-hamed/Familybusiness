@@ -273,3 +273,63 @@ test("customer daily home stays lightweight and does not import the 2000-product
   assert.equal(source.includes("../../core/supermarket/daily-essentials.js"), true);
   assert.equal(source.includes("../../core/supermarket/master-catalog.js"), false);
 });
+
+test("Phase E preserves all 2000 legacy IDs and remote image URLs exactly", () => {
+  // Frozen digest from Phase A/B baseline: [masterId, image] for all 2,000 rows.
+  // Changing even one product photo or its legacy identity fails this test.
+  const pairs = SUPERMARKET_MASTER_CATALOG.map(product => [product.masterId, product.image]);
+  let hash = 0xcbf29ce484222325n;
+  const prime = 0x100000001b3n;
+  for (const char of JSON.stringify(pairs)) {
+    hash ^= BigInt(char.charCodeAt(0));
+    hash = BigInt.asUintN(64, hash * prime);
+  }
+  assert.equal(hash.toString(16).padStart(16, "0"), "2713d6a84495ae15");
+  assert.equal(SUPERMARKET_MASTER_CATALOG.filter(product => Boolean(product.image)).length, 2000);
+});
+
+test("Phase E removes retailer display branding and source attribution, not images", () => {
+  for (const product of SUPERMARKET_MASTER_CATALOG) {
+    for (const field of ["name", "brand", "category", "size"]) {
+      assert.doesNotMatch(String(product[field] ?? ""), /carrefour|كارفور/i, product.masterId);
+    }
+    assert.equal(Object.hasOwn(product, "productUrl"), false, product.masterId);
+    assert.equal(Object.hasOwn(product, "source"), false, product.masterId);
+    assert.equal(Object.hasOwn(product, "sourceProductId"), false, product.masterId);
+  }
+  const source = readFileSync("core/supermarket/master-catalog-data.js", "utf8");
+  assert.doesNotMatch(source, /carrefouregypt\.com|"productUrl":|"source":"كارفور/i);
+  const master = readFileSync("core/supermarket/master-catalog.js", "utf8");
+  assert.match(master, /export const SUPERMARKET_MASTER_CATALOG = SHEET_SUPERMARKET_MASTER_CATALOG/);
+});
+
+test("retailer-neutral catalog view is display-only and preserves product image references", async () => {
+  const { neutralCatalogProductName } = await import("../core/supermarket/catalog-branding.js");
+  assert.equal(neutralCatalogProductName("Carrefour Instant Coffee - 100 gm"), "Instant Coffee - 100 gm");
+  assert.equal(neutralCatalogProductName("كارفور قهوة سريعة الذوبان"), "قهوة سريعة الذوبان");
+  assert.equal(neutralCatalogProductName("بيبسي - 1 لتر"), "بيبسي - 1 لتر");
+
+  const oldStoredImage = "https://cdn.mafrservices.com/pim-content/EGY/example.jpg?im=Resize=(300,300)";
+  const old = {
+    productId: "legacy",
+    masterId: "carrefour-443744",
+    name: "Carrefour Instant Coffee - 100 gm",
+    category: "قهوة وشاي وأعشاب",
+    size: "100 gm",
+    price: 99,
+    image: oldStoredImage,
+    isActive: true,
+    inStock: true
+  };
+  const [entry] = buildUnifiedCatalog([{...old, referencePrice: 99}], [old]);
+  assert.equal(entry.name, "Instant Coffee - 100 gm");
+  assert.equal(entry.image, oldStoredImage);
+  assert.equal(old.name, "Carrefour Instant Coffee - 100 gm");
+  assert.equal(old.masterId, "carrefour-443744");
+
+  const client = readFileSync("templates/supermarket/app.js", "utf8");
+  const operator = readFileSync("core/supermarket/catalog-view-model.js", "utf8");
+  assert.equal(client.includes("neutralCatalogProductName(p.name)"), true);
+  assert.equal(client.includes("neutralCatalogProductName(product.name)"), true);
+  assert.equal(operator.includes("neutralCatalogProductName(product?.name || master.name)"), true);
+});

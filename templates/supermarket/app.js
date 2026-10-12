@@ -1,4 +1,5 @@
 import db from "../../core/firebase/firebase-db.js";
+import { neutralCatalogProductName } from "../../core/supermarket/catalog-branding.js";
 import {
   createSupermarketOrder,
   getSupermarketOrderTracking,
@@ -325,7 +326,7 @@ function renderProducts(){
     (category===DAILY_HOME||category==="الكل"||(p.category||"أخرى")===category)
     && (
       !q
-      || [p.name,p.size,p.category]
+      || [neutralCatalogProductName(p.name),p.size,p.category]
         .some(value=>String(value||"").toLowerCase().includes(q))
     )
   );
@@ -338,7 +339,7 @@ function renderProducts(){
       :`<span>${fallback}</span>`;
     return `<article class="productCard">
       <div class="productImage">${image}</div>
-      <h3>${escapeHTML(p.name)}</h3>
+      <h3>${escapeHTML(neutralCatalogProductName(p.name))}</h3>
       <div class="meta">${escapeHTML(p.size||p.category||"")}</div>
       <div class="priceRow">
         <span class="price">${money(p.price)}</span>
@@ -372,7 +373,7 @@ function changeQty(id,delta){
 function cartSummary(){
   const lines=[...cart.entries()].map(([id,quantity])=>{
     const product=productCache.get(id);
-    return product?{...product,quantity,subtotal:Number(product.price||0)*quantity}:null;
+    return product?{...product,name:neutralCatalogProductName(product.name),quantity,subtotal:Number(product.price||0)*quantity}:null;
   }).filter(Boolean);
   const subtotal=lines.reduce((s,x)=>s+x.subtotal,0);
   const delivery=Number(store?.deliveryFee||0);
@@ -561,7 +562,7 @@ function renderMyOrders(){
   $("ordersList").innerHTML=orders.length
     ?orders.map(order=>{
       const items=(order.items||[])
-        .map(item=>`${Number(item.quantity||0)} × ${escapeHTML(item.name)}`)
+        .map(item=>`${Number(item.quantity||0)} × ${escapeHTML(neutralCatalogProductName(item.name))}`)
         .join("، ");
 
       return `<article class="customerOrderCard" data-tracking-token="${order.trackingToken}">
