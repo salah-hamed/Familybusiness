@@ -88,7 +88,14 @@ function hasPaidInitialActivation(data = {}) {
 function statusPill(status) {
   const value = clean(status) || "unknown";
   const label = ({
-    active: "نشط",
+    active: "نشط - نظام سابق",
+    active_paid: "اشتراك نشط",
+    onboarding_active: "مهلة ربط المشروع",
+    merchant_linked_payment_due: "أول اشتراك مستحق",
+    suspended_no_merchant: "توقّف لعدم الربط",
+    suspended_payment_due: "توقّف لعدم السداد",
+    admin_suspended: "موقوف إداريًا",
+    expired: "منتهي",
     inactive: "موقوف",
     pending: "معلق",
     pending_review: "بانتظار المراجعة",
@@ -229,7 +236,7 @@ async function loadOverview() {
     }
 
     $("billingSummary").innerText =
-      `${formatEgp(PLATFORM_BILLING.initialActivationFee)} أول مرة · ${formatEgp(PLATFORM_BILLING.monthlyRenewalFee)} شهري · إحالة ${formatEgp(REFERRAL_CONFIG.qualifiedReferralReward)}`;
+      `فتح الحساب مجاني · ${formatEgp(PLATFORM_BILLING.monthlyRenewalFee)} شهري بعد ربط أول نشاط · إحالة ${formatEgp(REFERRAL_CONFIG.qualifiedReferralReward)}`;
 
     $("overviewStatus").innerText =
       `آخر تحديث: ${new Intl.DateTimeFormat("ar-EG",{timeStyle:"short"}).format(new Date())}`;
@@ -306,10 +313,12 @@ async function loadUsers({ append = false } = {}) {
 function renderUsers() {
   const rows = state.users.rows;
   $("usersContainer").innerHTML = rows.length ? rows.map(user => {
-    const initialAlreadyPaid = hasPaidInitialActivation(user);
-    const nextAmount = initialAlreadyPaid
-      ? PLATFORM_BILLING.monthlyRenewalFee
-      : PLATFORM_BILLING.initialActivationFee;
+    const networkV2 = user.subscriptionModel === "network_v2";
+    const nextPaymentText = networkV2
+      ? (user.firstMerchantLinkedAt ? formatEgp(PLATFORM_BILLING.monthlyRenewalFee) : "لا يوجد قبل الربط")
+      : formatEgp(hasPaidInitialActivation(user)
+        ? PLATFORM_BILLING.monthlyRenewalFee
+        : PLATFORM_BILLING.legacyInitialActivationFee);
 
     return `
       <article class="adminCard">
@@ -319,19 +328,19 @@ function renderUsers() {
         </div>
         <div class="metaGrid">
           <span>UID<br><b class="codeText">${escapeHTML(user.uid)}</b></span>
-          <span>أول اشتراك<br><b>${initialAlreadyPaid ? "تم" : "لم يتم"}</b></span>
+          <span>النظام<br><b>${networkV2 ? "Network V2" : "Legacy"}</b></span>
+          <span>مهلة ربط أول مشروع<br><b>${formatDate(user.merchantLinkDeadlineAt)}</b></span>
+          <span>أول مشروع مرتبط<br><b class="codeText">${escapeHTML(user.firstMerchantProjectId || "—")}</b></span>
+          <span>موعد أول اشتراك<br><b>${formatDate(user.firstPaymentDueAt)}</b></span>
           <span>انتهاء الاشتراك<br><b>${formatDate(user.subscriptionExpiresAt)}</b></span>
-          <span>المطلوب الآن<br><b>${formatEgp(nextAmount)}</b></span>
+          <span>المطلوب الآن<br><b>${nextPaymentText}</b></span>
           <span>إحالة<br><b>${escapeHTML(user.referredByUserId || "لا يوجد")}</b></span>
           <span>آخر دفعة اشتراك<br><b>${money(user.lastPaymentAmount || 0)}</b></span>
         </div>
         <div class="actions">
           <button class="primaryBtn" data-action="view-user-payments" data-uid="${escapeHTML(user.uid)}">راجع دفعات الاشتراك</button>
-          ${!initialAlreadyPaid && user.subscriptionStatus !== "active"
-            ? `<button class="secondaryBtn" data-action="grant-launch-promo" data-uid="${escapeHTML(user.uid)}">🎁 منحة مجانية من رصيد Launch 50</button>`
-            : ""}
-          ${user.subscriptionStatus === "active"
-            ? `<button class="secondaryBtn" data-action="deactivate-user" data-uid="${escapeHTML(user.uid)}">إيقاف الاشتراك</button>`
+          ${user.isActive === true
+            ? `<button class="secondaryBtn" data-action="deactivate-user" data-uid="${escapeHTML(user.uid)}">تعليق الحساب إداريًا</button>`
             : ""}
         </div>
       </article>
@@ -645,7 +654,7 @@ function renderSubscriptionPayments() {
         </div>
         <div class="metaGrid">
           <span>User UID<br><b class="codeText">${escapeHTML(payment.userId || "—")}</b></span>
-          <span>النوع<br><b>${payment.paymentType === "renewal" ? "تجديد" : "أول تفعيل"}</b></span>
+          <span>النوع<br><b>${payment.paymentType === "renewal" ? "اشتراك شهري" : "دفعة تفعيل قديمة"}</b></span>
           <span>المبلغ<br><b>${money(payment.amount)}</b></span>
           <span>طريقة الدفع<br><b>InstaPay</b></span>
           <span>مرجع التحويل<br><b class="codeText">${escapeHTML(payment.paymentReference || "—")}</b></span>
@@ -658,7 +667,7 @@ function renderSubscriptionPayments() {
         <div class="actions">
           <button class="secondaryBtn" data-action="copy-payment-code" data-code="${escapeHTML(payment.paymentCode || "")}">نسخ كود الدفع</button>
           ${pending ? `
-            <button class="primaryBtn" data-action="approve-subscription-payment" data-payment="${escapeHTML(payment.paymentId)}">اعتماد وتفعيل</button>
+            <button class="primaryBtn" data-action="approve-subscription-payment" data-payment="${escapeHTML(payment.paymentId)}">اعتماد الاشتراك</button>
             <button class="dangerBtn" data-action="reject-subscription-payment" data-payment="${escapeHTML(payment.paymentId)}">رفض الإثبات</button>
           ` : ""}
         </div>
@@ -739,10 +748,12 @@ function renderProjects() {
         </div>
         <div class="metaGrid">
           <span>النوع<br><b>${escapeHTML(project.template || "—")}</b></span>
-          <span>المالك<br><b class="codeText">${escapeHTML(project.ownerId || "—")}</b></span>
-          <span>نموذج التشغيل<br><b>${escapeHTML(project.operatingModel || "—")}</b></span>
+          <span>Merchant ID<br><b class="codeText">${escapeHTML(project.merchantId || project.projectDocId)}</b></span>
+          <span>المشترك الأصلي<br><b class="codeText">${escapeHTML(project.originalSubscriberId || project.ownerId || "—")}</b></span>
+          <span>المشترك المعيّن<br><b class="codeText">${escapeHTML(project.assignedSubscriberId || project.ownerId || "—")}</b></span>
+          <span>حالة الإسناد<br><b>${escapeHTML(project.assignmentStatus || "legacy")}</b></span>
+          <span>علاقة المحل بالمنصة<br><b>${escapeHTML(project.merchantRelationshipStatus || project.partnerSetupStatus || "—")}</b></span>
           <span>المشغّل<br><b class="codeText">${escapeHTML(project.operatorId || "—")}</b></span>
-          <span>حالة الربط<br><b>${escapeHTML(project.partnerSetupStatus || "—")}</b></span>
           <span>الإصدار<br><b>${escapeHTML(String(project.templateVersion || "—"))}</b></span>
         </div>
         <div class="actions">
