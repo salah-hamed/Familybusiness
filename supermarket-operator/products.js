@@ -328,7 +328,7 @@ function renderAddedControls(entry) {
         <label>اسم المنتج<input class="editName" value="${escapeHTML(product.name || "")}"></label>
         <label>التصنيف<input class="editCategory" value="${escapeHTML(product.category || "أخرى")}"></label>
         <label>الحجم<input class="editSize" value="${escapeHTML(product.size || "")}"></label>
-        <label>رابط الصورة<input class="editImage" value="${escapeHTML(product.image || "")}" placeholder="https://..."></label>
+        <label>الصورة<input value="${product.image ? "صورة محفوظة" : "لا توجد صورة"}" disabled></label>
       </div>
       <div class="productControls">
         <button class="primary saveProductDetails" type="button">حفظ التفاصيل</button>
@@ -489,8 +489,7 @@ function bindCatalogCardEvents(visibleEntries) {
           const patch = {
             name: card.querySelector(".editName").value.trim(),
             category: card.querySelector(".editCategory").value.trim(),
-            size: card.querySelector(".editSize").value.trim(),
-            image: card.querySelector(".editImage").value.trim()
+            size: card.querySelector(".editSize").value.trim()
           };
           await updateStoreProduct(projectId, productId, currentUser.uid, patch);
           patchLocalProducts([productId], patch);
@@ -708,12 +707,12 @@ $("addProductBtn").onclick = async () => {
       price: $("productPrice").value,
       barcode: $("productBarcode").value,
       size: $("productSize").value,
-      image: $("productImage").value
+      image: ""
     });
     const addedProduct = await getStoreProduct(projectId, productId);
     if (addedProduct) upsertLocalProduct(addedProduct);
 
-    ["productName", "productCategory", "productPrice", "productBarcode", "productSize", "productImage"]
+    ["productName", "productCategory", "productPrice", "productBarcode", "productSize"]
       .forEach(id => $(id).value = "");
 
     await refreshLocalCatalog({ syncMeta: true });
