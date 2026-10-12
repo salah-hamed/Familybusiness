@@ -353,7 +353,7 @@ export async function addStoreProduct(projectId, actorUid, data = {}) {
     category,
     size: clean(data.size || master?.size),
     barcode,
-    image: clean(data.image || master?.image),
+    image: masterId ? clean(data.image || master?.image) : "",
     price: normalizePrice(data.price),
     inStock: data.inStock !== false,
     isActive: data.isActive !== false,
@@ -528,7 +528,7 @@ export async function updateStoreProduct(projectId, productId, actorUid, updates
   if ("category" in updates) next.category = clean(updates.category);
   if ("size" in updates) next.size = clean(updates.size);
   if ("barcode" in updates) next.barcode = clean(updates.barcode).replace(/\D/g, "");
-  if ("image" in updates) next.image = clean(updates.image);
+  if ("image" in updates && clean(current.data()?.masterId)) next.image = clean(updates.image);
   if ("price" in updates) next.price = normalizePrice(updates.price);
   if ("inStock" in updates) next.inStock = updates.inStock === true;
   if ("isActive" in updates) next.isActive = updates.isActive === true;
@@ -588,11 +588,7 @@ export async function bulkImportStoreProducts(projectId, actorUid, rows = []) {
         || row["المقاس"]
         || row["العبوة"]
       ),
-      image: clean(
-        row["رابط الصورة"]
-        || row.image
-        || row["الصورة"]
-      ),
+      image: "",
       externalId: clean(
         row["رقم المنتج بالمتجر"]
         || row["رقم المنتج"]
@@ -631,7 +627,6 @@ export async function bulkImportStoreProducts(projectId, actorUid, rows = []) {
         updatedAt: serverTimestamp()
       };
 
-      if (!clean(existing.image) && row.image) patch.image = row.image;
       if (!clean(existing.size) && row.size) patch.size = row.size;
       if (!clean(existing.barcode) && row.barcode) patch.barcode = row.barcode;
       if (
@@ -670,7 +665,7 @@ export async function bulkImportStoreProducts(projectId, actorUid, rows = []) {
       category: row.category,
       size: row.size,
       barcode: row.barcode,
-      image: row.image,
+      image: "",
       price: normalizePrice(row.price),
       inStock: true,
       isActive: true,
