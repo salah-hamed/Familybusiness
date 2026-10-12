@@ -331,9 +331,7 @@ function renderOrders(){
       o.status==="assigned"?'<button class="primary statusAction" data-next="out_for_delivery">خرج للتوصيل</button>':
       o.status==="out_for_delivery"?'<button class="primary statusAction" data-next="delivered">تأكيد التوصيل</button>':"";
     const resend=o.assignedWorkerWhatsapp?'<button class="secondary resendWhatsapp">إعادة إرسال واتساب</button>':"";
-    const reversalControl=o.status==="canceled"&&o.commissionLocked===true
-      ? `<select class="reversalReasonSelect">${reversalReasonOptions()}</select><button class="secondary requestReversal">طلب عكس العمولة</button>`
-      :"";
+    const reversalControl="";
     return `<article class="rowCard orderCard" data-order="${o.orderId}">
       <div class="rowTop"><div><b>طلب #${o.orderId.slice(0,7)}</b><div class="muted">${escapeHTML(o.customerName)} · ${escapeHTML(o.customerPhone)}</div></div><span class="pill">${statusLabel(o.status)}</span></div>
       ${getOrderOperationalAlert(o)?`<div class="message">${escapeHTML(getOrderOperationalAlert(o).message)}</div>`:""}
