@@ -4,7 +4,6 @@ import { renderCustomerQr } from "../core/qr/customer-qr.js?v=20261010-operator-
 import { claimOperatorAccess, getOperator, operatorCanOperate, buildOperatorAuthEmail } from "../core/partners/partner-service.js";
 import { acceptPendingCommission, rejectPendingCommission, getCommissionAgreement } from "../core/commissions/commission-service.js";
 import { renderOperatorFinancePanel } from "../core/commissions/finance-panel.js";
-import { requestCommissionReversal } from "../core/commissions/reversal-service.js";
 import { getSupermarket, updateSupermarketSettings } from "../core/supermarket/supermarket-service.js";
 import { WORKER_ROLES, createWorker, listProjectWorkers, setWorkerActive } from "../core/workers/worker-service.js";
 import { assignWorkerAndPrepareWhatsApp, rollbackPreparedAssignment } from "../core/workers/worker-dispatch-service.js";
@@ -263,21 +262,6 @@ function activeRiderOptions(selected=""){
   return riders.filter(r=>r.isActive).map(r=>`<option value="${r.workerId}" ${r.workerId===selected?"selected":""}>${escapeHTML(r.name)}</option>`).join("");
 }
 
-function reversalReasonOptions(){
-  return `
-    <option value="customer_canceled_after_dispatch">العميل ألغى بعد الإرسال</option>
-    <option value="delivery_failed">تعذر التوصيل</option>
-    <option value="duplicate_order">طلب مكرر</option>
-    <option value="operator_error">خطأ تشغيلي</option>
-    <option value="other">سبب آخر</option>
-  `;
-}
-function reversalErrorMessage(error){
-  if(error?.message==="REVERSAL_ALREADY_EXISTS")return "تم إرسال طلب عكس العمولة لهذا الأوردر بالفعل.";
-  if(error?.message==="REVERSAL_EXCEEDS_OUTSTANDING")return "لا يمكن عكس العمولة لأن الرصيد المستحق الحالي أقل من قيمة العمولة.";
-  return error?.message||"تعذر إرسال طلب عكس العمولة.";
-}
-
 function orderTime(order){
   if(typeof order.createdAt?.toMillis==="function")return order.createdAt.toMillis();
   return Number(order.createdAt?.seconds||0)*1000;
@@ -331,16 +315,13 @@ function renderOrders(){
       o.status==="assigned"?'<button class="primary statusAction" data-next="out_for_delivery">خرج للتوصيل</button>':
       o.status==="out_for_delivery"?'<button class="primary statusAction" data-next="delivered">تأكيد التوصيل</button>':"";
     const resend=o.assignedWorkerWhatsapp?'<button class="secondary resendWhatsapp">إعادة إرسال واتساب</button>':"";
-    const reversalControl=o.status==="canceled"&&o.commissionLocked===true
-      ? `<select class="reversalReasonSelect">${reversalReasonOptions()}</select><button class="secondary requestReversal">طلب عكس العمولة</button>`
-      :"";
     return `<article class="rowCard orderCard" data-order="${o.orderId}">
       <div class="rowTop"><div><b>طلب #${o.orderId.slice(0,7)}</b><div class="muted">${escapeHTML(o.customerName)} · ${escapeHTML(o.customerPhone)}</div></div><span class="pill">${statusLabel(o.status)}</span></div>
       ${getOrderOperationalAlert(o)?`<div class="message">${escapeHTML(getOrderOperationalAlert(o).message)}</div>`:""}
       <div class="orderItems">${items||"لا توجد تفاصيل"}</div>
       <div class="muted">${escapeHTML(o.customerAddress||"")} · الإجمالي <b>${money(o.total||o.price)}</b></div>
       ${o.assignedWorkerName?`<div class="muted">المندوب: <b>${escapeHTML(o.assignedWorkerName)}</b></div>`:""}
-      <div class="orderActions">${riderSelect}${nextButton}${resend}${reversalControl}${canCancel?'<button class="danger statusAction" data-next="canceled">إلغاء</button>':""}</div>
+      <div class="orderActions">${riderSelect}${nextButton}${resend}${canCancel?'<button class="danger statusAction" data-next="canceled">إلغاء</button>':""}</div>
     </article>`;
   }).join(""):'<p class="muted">لا توجد طلبات حتى الآن.</p>';
 
@@ -418,29 +399,6 @@ function renderOrders(){
       if(!opened) alert("المتصفح منع فتح واتساب. اسمح بالنوافذ المنبثقة وحاول مرة أخرى.");
     });
 
-    card.querySelector(".requestReversal")?.addEventListener("click",async()=>{
-      const button=card.querySelector(".requestReversal");
-      const reasonCode=card.querySelector(".reversalReasonSelect")?.value||"other";
-      button.disabled=true;
-      try{
-        await requestCommissionReversal({
-          projectId,
-          orderId:order.orderId,
-          operatorUid:currentUser.uid,
-          reasonCode
-        });
-        alert("تم إرسال طلب عكس العمولة لصاحب المشروع للمراجعة.");
-        await renderOperatorFinancePanel({
-          container:$("operationsPanel"),
-          projectId,
-          operatorUid:currentUser.uid
-        });
-      }catch(e){
-        alert(reversalErrorMessage(e));
-      }finally{
-        button.disabled=false;
-      }
-    });
   });
 }
 
