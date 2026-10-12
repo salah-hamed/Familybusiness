@@ -1,5 +1,5 @@
 import db from "../firebase/firebase-db.js";
-import { findMasterProduct, LEGACY_MASTER_NAME_MAP, canonicalMasterId } from "./master-catalog.js";
+import { findMasterProduct, LEGACY_MASTER_NAME_MAP, canonicalMasterId } from "./master-catalog.js?v=20261012-neutral-catalog1";
 
 import {
   collection,
