@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#176a38">
+  <title>تأكيد نقل نشاط — Family Business</title>
+  <style>
+    :root{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#1b3525;background:#f4f8f5}
+    body{margin:0;padding:16px}.panel{max-width:620px;margin:5vh auto;padding:24px;border-radius:19px;background:#fff;box-shadow:0 8px 24px #163d2620}
+    h1{margin:0 0 13px;font-size:24px}p{line-height:1.8}.muted{color:#52685b}
+    .choices{display:flex;gap:12px;flex-wrap:wrap;margin:18px 0}button{border:0;padding:13px 17px;border-radius:11px;font:inherit;font-weight:700;cursor:pointer;background:#176a38;color:#fff}
+    button.alt{background:#e9eeeb;color:#2a3f30}button:disabled{opacity:.55;cursor:default}
+    .hidden{display:none}.notice{white-space:pre-line;background:#f0f4f1;padding:14px;border-radius:11px}
+    a{color:#176a38}
+  </style>
+</head>
+<body>
+  <main class="panel">
+    <h1>تأكيد اتفاق إدارة النشاط</h1>
+    <p class="muted">هذا الرابط مخصص لصاحب المحل أو المشترك الجديد فقط. المشترك السابق لا يوافق أو يرفض الاسترداد.</p>
+    <p id="message" role="status" class="notice" aria-live="polite">جاري التحقق من صلاحية رابط الاتفاق...</p>
+    <section id="decision" class="hidden">
+      <h2 id="roleTitle"></h2>
+      <p id="details"></p>
+      <p class="muted">هذا تسجيل للموافقة المبدئية فقط؛ لا ينقل أرباحًا سابقة ولا يغيّر رابط طلبات العملاء.</p>
+      <div class="choices">
+        <button id="acceptBtn" type="button">أوافق على الاتفاق الجديد</button>
+        <button id="declineBtn" type="button" class="alt">لا أوافق</button>
+      </div>
+    </section>
+    <a href="../">العودة إلى Family Business</a>
+  </main>
+  <script type="module" src="./app.js?v=20261013-consent1"></script>
+</body>
+</html>
