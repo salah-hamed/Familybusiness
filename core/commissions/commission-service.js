@@ -146,6 +146,17 @@ export async function acceptPendingCommission({
       throw new Error("NO_PENDING_COMMISSION");
     }
 
+    // Read before writes. New trial users must have the very first accepted
+    // agreement anchored to server time in this exact atomic transaction.
+    const ownerRef = doc(db, "users", agreement.ownerId);
+    const ownerSnap = await transaction.get(ownerRef);
+    if (!ownerSnap.exists()) throw new Error("SUBSCRIBER_NOT_FOUND");
+    const owner = ownerSnap.data();
+    const linkFirstMerchant = owner.accessModel === "merchant_trial_v1"
+      && owner.subscriptionStatus === "trial"
+      && owner.firstMerchantLinkedAt == null
+      && agreement.status !== "accepted";
+
     transaction.update(agreementRef, {
       currentAmount: agreement.pendingAmount,
       acceptedVersion: Number(agreement.version || 1),
@@ -165,6 +176,13 @@ export async function acceptPendingCommission({
       isActive: true,
       updatedAt: serverTimestamp()
     });
+
+    if (linkFirstMerchant) {
+      transaction.update(ownerRef, {
+        firstMerchantLinkedAt: serverTimestamp(),
+        firstMerchantProjectId: projectDocId
+      });
+    }
   });
 }
 

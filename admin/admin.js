@@ -1,5 +1,6 @@
 import db from "../core/firebase/firebase-db.js";
 import { projectMerchantOverview } from "../core/merchants/merchant-overview.js";
+import { requiredSubscriptionPayment } from "../core/subscriptions/payment-policy.js";
 import { protectAdmin } from "../core/auth/admin-guard.js";
 import {
   PLATFORM_BILLING,
@@ -294,9 +295,7 @@ function renderUsers() {
   const rows = state.users.rows;
   $("usersContainer").innerHTML = rows.length ? rows.map(user => {
     const initialAlreadyPaid = hasPaidInitialActivation(user);
-    const nextAmount = initialAlreadyPaid
-      ? PLATFORM_BILLING.monthlyRenewalFee
-      : PLATFORM_BILLING.initialActivationFee;
+    const nextAmount = requiredSubscriptionPayment(user).amount;
 
     return `
       <article class="adminCard">
@@ -414,10 +413,9 @@ async function approveSubscriptionPayment(paymentId) {
 
     const data = userSnap.data();
     const initialAlreadyPaid = hasPaidInitialActivation(data);
-    const expectedType = initialAlreadyPaid ? "renewal" : "initial";
-    const expectedAmount = initialAlreadyPaid
-      ? PLATFORM_BILLING.monthlyRenewalFee
-      : PLATFORM_BILLING.initialActivationFee;
+    const expectedInvoice = requiredSubscriptionPayment(data);
+    const expectedType = expectedInvoice.paymentType;
+    const expectedAmount = expectedInvoice.amount;
 
     if (payment.paymentType !== expectedType || Number(payment.amount) !== Number(expectedAmount)) {
       throw new Error("PAYMENT_DOES_NOT_MATCH_ACCOUNT_STATE");

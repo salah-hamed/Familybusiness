@@ -1,10 +1,13 @@
 import { PLATFORM_BILLING } from "../config/platform-config.js";
+import { requiredMerchantTrialPayment } from "./trial-policy.js";
 
 function clean(value) {
   return String(value || "").trim();
 }
 
 export function requiredSubscriptionPayment(userData = {}) {
+  const trialInvoice = requiredMerchantTrialPayment(userData);
+  if (trialInvoice) return trialInvoice;
   const initialPaid = userData.initialActivationPaid === true || Boolean(userData.activatedAt);
   return {
     paymentType: initialPaid ? "renewal" : "initial",

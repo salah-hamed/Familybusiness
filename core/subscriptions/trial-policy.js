@@ -1,4 +1,4 @@
-import { isSubscriptionActive, subscriptionExpiryDate } from "./subscription-service.js";
+import { isPaidSubscriptionActive, subscriptionExpiryDate } from "./subscription-service.js";
 
 // New accounts must opt in at registration and pass server-side Firestore Rules.
 // Existing users without accessModel keep the previous paid-access policy.
@@ -43,7 +43,7 @@ export function resolveSubscriptionAccess(user = {}, now = new Date()) {
       || Boolean(user.lastSubscriptionPaymentId)
       || user.lastActivationSource === "launch_promo"
     );
-  if (isSubscriptionActive(user, when) && (!newModel || verifiedNewPaid)) {
+  if (isPaidSubscriptionActive(user, when) && (!newModel || verifiedNewPaid)) {
     return result("paid", true, expiry);
   }
 

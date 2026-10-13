@@ -1,6 +1,7 @@
 import auth from "../firebase/firebase-auth.js";
 import db from "../firebase/firebase-db.js";
 import { friendlyAuthError } from "./auth-errors.js";
+import { TRIAL_REGISTRATION_ENABLED } from "../subscriptions/trial-rollout.js";
 
 import {
   createUserWithEmailAndPassword,
@@ -52,10 +53,14 @@ export async function registerUser(name, email, password, referredByUserId = "")
       name: normalizedName,
       email: normalizedEmail,
       projectType: "",
-      isActive: false,
-      subscriptionStatus: "pending",
+      isActive: TRIAL_REGISTRATION_ENABLED,
+      subscriptionStatus: TRIAL_REGISTRATION_ENABLED ? "trial" : "pending",
       initialActivationPaid: false,
       billingCycle: "initial",
+      ...(TRIAL_REGISTRATION_ENABLED ? {
+        accessModel: "merchant_trial_v1",
+        firstMerchantLinkedAt: null
+      } : {}),
       referredByUserId: normalizedReferralId && normalizedReferralId !== user.uid ? normalizedReferralId : "",
       referralQualified: false,
       createdAt: serverTimestamp()
