@@ -1,4 +1,5 @@
 import db from "../firebase/firebase-db.js";
+import { PLATFORM_COMMISSION_BENEFICIARY, isVerifiedPlatformManagedMerchant } from "../merchants/merchant-commission-beneficiary.js";
 
 import {
   collection,
@@ -48,15 +49,24 @@ export async function getProjectPaymentSummary(
   const oid = clean(ownerId);
   if (!pid) throw new Error("PROJECT_ID_REQUIRED");
 
+  // Historical subscribers keep their own account statement. For a
+  // centrally recovered shop, the operator sees only the platform's new
+  // commission period; old subscriber payments cannot offset it.
+  const projectSnap = oid ? null : await getDoc(doc(db,"projects",pid));
+  const recovered = projectSnap?.exists?.()
+    && isVerifiedPlatformManagedMerchant(projectSnap.data());
+  const beneficiaryId = oid || (recovered ? PLATFORM_COMMISSION_BENEFICIARY : "");
   const ledger = collection(db, "commissionLedger");
   const payments = collection(db, "commissionSettlements");
   const ledgerScope = [
     where("projectId", "==", pid),
     where("sourceType", "==", "project_order")
   ];
+  const paymentScope = [where("projectId", "==", pid)];
 
-  if (oid) {
-    ledgerScope.push(where("userId", "==", oid));
+  if (beneficiaryId) {
+    ledgerScope.push(where("userId", "==", beneficiaryId));
+    paymentScope.push(where("ownerId", "==", beneficiaryId));
   }
 
   const [earned, reversed, confirmed, legacyPaid, pending] = await Promise.all([
@@ -68,17 +78,17 @@ export async function getProjectPaymentSummary(
     )),
     aggregateAmount(query(
       payments,
-      where("projectId", "==", pid),
+      ...paymentScope,
       where("status", "==", "confirmed")
     )),
     aggregateAmount(query(
       payments,
-      where("projectId", "==", pid),
+      ...paymentScope,
       where("status", "==", "paid")
     )),
     aggregateAmount(query(
       payments,
-      where("projectId", "==", pid),
+      ...paymentScope,
       where("status", "==", "pending_owner_confirmation")
     ))
   ]);
@@ -102,7 +112,7 @@ export async function getProjectPaymentSummary(
 
 export async function listProjectPaymentRequests(
   projectId,
-  { pageSize = 20 } = {}
+  { pageSize = 20, ownerId = "" } = {}
 ) {
   const pid = clean(projectId);
   if (!pid) throw new Error("PROJECT_ID_REQUIRED");
@@ -112,6 +122,7 @@ export async function listProjectPaymentRequests(
     query(
       collection(db, "commissionSettlements"),
       where("projectId", "==", pid),
+      ...(ownerId ? [where("ownerId", "==", clean(ownerId))] : []),
       orderBy("createdAt", "desc"),
       limit(size)
     )
@@ -157,6 +168,11 @@ export async function declareOperatorPayment({
 
     if (!projectSnap.exists()) throw new Error("PROJECT_NOT_FOUND");
     const project = projectSnap.data();
+    if (project.platformManaged === true) {
+      // Historical payments still confirm with their original subscriber.
+      // New platform dues require an independently approved accounting flow.
+      throw new Error("PLATFORM_SETTLEMENT_FLOW_NOT_CONFIGURED");
+    }
 
     if (
       project.operatingModel !== "partner_operated" ||
