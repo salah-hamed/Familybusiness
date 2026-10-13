@@ -3373,6 +3373,12 @@ service cloud.firestore {
     && d.recipientConsent == "pending"
     && d.operatorConsentedAt == null
     && d.recipientConsentedAt == null
+    && agreement.currentAmount is number
+    && agreement.currentAmount >= 0
+    && agreement.currency == "EGP"
+    && d.commissionAmount == agreement.currentAmount
+    && d.commissionVersion == agreement.acceptedVersion
+    && d.commissionCurrency == agreement.currency
     && d.financeClearance == "pending"
     && d.cutoverAt == null
     && d.reason is string
@@ -3384,6 +3390,7 @@ service cloud.firestore {
       "projectDocId","merchantId","originalSubscriberId","previousSubscriberId",
       "proposedSubscriberId","status","operatorConsent","recipientConsent",
       "operatorConsentedAt","recipientConsentedAt","financeClearance","cutoverAt",
+      "commissionAmount","commissionVersion","commissionCurrency",
       "reason","createdBy","createdAt"
     ]);
   }
