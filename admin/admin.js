@@ -12,6 +12,12 @@ import { PLATFORM_COMMISSION_BENEFICIARY } from "../core/merchants/merchant-comm
 import { openMerchantTransferCase, reviewMerchantTransferFinance } from "../core/merchants/transfer-case-service.js";
 import { merchantTransferConsentLink } from "../core/merchants/transfer-consent-view.js";
 import { executePlatformMerchantRecovery } from "../core/merchants/platform-recovery-service.js";
+import { MERCHANT_REPEAT_RECOVERY_ENABLED,MERCHANT_REPEAT_ASSIGNMENT_ENABLED }
+  from "../core/merchants/merchant-cycle-rollout.js";
+import { executeRepeatMerchantRecovery,executeRepeatMerchantAssignment }
+  from "../core/merchants/merchant-cycle-service.js";
+import { openRepeatMerchantTransferCase,reviewRepeatMerchantFinances }
+  from "../core/merchants/merchant-cycle-consent-service.js";
 import { requiredSubscriptionPayment } from "../core/subscriptions/payment-policy.js";
 import { getProjectPaymentSummary } from "../core/commissions/settlement-service.js";
 import { protectAdmin } from "../core/auth/admin-guard.js";
@@ -698,6 +704,33 @@ function renderProjects() {
             <button class="dangerBtn" data-action="recover-platform-merchant" data-project="${escapeHTML(project.projectDocId)}" type="button">
               استرداد إدارة المحل للمنصة
             </button>` : ""}
+          ${MERCHANT_REPEAT_RECOVERY_ENABLED
+            && merchant.platformManaged && merchant.assignmentStatus==="assigned_to_new_subscriber"
+            && (project.assignmentCycle??1)>=1 ? `
+            <label class="transferPreflightInput">سبب استرداد المحل بعد انتهاء تخصيصه
+              <select class="merchantRepeatReason">
+                <option value="overdue_renewal">تأخر التجديد</option>
+                <option value="unpaid_first_month">أول اشتراك غير مسدد</option>
+                <option value="confirmed_violation">مخالفة موثقة</option>
+              </select>
+            </label>
+            <button class="dangerBtn" type="button" data-action="repeat-recover-merchant"
+              data-project="${escapeHTML(project.projectDocId)}">استرداد جديد مع حفظ المستحقات</button>`:""}
+          ${MERCHANT_REPEAT_ASSIGNMENT_ENABLED && merchant.platformManaged
+            && merchant.assignmentStatus==="platform_managed"
+            && Number.isSafeInteger(project.assignmentCycle)
+            && project.assignmentCycle>=2 ? `
+            <label class="transferPreflightInput">سبب التخصيص المتكرر
+              <input class="repeatTransferReason" minlength="15" maxlength="300"
+                placeholder="اكتب سببًا واضحًا لا يقل عن 15 حرفًا">
+            </label>
+            <button class="secondaryBtn" type="button" data-action="repeat-open-transfer"
+              data-project="${escapeHTML(project.projectDocId)}">طلب موافقات جديدة</button>
+            <button class="secondaryBtn" type="button" data-action="repeat-review-finance"
+              data-project="${escapeHTML(project.projectDocId)}">توثيق الحسابات دون سداد</button>
+            <button class="dangerBtn" type="button" data-action="repeat-execute-transfer"
+              data-project="${escapeHTML(project.projectDocId)}">نقل المحل بعد مراجعة الموافقات</button>
+          `:""}
           <button class="secondaryBtn" data-action="preflight-merchant-transfer" data-project="${escapeHTML(project.projectDocId)}" type="button">
             فحص أهلية النقل (قراءة فقط)
           </button>
@@ -1445,6 +1478,77 @@ $("projectsContainer").addEventListener("click", async event => {
     } finally {
       button.disabled = false;
     }
+    return;
+  }
+
+  if (button.dataset.action === "repeat-recover-merchant") {
+    if (!MERCHANT_REPEAT_RECOVERY_ENABLED) return;
+    const card=button.closest(".adminCard");
+    const reason=card?.querySelector(".merchantRepeatReason")?.value;
+    const result=card?.querySelector(".transferPreflightResult");
+    if(!confirm("هل تحققت من انتهاء الاشتراك أو المخالفة، وعدم وجود إثبات دفع معلق، وتوثيق حقوق المشترك السابق؟"))return;
+    button.disabled=true;
+    try{
+      const done=await executeRepeatMerchantRecovery({
+        projectId,adminUid:adminSession.user.uid,reason
+      });
+      if(result)result.textContent="تم الاسترداد الموثق لدورة "+done.cycle+". المحل شغال ومستحقات المشترك السابق محفوظة.";
+      await Promise.all([loadProjects(),loadOverview()]);
+    }catch(error){
+      console.error(error);
+      if(result)result.textContent="تعذر الاسترداد: يلزم مطابقة المدفوعات والأدلة مع سجل الدورة السابقة.";
+    }finally{button.disabled=false;}
+    return;
+  }
+  if (button.dataset.action === "repeat-open-transfer") {
+    if(!MERCHANT_REPEAT_ASSIGNMENT_ENABLED)return;
+    const card=button.closest(".adminCard");
+    const candidateUid=String(card?.querySelector(".candidateSubscriberUid")?.value||"").trim();
+    const reason=String(card?.querySelector(".repeatTransferReason")?.value||"").trim();
+    const result=card?.querySelector(".transferPreflightResult");
+    if(!/^[A-Za-z0-9_-]{1,128}$/.test(candidateUid)||reason.length<15||reason.length>300){
+      if(result)result.textContent="راجع UID المشترك الجديد وسبب التخصيص أولًا.";return;
+    }
+    if(!confirm("سجل طلب موافقة مستقل للمشغل والمشترك الجديد، بدون تدخل المشترك السابق؟"))return;
+    button.disabled=true;
+    try{
+      const r=await openRepeatMerchantTransferCase({
+        projectId,candidateUid,reason,adminUid:adminSession.user.uid
+      });
+      const root=new URL("../",window.location.href).href;
+      const link=merchantTransferConsentLink(root,projectId,Number(r.cycleId.split("_").at(-1)));
+      if(result)result.textContent="ابعت رابط الموافقات لصاحب المحل والمشترك المستلم عبر واتساب: "+link;
+      try{await navigator.clipboard?.writeText(link);}catch{}
+    }catch(error){console.error(error);
+      if(result)result.textContent="تعذر إنشاء طلب جديد؛ تأكد من المشغل والحساب والعمولة.";
+    }finally{button.disabled=false;}
+    return;
+  }
+  if (button.dataset.action === "repeat-review-finance") {
+    if(!MERCHANT_REPEAT_ASSIGNMENT_ENABLED)return;
+    const result=button.closest(".adminCard")?.querySelector(".transferPreflightResult");
+    if(!confirm("تسجيل مراجعة مالية فقط، بدون إلغاء ديون أو سداد نيابة عن الطرفين؟"))return;
+    button.disabled=true;
+    try{
+      await reviewRepeatMerchantFinances({projectId,adminUid:adminSession.user.uid});
+      if(result)result.textContent="تمت مراجعة المستحقات السابقة بصورة منفصلة.";
+    }catch(error){console.error(error);
+      if(result)result.textContent="تعذر مراجعة الحسابات؛ تحقق من الموافقات وثبات العمولة.";
+    }finally{button.disabled=false;}
+    return;
+  }
+  if (button.dataset.action === "repeat-execute-transfer") {
+    if(!MERCHANT_REPEAT_ASSIGNMENT_ENABLED)return;
+    const result=button.closest(".adminCard")?.querySelector(".transferPreflightResult");
+    if(!confirm("تسليم المحل للمشترك الجديد بعد توثيق الموافقتين والمراجعة المالية، مع الاحتفاظ بكل السجلات القديمة؟"))return;
+    button.disabled=true;
+    try{
+      await executeRepeatMerchantAssignment({projectId,adminUid:adminSession.user.uid});
+      if(result)result.textContent="تم النقل الذري للدورة الجديدة بدون تغيير رقم المحل أو سجلاته القديمة.";
+      await loadProjects();
+    }catch(error){console.error(error);
+      if(result)result.textContent="لم يتم النقل؛ سجل الموافقة أو الاستحقاقات أو الحساب المستلم غير مكتمل.";
+    }finally{button.disabled=false;}
     return;
   }
 
