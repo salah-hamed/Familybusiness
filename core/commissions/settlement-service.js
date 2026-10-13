@@ -133,7 +133,7 @@ export async function getProjectPaymentSummary(
 
 export async function listProjectPaymentRequests(
   projectId,
-  { pageSize = 20, ownerId = "" } = {}
+  { pageSize = 20, ownerId = "", assignmentCycle = null } = {}
 ) {
   const pid = clean(projectId);
   if (!pid) throw new Error("PROJECT_ID_REQUIRED");
@@ -144,6 +144,8 @@ export async function listProjectPaymentRequests(
       collection(db, "commissionSettlements"),
       where("projectId", "==", pid),
       ...(ownerId ? [where("ownerId", "==", clean(ownerId))] : []),
+      ...(Number.isSafeInteger(assignmentCycle) && assignmentCycle >= 2
+        ? [where("assignmentCycle", "==", assignmentCycle)] : []),
       orderBy("createdAt", "desc"),
       limit(size)
     )
