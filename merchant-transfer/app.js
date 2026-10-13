@@ -1,6 +1,8 @@
 import auth from "../core/firebase/firebase-auth.js";
 import db from "../core/firebase/firebase-db.js";
 import { MERCHANT_TRANSFER_CASES_ENABLED } from "../core/merchants/transfer-case-rollout.js";
+import { MERCHANT_REPEAT_ASSIGNMENT_ENABLED } from "../core/merchants/merchant-cycle-rollout.js";
+import { submitRepeatMerchantConsent } from "../core/merchants/merchant-cycle-consent-service.js";
 import {
   loadMerchantTransferCase, submitMerchantTransferConsent
 } from "../core/merchants/transfer-case-service.js";
@@ -12,6 +14,8 @@ import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase
 
 const $ = id => document.getElementById(id);
 const projectDocId = new URLSearchParams(window.location.search).get("project") || "";
+const cycleText = new URLSearchParams(window.location.search).get("cycle") || "";
+const repeatCycle = /^[2-9][0-9]{0,3}$/.test(cycleText) ? Number(cycleText) : null;
 const buttons = [$("acceptBtn"), $("declineBtn")];
 
 function notice(message) {
@@ -28,7 +32,9 @@ async function loadConsent(user) {
     return;
   }
   try {
-    const transferCase = await loadMerchantTransferCase(projectDocId);
+    const transferCase = repeatCycle
+      ? (await getDoc(doc(db,"merchantTransferCycles",projectDocId+"_"+repeatCycle))).data()||null
+      : await loadMerchantTransferCase(projectDocId);
     if (!transferCase) {
       notice("لا يوجد اتفاق جديد متاح لهذا النشاط حاليًا.");
       return;
@@ -54,7 +60,13 @@ async function loadConsent(user) {
         const decision = button === $("acceptBtn") ? "accepted" : "declined";
         buttons.forEach(x => x.disabled = true);
         try {
-          await submitMerchantTransferConsent(projectDocId, role, decision);
+          if(repeatCycle){
+            await submitRepeatMerchantConsent({
+              projectId:projectDocId,cycle:repeatCycle,role,decision
+            });
+          }else{
+            await submitMerchantTransferConsent(projectDocId, role, decision);
+          }
           $("decision").classList.add("hidden");
           notice(decision === "accepted"
             ? "تم تسجيل موافقتك. النشاط لم يُنقل بعد؛ أي نقل يحتاج مراجعة الشروط والتسويات."
@@ -72,7 +84,7 @@ async function loadConsent(user) {
   }
 }
 
-if (!MERCHANT_TRANSFER_CASES_ENABLED) {
+if (repeatCycle ? !MERCHANT_REPEAT_ASSIGNMENT_ENABLED : !MERCHANT_TRANSFER_CASES_ENABLED) {
   notice("طلبات إعادة التخصيص لم تُفعَّل بعد. ستتاح بعد مراجعة قواعد الأمان ونشرها النهائي.");
 } else {
   onAuthStateChanged(auth, user => {
