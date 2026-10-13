@@ -140,7 +140,7 @@ protectPage(async current=>{
   const snap=await getDoc(doc(db,"projects",projectId));
   if(!snap.exists()){ $("statusBanner").innerText="المشروع غير موجود.";return;}
   project={projectDocId:snap.id,...snap.data()};
-  if(project.ownerId!==user.uid||project.template!=="laundry"){ $("statusBanner").innerText="غير مسموح لك بإدارة هذا المشروع.";return;}
+  if(project.platformManaged===true||project.ownerId!==user.uid||project.template!=="laundry"){ $("statusBanner").innerText="غير مسموح لك بإدارة هذا المشروع.";return;}
 
   if(project.operatingModel!=="partner_operated"){
     $("statusBanner").innerText="جاري ترقية مشروع الغسيل إلى نموذج Laundry 2.0...";
