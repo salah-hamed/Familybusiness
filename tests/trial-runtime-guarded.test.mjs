@@ -6,7 +6,8 @@ import { requiredSubscriptionPayment } from "../core/subscriptions/payment-polic
 import { TRIAL_REGISTRATION_ENABLED } from "../core/subscriptions/trial-rollout.js";
 import { buildWorkspaceGuide } from "../core/onboarding/guide-state.js";
 
-const at = days => new Date(Date.parse("2026-10-13T00:00:00Z")+days*86400000);
+const TEST_NOW = Date.now();
+const at = days => new Date(TEST_NOW + days*86400000);
 const trial = extra => ({
   accessModel:"merchant_trial_v1", firstMerchantLinkedAt:null,
   createdAt:at(0),isActive:true,subscriptionStatus:"trial",
