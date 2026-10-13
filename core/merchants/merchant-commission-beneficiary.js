@@ -18,16 +18,27 @@ export function isVerifiedPlatformManagedMerchant(project = {}) {
     && project.recoveryAdminUid != null;
 }
 
+// Structural only: Firestore Rules independently verify the immutable
+// recovered-shop cutover audit and both recorded consents.
+export function isVerifiedAssignedAfterCutover(project = {}) {
+  return project.platformManaged === true
+    && project.assignmentStatus === "assigned_to_new_subscriber"
+    && typeof project.assignedSubscriberId === "string"
+    && /^[A-Za-z0-9_-]{1,128}$/.test(project.assignedSubscriberId)
+    && project.assignedSubscriberId !== project.originalSubscriberId
+    && project.cutoverAuditId === project.recoveryAuditId
+    && Boolean(project.cutoverAt && project.cutoverAdminUid && project.recoveryAt);
+}
+
 export function resolveCommissionBeneficiary(project = {}, agreement = {}) {
   if (!project.ownerId || !agreement.ownerId || project.ownerId !== agreement.ownerId) {
     throw new Error("COMMISSION_AGREEMENT_PROJECT_OWNER_MISMATCH");
   }
 
   if (project.platformManaged === true) {
-    if (!isVerifiedPlatformManagedMerchant(project)) {
-      throw new Error("MERCHANT_RECOVERY_AUDIT_REQUIRED");
-    }
-    return PLATFORM_COMMISSION_BENEFICIARY;
+    if (isVerifiedPlatformManagedMerchant(project)) return PLATFORM_COMMISSION_BENEFICIARY;
+    if (isVerifiedAssignedAfterCutover(project)) return project.assignedSubscriberId;
+    throw new Error("MERCHANT_CUTOVER_AUDIT_REQUIRED");
   }
 
   if (project.assignmentStatus === "platform_managed") {
