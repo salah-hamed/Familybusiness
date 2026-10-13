@@ -2270,14 +2270,16 @@ async function seedTransferCaseScenario(suffix="audit") {
   const operatorUid="operator_transfer_"+suffix;
   const projectId=owner+"_supermarket";
   const merchantId="m_"+"a".repeat(32);
+  const recoveredAt=Timestamp.fromDate(new Date("2026-10-10T10:00:00Z"));
   await seedUser(admin,{role:"admin"});
   await seedUser(owner);
   await seedUser(target);
   await seedProject(projectId,{
     ownerId:owner,projectId:"supermarket",template:"supermarket",
     operatingModel:"partner_operated",templateVersion:1,
-    merchantId,originalSubscriberId:owner,assignedSubscriberId:owner,
-    assignmentStatus:"assigned_to_subscriber",platformManaged:false,
+    merchantId,originalSubscriberId:owner,assignedSubscriberId:"",
+    assignmentStatus:"platform_managed",platformManaged:true,
+    recoveryAuditId:projectId,recoveryAt:recoveredAt,recoveryAdminUid:admin,
     linkedAt:null,assignmentUpdatedAt:null,
     businessName:"Test Merchant",status:"active",isActive:true
   });
@@ -2291,6 +2293,11 @@ async function seedTransferCaseScenario(suffix="audit") {
       agreementId:projectId,projectId,ownerId:owner,operatorId:projectId,
       templateId:"supermarket",status:"accepted",acceptedVersion:1
     });
+    await setDoc(doc(db,"merchantRecoveries",projectId),{
+      recoveryId:projectId,projectDocId:projectId,merchantId,
+      originalSubscriberId:owner,previousSubscriberId:owner,
+      status:"completed",adminUid:admin,recoveredAt
+    });
   });
   return {admin,owner,target,operatorUid,projectId,merchantId};
 }
@@ -2300,7 +2307,7 @@ function sampleTransferCase(ids, overrides={}){
     projectDocId:ids.projectId,
     merchantId:ids.merchantId,
     originalSubscriberId:ids.owner,
-    previousSubscriberId:ids.owner,
+    previousSubscriberId:"",
     proposedSubscriberId:ids.target,
     status:"awaiting_consents",
     operatorConsent:"pending",
@@ -2325,7 +2332,8 @@ test("Phase C4 only admin opens consent case; existing project identities remain
   const ownerDb=testEnv.authenticatedContext(ids.owner).firestore();
   const projectSnap=await getDoc(doc(ownerDb,"projects",ids.projectId));
   assert.equal(projectSnap.data().ownerId,ids.owner);
-  assert.equal(projectSnap.data().assignedSubscriberId,ids.owner);
+  assert.equal(projectSnap.data().assignedSubscriberId,"");
+  assert.equal(projectSnap.data().platformManaged,true);
   await assertSucceeds(getDoc(ref(testEnv.authenticatedContext(ids.operatorUid).firestore())));
   await assertSucceeds(getDoc(ref(testEnv.authenticatedContext(ids.target).firestore())));
   // The departing subscriber retains historical finances but has no right
