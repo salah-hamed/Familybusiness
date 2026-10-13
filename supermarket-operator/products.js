@@ -3,6 +3,9 @@ import { friendlyOperatorError } from "../core/operators/operator-errors.js";
 import { claimOperatorAccess, getOperator, operatorCanOperate, buildOperatorAuthEmail } from "../core/partners/partner-service.js";
 import { getCommissionAgreement } from "../core/commissions/commission-service.js";
 import { getSupermarket } from "../core/supermarket/supermarket-service.js";
+import {
+  isImageUploadConfigured, uploadProductImageFile, productImageErrorMessage
+} from "../core/images/image-upload.js";
 import { SUPERMARKET_MASTER_CATALOG, MASTER_PRICE_META, canonicalMasterId } from "../core/supermarket/master-catalog.js?v=20261012-neutral-catalog1";
 import {
   addStoreProduct,
@@ -329,6 +332,7 @@ function renderAddedControls(entry) {
         <label>التصنيف<input class="editCategory" value="${escapeHTML(product.category || "أخرى")}"></label>
         <label>الحجم<input class="editSize" value="${escapeHTML(product.size || "")}"></label>
         <label>رابط الصورة<input class="editImage" value="${escapeHTML(product.image || "")}" placeholder="https://..."></label>
+        ${isImageUploadConfigured() ? '<label>أو صورة من الجهاز<input class="editImageFile" type="file" accept="image/jpeg,image/png,image/webp"></label>' : ""}
       </div>
       <div class="productControls">
         <button class="primary saveProductDetails" type="button">حفظ التفاصيل</button>
@@ -486,18 +490,24 @@ function bindCatalogCardEvents(visibleEntries) {
       saveDetails.onclick = async () => {
         saveDetails.disabled = true;
         try {
+          const file = card.querySelector(".editImageFile")?.files?.[0];
+          const image = file
+            ? await uploadProductImageFile(file)
+            : card.querySelector(".editImage").value.trim();
           const patch = {
             name: card.querySelector(".editName").value.trim(),
             category: card.querySelector(".editCategory").value.trim(),
             size: card.querySelector(".editSize").value.trim(),
-            image: card.querySelector(".editImage").value.trim()
+            image
           };
           await updateStoreProduct(projectId, productId, currentUser.uid, patch);
           patchLocalProducts([productId], patch);
           await refreshLocalCatalog({ syncMeta: true });
           $("catalogMessage").innerText = "تم حفظ بيانات المنتج ✅";
         } catch (error) {
-          $("catalogMessage").innerText = friendlyOperatorError(error,"تعذر حفظ بيانات المنتج. راجع البيانات وحاول مرة أخرى.");
+          $("catalogMessage").innerText = String(error?.message || "").startsWith("IMAGE_")
+            ? productImageErrorMessage(error)
+            : friendlyOperatorError(error,"تعذر حفظ بيانات المنتج. راجع البيانات وحاول مرة أخرى.");
           saveDetails.disabled = false;
         }
       };
@@ -699,27 +709,38 @@ $("bulkDeleteBtn").onclick = async () => {
   }
 };
 
+if (isImageUploadConfigured()) {
+  $("productImagePickerRow")?.classList.remove("hidden");
+}
+
 $("addProductBtn").onclick = async () => {
   $("productMessage").innerText = "جاري الإضافة...";
   try {
+    const chosenImage = $("productImageFile")?.files?.[0];
+    const image = chosenImage
+      ? await uploadProductImageFile(chosenImage)
+      : $("productImage").value.trim();
     const productId = await addStoreProduct(projectId, currentUser.uid, {
       name: $("productName").value,
       category: $("productCategory").value,
       price: $("productPrice").value,
       barcode: $("productBarcode").value,
       size: $("productSize").value,
-      image: $("productImage").value
+      image
     });
     const addedProduct = await getStoreProduct(projectId, productId);
     if (addedProduct) upsertLocalProduct(addedProduct);
 
     ["productName", "productCategory", "productPrice", "productBarcode", "productSize", "productImage"]
       .forEach(id => $(id).value = "");
+    if ($("productImageFile")) $("productImageFile").value = "";
 
     await refreshLocalCatalog({ syncMeta: true });
     $("productMessage").innerText = "تمت إضافة المنتج داخل نفس الكتالوج ✅";
   } catch (error) {
-    $("productMessage").innerText = error.message === "PRODUCT_ALREADY_EXISTS"
+    $("productMessage").innerText = String(error?.message || "").startsWith("IMAGE_")
+      ? productImageErrorMessage(error)
+      : error.message === "PRODUCT_ALREADY_EXISTS"
       ? "المنتج موجود بالفعل بنفس الاسم والحجم."
       : friendlyOperatorError(error,"تعذر إضافة المنتج. راجع البيانات وحاول مرة أخرى.");
   }
