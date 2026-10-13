@@ -3771,6 +3771,34 @@ service cloud.firestore {
    allow update, delete: if false;
   }
 
+  // C4B12 read access is already fenced; all state-changing writes stay
+  // DENIED until a trusted billing gate and atomic v2 Rules are implemented.
+  match /merchantHistoricalAccess/{grantId} {
+   allow get, list: if isAdmin()
+    || (signedIn() && resource.data.subscriberUid==request.auth.uid);
+   allow create, update, delete: if false;
+  }
+  match /merchantRecoveryCycles/{cycleId} {
+   allow get, list: if isAdmin();
+   allow create, update, delete: if false;
+  }
+  match /merchantAssignmentCycles/{cycleId} {
+   allow get, list: if isAdmin();
+   allow create, update, delete: if false;
+  }
+  match /merchantTransferCycles/{cycleId} {
+   allow get, list: if isAdmin()
+    || (signedIn() && (
+      resource.data.proposedSubscriberId==request.auth.uid
+      || (operatorExists(resource.data.projectDocId)
+          && operatorData(resource.data.projectDocId).authUid==request.auth.uid)));
+   allow create, update, delete: if false;
+  }
+  match /merchantTransferCycleFinanceReviews/{cycleId} {
+   allow get, list: if isAdmin();
+   allow create, update, delete: if false;
+  }
+
   match /{document=**} { allow read, write: if false; }
  }
 }
