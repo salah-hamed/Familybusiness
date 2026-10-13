@@ -1,5 +1,6 @@
 import { getDiscoverableProjects } from "../templates/projects.js";
 import { PLATFORM_BILLING, REFERRAL_CONFIG, formatEgp } from "../core/config/platform-config.js";
+import { TRIAL_REGISTRATION_ENABLED } from "../core/subscriptions/trial-rollout.js";
 
 const projectCopy = {
   supermarket: "اتعاون مع سوبرماركت شغال بالفعل، وساعده يستقبل طلبات أكتر مقابل عمولة على الطلب المكتمل.",
@@ -32,7 +33,7 @@ const referralFocusAmount = document.getElementById("referralFocusAmount");
 const referralLandingBanner = document.getElementById("referralLandingBanner");
 const supportWhatsAppLink = document.getElementById("supportWhatsAppLink");
 
-if (initialPrice) initialPrice.textContent = formatEgp(PLATFORM_BILLING.initialActivationFee);
+if (initialPrice) initialPrice.textContent = TRIAL_REGISTRATION_ENABLED ? "مجانًا" : formatEgp(PLATFORM_BILLING.initialActivationFee);
 if (renewalPrice) renewalPrice.textContent = formatEgp(PLATFORM_BILLING.monthlyRenewalFee);
 if (referralAmount) referralAmount.textContent = `+ ${formatEgp(REFERRAL_CONFIG.qualifiedReferralReward)}`;
 if (faqReferralAmount) faqReferralAmount.textContent = formatEgp(REFERRAL_CONFIG.qualifiedReferralReward);
