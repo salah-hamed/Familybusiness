@@ -2,6 +2,7 @@ import { isQualifyingMerchantLink, resolveMerchantIdentity } from "./merchant-id
 
 export const MERCHANT_RECOVERY_REASON = Object.freeze({
   OVERDUE_RENEWAL: "overdue_renewal",
+  UNPAID_FIRST_MONTH: "unpaid_first_month",
   CONFIRMED_VIOLATION: "confirmed_violation"
 });
 
@@ -46,6 +47,7 @@ export function assessPlatformMerchantRecovery({
   reason = "",
   violation = null,
   hasUnreviewedRenewalPayment = false,
+  hasUnreviewedFirstPayment = false,
   now = new Date()
 } = {}) {
   const when = dateFrom(now);
@@ -73,6 +75,20 @@ export function assessPlatformMerchantRecovery({
     when.getTime() >= expiry.getTime() &&
     !hasUnreviewedRenewalPayment);
 
+  // The first accepted physical merchant starts the 3-day paid-signup grace.
+  // A linked and functioning merchant must not go offline because the
+  // subscriber never paid the first monthly 59 EGP installment.
+  const firstLinkedAt = dateFrom(subscriber?.firstMerchantLinkedAt);
+  const unpaidFirstMonth = Boolean(
+    subscriber?.accessModel === "merchant_trial_v1" &&
+    subscriber?.subscriptionStatus === "trial" &&
+    subscriber?.initialActivationPaid === false &&
+    !subscriber?.lastSubscriptionPaymentId &&
+    firstLinkedAt && firstLinkedAt.getTime() <= when.getTime() &&
+    when.getTime() >= firstLinkedAt.getTime() + 3 * 86400000 &&
+    !hasUnreviewedFirstPayment
+  );
+
   const verifiedViolation = Boolean(
     violation && violation.status === "confirmed" &&
     typeof violation.reasonCode === "string" &&
@@ -86,6 +102,8 @@ export function assessPlatformMerchantRecovery({
   );
   const triggerValid = reason === MERCHANT_RECOVERY_REASON.OVERDUE_RENEWAL
     ? renewalOverdue
+    : reason === MERCHANT_RECOVERY_REASON.UNPAID_FIRST_MONTH
+      ? unpaidFirstMonth
     : reason === MERCHANT_RECOVERY_REASON.CONFIRMED_VIOLATION
       ? verifiedViolation : false;
 
@@ -96,7 +114,9 @@ export function assessPlatformMerchantRecovery({
     {code: "cause", passed: triggerValid,
       label: reason === MERCHANT_RECOVERY_REASON.OVERDUE_RENEWAL
         ? "تأكد تأخر تجديد الاشتراك المدفوع، ولا توجد دفعة تجديد معلقة للمراجعة"
-        : "المخالفة موثقة ومؤكدة من الإدارة"}
+        : reason === MERCHANT_RECOVERY_REASON.UNPAID_FIRST_MONTH
+          ? "انتهت 3 أيام من قبول أول محل بدون أول دفعة شهرية ولا إثبات معلق"
+          : "المخالفة موثقة ومؤكدة من الإدارة"}
   ];
 
   return {
