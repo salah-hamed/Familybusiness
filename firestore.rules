@@ -94,8 +94,8 @@ service cloud.firestore {
   function isVerifiedAssignedAfterCutover(projectId){
    let p = projectData(projectId);
    return projectExists(projectId)
-    && p.platformManaged == true
-    && p.assignmentStatus == "assigned_to_new_subscriber"
+    && ("platformManaged" in p) && p.platformManaged == true
+    && ("assignmentStatus" in p) && p.assignmentStatus == "assigned_to_new_subscriber"
     && p.assignedSubscriberId is string
     && p.assignedSubscriberId.size() > 0
     && p.assignedSubscriberId != p.originalSubscriberId
