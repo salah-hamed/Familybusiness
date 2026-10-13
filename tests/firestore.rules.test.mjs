@@ -2624,6 +2624,39 @@ test("C4B11 expired incoming subscription blocks management but not physical mer
   await assertFails(getDocs(query(collection(recipientDb,"orders"),where("projectId","==",ids.projectId))));
   await assertFails(updateDoc(doc(recipientDb,"projects",ids.projectId),{businessName:"Unauthorised"}));
 });
+
+test("C4B11 former and expired incoming subscriber retain only their own financial statements",async()=>{
+  const {ids,adminDb,recipientDb}=await seedReviewedCutoverScenario("statements");
+  const formerDb=testEnv.authenticatedContext(ids.owner).firestore();
+  await assertSucceeds(cutoverBatch(adminDb,ids));
+  await testEnv.withSecurityRulesDisabled(async ctx=>{
+    const db=ctx.firestore();
+    await updateDoc(doc(db,"users",ids.owner),{isActive:false,subscriptionStatus:"inactive"});
+    await updateDoc(doc(db,"users",ids.target),{isActive:false,subscriptionStatus:"inactive"});
+    for (const [name,uid] of [["former",ids.owner],["incoming",ids.target]]) {
+      await setDoc(doc(db,"commissionSettlements","historic_receipt_"+name),{
+        projectId:ids.projectId,ownerId:uid,operatorId:ids.projectId,
+        status:"confirmed",amount:15,createdAt:Timestamp.now(),currency:"EGP"
+      });
+    }
+  });
+  await assertSucceeds(getDoc(doc(formerDb,"projects",ids.projectId)));
+  await assertSucceeds(getDoc(doc(recipientDb,"projects",ids.projectId)));
+  await assertSucceeds(getDoc(doc(formerDb,"commissionSettlements","historic_receipt_former")));
+  await assertSucceeds(getDoc(doc(recipientDb,"commissionSettlements","historic_receipt_incoming")));
+  await assertFails(getDoc(doc(formerDb,"commissionSettlements","historic_receipt_incoming")));
+  await assertFails(getDoc(doc(recipientDb,"commissionSettlements","historic_receipt_former")));
+  const formerRead=await assertSucceeds(getDocs(query(
+    collection(formerDb,"commissionSettlements"),
+    where("projectId","==",ids.projectId),where("ownerId","==",ids.owner))));
+  assert.equal(formerRead.size,1);
+  const incomingRead=await assertSucceeds(getDocs(query(
+    collection(recipientDb,"commissionSettlements"),
+    where("projectId","==",ids.projectId),where("ownerId","==",ids.target))));
+  assert.equal(incomingRead.size,1);
+  await assertFails(updateDoc(doc(formerDb,"projects",ids.projectId),{businessName:"hijack"}));
+  await assertFails(updateDoc(doc(recipientDb,"projects",ids.projectId),{businessName:"expired"}));
+});
 async function seedRecoverableLaundry(name = "basic") {
   const ctx=await seedPartnerRuntime("laundry","recovery_"+name);
   const merchantId="m_"+"b".repeat(32);
