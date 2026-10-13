@@ -1603,6 +1603,20 @@ function subscriptionPaymentRecord(uid, paymentId, extra = {}) {
   };
 }
 
+function atomicSubscriptionProof(db,uid,paymentId,extra={}){
+ const batch=writeBatch(db);
+ batch.set(doc(db,"subscriptionBillingGuards",uid),{
+  userId:uid,pendingPaymentId:paymentId,lastReviewedPaymentId:"",
+  revision:1,recoverySafe:false,updatedAt:serverTimestamp()
+ });
+ batch.set(doc(db,"subscriptionPayments",paymentId),subscriptionPaymentRecord(uid,paymentId,extra));
+ return batch.commit();
+}
+function resolveBillingProofInBatch(batch,db,uid,paymentId){
+ batch.update(doc(db,"subscriptionBillingGuards",uid),{
+  pendingPaymentId:"",lastReviewedPaymentId:paymentId,revision:2,updatedAt:serverTimestamp()
+ });
+}
 test("subscriber can create a valid initial subscription payment proof record", async () => {
   const uid = "payment_owner";
   const paymentId = `${uid}_1`;
@@ -1613,12 +1627,7 @@ test("subscriber can create a valid initial subscription payment proof record", 
   });
   const db = testEnv.authenticatedContext(uid).firestore();
 
-  await assertSucceeds(
-    setDoc(
-      doc(db, "subscriptionPayments", paymentId),
-      subscriptionPaymentRecord(uid, paymentId)
-    )
-  );
+  await assertSucceeds(atomicSubscriptionProof(db,uid,paymentId));
 });
 
 test("subscriber cannot forge subscription payment amount or owner", async () => {
@@ -1704,6 +1713,10 @@ async function seedPendingSubscriptionReviewFixture(suffix = "review") {
         submittedAt: new Date("2026-10-01T10:00:00Z")
       })
     );
+    await setDoc(doc(db,"subscriptionBillingGuards",uid),{
+      userId:uid,pendingPaymentId:paymentId,lastReviewedPaymentId:"",
+      revision:1,recoverySafe:false,updatedAt:new Date("2026-10-01T10:00:00Z")
+    });
   });
 
   return { uid, adminId, paymentId };
@@ -1761,6 +1774,7 @@ test("admin can atomically approve payment and activate subscriber with matching
     rejectionReason: ""
   });
   batch.update(doc(adminDb, "users", uid), initialActivationUpdate(paymentId));
+  resolveBillingProofInBatch(batch,adminDb,uid,paymentId);
 
   await assertSucceeds(batch.commit());
 
@@ -1804,14 +1818,13 @@ test("admin can reject pending proof without activating subscriber and subscribe
     })
   );
 
-  await assertSucceeds(
-    updateDoc(doc(adminDb, "subscriptionPayments", paymentId), {
-      status: "rejected",
-      reviewedAt: serverTimestamp(),
-      reviewedBy: adminId,
-      rejectionReason: "صورة التحويل غير واضحة"
-    })
-  );
+  const rejectBatch=writeBatch(adminDb);
+  rejectBatch.update(doc(adminDb,"subscriptionPayments",paymentId),{
+    status:"rejected",reviewedAt:serverTimestamp(),reviewedBy:adminId,
+    rejectionReason:"صورة التحويل غير واضحة"
+  });
+  resolveBillingProofInBatch(rejectBatch,adminDb,uid,paymentId);
+  await assertSucceeds(rejectBatch.commit());
 
   const userSnap = await getDoc(doc(adminDb, "users", uid));
   assert.equal(userSnap.data().subscriptionStatus, "pending");
@@ -2155,12 +2168,12 @@ test("Phase B2 validates linked merchant grace using immutable server timestamp"
 test("Phase B2 first payment is 59 for opted-in trial and old 350 for legacy users", async () => {
   const uid="trial_payment_59", db=testEnv.authenticatedContext(uid).firestore();
   await assertSucceeds(setDoc(doc(db,"users",uid),trialAccount(uid)));
-  await assertSucceeds(setDoc(doc(db,"subscriptionPayments",uid+"_59"),subscriptionPaymentRecord(uid,uid+"_59",{amount:59})));
+  await assertSucceeds(atomicSubscriptionProof(db,uid,uid+"_59",{amount:59}));
   await assertFails(setDoc(doc(db,"subscriptionPayments",uid+"_350"),subscriptionPaymentRecord(uid,uid+"_350",{amount:350})));
   const oldUid="old_payment_350";
   await seedUser(oldUid,{isActive:false,subscriptionStatus:"pending"});
   const oldDb=testEnv.authenticatedContext(oldUid).firestore();
-  await assertSucceeds(setDoc(doc(oldDb,"subscriptionPayments",oldUid+"_350"),subscriptionPaymentRecord(oldUid,oldUid+"_350")));
+  await assertSucceeds(atomicSubscriptionProof(oldDb,oldUid,oldUid+"_350"));
   await assertFails(setDoc(doc(oldDb,"subscriptionPayments",oldUid+"_59"),subscriptionPaymentRecord(oldUid,oldUid+"_59",{amount:59})));
 });
 
