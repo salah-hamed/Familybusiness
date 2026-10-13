@@ -1630,6 +1630,29 @@ test("subscriber can create a valid initial subscription payment proof record", 
   await assertSucceeds(atomicSubscriptionProof(db,uid,paymentId));
 });
 
+test("C4B12 billing lock rejects orphan proof, forged unlocking and parallel pending proofs",async()=>{
+ const uid="billing_guard_atomic", first=uid+"_first",second=uid+"_second";
+ await seedUser(uid,{isActive:false,subscriptionStatus:"pending",initialActivationPaid:false});
+ const db=testEnv.authenticatedContext(uid).firestore();
+ await assertFails(setDoc(doc(db,"subscriptionPayments",first),subscriptionPaymentRecord(uid,first)));
+ await assertFails(setDoc(doc(db,"subscriptionBillingGuards",uid),{
+  userId:uid,pendingPaymentId:"fake",lastReviewedPaymentId:"",
+  revision:1,recoverySafe:false,updatedAt:serverTimestamp()
+ }));
+ await assertSucceeds(atomicSubscriptionProof(db,uid,first));
+ const secondBatch=writeBatch(db);
+ secondBatch.set(doc(db,"subscriptionPayments",second),subscriptionPaymentRecord(uid,second));
+ secondBatch.update(doc(db,"subscriptionBillingGuards",uid),{
+  pendingPaymentId:second,revision:2,updatedAt:serverTimestamp()
+ });
+ await assertFails(secondBatch.commit());
+ await assertFails(updateDoc(doc(db,"subscriptionBillingGuards",uid),{
+  pendingPaymentId:"",recoverySafe:true
+ }));
+ const guard=(await getDoc(doc(db,"subscriptionBillingGuards",uid))).data();
+ assert.equal(guard.pendingPaymentId,first);
+ assert.equal(guard.recoverySafe,false);
+});
 test("subscriber cannot forge subscription payment amount or owner", async () => {
   const uid = "payment_guard_owner";
   await seedUser(uid, {
