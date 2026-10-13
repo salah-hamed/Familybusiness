@@ -1,4 +1,5 @@
 import db from "../firebase/firebase-db.js";
+import { resolveCommissionBeneficiary } from "../merchants/merchant-commission-beneficiary.js";
 import { getEffectiveCommissionSnapshot, getProjectCommissionLedgerId } from "../commissions/commission-service.js";
 
 import {
@@ -318,6 +319,7 @@ export async function changeLaundryStage({projectId,orderId,actorUid,nextStage})
   }
 
   if(nextStage==="out_for_delivery"){
+    const projectRef=doc(db,"projects",projectId);
     const agreementRef=doc(db,"commissionAgreements",projectId);
     const ledgerRef=doc(db,"commissionLedger",getProjectCommissionLedgerId(orderId));
 
@@ -325,7 +327,8 @@ export async function changeLaundryStage({projectId,orderId,actorUid,nextStage})
       await runTransaction(db,async transaction=>{
         const freshOrderSnap=await transaction.get(ref);
         const agreementSnap=await transaction.get(agreementRef);
-        if(!freshOrderSnap.exists()||!agreementSnap.exists())throw new Error("ORDER_OR_AGREEMENT_NOT_FOUND");
+        const projectSnap=await transaction.get(projectRef);
+        if(!freshOrderSnap.exists()||!agreementSnap.exists()||!projectSnap.exists())throw new Error("ORDER_OR_AGREEMENT_NOT_FOUND");
 
         const fresh=freshOrderSnap.data();
         const commission=getEffectiveCommissionSnapshot(agreementSnap.data());
@@ -360,7 +363,7 @@ export async function changeLaundryStage({projectId,orderId,actorUid,nextStage})
         }
 
         transaction.set(ledgerRef,{
-          userId:agreementSnap.data().ownerId,
+          userId: resolveCommissionBeneficiary(projectSnap.data(), agreementSnap.data()),
           projectId,
           orderId,
           sourceType:"project_order",
@@ -424,13 +427,15 @@ export async function changeLaundryStage({projectId,orderId,actorUid,nextStage})
   }
 
   // Legacy compatibility for orders already in flight before FB-LAUNCH01.
-  const agreementRef=doc(db,"commissionAgreements",projectId);
+  const projectRef=doc(db,"projects",projectId);
+    const agreementRef=doc(db,"commissionAgreements",projectId);
   const ledgerRef=doc(db,"commissionLedger",getProjectCommissionLedgerId(orderId));
 
   await runTransaction(db,async transaction=>{
     const freshOrderSnap=await transaction.get(ref);
     const agreementSnap=await transaction.get(agreementRef);
-    if(!freshOrderSnap.exists()||!agreementSnap.exists())throw new Error("ORDER_OR_AGREEMENT_NOT_FOUND");
+        const projectSnap=await transaction.get(projectRef);
+    if(!freshOrderSnap.exists()||!agreementSnap.exists()||!projectSnap.exists())throw new Error("ORDER_OR_AGREEMENT_NOT_FOUND");
 
     const fresh=freshOrderSnap.data();
     const commission=getEffectiveCommissionSnapshot(agreementSnap.data());
@@ -460,7 +465,7 @@ export async function changeLaundryStage({projectId,orderId,actorUid,nextStage})
     }
 
     transaction.set(ledgerRef,{
-      userId:agreementSnap.data().ownerId,
+      userId: resolveCommissionBeneficiary(projectSnap.data(), agreementSnap.data()),
       projectId,
       orderId,
       sourceType:"project_order",
