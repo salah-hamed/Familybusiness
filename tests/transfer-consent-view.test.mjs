@@ -31,7 +31,7 @@ test("the physical shop and incoming subscriber may independently record one cho
   assert.equal(identifyTransferConsentRole({...sample,operatorConsent:"accepted"},operator,"physical_shop"),null);
   assert.equal(identifyTransferConsentRole({...sample,recipientConsent:"declined"},operator,"incoming"),null);
   assert.equal(identifyTransferConsentRole({...sample,status:"canceled"},operator,"incoming"),null);
-  assert.match(summarizeTransferConsent(sample,"recipient"),/دون الحصول على أرباح المشترك السابق/);
+  assert.match(summarizeTransferConsent(sample,"recipient"),/من غير الحصول على أرباح المشترك السابق/);
 });
 
 test("safe transfer link stays within the repository and rejects path traversal",()=>{
