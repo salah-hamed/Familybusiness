@@ -52,6 +52,7 @@ test("a transfer case may only be created after audited platform takeover, never
   assert.match(rules,/audit.status == "completed"/);
   assert.match(rules,/audit.recoveredAt == p.recoveryAt/);
   assert.match(block,/validMerchantTransferCaseCreate\(projectId\)/);
-  assert.match(block,/projectData\(projectId\)\.assignedSubscriberId == ""/);
+  assert.match(rules,/p.assignedSubscriberId == ""/);
+  assert.match(rules,/d.previousSubscriberId == ""/);
   assert.doesNotMatch(block,/originalSubscriberId == request\.auth\.uid/);
 });
