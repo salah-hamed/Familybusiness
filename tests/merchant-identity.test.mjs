@@ -53,6 +53,15 @@ test("merchant's assignment can evolve without changing legacy ownerId", () => {
   assert.equal(project.ownerId, "alice");
 });
 
+test("recovered shop has an explicit empty current assignee, never the original subscriber", () => {
+  const project={ownerId:"old",projectId:"supermarket",merchantId:"m_"+"a".repeat(32),
+    originalSubscriberId:"old",assignedSubscriberId:"",assignmentStatus:"platform_managed",platformManaged:true};
+  const merchant=resolveMerchantIdentity(project,"old_supermarket");
+  assert.equal(merchant.assignedSubscriberId,"");
+  assert.equal(merchant.originalSubscriberId,"old");
+  assert.equal(project.assignedSubscriberId,"");
+});
+
 test("creating project/inviting operator never qualifies a merchant link", () => {
   assert.equal(isQualifyingMerchantLink({}, {}), false);
   assert.equal(isQualifyingMerchantLink(
