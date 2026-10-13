@@ -5,7 +5,8 @@ import { resolveMerchantIdentity } from "./merchant-identity.js";
 export function projectMerchantOverview(project = {}, projectDocId = "") {
   const identity = resolveMerchantIdentity(project, projectDocId);
   const runtimeProjectId = String(projectDocId || project.projectDocId || "");
-  const assigned = identity.assignedSubscriberId || identity.originalSubscriberId;
+  // An explicit empty assignee means platform-managed, NOT original owner.
+  const assigned = identity.assignedSubscriberId;
   const status = identity.assignmentStatus || "assigned_to_subscriber";
   return {
     merchantId: identity.merchantId,
