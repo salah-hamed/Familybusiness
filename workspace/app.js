@@ -490,7 +490,9 @@ getDiscoverableProjects().forEach(project => {
     startWorkspaceFinanceLive(user, visibleProjectDocIds, ownPaymentStateIds);
 
     userName.innerText = `أهلاً ${data.name} 👋`;
-    if (projectCount) projectCount.innerText = `${myProjects.length} / 4`;
+    const activeProjectCount=myProjects.filter(item=>item.platformManaged !== true ||
+      (item.assignmentStatus==="assigned_to_new_subscriber" && item.assignedSubscriberId===user.uid)).length;
+    if (projectCount) projectCount.innerText = `${activeProjectCount} / 4`;
     if (workspaceAccountState) {
       workspaceAccountState.innerText = isTrialWindow
         ? "فترة تجربة مجانية"
