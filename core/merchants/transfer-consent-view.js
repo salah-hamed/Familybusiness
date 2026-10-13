@@ -21,10 +21,15 @@ export function identifyTransferConsentRole(transferCase, operator, currentUid) 
   return null;
 }
 
-export function merchantTransferConsentLink(origin, projectDocId) {
+export function merchantTransferConsentLink(origin, projectDocId, cycle = null) {
   if (!UID.test(String(projectDocId || ""))) throw new Error("INVALID_TRANSFER_IDENTIFIERS");
   const url = new URL("merchant-transfer/", origin);
   url.searchParams.set("project", projectDocId);
+  if(cycle!=null){
+    if(!Number.isSafeInteger(cycle)||cycle<2||cycle>9999)
+      throw new Error("INVALID_TRANSFER_CYCLE");
+    url.searchParams.set("cycle",String(cycle));
+  }
   return url.toString();
 }
 
