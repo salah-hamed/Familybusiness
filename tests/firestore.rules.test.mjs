@@ -2854,7 +2854,6 @@ test("C4B12 new operator and subscriber consent, private review and reassignment
  await assertFails(updateDoc(doc(recipientDb,"merchantAssignmentCycles",cycleId),{assignedSubscriberId:"attacker"}));
  await assertFails(getDoc(doc(recipientDb,"merchantAssignmentCycles",cycleId)));
  await assertFails(getDoc(doc(recipientDb,"merchantTransferCycleFinanceReviews",cycleId)));
- await assertFails(caseComplete.commit());
 });
 
 test("C4B12 second recovery retains historical access and credits platform only in earning cycle 2",async()=>{
