@@ -6,7 +6,7 @@ import {
 } from "../core/merchants/transfer-case-service.js";
 import {
   identifyTransferConsentRole, summarizeTransferConsent
-} from "../core/merchants/transfer-consent-view.js";
+} from "../core/merchants/transfer-consent-view.js?v=20261013-terms1";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 

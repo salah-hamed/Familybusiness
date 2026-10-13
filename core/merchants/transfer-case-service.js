@@ -1,6 +1,7 @@
 import db from "../firebase/firebase-db.js";
 import { assessMerchantTransfer } from "./merchant-transfer-preflight.js";
 import { MERCHANT_TRANSFER_CASES_ENABLED } from "./transfer-case-rollout.js";
+import { snapshotMerchantTransferTerms } from "./transfer-financial-terms.js";
 
 import {
   doc, getDoc, runTransaction, serverTimestamp, updateDoc
@@ -42,6 +43,7 @@ export function buildMerchantTransferCase({
     recipientConsent:"pending",
     operatorConsentedAt:null,
     recipientConsentedAt:null,
+    ...snapshotMerchantTransferTerms(agreement),
     financeClearance:"pending",
     cutoverAt:null,
     reason:safeReason,

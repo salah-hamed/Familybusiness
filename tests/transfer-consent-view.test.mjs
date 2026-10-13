@@ -7,7 +7,8 @@ import { MERCHANT_TRANSFER_CASES_ENABLED } from "../core/merchants/transfer-case
 const sample={
   projectDocId:"owner_supermarket",originalSubscriberId:"owner",
   previousSubscriberId:"", proposedSubscriberId:"incoming",
-  status:"awaiting_consents",operatorConsent:"pending",recipientConsent:"pending"
+  status:"awaiting_consents",operatorConsent:"pending",recipientConsent:"pending",
+  commissionAmount:6,commissionVersion:1,commissionCurrency:"EGP"
 };
 const operator={authUid:"physical_shop",status:"active"};
 
@@ -32,6 +33,8 @@ test("the physical shop and incoming subscriber may independently record one cho
   assert.equal(identifyTransferConsentRole({...sample,recipientConsent:"declined"},operator,"incoming"),null);
   assert.equal(identifyTransferConsentRole({...sample,status:"canceled"},operator,"incoming"),null);
   assert.match(summarizeTransferConsent(sample,"recipient"),/من غير الحصول على أرباح المشترك السابق/);
+  assert.match(summarizeTransferConsent(sample,"recipient"),/٦ جنيه/);
+  assert.match(summarizeTransferConsent(sample,"operator"),/العمولة المتفق عليها/);
 });
 
 test("safe transfer link stays within the repository and rejects path traversal",()=>{
