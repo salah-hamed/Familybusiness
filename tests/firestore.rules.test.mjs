@@ -2458,3 +2458,80 @@ test("C4 shop operator retains read access while departing subscriber loses mana
   const unauth=testEnv.unauthenticatedContext().firestore();
   await assertFails(getDoc(doc(unauth,"merchantRecoveries",data.projectId)));
 });
+
+test("C4 dispatch credits ONLY the platform after recovery, not the old subscriber",async()=>{
+  const ownerUid="owner_supermarket_c4ledger";
+  const projectId=ownerUid+"_supermarket";
+  const operatorUid="operator_supermarket_c4ledger";
+  const workerId="rider_c4ledger";
+  const orderId="order_c4ledger";
+  const merchantId="m_"+"c".repeat(32);
+  await seedUser("admin_recover",{role:"admin"});
+  await seedUser(ownerUid,{
+    subscriptionStatus:"inactive",isActive:false,initialActivationPaid:true,
+    subscriptionExpiresAt:new Date(Date.now()-86400000)
+  });
+  await testEnv.withSecurityRulesDisabled(async context=>{
+    const db=context.firestore();
+    await setDoc(doc(db,"projects",projectId),{
+      ownerId:ownerUid,originalSubscriberId:ownerUid,assignedSubscriberId:ownerUid,
+      assignmentStatus:"assigned_to_subscriber",platformManaged:false,
+      merchantId,linkedAt:null,assignmentUpdatedAt:null,
+      projectId:"supermarket",template:"supermarket",operatingModel:"partner_operated",
+      templateVersion:1,operatorId:projectId,partnerSetupStatus:"active",
+      businessName:"Shop",status:"active",isActive:true,priceConfig:{}
+    });
+    await setDoc(doc(db,"operators",projectId),{
+      authUid:operatorUid,ownerId:ownerUid,projectId,status:"active",
+      agreementStatus:"accepted",isActive:true
+    });
+    await setDoc(doc(db,"commissionAgreements",projectId),{
+      agreementId:projectId,ownerId:ownerUid,projectId,
+      status:"accepted",currentAmount:5,acceptedVersion:1
+    });
+    await setDoc(doc(db,"workers",workerId),{projectId,role:"rider"});
+    await setDoc(doc(db,"orders",orderId),{
+      projectId,providerId:projectId,templateType:"supermarket",status:"ready",
+      pricingLocked:true,assignedWorkerId:workerId,assignedWorkerRole:"rider",
+      items:[{name:"Bread",quantity:1}],subtotal:20,deliveryFee:10,
+      total:30,price:30
+    });
+  });
+  const admin=testEnv.authenticatedContext("admin_recover").firestore();
+  const audit=writeBatch(admin);
+  audit.update(doc(admin,"projects",projectId),{
+    platformManaged:true,assignmentStatus:"platform_managed",assignedSubscriberId:"",
+    assignmentUpdatedAt:serverTimestamp(),recoveryAuditId:projectId,
+    recoveryAt:serverTimestamp(),recoveryAdminUid:"admin_recover",
+    recoveryReason:"overdue_renewal"
+  });
+  audit.set(doc(admin,"merchantRecoveries",projectId),{
+    recoveryId:projectId,projectDocId:projectId,merchantId,
+    originalSubscriberId:ownerUid,previousSubscriberId:ownerUid,
+    reason:"overdue_renewal",evidenceReference:"billing-expiry-c4ledger",
+    status:"completed",adminUid:"admin_recover",recoveredAt:serverTimestamp()
+  });
+  await assertSucceeds(audit.commit());
+
+  const operator=testEnv.authenticatedContext(operatorUid).firestore();
+  function dispatchTo(beneficiary){
+    const batch=writeBatch(operator);
+    batch.update(doc(operator,"orders",orderId),{
+      status:"assigned",statusUpdatedAt:serverTimestamp(),statusUpdatedBy:operatorUid,
+      commissionEligible:true,commissionLocked:true,commissionAmount:5,
+      commissionAgreementVersion:1,commissionTrigger:"delivery_assignment",
+      commissionEarnedAt:serverTimestamp()
+    });
+    batch.set(doc(operator,"commissionLedger","project_order_"+orderId),{
+      userId:beneficiary,projectId,orderId,sourceType:"project_order",sourceId:orderId,
+      agreementId:projectId,agreementVersion:1,amount:5,currency:"EGP",
+      status:"earned",trigger:"delivery_assignment",
+      createdAt:serverTimestamp(),earnedAt:serverTimestamp(),paidAt:null
+    });
+    return batch.commit();
+  }
+  await assertFails(dispatchTo(ownerUid));
+  await assertSucceeds(dispatchTo("__fb_platform_commissions__"));
+  const saved=await getDoc(doc(admin,"commissionLedger","project_order_"+orderId));
+  assert.equal(saved.data().userId,"__fb_platform_commissions__");
+});
