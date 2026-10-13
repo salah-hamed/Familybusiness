@@ -4,7 +4,7 @@ import { assessMerchantCutoverReadiness, formatMerchantCutoverReadiness } from "
 import { assessMerchantTransfer, formatMerchantTransferPreflight } from "../core/merchants/merchant-transfer-preflight.js";
 import { PLATFORM_MERCHANT_RECOVERY_ENABLED } from "../core/merchants/platform-recovery-rollout.js";
 import { MERCHANT_TRANSFER_CASES_ENABLED } from "../core/merchants/transfer-case-rollout.js";
-import { openMerchantTransferCase } from "../core/merchants/transfer-case-service.js";
+import { openMerchantTransferCase, reviewMerchantTransferFinance } from "../core/merchants/transfer-case-service.js";
 import { merchantTransferConsentLink } from "../core/merchants/transfer-consent-view.js";
 import { executePlatformMerchantRecovery } from "../core/merchants/platform-recovery-service.js";
 import { requiredSubscriptionPayment } from "../core/subscriptions/payment-policy.js";
@@ -683,6 +683,8 @@ function renderProjects() {
             </label>
             <button class="secondaryBtn" type="button" data-action="open-merchant-transfer-case"
               data-project="${escapeHTML(project.projectDocId)}">إنشاء اتفاق تخصيص جديد</button>
+            <button class="secondaryBtn" type="button" data-action="review-merchant-transfer-finance"
+              data-project="${escapeHTML(project.projectDocId)}">توثيق مراجعة الحسابات (بدون سداد)</button>
           ` : ""}
 
         </div>
@@ -1412,6 +1414,24 @@ $("projectsContainer").addEventListener("click", async event => {
     $("settlementsSearch").value = projectId;
     switchSection("settlementsSection");
     await loadSettlements();
+    return;
+  }
+
+  if (button.dataset.action === "review-merchant-transfer-finance") {
+    if (!MERCHANT_TRANSFER_CASES_ENABLED) return;
+    const result = button.closest(".adminCard")?.querySelector(".transferPreflightResult");
+    const approved = confirm("تأكيد مراجعة رصيد المنصة وحقوق المشترك السابق بعد قبول المشغّل والمشترك الجديد؟ ده توثيق للمراجعة فقط، ولا يعني سداد أي مبلغ أو تصفيره.");
+    if (!approved) return;
+    button.disabled = true;
+    try {
+      await reviewMerchantTransferFinance({projectDocId:projectId,adminUid:adminSession.user.uid});
+      if (result) result.textContent = "تم توثيق مراجعة الفترات المالية بدون تأكيد سداد أو نقل للمحل. المستحقات السابقة محفوظة.";
+    } catch (error) {
+      console.error(error);
+      if (result) result.textContent = "تعذر اعتماد المراجعة. تأكد من موافقتي المشغّل والمشترك الجديد وثبات عمولتهما.";
+    } finally {
+      button.disabled = false;
+    }
     return;
   }
 
