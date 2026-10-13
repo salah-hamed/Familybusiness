@@ -2402,6 +2402,42 @@ test("Phase C4 disallows account-owner substitution, pre-consent and backdated c
   }
 });
 
+test("admin can record a separate finance REVIEW only after both consents; it never pays or transfers",async()=>{
+  const ids=await seedTransferCaseScenario("finance_review");
+  const adminDb=testEnv.authenticatedContext(ids.admin).firestore();
+  const operatorDb=testEnv.authenticatedContext(ids.operatorUid).firestore();
+  const recipientDb=testEnv.authenticatedContext(ids.target).firestore();
+  const ref=db=>doc(db,"merchantTransferCases",ids.projectId);
+  await assertSucceeds(setDoc(ref(adminDb),sampleTransferCase(ids)));
+  const patch=()=>({
+    financeClearance:"reviewed",financeReviewedBy:ids.admin,
+    financeReviewedAt:serverTimestamp(),
+    financeSnapshot:{
+      currency:"EGP",formerSubscriberId:ids.owner,
+      platformOutstandingAmount:100,formerSubscriberOutstandingAmount:50,
+      platformEarnedAmount:125,formerSubscriberEarnedAmount:250
+    }
+  });
+  // Admin cannot skip the two real consents.
+  await assertFails(updateDoc(ref(adminDb),patch()));
+  await assertSucceeds(updateDoc(ref(operatorDb),{
+    operatorConsent:"accepted",operatorConsentedAt:serverTimestamp()
+  }));
+  await assertSucceeds(updateDoc(ref(recipientDb),{
+    recipientConsent:"accepted",recipientConsentedAt:serverTimestamp()
+  }));
+  await assertFails(updateDoc(ref(recipientDb),patch()));
+  await assertFails(updateDoc(ref(operatorDb),patch()));
+  await assertSucceeds(updateDoc(ref(adminDb),patch()));
+  const reviewed=await getDoc(ref(adminDb));
+  assert.equal(reviewed.data().financeClearance,"reviewed");
+  assert.equal(reviewed.data().financeSnapshot.formerSubscriberOutstandingAmount,50);
+  assert.equal(reviewed.data().cutoverAt,null);
+  assert.equal(reviewed.data().status,"awaiting_consents");
+  await assertFails(updateDoc(ref(adminDb),{financeClearance:"paid"}));
+  await assertFails(updateDoc(ref(adminDb),{financeSnapshot:{currency:"EGP"}}));
+});
+
 async function seedRecoverableLaundry(name = "basic") {
   const ctx=await seedPartnerRuntime("laundry","recovery_"+name);
   const merchantId="m_"+"b".repeat(32);
