@@ -108,13 +108,16 @@ export async function loadUserProjects(ownerId) {
   // misses legitimately reassigned shops and advertises reclaimed ones
   // to former subscribers. Keep both scopes separate.
   const col = collection(db, "projects");
-  // During staged rollout, the *deployed* Rules do not permit assignee
-  // list queries. Do not issue one until the final Rules are live.
-  // One-field query also avoids a new composite index requirement.
+  // Only the full assignment predicate is authorized for listing.
+  // A single-field assignee query can include unverified/legacy records
+  // and is correctly denied by Firestore Rules. Requires a staged index.
   const [historic,assigned] = await Promise.all([
     getDocs(query(col,where("ownerId","==",ownerId))),
     MERCHANT_CUTOVER_ENABLED
-      ? getDocs(query(col,where("assignedSubscriberId","==",ownerId)))
+      ? getDocs(query(col,
+          where("assignedSubscriberId","==",ownerId),
+          where("assignmentStatus","==","assigned_to_new_subscriber"),
+          where("platformManaged","==",true)))
       : Promise.resolve(null)
   ]);
   const byId = new Map();
