@@ -80,7 +80,10 @@ service cloud.firestore {
   function projectData(projectId){ return get(projectPath(projectId)).data; }
   function isVerifiedPlatformManagedMerchant(projectId){
    let p = projectData(projectId);
-   return (projectExists(projectId)
+   return (("assignmentCycle" in p) && p.assignmentCycle is int
+     && p.assignmentCycle>=2)
+     ? verifiedRepeatPlatformMerchant(projectId)
+     : (projectExists(projectId)
     && ("platformManaged" in p) && p.platformManaged == true
     && p.template in ["supermarket","restaurant","bakery","laundry"]
     && p.operatingModel == "partner_operated"
@@ -94,7 +97,7 @@ service cloud.firestore {
     && get(merchantRecoveryPath(projectId)).data.recoveredAt == p.recoveryAt
     && get(merchantRecoveryPath(projectId)).data.adminUid == p.recoveryAdminUid
     && get(merchantRecoveryPath(projectId)).data.previousSubscriberId == p.originalSubscriberId
-    && get(merchantRecoveryPath(projectId)).data.merchantId == p.merchantId) || verifiedRepeatPlatformMerchant(projectId);
+    && get(merchantRecoveryPath(projectId)).data.merchantId == p.merchantId);
   }
   // Live assignment is legal only after BOTH the consent and audit documents exist.
   // Read EACH referenced document once. Ledger creation and order update
@@ -122,7 +125,10 @@ service cloud.firestore {
   }
   function isVerifiedAssignedAfterCutover(projectId){
    let p = projectData(projectId);
-   return (projectExists(projectId)
+   return (("assignmentCycle" in p) && p.assignmentCycle is int
+     && p.assignmentCycle>=2)
+     ? verifiedRepeatAssignedMerchant(projectId)
+     : (projectExists(projectId)
     && ("platformManaged" in p) && p.platformManaged == true
     && ("assignmentStatus" in p) && p.assignmentStatus == "assigned_to_new_subscriber"
     && p.assignedSubscriberId is string
@@ -134,7 +140,7 @@ service cloud.firestore {
     && p.recoveryAuditId == projectId
     && exists(merchantTransferCasePath(projectId))
     && exists(merchantCutoverPath(projectId))
-    && cutoverDocumentsMatch(projectId,p)) || verifiedRepeatAssignedMerchant(projectId);
+    && cutoverDocumentsMatch(projectId,p));
   }
   // C4B12: v2+ epoch witnesses are isolated from immutable C4B11 records.
   function verifiedRepeatPlatformMerchant(projectId){
