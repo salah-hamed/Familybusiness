@@ -36,7 +36,7 @@ test("historical and incoming statement only queries signed-in user's ledger and
 test("no original partner setup can reopen after platform recovery",()=>{
  for(const p of ["supermarket/app.js","restaurant/app.js","bakery/app.js","laundry/app.js"]){
   const source=readFileSync(p,"utf8");
-  assert.match(source,/\.platformManaged===true\|\|/);
+  assert.match(source,/\.platformManaged===true\s*\|\|/);
  }
  const engine=readFileSync("templates/engine/project-engine.js","utf8");
  assert.match(engine,/where\("assignedSubscriberId","==",ownerId\)/);
