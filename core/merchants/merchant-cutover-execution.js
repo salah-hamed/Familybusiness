@@ -2,6 +2,11 @@ import { assessMerchantCutoverReadiness } from "./merchant-cutover-readiness.js"
 
 const ID = /^[A-Za-z0-9_-]{1,128}$/;
 const validMoney = value => typeof value === "number" && Number.isFinite(value) && value >= 0;
+function millis(value) {
+  if (typeof value?.toMillis === "function") return value.toMillis();
+  if (value instanceof Date) return value.getTime();
+  return NaN;
+}
 
 /**
  * Pure, auditable contract for ONE platform-managed -> incoming subscriber
@@ -43,10 +48,8 @@ export function buildMerchantCutoverMutation({
     now:at instanceof Date ? at : new Date()
   });
   if (!report.prerequisitesMet ||
-      financeReview.reviewedAt.toMillis?.() !== transferCase.financeReviewedAt?.toMillis?.() &&
-      Number(financeReview.reviewedAt) !== Number(transferCase.financeReviewedAt) &&
-      !(financeReview.reviewedAt instanceof Date && transferCase.financeReviewedAt instanceof Date &&
-        financeReview.reviewedAt.getTime() === transferCase.financeReviewedAt.getTime())) {
+      !Number.isFinite(millis(financeReview.reviewedAt)) ||
+      millis(financeReview.reviewedAt) !== millis(transferCase.financeReviewedAt)) {
     throw new Error("CUTOVER_PREREQUISITES_STALE");
   }
   if (project.ownerId !== project.originalSubscriberId ||
