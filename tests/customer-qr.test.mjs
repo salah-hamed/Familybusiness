@@ -100,7 +100,7 @@ test("all four operator dashboards expose the same customer QR tools", () => {
     const html = readFileSync(path, "utf8");
     assert.match(html, /id="customerOrderLink"/, path);
     assert.match(html, /id="operatorCustomerQrMount"/, path);
-    assert.match(html, /src="\.\/app\.js\?v=20261012-reversal-ui1"/, path);
+    assert.match(html, /src="\.\/app\.js\?v=20261013-acceptfix1"/, path);
   }
 
   const appPaths = [
