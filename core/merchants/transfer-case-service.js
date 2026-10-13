@@ -43,6 +43,7 @@ export function buildMerchantTransferCase({
     recipientConsent:"pending",
     operatorConsentedAt:null,
     recipientConsentedAt:null,
+    ...snapshotMerchantTransferTerms(agreement),
     financeClearance:"pending",
     cutoverAt:null,
     reason:safeReason,
