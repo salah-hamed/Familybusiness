@@ -1,4 +1,5 @@
 import db from "../core/firebase/firebase-db.js";
+import { projectMerchantOverview } from "../core/merchants/merchant-overview.js";
 import { protectAdmin } from "../core/auth/admin-guard.js";
 import {
   PLATFORM_BILLING,
@@ -690,6 +691,7 @@ function renderProjects() {
   const rows = state.projects.rows;
   $("projectsContainer").innerHTML = rows.length ? rows.map(project => {
     const active = project.isActive === true && project.status === "active";
+    const merchant = projectMerchantOverview(project, project.projectDocId);
 
     return `
       <article class="adminCard">
@@ -700,7 +702,12 @@ function renderProjects() {
         </div>
         <div class="metaGrid">
           <span>النوع<br><b>${escapeHTML(project.template || "—")}</b></span>
-          <span>المالك<br><b class="codeText">${escapeHTML(project.ownerId || "—")}</b></span>
+          <span>المالك التشغيلي التاريخي<br><b class="codeText">${escapeHTML(project.ownerId || "—")}</b></span>
+          <span>معرّف النشاط المركزي<br><b class="codeText">${escapeHTML(merchant.merchantId || "—")}</b></span>
+          <span>المشترك الأصلي<br><b class="codeText">${escapeHTML(merchant.originalSubscriberId || "—")}</b></span>
+          <span>المشترك المخصص<br><b class="codeText">${escapeHTML(merchant.assignedSubscriberId || "—")}</b></span>
+          <span>التخصيص<br><b>${escapeHTML(merchant.displayState)}${merchant.legacy ? " (سجل قديم)" : ""}</b></span>
+          <span>تاريخ ربط النشاط<br><b>${formatDate(merchant.linkedAt)}</b></span>
           <span>نموذج التشغيل<br><b>${escapeHTML(project.operatingModel || "—")}</b></span>
           <span>المشغّل<br><b class="codeText">${escapeHTML(project.operatorId || "—")}</b></span>
           <span>حالة الربط<br><b>${escapeHTML(project.partnerSetupStatus || "—")}</b></span>
