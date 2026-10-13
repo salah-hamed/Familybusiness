@@ -1,5 +1,6 @@
 import db from "../firebase/firebase-db.js";
 import { PLATFORM_COMMISSION_BENEFICIARY, isVerifiedPlatformManagedMerchant } from "../merchants/merchant-commission-beneficiary.js";
+import { resolveMerchantFinancePeriod } from "./merchant-finance-period.js";
 
 import {
   collection,
@@ -41,6 +42,14 @@ async function aggregateAmount(queryRef) {
   };
 }
 
+export async function getMerchantFinancePeriod(projectId) {
+  const pid = clean(projectId);
+  if (!pid) throw new Error("PROJECT_ID_REQUIRED");
+  const snap = await getDoc(doc(db, "projects", pid));
+  if (!snap.exists()) throw new Error("PROJECT_NOT_FOUND");
+  return resolveMerchantFinancePeriod(snap.data());
+}
+
 export async function getProjectPaymentSummary(
   projectId,
   { ownerId = "" } = {}
@@ -53,6 +62,10 @@ export async function getProjectPaymentSummary(
   // centrally recovered shop, the operator sees only the platform's new
   // commission period; old subscriber payments cannot offset it.
   const projectSnap = oid ? null : await getDoc(doc(db,"projects",pid));
+  if (projectSnap?.exists?.() && projectSnap.data().platformManaged === true
+    && !isVerifiedPlatformManagedMerchant(projectSnap.data())) {
+    throw new Error("MERCHANT_RECOVERY_AUDIT_REQUIRED");
+  }
   const recovered = projectSnap?.exists?.()
     && isVerifiedPlatformManagedMerchant(projectSnap.data());
   const beneficiaryId = oid || (recovered ? PLATFORM_COMMISSION_BENEFICIARY : "");
@@ -168,7 +181,8 @@ export async function declareOperatorPayment({
 
     if (!projectSnap.exists()) throw new Error("PROJECT_NOT_FOUND");
     const project = projectSnap.data();
-    if (project.platformManaged === true) {
+    const period = resolveMerchantFinancePeriod(project);
+    if (period.platformPeriod) {
       // Historical payments still confirm with their original subscriber.
       // New platform dues require an independently approved accounting flow.
       throw new Error("PLATFORM_SETTLEMENT_FLOW_NOT_CONFIGURED");

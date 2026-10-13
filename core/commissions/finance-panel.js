@@ -1,5 +1,6 @@
 import {
   getProjectPaymentSummary,
+  getMerchantFinancePeriod,
   listProjectPaymentRequests,
   declareOperatorPayment,
   confirmOwnerPayment,
@@ -307,10 +308,15 @@ export async function renderOperatorFinancePanel({
   root.innerHTML = '<p class="fbFinanceMessage">جاري تحميل حساب العمولة...</p>';
 
   try {
+    const period = await getMerchantFinancePeriod(projectId);
     const [summary, payments, reversals] = await Promise.all([
       getProjectPaymentSummary(projectId),
-      listProjectPaymentRequests(projectId, { pageSize: 20 }),
-      listProjectCommissionReversals(projectId, { pageSize: 20 })
+      listProjectPaymentRequests(projectId, {
+        pageSize: 20, ownerId: period.beneficiaryId
+      }),
+      period.platformPeriod
+        ? Promise.resolve([])
+        : listProjectCommissionReversals(projectId, { pageSize: 20 })
     ]);
 
     const pending = payments.find(item => item.status === "pending_owner_confirmation");
@@ -321,9 +327,9 @@ export async function renderOperatorFinancePanel({
     root.innerHTML = `
       <div class="fbFinanceHead">
         <div>
-          <span>حساب العمولة مع صاحب المشروع</span>
+          <span>${period.platformPeriod ? "حساب المنصة بعد الاسترداد" : "حساب العمولة مع صاحب المشروع"}</span>
           <h2>المستحق والسداد</h2>
-          <p>لو حولت مبلغ لصاحب المشروع سجله هنا. الرصيد لا يتغير إلا بعد ما يؤكد استلامه.</p>
+          <p>${period.platformPeriod ? "مستحقات المنصة بعد الاسترداد منفصلة عن مستحقات المشترك القديم. تسجيل السداد مؤجل لحين تفعيل وسيلة إثبات وتحقق آمنة، ولا يُعد أي مبلغ مسددًا تلقائيًا." : "لو حولت مبلغ لصاحب المشروع سجله هنا. الرصيد لا يتغير إلا بعد ما يؤكد استلامه."}</p>
         </div>
       </div>
       <div class="fbFinanceGrid">
@@ -331,7 +337,12 @@ export async function renderOperatorFinancePanel({
         <div class="fbFinanceStat fbFinancePaid"><span>تم تأكيد سداده</span><b>${money(summary.paidAmount)}</b></div>
         <div class="fbFinanceStat fbFinanceDue"><span>المطلوب سداده</span><b>${money(summary.outstandingAmount)}</b></div>
       </div>
-      ${pending ? `
+      ${period.platformPeriod ? `
+        <div class="fbPendingBox">
+          <b>المبلغ المستحق للمنصة فقط</b>
+          <p>لا تحول عمولات الفترة الجديدة للمشترك السابق. سيتم إتاحة قناة دفع رسمية مع تحقق مالي مستقل؛ لا يوجد زر تأكيد دفع في هذه الفترة حاليًا.</p>
+        </div>
+      ` : pending ? `
         <div class="fbPendingBox">
           <b>تم تسجيل دفعة ${money(pending.amount)}</b>
           <div class="fbPaymentMeta">

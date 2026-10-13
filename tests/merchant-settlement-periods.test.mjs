@@ -24,7 +24,7 @@ test("former subscriber only receives their own historical payment requests",()=
 });
 
 test("physical shop operator cannot accidentally declare an old-subscriber payment for a recovered merchant",()=>{
-  assert.match(settlements,/project.platformManaged === true/);
+  assert.match(settlements,/resolveMerchantFinancePeriod\(project\)/);
   assert.match(settlements,/PLATFORM_SETTLEMENT_FLOW_NOT_CONFIGURED/);
 });
 

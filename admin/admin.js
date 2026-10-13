@@ -4,6 +4,7 @@ import { assessMerchantTransfer, formatMerchantTransferPreflight } from "../core
 import { PLATFORM_MERCHANT_RECOVERY_ENABLED } from "../core/merchants/platform-recovery-rollout.js";
 import { executePlatformMerchantRecovery } from "../core/merchants/platform-recovery-service.js";
 import { requiredSubscriptionPayment } from "../core/subscriptions/payment-policy.js";
+import { getProjectPaymentSummary } from "../core/commissions/settlement-service.js";
 import { protectAdmin } from "../core/auth/admin-guard.js";
 import {
   PLATFORM_BILLING,
@@ -644,6 +645,11 @@ function renderProjects() {
           <button class="secondaryBtn" data-action="view-project-payments" data-project="${escapeHTML(project.projectDocId)}">
             عرض حساب المشروع
           </button>
+          ${merchant.platformManaged ? `<button class="secondaryBtn"
+            data-action="show-platform-recovery-dues"
+            data-project="${escapeHTML(project.projectDocId)}" type="button">
+            مستحقات المنصة والمشترك السابق
+          </button>` : ""}
           <label class="transferPreflightInput">فحص نقل النشاط للمشترك الجديد
             <input class="candidateSubscriberUid" type="text" maxlength="128" placeholder="UID المشترك الجديد" autocomplete="off">
           </label>
@@ -1314,6 +1320,33 @@ $("projectsContainer").addEventListener("click", async event => {
   if (!button) return;
 
   const projectId = button.dataset.project;
+
+  if (button.dataset.action === "show-platform-recovery-dues") {
+    const container = button.closest(".adminCard")?.querySelector(".transferPreflightResult");
+    button.disabled = true;
+    if (container) container.textContent = "جاري مراجعة المستحقات منفصلة...";
+    try {
+      const projectSnap = await getDoc(doc(db, "projects", projectId));
+      if (!projectSnap.exists() || projectSnap.data().platformManaged !== true) {
+        throw new Error("NOT_A_RECOVERED_MERCHANT");
+      }
+      const oldUid = projectSnap.data().originalSubscriberId || projectSnap.data().ownerId;
+      const [platform, historical] = await Promise.all([
+        getProjectPaymentSummary(projectId),
+        getProjectPaymentSummary(projectId, { ownerId: oldUid })
+      ]);
+      if (container) container.textContent =
+        `مستحقات المنصة بعد الاسترداد: ${money(platform.outstandingAmount)} | إجمالي المتحقق: ${money(platform.earnedAmount)}\n` +
+        `حقوق المشترك القديم (لم تُنقل): ${money(historical.outstandingAmount)} | إجمالي أرباحه السابقة: ${money(historical.earnedAmount)}\n` +
+        "للعرض والمتابعة فقط؛ لا يتم تأكيد سداد أو إعادة توزيع أي رصيد من هنا.";
+    } catch (error) {
+      console.error(error);
+      if (container) container.textContent = "تعذر تحميل فصل المستحقات. لم تتغير أي بيانات.";
+    } finally {
+      button.disabled = false;
+    }
+    return;
+  }
 
   if (button.dataset.action === "view-project-payments") {
     state.settlements.search = projectId;
