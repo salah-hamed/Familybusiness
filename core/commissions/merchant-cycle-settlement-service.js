@@ -10,7 +10,7 @@ const ID=/^[A-Za-z0-9_-]{1,128}$/;
 function cleanId(v){const id=String(v||"").trim();if(!ID.test(id))throw new Error("CYCLE_PAYMENT_INVALID_ID");return id;}
 function exactAmount(v){
  const n=Number(v);
- if(!Number.isFinite(n)||n<=0||Math.round(n*100)!==n*100)
+ if(!Number.isFinite(n)||n<=0||Math.abs(n*100-Math.round(n*100))>1e-6)
   throw new Error("CYCLE_PAYMENT_INVALID_AMOUNT");
  return n;
 }
@@ -84,11 +84,21 @@ export async function decideMerchantCyclePayment({settlementId,subscriberUid,acc
    throw new Error("CYCLE_PAYMENT_NOT_OWNER_OR_NOT_PENDING");
   const projectRef=doc(db,"projects",data.projectId);
   const stateRef=doc(db,"merchantCyclePaymentStates",data.projectId+"_"+data.assignmentCycle);
-  const [project,state]=await Promise.all([tx.get(projectRef),tx.get(stateRef)]);
+  const grantRef=doc(db,"merchantHistoricalAccess",data.projectId+"_"+subscriberUid);
+  const [project,state,historic]=await Promise.all([
+    tx.get(projectRef),tx.get(stateRef),tx.get(grantRef)
+  ]);
   if(!project.exists())throw new Error("CYCLE_PAYMENT_PROJECT_MISSING");
-  const scope=cycleSettlementScope(project.data(),data.projectId);
-  if(scope.beneficiaryId!==subscriberUid||scope.cycle!==data.assignmentCycle)
-   throw new Error("CYCLE_PAYMENT_NO_LONGER_CURRENT");
+  const current=project.data().platformManaged===true
+    && project.data().assignmentStatus==="assigned_to_new_subscriber"
+    && project.data().assignedSubscriberId===subscriberUid
+    && (project.data().assignmentCycle??1)===data.assignmentCycle;
+  const former=historic.exists()
+    && historic.data().subscriberUid===subscriberUid
+    && historic.data().projectDocId===data.projectId
+    && historic.data().status==="historic_only"
+    && historic.data().firstRecoveredCycle===data.assignmentCycle+1;
+  if(!current&&!former)throw new Error("CYCLE_PAYMENT_NOT_CURRENT_OR_HISTORIC");
   if(!state.exists()||state.data().pendingSettlementId!==settlementId)
    throw new Error("CYCLE_PAYMENT_STATE_MISMATCH");
   const at=serverTimestamp();
