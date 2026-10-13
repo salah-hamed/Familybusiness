@@ -3439,6 +3439,89 @@ service cloud.firestore {
    allow delete: if false;
   }
 
+  function merchantCycleOfProject(projectId){
+   let p=projectData(projectId);
+   return ("assignmentCycle" in p)?p.assignmentCycle:1;
+  }
+  function authorizedMerchantCycleReceiptSubscriber(projectId,cycle,uid){
+    let p=projectData(projectId);
+    return signedIn() && uid==request.auth.uid
+     && (
+       (p.platformManaged==true
+        && p.assignmentStatus=="assigned_to_new_subscriber"
+        && p.assignedSubscriberId==uid
+        && merchantCycleOfProject(projectId)==cycle
+        && isVerifiedAssignedAfterCutover(projectId))
+       || (
+        exists(merchantHistoricGrantPath(projectId+"_"+uid))
+        && get(merchantHistoricGrantPath(projectId+"_"+uid)).data.status=="historic_only"
+        && get(merchantHistoricGrantPath(projectId+"_"+uid)).data.firstRecoveredCycle==cycle+1
+        && get(merchantHistoricGrantPath(projectId+"_"+uid)).data.subscriberUid==uid
+       )
+     );
+  }
+  function validMerchantCycleSettlementCreate(settlementId){
+   let d=request.resource.data;
+   let p=projectData(d.projectId);
+   let period=d.projectId+"_"+string(d.assignmentCycle);
+   let state=getAfter(/databases/$(database)/documents/merchantCyclePaymentStates/$(period)).data;
+   return signedIn()
+    && d.settlementId==settlementId
+    && d.assignmentCycle is int && d.assignmentCycle>=1
+    && d.assignmentCycle==merchantCycleOfProject(d.projectId)
+    && p.platformManaged==true
+    && p.assignmentStatus=="assigned_to_new_subscriber"
+    && isVerifiedAssignedAfterCutover(d.projectId)
+    && d.ownerId==p.assignedSubscriberId
+    && d.operatorId==p.operatorId
+    && isProjectOperator(d.projectId)
+    && d.declaredBy==request.auth.uid
+    && d.status=="pending_owner_confirmation"
+    && d.currency=="EGP" && d.amount is number && d.amount>0
+    && d.paymentMethod in ["instapay","bank_transfer","cash","other"]
+    && d.paymentReference is string && d.paymentReference.size()<=200
+    && d.note is string && d.note.size()<=500
+    && d.createdAt==request.time && d.declaredAt==request.time
+    && d.updatedAt==request.time
+    && d.confirmedAt==null && d.confirmedBy==null
+    && d.rejectedAt==null && d.rejectedBy==null
+    && state.projectId==d.projectId
+    && state.assignmentCycle==d.assignmentCycle
+    && state.beneficiaryId==d.ownerId
+    && state.pendingSettlementId==settlementId
+    && state.updatedAt==request.time
+    && d.keys().hasOnly([
+     "settlementId","projectId","ownerId","operatorId","assignmentCycle",
+     "templateId","businessName","currency","amount","status",
+     "paymentMethod","paymentReference","note","declaredAt","declaredBy",
+     "createdAt","updatedAt","confirmedAt","confirmedBy","rejectedAt","rejectedBy"]);
+  }
+  function validMerchantCycleSettlementDecision(settlementId){
+   let old=resource.data;
+   let next=request.resource.data;
+   let state=getAfter(/databases/$(database)/documents/merchantCyclePaymentStates/$(old.projectId+"_"+string(old.assignmentCycle))).data;
+   return signedIn()
+    && ("assignmentCycle" in old)
+    && old.assignmentCycle is int && old.assignmentCycle>=1
+    && old.status=="pending_owner_confirmation"
+    && authorizedMerchantCycleReceiptSubscriber(old.projectId,old.assignmentCycle,old.ownerId)
+    && next.diff(old).affectedKeys().hasOnly([
+      "status","confirmedAt","confirmedBy","rejectedAt","rejectedBy","updatedAt"
+    ])
+    && next.updatedAt==request.time
+    && (
+      (next.status=="confirmed"
+       && next.confirmedAt==request.time && next.confirmedBy==request.auth.uid
+       && next.rejectedAt==null && next.rejectedBy==null)
+      || (next.status=="rejected"
+       && next.rejectedAt==request.time && next.rejectedBy==request.auth.uid
+       && next.confirmedAt==null && next.confirmedBy==null)
+    )
+    && state.projectId==old.projectId
+    && state.assignmentCycle==old.assignmentCycle
+    && state.pendingSettlementId==""
+    && state.updatedAt==request.time;
+  }
   match /commissionSettlements/{settlementId} {
    allow get, list: if isAdmin()
     || (signedIn() && resource.data.ownerId == request.auth.uid)
@@ -3455,7 +3538,8 @@ service cloud.firestore {
       )
     );
 
-   allow create: if signedIn()
+   allow create: if validMerchantCycleSettlementCreate(settlementId)
+    || (signedIn()
     && request.resource.data.settlementId == settlementId
     && request.resource.data.projectId is string
     && isProjectOperator(request.resource.data.projectId)
@@ -3475,8 +3559,9 @@ service cloud.firestore {
     && request.resource.data.confirmedAt == null
     && request.resource.data.confirmedBy == null
     && request.resource.data.rejectedAt == null
-    && request.resource.data.rejectedBy == null;
+    && request.resource.data.rejectedBy == null);
 
+   allow update: if validMerchantCycleSettlementDecision(settlementId);
    allow update: if signedIn()
     && resource.data.projectId is string
     && historicProjectOwner(resource.data.projectId)
@@ -3525,6 +3610,54 @@ service cloud.firestore {
    allow delete: if false;
   }
 
+  match /merchantCyclePaymentStates/{periodId} {
+    function validNewPendingState(){
+     let d=request.resource.data;
+     let payment=getAfter(commissionSettlementPath(d.pendingSettlementId)).data;
+     return signedIn()
+      && periodId==d.projectId+"_"+string(d.assignmentCycle)
+      && d.assignmentCycle is int && d.assignmentCycle>=1
+      && merchantCycleOfProject(d.projectId)==d.assignmentCycle
+      && isProjectOperator(d.projectId)
+      && d.beneficiaryId==projectData(d.projectId).assignedSubscriberId
+      && d.operatorId==projectData(d.projectId).operatorId
+      && d.pendingSettlementId is string && d.pendingSettlementId.size()>0
+      && d.updatedAt==request.time
+      && payment.status=="pending_owner_confirmation"
+      && payment.projectId==d.projectId
+      && payment.assignmentCycle==d.assignmentCycle
+      && payment.ownerId==d.beneficiaryId
+      && payment.declaredBy==request.auth.uid
+      && payment.createdAt==request.time
+      && d.keys().hasOnly([
+       "projectId","assignmentCycle","beneficiaryId","operatorId",
+       "pendingSettlementId","updatedAt"]);
+    }
+    function validClearPendingState(){
+     let old=resource.data;
+     let next=request.resource.data;
+     let payment=getAfter(commissionSettlementPath(old.pendingSettlementId)).data;
+     return signedIn()
+      && old.pendingSettlementId is string && old.pendingSettlementId.size()>0
+      && authorizedMerchantCycleReceiptSubscriber(old.projectId,old.assignmentCycle,old.beneficiaryId)
+      && next.pendingSettlementId=="" && next.updatedAt==request.time
+      && next.diff(old).affectedKeys().hasOnly(["pendingSettlementId","updatedAt"])
+      && payment.ownerId==request.auth.uid
+      && payment.status in ["confirmed","rejected"]
+      && (payment.confirmedBy==request.auth.uid || payment.rejectedBy==request.auth.uid)
+      && payment.updatedAt==request.time;
+    }
+    allow get: if isAdmin() || isProjectOperator(resource.data.projectId)
+      || authorizedMerchantCycleReceiptSubscriber(resource.data.projectId,resource.data.assignmentCycle,resource.data.beneficiaryId);
+    allow list: if isAdmin();
+    allow create: if validNewPendingState();
+    allow update: if (
+      resource.data.pendingSettlementId==""
+      && request.resource.data.pendingSettlementId!=""
+      && validNewPendingState()
+    ) || validClearPendingState();
+    allow delete: if false;
+  }
   match /commissionPaymentStates/{projectId} {
    allow get, list: if isAdmin()
     || historicProjectOwner(projectId)
