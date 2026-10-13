@@ -2565,3 +2565,26 @@ test("C4 paid subscription not overdue cannot trigger recovery even if admin att
   const admin=testEnv.authenticatedContext("admin_recover").firestore();
   await assertFails(recoveryBatch(admin,data,"overdue_renewal").commit());
 });
+
+test("C4 former subscriber can still read only their own past financial settlements",async()=>{
+  const data=await seedRecoverableLaundry("historic_finance");
+  await testEnv.withSecurityRulesDisabled(async context=>{
+    const db=context.firestore();
+    await setDoc(doc(db,"commissionSettlements","past_owner_settlement"),{
+      settlementId:"past_owner_settlement",projectId:data.projectId,
+      ownerId:data.ownerId,status:"confirmed",amount:5
+    });
+    await setDoc(doc(db,"commissionSettlements","new_platform_settlement"),{
+      settlementId:"new_platform_settlement",projectId:data.projectId,
+      ownerId:"__fb_platform_commissions__",status:"confirmed",amount:5
+    });
+  });
+  const admin=testEnv.authenticatedContext("admin_recover").firestore();
+  await assertSucceeds(recoveryBatch(admin,data).commit());
+  const owner=testEnv.authenticatedContext(data.ownerId).firestore();
+  await assertSucceeds(getDoc(doc(owner,"commissionSettlements","past_owner_settlement")));
+  await assertFails(getDoc(doc(owner,"commissionSettlements","new_platform_settlement")));
+  const ownHistory=query(collection(owner,"commissionSettlements"),
+    where("projectId","==",data.projectId),where("ownerId","==",data.ownerId));
+  await assertSucceeds(getDocs(ownHistory));
+});
