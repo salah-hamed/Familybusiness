@@ -28,7 +28,15 @@ export async function loadCurrentProject(ownerId) {
     };
   }
 
-  if (project.ownerId !== ownerId) {
+  // A recovered shop is operationally controlled only by its current
+  // verified incoming subscriber, never the historical owner.
+  const assigned = project.platformManaged === true
+    && project.assignmentStatus === "assigned_to_new_subscriber"
+    && project.assignedSubscriberId === ownerId
+    && project.cutoverAuditId === projectDocId
+    && project.cutoverAt != null;
+  if ((project.platformManaged === true && !assigned) ||
+      (project.platformManaged !== true && project.ownerId !== ownerId)) {
     return {
       success: false,
       reason: "access-denied"
