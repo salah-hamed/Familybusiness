@@ -56,7 +56,7 @@ test("operator only sees settlement records for current beneficiary, not mixed h
 test("operator cannot declare recovered platform payment or offset the prior subscriber",()=>{
   const src=readFileSync("core/commissions/settlement-service.js","utf8");
   assert.match(src,/const period = resolveMerchantFinancePeriod\(project\)/);
-  assert.match(src,/if \(period\.platformPeriod\)/);
+  assert.ok(src.includes("if (!period.canDeclarePayment)"));
   assert.match(src,/PLATFORM_SETTLEMENT_FLOW_NOT_CONFIGURED/);
   assert.match(src,/beneficiaryId = oid \|\|/);
   assert.match(src,/paymentScope\.push\(where\("ownerId", "==", beneficiaryId\)\)/);
