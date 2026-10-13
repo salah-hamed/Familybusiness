@@ -152,8 +152,7 @@ service cloud.firestore {
     && project.status == "active"
     && ((("platformManaged" in project) && project.platformManaged == true
         && (isVerifiedPlatformManagedMerchant(projectId)
-        || (isVerifiedAssignedAfterCutover(projectId)
-           && subscriptionActive(project.assignedSubscriberId))))
+        || isVerifiedAssignedAfterCutover(projectId)))
         || ((!('platformManaged' in project) || project.platformManaged == false)
             && subscriptionActive(project.ownerId)));
   }
