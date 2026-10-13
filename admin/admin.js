@@ -1,5 +1,6 @@
 import db from "../core/firebase/firebase-db.js";
 import { projectMerchantOverview } from "../core/merchants/merchant-overview.js";
+import { assessMerchantTransfer, formatMerchantTransferPreflight } from "../core/merchants/merchant-transfer-preflight.js";
 import { requiredSubscriptionPayment } from "../core/subscriptions/payment-policy.js";
 import { protectAdmin } from "../core/auth/admin-guard.js";
 import {
@@ -641,7 +642,14 @@ function renderProjects() {
           <button class="secondaryBtn" data-action="view-project-payments" data-project="${escapeHTML(project.projectDocId)}">
             عرض حساب المشروع
           </button>
+          <label class="transferPreflightInput">فحص نقل النشاط للمشترك الجديد
+            <input class="candidateSubscriberUid" type="text" maxlength="128" placeholder="UID المشترك الجديد" autocomplete="off">
+          </label>
+          <button class="secondaryBtn" data-action="preflight-merchant-transfer" data-project="${escapeHTML(project.projectDocId)}" type="button">
+            فحص أهلية النقل (قراءة فقط)
+          </button>
         </div>
+        <p class="transferPreflightResult" role="status" aria-live="polite"></p>
       </article>
     `;
   }).join("") : '<div class="emptyState">لا توجد مشاريع مطابقة.</div>';
@@ -1299,6 +1307,41 @@ $("projectsContainer").addEventListener("click", async event => {
     $("settlementsSearch").value = projectId;
     switchSection("settlementsSection");
     await loadSettlements();
+    return;
+  }
+
+  if (button.dataset.action === "preflight-merchant-transfer") {
+    const panel = button.closest(".adminCard");
+    const result = panel?.querySelector(".transferPreflightResult");
+    const candidateUid = String(panel?.querySelector(".candidateSubscriberUid")?.value || "").trim();
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(candidateUid)) {
+      if (result) result.textContent = "اكتب UID صحيح للمشترك الجديد أولًا.";
+      return;
+    }
+    button.disabled = true;
+    if (result) result.textContent = "جاري مراجعة النشاط وحساب المشترك والاتفاق...";
+    try {
+      const [projectSnap,operatorSnap,agreementSnap,candidateSnap] = await Promise.all([
+        getDoc(doc(db,"projects",projectId)),
+        getDoc(doc(db,"operators",projectId)),
+        getDoc(doc(db,"commissionAgreements",projectId)),
+        getDoc(doc(db,"users",candidateUid))
+      ]);
+      const report = assessMerchantTransfer({
+        projectDocId:projectId,
+        project:projectSnap.exists() ? projectSnap.data() : null,
+        operator:operatorSnap.exists() ? operatorSnap.data() : null,
+        agreement:agreementSnap.exists() ? agreementSnap.data() : null,
+        candidate:candidateSnap.exists() ? candidateSnap.data() : null,
+        candidateUid
+      });
+      if (result) result.textContent = formatMerchantTransferPreflight(report);
+    } catch (error) {
+      console.error(error);
+      if (result) result.textContent = "تعذر مراجعة النقل حاليًا. لم تتغير أي بيانات.";
+    } finally {
+      button.disabled = false;
+    }
     return;
   }
 
