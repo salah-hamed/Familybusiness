@@ -2277,6 +2277,7 @@ async function seedTransferCaseScenario(suffix="audit") {
   await seedProject(projectId,{
     ownerId:owner,projectId:"supermarket",template:"supermarket",
     operatingModel:"partner_operated",templateVersion:1,
+    operatorId:projectId,partnerSetupStatus:"active",
     merchantId,originalSubscriberId:owner,assignedSubscriberId:"",
     assignmentStatus:"platform_managed",platformManaged:true,
     recoveryAuditId:projectId,recoveryAt:recoveredAt,recoveryAdminUid:admin,
