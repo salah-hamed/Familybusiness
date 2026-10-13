@@ -47,7 +47,7 @@ test("new Rules are deny-by-default for financial cutover and require independen
   assert.match(block,/resource\.data\.operatorConsent == "pending"/);
   assert.match(block,/resource\.data\.recipientConsent == "pending"/);
   assert.match(block,/allow delete: if false/);
-  assert.ok(block.includes('request.resource.data.status == "cutover_completed"'));
+  assert.ok(block.includes('next.status == "cutover_completed"'));
   assert.ok(block.includes("getAfter(merchantCutoverPath(projectId))"));
 });
 
