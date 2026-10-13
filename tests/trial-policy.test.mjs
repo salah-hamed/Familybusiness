@@ -129,3 +129,25 @@ test("Phase B1 is policy-only: existing auth, rules and orders remain unmodified
   assert.equal(source.includes("serverTimestamp"), false);
   assert.equal(source.includes("request.auth.uid"), false);
 });
+
+test("opted-in users cannot gain a perpetual subscription by setting status active without expiry or payment", () => {
+  const fakeActive = trial({subscriptionStatus:"active"});
+  assert.equal(resolveSubscriptionAccess(fakeActive, at(1)).allowed, false);
+  assert.equal(resolveSubscriptionAccess(fakeActive, at(1)).phase, "payment_required");
+  assert.equal(resolveSubscriptionAccess({...fakeActive, subscriptionExpiresAt:at(30)}, at(1)).allowed, false);
+  const realPaid = trial({
+    subscriptionStatus:"active", initialActivationPaid:true, subscriptionExpiresAt:at(30)
+  });
+  assert.equal(resolveSubscriptionAccess(realPaid, at(1)).phase, "paid");
+  assert.equal(resolveSubscriptionAccess(realPaid, at(30)).phase, "payment_required");
+});
+
+test("new-model launch promo must have a real expiry but can work without a paid transaction", () => {
+  const grant = trial({
+    subscriptionStatus:"active",
+    lastActivationSource:"launch_promo",
+    subscriptionExpiresAt:at(30)
+  });
+  assert.equal(resolveSubscriptionAccess(grant, at(10)).phase, "paid");
+  assert.equal(resolveSubscriptionAccess({...grant, subscriptionExpiresAt:null}, at(10)).allowed, false);
+});
