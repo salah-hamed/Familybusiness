@@ -62,13 +62,12 @@ export async function getProjectPaymentSummary(
   // centrally recovered shop, the operator sees only the platform's new
   // commission period; old subscriber payments cannot offset it.
   const projectSnap = oid ? null : await getDoc(doc(db,"projects",pid));
-  if (projectSnap?.exists?.() && projectSnap.data().platformManaged === true
-    && !isVerifiedPlatformManagedMerchant(projectSnap.data())) {
-    throw new Error("MERCHANT_RECOVERY_AUDIT_REQUIRED");
-  }
-  const recovered = projectSnap?.exists?.()
-    && isVerifiedPlatformManagedMerchant(projectSnap.data());
-  const beneficiaryId = oid || (recovered ? PLATFORM_COMMISSION_BENEFICIARY : "");
+  // Always scope post-recovery and post-cutover statements by the CURRENT
+  // beneficiary. Never mix ledger epochs or charge new dues against old paid.
+  const beneficiaryId = oid || (projectSnap?.exists?.()
+    ? (projectSnap.data().platformManaged === true
+      ? resolveMerchantFinancePeriod(projectSnap.data()).beneficiaryId : "")
+    : "");
   const ledger = collection(db, "commissionLedger");
   const payments = collection(db, "commissionSettlements");
   const ledgerScope = [
@@ -182,7 +181,7 @@ export async function declareOperatorPayment({
     if (!projectSnap.exists()) throw new Error("PROJECT_NOT_FOUND");
     const project = projectSnap.data();
     const period = resolveMerchantFinancePeriod(project);
-    if (period.platformPeriod) {
+    if (!period.canDeclarePayment) {
       // Historical payments still confirm with their original subscriber.
       // New platform dues require an independently approved accounting flow.
       throw new Error("PLATFORM_SETTLEMENT_FLOW_NOT_CONFIGURED");
