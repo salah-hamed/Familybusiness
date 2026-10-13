@@ -15,6 +15,7 @@ export function resolveMerchantFinancePeriod(project) {
   if (project.platformManaged === true) {
     if (isVerifiedAssignedAfterCutover(project)) {
       return {
+        assignmentCycle: project.assignmentCycle ?? 1,
         beneficiaryId: project.assignedSubscriberId,
         platformPeriod: false,
         assignmentPeriod: true,
@@ -27,6 +28,7 @@ export function resolveMerchantFinancePeriod(project) {
       throw new Error("MERCHANT_RECOVERY_AUDIT_REQUIRED");
     }
     return {
+      assignmentCycle: project.assignmentCycle ?? 1,
       beneficiaryId: PLATFORM_COMMISSION_BENEFICIARY,
       platformPeriod: true,
       canDeclarePayment: false,
