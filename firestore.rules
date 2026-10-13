@@ -3160,10 +3160,7 @@ service cloud.firestore {
     && ("merchantId" in projectData(projectId))
     && request.resource.data.projectDocId == projectId
     && request.resource.data.merchantId == projectData(projectId).merchantId
-    && request.resource.data.merchantId.matches('^m_[0-9a-f]{32}
- }
-}
-)
+    && request.resource.data.merchantId.matches('^m_[0-9a-f]{32}$')
     && request.resource.data.originalSubscriberId == projectData(projectId).originalSubscriberId
     && request.resource.data.previousSubscriberId == projectData(projectId).assignedSubscriberId
     && request.resource.data.proposedSubscriberId is string
