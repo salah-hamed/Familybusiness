@@ -314,7 +314,7 @@ export async function renderOperatorFinancePanel({
       listProjectPaymentRequests(projectId, {
         pageSize: 20, ownerId: period.beneficiaryId
       }),
-      period.platformPeriod
+      (period.platformPeriod || !period.canDeclarePayment)
         ? Promise.resolve([])
         : listProjectCommissionReversals(projectId, { pageSize: 20 })
     ]);
