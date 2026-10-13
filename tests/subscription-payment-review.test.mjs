@@ -69,24 +69,19 @@ test("rules bind approved payment and active subscriber atomically", () => {
 });
 
 
-test("admin exposes capped Launch 50 activation without restoring direct paid activation", () => {
-  assert.match(adminJs, /grantLaunchPromo/);
-  assert.match(adminJs, /grant-launch-promo/);
-  assert.match(adminJs, /LAUNCH_PROMO\.limit/);
-  assert.match(adminHtml, /id="metricLaunchPromo"/);
+test("retired Launch50 and manual activation controls stay hidden from Admin", () => {
+  for (const retired of ["grantLaunchPromo","grant-launch-promo","metricLaunchPromo","LAUNCH_PROMO"]) {
+    assert.equal(adminJs.includes(retired), false, retired);
+    assert.equal(adminHtml.includes(retired), false, retired);
+  }
   assert.doesNotMatch(adminJs, /data-action="activate-user"/);
 });
 
-test("Launch 50 activation is modeled as a grant, not a zero-value payment", () => {
-  const start = adminJs.indexOf("async function grantLaunchPromo");
-  const end = adminJs.indexOf("async function approveSubscriptionPayment", start);
-  const block = adminJs.slice(start, end);
-  assert.match(block, /subscriptionGrants/);
-  assert.match(block, /platformCounters/);
-  assert.match(block, /paymentRequired: false/);
-  assert.match(block, /lastActivationSource: "launch_promo"/);
-  assert.doesNotMatch(block, /subscriptionPayments/);
-  assert.doesNotMatch(block, /referralQualified/);
+test("historical Launch50 grant schema remains protected in Firestore rules", () => {
+  assert.match(rules, /match \/subscriptionGrants\/\{grantId\}/);
+  assert.match(rules, /lastGrantedUserId/);
+  assert.match(rules, /grantId == "launch50_" /);
+  assert.match(rules, /lastActivationSource/);
 });
 
 test("Storage deployment is removed from Firebase config", () => {

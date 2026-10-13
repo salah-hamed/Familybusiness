@@ -5,7 +5,6 @@ import { protectAdmin } from "../core/auth/admin-guard.js";
 import {
   PLATFORM_BILLING,
   REFERRAL_CONFIG,
-  LAUNCH_PROMO,
   formatEgp
 } from "../core/config/platform-config.js";
 import { escapeHTML } from "../core/utils/helpers.js";
@@ -165,8 +164,7 @@ async function loadOverview() {
       confirmedPayments,
       legacyPayments,
       pendingPayments,
-      pendingSubscriptionPayments,
-      launchPromoCounter
+      pendingSubscriptionPayments
     ] = await Promise.all([
       countDocs("users"),
       countDocs("users", [where("subscriptionStatus", "==", "active")]),
@@ -180,8 +178,7 @@ async function loadOverview() {
       aggregateAmount("commissionSettlements", [where("status", "==", "confirmed")]).catch(() => ({ totalAmount: 0, entryCount: 0 })),
       aggregateAmount("commissionSettlements", [where("status", "==", "paid")]).catch(() => ({ totalAmount: 0, entryCount: 0 })),
       countDocs("commissionSettlements", [where("status", "==", "pending_owner_confirmation")]).catch(() => null),
-      countDocs("subscriptionPayments", [where("status", "==", "pending_review")]).catch(() => null),
-      getDoc(doc(db, "platformCounters", LAUNCH_PROMO.campaignId)).catch(() => null)
+      countDocs("subscriptionPayments", [where("status", "==", "pending_review")]).catch(() => null)
     ]);
 
     const netCommission = Math.max(0, totalCommission.totalAmount - reversedCommission.totalAmount);
@@ -193,10 +190,6 @@ async function loadOverview() {
     $("metricPendingSubscriptionPayments").innerText = pendingSubscriptionPayments == null
       ? "—"
       : pendingSubscriptionPayments.toLocaleString("ar-EG");
-    const launchPromoUsed = launchPromoCounter?.exists?.()
-      ? Number(launchPromoCounter.data()?.count || 0)
-      : 0;
-    $("metricLaunchPromo").innerText = `${launchPromoUsed.toLocaleString("ar-EG")} / ${LAUNCH_PROMO.limit.toLocaleString("ar-EG")}`;
     $("metricProjects").innerText = totalProjects.toLocaleString("ar-EG");
     $("metricOperators").innerText = totalOperators.toLocaleString("ar-EG");
     $("metricOperatorsMeta").innerText = `${activeOperators} مشغّل نشط`;
@@ -313,9 +306,6 @@ function renderUsers() {
         </div>
         <div class="actions">
           <button class="primaryBtn" data-action="view-user-payments" data-uid="${escapeHTML(user.uid)}">راجع دفعات الاشتراك</button>
-          ${!initialAlreadyPaid && user.subscriptionStatus !== "active"
-            ? `<button class="secondaryBtn" data-action="grant-launch-promo" data-uid="${escapeHTML(user.uid)}">🎁 منحة مجانية من رصيد Launch 50</button>`
-            : ""}
           ${user.subscriptionStatus === "active"
             ? `<button class="secondaryBtn" data-action="deactivate-user" data-uid="${escapeHTML(user.uid)}">إيقاف الاشتراك</button>`
             : ""}
@@ -323,76 +313,6 @@ function renderUsers() {
       </article>
     `;
   }).join("") : '<div class="emptyState">لا توجد نتائج مطابقة.</div>';
-}
-
-async function grantLaunchPromo(uid) {
-  if (!adminSession?.user?.uid) throw new Error("ADMIN_SESSION_REQUIRED");
-
-  const grantId = `${LAUNCH_PROMO.campaignId}_${uid}`;
-
-  await runTransaction(db, async transaction => {
-    const userRef = doc(db, "users", uid);
-    const grantRef = doc(db, "subscriptionGrants", grantId);
-    const counterRef = doc(db, "platformCounters", LAUNCH_PROMO.campaignId);
-
-    const [userSnap, grantSnap, counterSnap] = await Promise.all([
-      transaction.get(userRef),
-      transaction.get(grantRef),
-      transaction.get(counterRef)
-    ]);
-
-    if (!userSnap.exists()) throw new Error("USER_NOT_FOUND");
-    if (grantSnap.exists()) throw new Error("PROMO_ALREADY_GRANTED");
-
-    const userData = userSnap.data();
-    if (hasPaidInitialActivation(userData) || userData.subscriptionStatus === "active") {
-      throw new Error("PROMO_NOT_ELIGIBLE");
-    }
-
-    const used = counterSnap.exists() ? Number(counterSnap.data()?.count || 0) : 0;
-    if (used >= LAUNCH_PROMO.limit) throw new Error("PROMO_FULL");
-
-    const now = new Date();
-    const expiresAt = new Date(now);
-    expiresAt.setDate(expiresAt.getDate() + LAUNCH_PROMO.subscriptionDays);
-
-    transaction.set(grantRef, {
-      grantId,
-      userId: uid,
-      campaignId: LAUNCH_PROMO.campaignId,
-      status: "granted",
-      paymentRequired: false,
-      value: PLATFORM_BILLING.initialActivationFee,
-      currency: PLATFORM_BILLING.currency,
-      subscriptionDays: LAUNCH_PROMO.subscriptionDays,
-      grantedAt: serverTimestamp(),
-      grantedBy: adminSession.user.uid
-    });
-
-    const counterData = {
-      campaignId: LAUNCH_PROMO.campaignId,
-      count: used + 1,
-      limit: LAUNCH_PROMO.limit,
-      lastGrantedUserId: uid,
-      updatedAt: serverTimestamp()
-    };
-
-    if (counterSnap.exists()) transaction.update(counterRef, counterData);
-    else transaction.set(counterRef, counterData);
-
-    transaction.update(userRef, {
-      isActive: true,
-      subscriptionStatus: "active",
-      initialActivationPaid: false,
-      billingCycle: "monthly",
-      subscriptionStartedAt: Timestamp.fromDate(now),
-      subscriptionExpiresAt: Timestamp.fromDate(expiresAt),
-      activatedAt: serverTimestamp(),
-      lastActivationSource: "launch_promo",
-      lastSubscriptionGrantId: grantId,
-      launchPromoCampaignId: LAUNCH_PROMO.campaignId
-    });
-  });
 }
 
 async function approveSubscriptionPayment(paymentId) {
@@ -1347,32 +1267,6 @@ $("usersContainer").addEventListener("click", async event => {
     $("subscriptionPaymentsStatusFilter").value = "all";
     switchSection("subscriptionPaymentsSection");
     await loadSubscriptionPayments();
-    return;
-  }
-
-  if (button.dataset.action === "grant-launch-promo") {
-    const confirmed = confirm(`منح هذا المستخدم اشتراكًا مجانيًا لمدة ${LAUNCH_PROMO.subscriptionDays} يوم من رصيد ${LAUNCH_PROMO.limit} منحة؟ يمكنك توزيع المنح في أي وقت وعلى المستخدمين الذين تختارهم. هذا التفعيل لا يُحسب كدفعة مدفوعة ولا يؤهل عمولة إحالة.`);
-    if (!confirmed) return;
-
-    button.disabled = true;
-    try {
-      await grantLaunchPromo(button.dataset.uid);
-      $("usersMessage").innerText = "تم تفعيل اشتراك Launch 50 المجاني ✅";
-      await Promise.all([loadUsers(), loadOverview()]);
-    } catch (error) {
-      console.error(error);
-      const code = String(error?.message || "");
-      $("usersMessage").innerText =
-        code === "PROMO_FULL"
-          ? "تم استخدام كل منح Launch 50 المجانية المتاحة."
-          : code === "PROMO_ALREADY_GRANTED"
-            ? "هذا المستخدم حصل على العرض بالفعل."
-            : code === "PROMO_NOT_ELIGIBLE"
-              ? "هذا المستخدم لم يعد مؤهلًا لأول تفعيل مجاني."
-              : "تعذر تفعيل العرض المجاني. حدّث البيانات وحاول مرة أخرى.";
-    } finally {
-      button.disabled = false;
-    }
     return;
   }
 
