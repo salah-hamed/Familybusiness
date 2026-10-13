@@ -18,7 +18,7 @@ function ready(overrides={}) {
     recipientConsent:"accepted",operatorConsent:"accepted",recipientConsentedAt:at,
     operatorConsentedAt:at,financeClearance:"reviewed",financeReviewedAt:at,
     financeReviewedBy:"admin",commissionAmount:6.5,commissionVersion:2,commissionCurrency:"EGP"};
-  const recoveryAudit={status:"completed",projectDocId,merchantId,
+  const recoveryAudit={status:"completed",projectDocId:projectId,merchantId,
     originalSubscriberId:"old",previousSubscriberId:"old",recoveredAt:at};
   return {
     projectId,project,transferCase,recoveryAudit,
