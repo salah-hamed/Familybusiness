@@ -27,6 +27,7 @@ service cloud.firestore {
   function merchantAssignmentCyclePath(id){ return /databases/$(database)/documents/merchantAssignmentCycles/$(id); }
   function merchantTransferCyclePath(id){ return /databases/$(database)/documents/merchantTransferCycles/$(id); }
   function merchantHistoricGrantPath(id){ return /databases/$(database)/documents/merchantHistoricalAccess/$(id); }
+  function merchantTransferCycleFinanceReviewPath(id){ return /databases/$(database)/documents/merchantTransferCycleFinanceReviews/$(id); }
   function subscriptionGrantPath(grantId){ return /databases/$(database)/documents/subscriptionGrants/$(grantId); }
   function platformCounterPath(counterId){ return /databases/$(database)/documents/platformCounters/$(counterId); }
   function userExists(uid){ return exists(userPath(uid)); }
@@ -3999,22 +4000,177 @@ service cloud.firestore {
    allow update, delete: if false;
   }
   match /merchantRecoveryCycles/{cycleId} {
+     function verifiedRepeatCycleTransferCreate(cycleId){
+    let c=request.resource.data;
+    let p=get(projectPath(c.projectDocId)).data;
+    let op=get(operatorPath(c.projectDocId)).data;
+    let ag=get(commissionAgreementPath(c.projectDocId)).data;
+    return cycleId==c.projectDocId+"_"+string(c.cycle)
+     && c.cycleId==cycleId && c.cycle is int && c.cycle>=2
+     && p.assignmentCycle==c.cycle && p.recoveryAuditId==cycleId
+     && p.platformManaged==true && p.assignmentStatus=="platform_managed"
+     && p.assignedSubscriberId=="" && p.operatorId==c.projectDocId
+     && c.merchantId==p.merchantId
+     && c.originalSubscriberId==p.originalSubscriberId
+     && c.previousSubscriberId==""
+     && c.proposedSubscriberId is string && c.proposedSubscriberId.size()>0
+     && c.proposedSubscriberId!=p.originalSubscriberId
+     && !exists(merchantHistoricGrantPath(c.projectDocId+"_"+c.proposedSubscriberId))
+     && subscriptionActive(c.proposedSubscriberId)
+     && op.authUid is string && op.authUid.size()>0
+     && op.isActive==true && op.status=="active" && op.agreementStatus=="accepted"
+     && ag.status=="accepted" && ag.currency=="EGP"
+     && c.commissionAmount==ag.currentAmount
+     && c.commissionVersion==ag.acceptedVersion
+     && c.commissionCurrency=="EGP"
+     && c.status=="awaiting_consents"
+     && c.operatorConsent=="pending" && c.recipientConsent=="pending"
+     && c.operatorConsentedAt==null && c.recipientConsentedAt==null
+     && c.financeClearance=="pending" && c.cutoverAt==null
+     && c.reason is string && c.reason.size()>=15 && c.reason.size()<=300
+     && c.createdAt==request.time && c.createdBy==request.auth.uid
+     && c.keys().hasOnly([
+      "cycle","cycleId","projectDocId","merchantId","originalSubscriberId",
+      "previousSubscriberId","proposedSubscriberId","status",
+      "operatorConsent","recipientConsent","operatorConsentedAt",
+      "recipientConsentedAt","commissionAmount","commissionVersion",
+      "commissionCurrency","financeClearance","cutoverAt",
+      "reason","createdBy","createdAt"]);
+  }
+  match /merchantTransferCycles/{cycleId} {
+   allow get: if isAdmin() || (signedIn() && (
+     resource.data.proposedSubscriberId==request.auth.uid ||
+     (operatorExists(resource.data.projectDocId)
+      && operatorData(resource.data.projectDocId).authUid==request.auth.uid)));
+   allow list: if isAdmin() || (signedIn() && resource.data.proposedSubscriberId==request.auth.uid);
+   allow create: if isAdmin() && verifiedRepeatCycleTransferCreate(cycleId);
+   allow update: if (
+    signedIn() && resource.data.status=="awaiting_consents"
+    && operatorExists(resource.data.projectDocId)
+    && operatorData(resource.data.projectDocId).authUid==request.auth.uid
+    && resource.data.operatorConsent=="pending"
+    && request.resource.data.operatorConsent in ["accepted","declined"]
+    && request.resource.data.operatorConsentedAt==request.time
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+     "operatorConsent","operatorConsentedAt"])
+   ) || (
+    signedIn() && resource.data.status=="awaiting_consents"
+    && resource.data.proposedSubscriberId==request.auth.uid
+    && resource.data.recipientConsent=="pending"
+    && request.resource.data.recipientConsent in ["accepted","declined"]
+    && request.resource.data.recipientConsentedAt==request.time
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+     "recipientConsent","recipientConsentedAt"])
+   ) || (
+    isAdmin() && resource.data.status=="awaiting_consents"
+    && resource.data.operatorConsent=="accepted"
+    && resource.data.recipientConsent=="accepted"
+    && resource.data.financeClearance=="pending"
+    && request.resource.data.financeClearance=="reviewed"
+    && request.resource.data.financeReviewedAt==request.time
+    && request.resource.data.financeReviewedBy==request.auth.uid
+    && getAfter(/databases/$(database)/documents/merchantTransferCycleFinanceReviews/$(cycleId)).data.reviewedAt==request.time
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+     "financeClearance","financeReviewedAt","financeReviewedBy"])
+   ) || (
+    isAdmin() && resource.data.status=="awaiting_consents"
+    && resource.data.financeClearance=="reviewed"
+    && resource.data.operatorConsent=="accepted"
+    && resource.data.recipientConsent=="accepted"
+    && subscriptionActive(resource.data.proposedSubscriberId)
+    && request.resource.data.status=="cutover_completed"
+    && request.resource.data.cutoverAt==request.time
+    && request.resource.data.cutoverBy==request.auth.uid
+    && request.resource.data.cutoverAuditId==cycleId
+    && getAfter(merchantAssignmentCyclePath(cycleId)).data.status=="completed"
+    && getAfter(projectPath(resource.data.projectDocId)).data.assignedSubscriberId==resource.data.proposedSubscriberId
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+     "status","cutoverAt","cutoverBy","cutoverAuditId"])
+   );
+   allow delete: if false;
+  }
+  function verifiedRepeatFinanceReview(cycleId){
+    let d=request.resource.data;
+    let c=get(merchantTransferCyclePath(cycleId)).data;
+    let next=getAfter(merchantTransferCyclePath(cycleId)).data;
+    let recovery=get(merchantRecoveryCyclePath(cycleId)).data;
+    return d.cycleId==cycleId && d.projectDocId==c.projectDocId
+     && d.adminUid==request.auth.uid
+     && d.reviewedAt==request.time && d.currency=="EGP"
+     && d.formerSubscriberId==recovery.previousSubscriberId
+     && c.status=="awaiting_consents"
+     && c.operatorConsent=="accepted" && c.recipientConsent=="accepted"
+     && c.financeClearance=="pending"
+     && next.financeClearance=="reviewed"
+     && next.financeReviewedBy==request.auth.uid
+     && next.financeReviewedAt==request.time
+     && d.formerSubscriberEarnedAmount is number && d.formerSubscriberEarnedAmount>=0
+     && d.formerSubscriberOutstandingAmount is number && d.formerSubscriberOutstandingAmount>=0
+     && d.formerSubscriberOutstandingAmount<=d.formerSubscriberEarnedAmount
+     && d.platformEarnedAmount is number && d.platformEarnedAmount>=0
+     && d.platformOutstandingAmount is number && d.platformOutstandingAmount>=0
+     && d.platformOutstandingAmount<=d.platformEarnedAmount
+     && d.keys().hasOnly([
+      "cycleId","projectDocId","adminUid","reviewedAt","currency",
+      "formerSubscriberId","formerSubscriberEarnedAmount",
+      "formerSubscriberOutstandingAmount","platformEarnedAmount",
+      "platformOutstandingAmount"]);
+  }
+  match /merchantTransferCycleFinanceReviews/{cycleId} {
    allow get, list: if isAdmin();
-   allow create: if isAdmin() && validRepeatRecoveryWitness(cycleId);
+   allow create: if isAdmin() && verifiedRepeatFinanceReview(cycleId);
    allow update, delete: if false;
+  }
+  function verifiedRepeatAssignmentWitness(cycleId){
+    let d=request.resource.data;
+    let p=get(projectPath(d.projectDocId)).data;
+    let c=get(merchantTransferCyclePath(cycleId)).data;
+    let review=get(merchantTransferCycleFinanceReviewPath(cycleId)).data;
+    let ag=get(commissionAgreementPath(d.projectDocId)).data;
+    let updated=getAfter(projectPath(d.projectDocId)).data;
+    return d.cycleId==cycleId && d.cycle is int && d.cycle>=2
+     && cycleId==d.projectDocId+"_"+string(d.cycle)
+     && p.assignmentCycle==d.cycle && p.recoveryAuditId==cycleId
+     && p.platformManaged==true && p.assignmentStatus=="platform_managed"
+     && p.assignedSubscriberId==""
+     && d.projectDocId==c.projectDocId && d.merchantId==p.merchantId
+     && d.originalSubscriberId==p.originalSubscriberId
+     && d.previousSubscriberId==get(merchantRecoveryCyclePath(cycleId)).data.previousSubscriberId
+     && c.status=="awaiting_consents" && c.financeClearance=="reviewed"
+     && c.operatorConsent=="accepted" && c.recipientConsent=="accepted"
+     && d.assignedSubscriberId==c.proposedSubscriberId
+     && subscriptionActive(d.assignedSubscriberId)
+     && !exists(merchantHistoricGrantPath(d.projectDocId+"_"+d.assignedSubscriberId))
+     && review.reviewedAt==c.financeReviewedAt
+     && review.adminUid==c.financeReviewedBy
+     && review.cycleId==cycleId
+     && ag.status=="accepted" && ag.currency=="EGP"
+     && ag.currentAmount==c.commissionAmount
+     && ag.acceptedVersion==c.commissionVersion
+     && d.recoveryAuditId==cycleId && d.financeReviewId==cycleId
+     && d.commissionAmount==c.commissionAmount
+     && d.commissionVersion==c.commissionVersion
+     && d.commissionCurrency=="EGP"
+     && d.status=="completed" && d.completedAt==request.time
+     && d.completedBy==request.auth.uid
+     && updated.cutoverAuditId==cycleId
+     && updated.assignmentStatus=="assigned_to_new_subscriber"
+     && updated.assignedSubscriberId==d.assignedSubscriberId
+     && updated.cutoverAt==request.time
+     && getAfter(merchantTransferCyclePath(cycleId)).data.status=="cutover_completed"
+     && d.keys().hasOnly([
+      "cycle","cycleId","projectDocId","merchantId","originalSubscriberId",
+      "previousSubscriberId","assignedSubscriberId","recoveryAuditId","financeReviewId",
+      "commissionAmount","commissionVersion","commissionCurrency",
+      "status","completedBy","completedAt"]);
   }
   match /merchantAssignmentCycles/{cycleId} {
    allow get, list: if isAdmin();
-   allow create, update, delete: if false;
+   allow create: if isAdmin() && verifiedRepeatAssignmentWitness(cycleId);
+   allow update, delete: if false;
   }
-  match /merchantTransferCycles/{cycleId} {
-   allow get, list: if isAdmin()
-    || (signedIn() && (
-      resource.data.proposedSubscriberId==request.auth.uid
-      || (operatorExists(resource.data.projectDocId)
-          && operatorData(resource.data.projectDocId).authUid==request.auth.uid)));
-   allow create, update, delete: if false;
-  }
+
+
   match /merchantTransferCycleFinanceReviews/{cycleId} {
    allow get, list: if isAdmin();
    allow create, update, delete: if false;
