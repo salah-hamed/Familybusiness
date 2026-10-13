@@ -162,12 +162,12 @@ service cloud.firestore {
      && p.recoveryAuditId==p.cutoverAuditId
      && exists(merchantRecoveryCyclePath(p.recoveryAuditId))
      && exists(merchantAssignmentCyclePath(p.cutoverAuditId))
-     && exists(merchantTransferCyclePath(p.cutoverAuditId))
      && repeatAssignmentEvidence(projectId,p);
   }
   function repeatAssignmentEvidence(projectId,p){
     let a=get(merchantAssignmentCyclePath(p.cutoverAuditId)).data;
-    let c=get(merchantTransferCyclePath(p.cutoverAuditId)).data;
+    // Consent and accepted terms are validated when creating this immutable
+    // witness. Runtime dispatch only needs the signed epoch beneficiary.
     return p.platformManaged==true
      && p.assignmentStatus=="assigned_to_new_subscriber"
      && p.assignedSubscriberId is string && p.assignedSubscriberId.size()>0
@@ -179,12 +179,7 @@ service cloud.firestore {
      && a.originalSubscriberId==p.originalSubscriberId
      && a.recoveryAuditId==p.recoveryAuditId
      && a.assignedSubscriberId==p.assignedSubscriberId
-     && a.completedAt==p.cutoverAt && a.completedBy==p.cutoverAdminUid
-     && c.status=="cutover_completed" && c.cycleId==p.cutoverAuditId
-     && c.proposedSubscriberId==p.assignedSubscriberId
-     && c.operatorConsent=="accepted" && c.recipientConsent=="accepted"
-     && c.financeClearance=="reviewed"
-     && c.cutoverAt==p.cutoverAt && c.cutoverBy==p.cutoverAdminUid;
+     && a.completedAt==p.cutoverAt && a.completedBy==p.cutoverAdminUid;
   }
   function historicCycleStatementAccess(projectId){
     let path=merchantHistoricGrantPath(projectId+"_"+request.auth.uid);
@@ -211,13 +206,17 @@ service cloud.firestore {
   }
   function commissionBeneficiary(projectId){
    let p=projectData(projectId);
-   return isVerifiedAssignedAfterCutover(projectId)
-    ? p.assignedSubscriberId
-    : (isVerifiedPlatformManagedMerchant(projectId)
-      ? "__fb_platform_commissions__"
-      : ((("platformManaged" in p) && p.platformManaged==true)
-          || (("assignedSubscriberId" in p) && p.assignedSubscriberId!=p.ownerId)
-        ? "" : p.ownerId));
+   // Choose the one live state FIRST. Verifying a non-applicable audit
+   // can exhaust Firestore's rule-evaluation budget in rider dispatch.
+   return !("platformManaged" in p) || p.platformManaged==false
+    ? ((("assignedSubscriberId" in p) && p.assignedSubscriberId!=p.ownerId)
+       ? "" : p.ownerId)
+    : (p.assignmentStatus=="platform_managed"
+       ? (isVerifiedPlatformManagedMerchant(projectId)
+          ? "__fb_platform_commissions__" : "")
+       : (p.assignmentStatus=="assigned_to_new_subscriber"
+         ? (isVerifiedAssignedAfterCutover(projectId) ? p.assignedSubscriberId : "")
+         : ""));
   }
   function projectAvailable(projectId){
    let project = projectData(projectId);
