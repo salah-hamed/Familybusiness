@@ -1354,6 +1354,17 @@ service cloud.firestore {
       && request.resource.data.keys().hasOnly([
        "userId","revision","lastReviewedPaymentId","updatedAt",
        "recoverySafe","pendingPaymentId","reconciledAt","reconciledBy"]))
+     || (isAdmin()
+      && request.resource.data.pendingPaymentId is string
+      && request.resource.data.pendingPaymentId.size()>0
+      && request.resource.data.recoverySafe==false
+      && request.resource.data.migratedAt==request.time
+      && request.resource.data.migratedBy==request.auth.uid
+      && get(subscriptionPaymentPath(request.resource.data.pendingPaymentId)).data.userId==uid
+      && get(subscriptionPaymentPath(request.resource.data.pendingPaymentId)).data.status=="pending_review"
+      && request.resource.data.keys().hasOnly([
+       "userId","revision","lastReviewedPaymentId","updatedAt",
+       "recoverySafe","pendingPaymentId","migratedAt","migratedBy"]))
     );
    allow update: if request.resource.data.userId==uid
     && resource.data.userId==uid
