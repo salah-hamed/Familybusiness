@@ -211,6 +211,17 @@ service cloud.firestore {
       )
     );
   }
+  function commissionCycleMatches(order,ledger){
+    let p=projectData(ledger.projectId);
+    return (("assignmentCycle" in p) && p.assignmentCycle is int
+        && p.assignmentCycle>=2)
+      ? ("assignmentCycle" in ledger
+        && ledger.assignmentCycle==p.assignmentCycle
+        && ("commissionAssignmentCycle" in order)
+        && order.commissionAssignmentCycle==p.assignmentCycle)
+      : !("assignmentCycle" in ledger)
+        && !("commissionAssignmentCycle" in order);
+  }
   function validProjectOrderLedgerCreate(entryId){
    let ledger = request.resource.data;
    let order = getAfter(orderPath(ledger.orderId)).data;
@@ -238,7 +249,8 @@ service cloud.firestore {
     && validCommissionTriggerState(order)
     && order.commissionLocked == true
     && order.commissionAmount == ledger.amount
-    && order.commissionAgreementVersion == ledger.agreementVersion;
+    && order.commissionAgreementVersion == ledger.agreementVersion
+    && commissionCycleMatches(order,ledger);
   }
   function validTrackedLaundryProjectOrderLedgerCreate(entryId){
    let ledger = request.resource.data;
@@ -263,6 +275,7 @@ service cloud.firestore {
     && order.commissionAmount == ledger.amount
     && order.commissionAgreementVersion == ledger.agreementVersion
     && ledger.userId == commissionBeneficiary(ledger.projectId)
+    && commissionCycleMatches(order,ledger)
     && isProjectOperator(ledger.projectId);
   }
 
@@ -307,7 +320,8 @@ service cloud.firestore {
       "commissionAmount",
       "commissionAgreementVersion",
       "commissionTrigger",
-      "commissionEarnedAt"
+      "commissionEarnedAt",
+       "commissionAssignmentCycle"
     ])
     && ledger.orderId == orderId
     && ledger.projectId == before.projectId
@@ -401,7 +415,8 @@ service cloud.firestore {
           "commissionAmount",
           "commissionAgreementVersion",
           "commissionTrigger",
-          "commissionEarnedAt"
+          "commissionEarnedAt",
+       "commissionAssignmentCycle"
         ])
       )
       ||
@@ -427,7 +442,8 @@ service cloud.firestore {
           "commissionAmount",
           "commissionAgreementVersion",
           "commissionTrigger",
-          "commissionEarnedAt"
+          "commissionEarnedAt",
+       "commissionAssignmentCycle"
         ])
       )
     );
