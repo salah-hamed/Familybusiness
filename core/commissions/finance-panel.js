@@ -6,6 +6,7 @@ import {
   confirmOwnerPayment,
   rejectOwnerPayment
 } from "./settlement-service.js";
+import { declareMerchantCyclePayment } from "./merchant-cycle-settlement-service.js";
 import {
   listProjectCommissionReversals,
   confirmCommissionReversal,
@@ -388,13 +389,15 @@ export async function renderOperatorFinancePanel({
 
           message.textContent = "جاري تسجيل عملية الدفع...";
 
-          await declareOperatorPayment({
-            projectId,
-            operatorUid,
-            amount,
-            paymentMethod,
-            paymentReference
-          });
+          if (period.assignmentPeriod) {
+            await declareMerchantCyclePayment({
+              projectId,operatorUid,amount,paymentMethod,paymentReference
+            });
+          } else {
+            await declareOperatorPayment({
+              projectId,operatorUid,amount,paymentMethod,paymentReference
+            });
+          }
 
           message.textContent = "تم تسجيل الدفع. في انتظار تأكيد صاحب المشروع.";
           await renderOperatorFinancePanel({
