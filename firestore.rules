@@ -19,6 +19,8 @@ service cloud.firestore {
   function commissionSettlementPath(settlementId){ return /databases/$(database)/documents/commissionSettlements/$(settlementId); }
   function merchantViolationPath(projectId){ return /databases/$(database)/documents/merchantViolations/$(projectId); }
   function merchantRecoveryPath(projectId){ return /databases/$(database)/documents/merchantRecoveries/$(projectId); }
+  function merchantTransferCasePath(projectId){ return /databases/$(database)/documents/merchantTransferCases/$(projectId); }
+  function merchantTransferFinanceReviewPath(projectId){ return /databases/$(database)/documents/merchantTransferFinanceReviews/$(projectId); }
   function subscriptionGrantPath(grantId){ return /databases/$(database)/documents/subscriptionGrants/$(grantId); }
   function platformCounterPath(counterId){ return /databases/$(database)/documents/platformCounters/$(counterId); }
   function userExists(uid){ return exists(userPath(uid)); }
@@ -3439,27 +3441,12 @@ service cloud.firestore {
      && request.resource.data.financeClearance == "reviewed"
      && request.resource.data.financeReviewedBy == request.auth.uid
      && request.resource.data.financeReviewedAt == request.time
-     && request.resource.data.financeSnapshot is map
-     && request.resource.data.financeSnapshot.keys().hasOnly([
-       "currency","formerSubscriberId","platformOutstandingAmount",
-       "formerSubscriberOutstandingAmount","platformEarnedAmount","formerSubscriberEarnedAmount"
-     ])
-     && request.resource.data.financeSnapshot.keys().hasAll([
-       "currency","formerSubscriberId","platformOutstandingAmount",
-       "formerSubscriberOutstandingAmount","platformEarnedAmount","formerSubscriberEarnedAmount"
-     ])
-     && request.resource.data.financeSnapshot.currency == "EGP"
-     && request.resource.data.financeSnapshot.formerSubscriberId == resource.data.originalSubscriberId
-     && request.resource.data.financeSnapshot.platformOutstandingAmount is number
-     && request.resource.data.financeSnapshot.platformOutstandingAmount >= 0
-     && request.resource.data.financeSnapshot.formerSubscriberOutstandingAmount is number
-     && request.resource.data.financeSnapshot.formerSubscriberOutstandingAmount >= 0
-     && request.resource.data.financeSnapshot.platformEarnedAmount is number
-     && request.resource.data.financeSnapshot.platformEarnedAmount >= 0
-     && request.resource.data.financeSnapshot.formerSubscriberEarnedAmount is number
-     && request.resource.data.financeSnapshot.formerSubscriberEarnedAmount >= 0
+     && existsAfter(merchantTransferFinanceReviewPath(projectId))
+     && getAfter(merchantTransferFinanceReviewPath(projectId)).data.adminUid == request.auth.uid
+     && getAfter(merchantTransferFinanceReviewPath(projectId)).data.reviewedAt == request.time
+     && getAfter(merchantTransferFinanceReviewPath(projectId)).data.projectDocId == projectId
      && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-       "financeClearance","financeReviewedBy","financeReviewedAt","financeSnapshot"
+       "financeClearance","financeReviewedBy","financeReviewedAt"
      ])
    ) || (
      isAdmin()
@@ -3472,6 +3459,41 @@ service cloud.firestore {
      ])
    );
    allow delete: if false;
+  }
+
+
+  // Financial snapshot is PRIVATE: consent case readers must never see a
+  // former subscriber's outstanding balances. Reviewed is not paid.
+  match /merchantTransferFinanceReviews/{projectId} {
+   allow get, list: if isAdmin();
+   allow create: if isAdmin()
+    && projectExists(projectId)
+    && request.resource.data.projectDocId == projectId
+    && request.resource.data.adminUid == request.auth.uid
+    && request.resource.data.reviewedAt == request.time
+    && request.resource.data.currency == "EGP"
+    && request.resource.data.formerSubscriberId == projectData(projectId).originalSubscriberId
+    && request.resource.data.platformOutstandingAmount is number
+    && request.resource.data.platformOutstandingAmount >= 0
+    && request.resource.data.formerSubscriberOutstandingAmount is number
+    && request.resource.data.formerSubscriberOutstandingAmount >= 0
+    && request.resource.data.platformEarnedAmount is number
+    && request.resource.data.platformEarnedAmount >= 0
+    && request.resource.data.formerSubscriberEarnedAmount is number
+    && request.resource.data.formerSubscriberEarnedAmount >= 0
+    && request.resource.data.keys().hasOnly([
+      "projectDocId","adminUid","reviewedAt","currency","formerSubscriberId",
+      "platformOutstandingAmount","formerSubscriberOutstandingAmount",
+      "platformEarnedAmount","formerSubscriberEarnedAmount"
+    ])
+    && exists(merchantTransferCasePath(projectId))
+    && get(merchantTransferCasePath(projectId)).data.financeClearance == "pending"
+    && get(merchantTransferCasePath(projectId)).data.operatorConsent == "accepted"
+    && get(merchantTransferCasePath(projectId)).data.recipientConsent == "accepted"
+    && getAfter(merchantTransferCasePath(projectId)).data.financeClearance == "reviewed"
+    && getAfter(merchantTransferCasePath(projectId)).data.financeReviewedBy == request.auth.uid
+    && getAfter(merchantTransferCasePath(projectId)).data.financeReviewedAt == request.time;
+   allow update, delete: if false;
   }
 
   match /{document=**} { allow read, write: if false; }

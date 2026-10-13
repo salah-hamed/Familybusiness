@@ -122,6 +122,7 @@ export async function reviewMerchantTransferFinance({projectDocId,adminUid}) {
   const projectRef=doc(db,"projects",projectDocId);
   const caseRef=doc(db,"merchantTransferCases",projectDocId);
   const agreementRef=doc(db,"commissionAgreements",projectDocId);
+  const reviewRef=doc(db,"merchantTransferFinanceReviews",projectDocId);
   const projectSnap=await getDoc(projectRef);
   if (!projectSnap.exists() || projectSnap.data().platformManaged !== true) {
     throw new Error("FINANCE_REVIEW_MERCHANT_NOT_RECOVERED");
@@ -136,9 +137,10 @@ export async function reviewMerchantTransferFinance({projectDocId,adminUid}) {
     getProjectPaymentSummary(projectDocId,{ownerId:originalUid})
   ]);
   await runTransaction(db,async tx=>{
-    const [projectSnap2,caseSnap,agreementSnap]=await Promise.all([
-      tx.get(projectRef),tx.get(caseRef),tx.get(agreementRef)
+    const [projectSnap2,caseSnap,agreementSnap,existingReview]=await Promise.all([
+      tx.get(projectRef),tx.get(caseRef),tx.get(agreementRef),tx.get(reviewRef)
     ]);
+    if (existingReview.exists()) throw new Error("FINANCE_REVIEW_ALREADY_RECORDED");
     const payload=buildMerchantTransferFinanceReview({
       projectId:projectDocId,
       project:projectSnap2.exists()?projectSnap2.data():null,
@@ -146,6 +148,13 @@ export async function reviewMerchantTransferFinance({projectDocId,adminUid}) {
       agreement:agreementSnap.exists()?agreementSnap.data():null,
       adminUid,platformSummary,historicalSummary
     });
-    tx.update(caseRef,{...payload,financeReviewedAt:serverTimestamp()});
+    const reviewedAt=serverTimestamp();
+    // The operator/recipient may read the consent case; they must NEVER read
+    // the former subscriber's balances. Amounts live in an admin-only document.
+    const {financeSnapshot,...publicReview}=payload;
+    tx.set(reviewRef,{
+      projectDocId,adminUid,reviewedAt,...financeSnapshot
+    });
+    tx.update(caseRef,{...publicReview,financeReviewedAt:reviewedAt});
   });
 }

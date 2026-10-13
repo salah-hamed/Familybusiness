@@ -2402,40 +2402,51 @@ test("Phase C4 disallows account-owner substitution, pre-consent and backdated c
   }
 });
 
-test("admin can record a separate finance REVIEW only after both consents; it never pays or transfers",async()=>{
+test("admin finance review is atomic and sensitive balances are hidden from incoming subscriber",async()=>{
   const ids=await seedTransferCaseScenario("finance_review");
   const adminDb=testEnv.authenticatedContext(ids.admin).firestore();
   const operatorDb=testEnv.authenticatedContext(ids.operatorUid).firestore();
   const recipientDb=testEnv.authenticatedContext(ids.target).firestore();
-  const ref=db=>doc(db,"merchantTransferCases",ids.projectId);
-  await assertSucceeds(setDoc(ref(adminDb),sampleTransferCase(ids)));
+  const caseRef=db=>doc(db,"merchantTransferCases",ids.projectId);
+  const reviewRef=db=>doc(db,"merchantTransferFinanceReviews",ids.projectId);
+  await assertSucceeds(setDoc(caseRef(adminDb),sampleTransferCase(ids)));
   const patch=()=>({
     financeClearance:"reviewed",financeReviewedBy:ids.admin,
-    financeReviewedAt:serverTimestamp(),
-    financeSnapshot:{
-      currency:"EGP",formerSubscriberId:ids.owner,
-      platformOutstandingAmount:100,formerSubscriberOutstandingAmount:50,
-      platformEarnedAmount:125,formerSubscriberEarnedAmount:250
-    }
+    financeReviewedAt:serverTimestamp()
   });
-  // Admin cannot skip the two real consents.
-  await assertFails(updateDoc(ref(adminDb),patch()));
-  await assertSucceeds(updateDoc(ref(operatorDb),{
+  const finance=()=>({
+    projectDocId:ids.projectId,adminUid:ids.admin,reviewedAt:serverTimestamp(),
+    currency:"EGP",formerSubscriberId:ids.owner,
+    platformOutstandingAmount:100,formerSubscriberOutstandingAmount:50,
+    platformEarnedAmount:125,formerSubscriberEarnedAmount:250
+  });
+  const submitReview=()=>{
+    const batch=writeBatch(adminDb);
+    batch.update(caseRef(adminDb),patch());
+    batch.set(reviewRef(adminDb),finance());
+    return batch.commit();
+  };
+  await assertFails(submitReview()); // missing both consents
+  await assertSucceeds(updateDoc(caseRef(operatorDb),{
     operatorConsent:"accepted",operatorConsentedAt:serverTimestamp()
   }));
-  await assertSucceeds(updateDoc(ref(recipientDb),{
+  await assertSucceeds(updateDoc(caseRef(recipientDb),{
     recipientConsent:"accepted",recipientConsentedAt:serverTimestamp()
   }));
-  await assertFails(updateDoc(ref(recipientDb),patch()));
-  await assertFails(updateDoc(ref(operatorDb),patch()));
-  await assertSucceeds(updateDoc(ref(adminDb),patch()));
-  const reviewed=await getDoc(ref(adminDb));
-  assert.equal(reviewed.data().financeClearance,"reviewed");
-  assert.equal(reviewed.data().financeSnapshot.formerSubscriberOutstandingAmount,50);
-  assert.equal(reviewed.data().cutoverAt,null);
-  assert.equal(reviewed.data().status,"awaiting_consents");
-  await assertFails(updateDoc(ref(adminDb),{financeClearance:"paid"}));
-  await assertFails(updateDoc(ref(adminDb),{financeSnapshot:{currency:"EGP"}}));
+  await assertFails(updateDoc(caseRef(recipientDb),patch()));
+  await assertFails(updateDoc(caseRef(operatorDb),patch()));
+  await assertFails(updateDoc(caseRef(adminDb),patch())); // missing private atomic audit
+  await assertSucceeds(submitReview());
+  const publicCase=await getDoc(caseRef(recipientDb));
+  assert.equal(publicCase.data().financeClearance,"reviewed");
+  assert.equal(publicCase.data().financeSnapshot,undefined);
+  assert.equal(publicCase.data().cutoverAt,null);
+  await assertFails(getDoc(reviewRef(recipientDb)));
+  await assertFails(getDoc(reviewRef(operatorDb)));
+  const privateReview=await getDoc(reviewRef(adminDb));
+  assert.equal(privateReview.data().formerSubscriberOutstandingAmount,50);
+  await assertFails(updateDoc(caseRef(adminDb),{financeClearance:"paid"}));
+  await assertFails(updateDoc(reviewRef(adminDb),{platformOutstandingAmount:0}));
 });
 
 async function seedRecoverableLaundry(name = "basic") {
