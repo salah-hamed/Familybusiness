@@ -61,7 +61,7 @@ test("C4B12 gates are OFF even if the service is accidentally called",()=>{
  const s=readFileSync("core/merchants/merchant-cycle-service.js","utf8");
  assert.match(s,/MERCHANT_REPEAT_RECOVERY_DISABLED/);
  assert.match(s,/MERCHANT_REPEAT_ASSIGNMENT_DISABLED/);
- assert.match(s,/assertTrustedRecoveryBillingGuard\\(billingSnap.data\\(\\),previousUid\\)/);
+ assert.ok(s.includes("assertTrustedRecoveryBillingGuard(billingSnap.data(),previousUid)"));
  for(const bad of ["collection(db,\"commissionLedger\")","collection(db,\"orders\")",
    "transaction.delete","tx.delete"]){assert.equal(s.includes(bad),false,bad);}
 });
