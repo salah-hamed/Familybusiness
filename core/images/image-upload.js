@@ -45,8 +45,9 @@ export async function compressProductImage(file, {
     if (!ctx) throw new Error("IMAGE_BROWSER_NOT_SUPPORTED");
     ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
 
+    if (typeof canvas.toBlob !== "function") throw new Error("IMAGE_BROWSER_NOT_SUPPORTED");
     const blob = await new Promise((resolve, reject) => {
-      canvas.toBlob?.(value => value ? resolve(value) : reject(new Error("IMAGE_COMPRESSION_FAILED")), "image/webp", quality);
+      canvas.toBlob(value => value ? resolve(value) : reject(new Error("IMAGE_COMPRESSION_FAILED")), "image/webp", quality);
     });
     if (blob.size > IMAGE_UPLOAD_MAX_OUTPUT_BYTES) throw new Error("IMAGE_COMPRESSED_TOO_LARGE");
     return blob;
