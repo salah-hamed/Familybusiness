@@ -2262,3 +2262,112 @@ test("Phase B2 cannot accept first agreement without starting three-day clock", 
   firstCommissionAcceptance(batch,db,operatorUid,projectId);
   await assertFails(batch.commit());
 });
+
+async function seedTransferCaseScenario(suffix="audit") {
+  const admin="admin_transfer_"+suffix;
+  const owner="owner_transfer_"+suffix;
+  const target="target_transfer_"+suffix;
+  const operatorUid="operator_transfer_"+suffix;
+  const projectId=owner+"_supermarket";
+  const merchantId="m_"+"a".repeat(32);
+  await seedUser(admin,{role:"admin"});
+  await seedUser(owner);
+  await seedUser(target);
+  await seedProject(projectId,{
+    ownerId:owner,projectId:"supermarket",template:"supermarket",
+    operatingModel:"partner_operated",templateVersion:1,
+    merchantId,originalSubscriberId:owner,assignedSubscriberId:owner,
+    assignmentStatus:"assigned_to_subscriber",platformManaged:false,
+    linkedAt:null,assignmentUpdatedAt:null,
+    businessName:"Test Merchant",status:"active",isActive:true
+  });
+  await testEnv.withSecurityRulesDisabled(async context=>{
+    const db=context.firestore();
+    await setDoc(doc(db,"operators",projectId),{
+      operatorId:projectId,projectId,ownerId:owner,templateId:"supermarket",
+      authUid:operatorUid,status:"active",isActive:true,agreementStatus:"accepted"
+    });
+    await setDoc(doc(db,"commissionAgreements",projectId),{
+      agreementId:projectId,projectId,ownerId:owner,operatorId:projectId,
+      templateId:"supermarket",status:"accepted",acceptedVersion:1
+    });
+  });
+  return {admin,owner,target,operatorUid,projectId,merchantId};
+}
+
+function sampleTransferCase(ids, overrides={}){
+  return {
+    projectDocId:ids.projectId,
+    merchantId:ids.merchantId,
+    originalSubscriberId:ids.owner,
+    previousSubscriberId:ids.owner,
+    proposedSubscriberId:ids.target,
+    status:"awaiting_consents",
+    operatorConsent:"pending",
+    recipientConsent:"pending",
+    operatorConsentedAt:null,
+    recipientConsentedAt:null,
+    financeClearance:"pending",
+    cutoverAt:null,
+    reason:"المحل يحتاج إعادة تخصيص موثقة بعد انتهاء التعاون السابق",
+    createdBy:ids.admin,createdAt:serverTimestamp(),
+    ...overrides
+  };
+}
+
+test("Phase C4 only admin opens consent case; existing project identities remain untouched",async()=>{
+  const ids=await seedTransferCaseScenario("happy");
+  const ref=db=>doc(db,"merchantTransferCases",ids.projectId);
+  const outsider=testEnv.authenticatedContext("attacker_transfer").firestore();
+  await assertFails(setDoc(ref(outsider),sampleTransferCase(ids)));
+  const adminDb=testEnv.authenticatedContext(ids.admin).firestore();
+  await assertSucceeds(setDoc(ref(adminDb),sampleTransferCase(ids)));
+  const ownerDb=testEnv.authenticatedContext(ids.owner).firestore();
+  const projectSnap=await getDoc(doc(ownerDb,"projects",ids.projectId));
+  assert.equal(projectSnap.data().ownerId,ids.owner);
+  assert.equal(projectSnap.data().assignedSubscriberId,ids.owner);
+  await assertSucceeds(getDoc(ref(testEnv.authenticatedContext(ids.operatorUid).firestore())));
+  await assertSucceeds(getDoc(ref(testEnv.authenticatedContext(ids.target).firestore())));
+  await assertFails(getDoc(ref(outsider)));
+  await assertFails(updateDoc(ref(adminDb),{merchantId:"m_"+"b".repeat(32)}));
+  await assertFails(deleteDoc(ref(adminDb)));
+});
+
+test("Phase C4 consent can only be recorded by physical operator and intended recipient",async()=>{
+  const ids=await seedTransferCaseScenario("consent");
+  const adminDb=testEnv.authenticatedContext(ids.admin).firestore();
+  const ref=db=>doc(db,"merchantTransferCases",ids.projectId);
+  await assertSucceeds(setDoc(ref(adminDb),sampleTransferCase(ids)));
+  const operatorDb=testEnv.authenticatedContext(ids.operatorUid).firestore();
+  const targetDb=testEnv.authenticatedContext(ids.target).firestore();
+  const strangerDb=testEnv.authenticatedContext("stranger_transfer").firestore();
+  await assertFails(updateDoc(ref(targetDb),{operatorConsent:"accepted",operatorConsentedAt:serverTimestamp()}));
+  await assertFails(updateDoc(ref(operatorDb),{recipientConsent:"accepted",recipientConsentedAt:serverTimestamp()}));
+  await assertFails(updateDoc(ref(strangerDb),{recipientConsent:"accepted",recipientConsentedAt:serverTimestamp()}));
+  await assertSucceeds(updateDoc(ref(operatorDb),{operatorConsent:"accepted",operatorConsentedAt:serverTimestamp()}));
+  await assertFails(updateDoc(ref(operatorDb),{operatorConsent:"declined",operatorConsentedAt:serverTimestamp()}));
+  await assertSucceeds(updateDoc(ref(targetDb),{recipientConsent:"accepted",recipientConsentedAt:serverTimestamp()}));
+  const caseSnap=await getDoc(ref(adminDb));
+  assert.equal(caseSnap.data().operatorConsent,"accepted");
+  assert.equal(caseSnap.data().recipientConsent,"accepted");
+  assert.equal(caseSnap.data().status,"awaiting_consents");
+  assert.equal(caseSnap.data().financeClearance,"pending");
+  assert.equal(caseSnap.data().cutoverAt,null);
+});
+
+test("Phase C4 disallows account-owner substitution, pre-consent and backdated cases",async()=>{
+  const ids=await seedTransferCaseScenario("forgery");
+  const db=testEnv.authenticatedContext(ids.admin).firestore();
+  for(const extra of [
+    {proposedSubscriberId:ids.owner},
+    {operatorConsent:"accepted"},
+    {recipientConsent:"accepted"},
+    {financeClearance:"approved"},
+    {cutoverAt:serverTimestamp()},
+    {merchantId:"m_"+"b".repeat(32)},
+    {createdAt:new Date("2020-01-01T00:00:00Z")},
+    {reason:"too short"}
+  ]) {
+    await assertFails(setDoc(doc(db,"merchantTransferCases",ids.projectId),sampleTransferCase(ids,extra)));
+  }
+});
