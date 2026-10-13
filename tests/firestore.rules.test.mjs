@@ -2854,6 +2854,47 @@ test("C4B12 new operator and subscriber consent, private review and reassignment
  await assertFails(updateDoc(doc(recipientDb,"merchantAssignmentCycles",cycleId),{assignedSubscriberId:"attacker"}));
  await assertFails(getDoc(doc(recipientDb,"merchantAssignmentCycles",cycleId)));
  await assertFails(getDoc(doc(recipientDb,"merchantTransferCycleFinanceReviews",cycleId)));
+ const paymentId="cycle_paid_"+ids.projectId;
+ const stateRef=doc(adminDb,"merchantCyclePaymentStates",cycleId);
+ await testEnv.withSecurityRulesDisabled(async ctx=>{
+  await setDoc(doc(ctx.firestore(),"commissionLedger","project_order_cycle_valid"),{
+   userId:candidate,projectId:ids.projectId,orderId:"cycle_valid",sourceType:"project_order",
+   sourceId:"cycle_valid",agreementId:ids.projectId,agreementVersion:1,
+   assignmentCycle:2,amount:6,currency:"EGP",status:"earned",createdAt:Timestamp.now()
+  });
+ });
+ const payBatch=writeBatch(operatorDb);
+ payBatch.set(doc(operatorDb,"commissionSettlements",paymentId),{
+  settlementId:paymentId,projectId:ids.projectId,ownerId:candidate,
+  operatorId:ids.projectId,assignmentCycle:2,templateId:"supermarket",
+  businessName:"Shop",currency:"EGP",amount:6,status:"pending_owner_confirmation",
+  paymentMethod:"instapay",paymentReference:"PAY-CYCLE2",note:"",
+  declaredAt:serverTimestamp(),declaredBy:ids.operatorUid,
+  createdAt:serverTimestamp(),updatedAt:serverTimestamp(),
+  confirmedAt:null,confirmedBy:null,rejectedAt:null,rejectedBy:null
+ });
+ payBatch.set(doc(operatorDb,"merchantCyclePaymentStates",cycleId),{
+  projectId:ids.projectId,assignmentCycle:2,beneficiaryId:candidate,
+  operatorId:ids.projectId,pendingSettlementId:paymentId,
+  updatedAt:serverTimestamp()
+ });
+ await assertSucceeds(payBatch.commit());
+ await assertFails(updateDoc(doc(operatorDb,"commissionSettlements",paymentId),{
+  status:"confirmed",confirmedBy:ids.operatorUid,confirmedAt:serverTimestamp()
+ }));
+ const confirm=writeBatch(recipientDb);
+ confirm.update(doc(recipientDb,"commissionSettlements",paymentId),{
+  status:"confirmed",confirmedBy:candidate,confirmedAt:serverTimestamp(),
+  updatedAt:serverTimestamp()
+ });
+ confirm.update(doc(recipientDb,"merchantCyclePaymentStates",cycleId),{
+  pendingSettlementId:"",updatedAt:serverTimestamp()
+ });
+ await assertSucceeds(confirm.commit());
+ assert.equal((await getDoc(doc(adminDb,"commissionSettlements",paymentId))).data().status,"confirmed");
+ await assertFails(updateDoc(doc(adminDb,"merchantCyclePaymentStates",cycleId),{
+  pendingSettlementId:"forged"
+ }));
 });
 
 test("C4B12 second recovery retains historical access and credits platform only in earning cycle 2",async()=>{
