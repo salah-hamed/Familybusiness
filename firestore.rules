@@ -1394,6 +1394,37 @@ service cloud.firestore {
   }
 
 
+  // Only cutover assignment fields can move; the prior project identity
+  // and operational merchant remain immutable. Cache two getAfter reads.
+  function validAtomicMerchantProjectCutover(projectId){
+    let before = resource.data;
+    let next = request.resource.data;
+    let consent = getAfter(merchantTransferCasePath(projectId)).data;
+    let witness = getAfter(merchantCutoverPath(projectId)).data;
+    return before.platformManaged == true
+     && before.assignmentStatus == "platform_managed"
+     && before.assignedSubscriberId == ""
+     && next.platformManaged == true
+     && next.assignmentStatus == "assigned_to_new_subscriber"
+     && next.assignedSubscriberId is string
+     && next.assignedSubscriberId.size() > 0
+     && next.assignedSubscriberId != before.originalSubscriberId
+     && next.assignmentUpdatedAt == request.time
+     && next.cutoverAuditId == projectId
+     && next.cutoverAt == request.time
+     && next.cutoverAdminUid == request.auth.uid
+     && next.diff(before).affectedKeys().hasOnly([
+       "assignmentStatus","assignedSubscriberId","assignmentUpdatedAt",
+       "cutoverAuditId","cutoverAt","cutoverAdminUid"
+     ])
+     && consent.status == "cutover_completed"
+     && consent.proposedSubscriberId == next.assignedSubscriberId
+     && consent.cutoverAt == request.time
+     && witness.status == "completed"
+     && witness.assignedSubscriberId == next.assignedSubscriberId
+     && witness.completedAt == request.time;
+  }
+
   match /projects/{projectId} {
    allow get: if isAdmin()
     || (signedIn() && resource.data.ownerId == request.auth.uid)
@@ -1424,7 +1455,8 @@ service cloud.firestore {
     && (!("merchantId" in resource.data) || request.resource.data.merchantId == resource.data.merchantId)
     && (!("originalSubscriberId" in resource.data) || request.resource.data.originalSubscriberId == resource.data.originalSubscriberId)
     && (
-      !isVerifiedPlatformManagedMerchant(projectId)
+      !("platformManaged" in resource.data)
+      || resource.data.platformManaged != true
       || request.resource.data.operatorId == resource.data.operatorId
     )
     && (
@@ -1464,30 +1496,7 @@ service cloud.firestore {
         && getAfter(merchantRecoveryPath(projectId)).data.merchantId == resource.data.merchantId
         && getAfter(merchantRecoveryPath(projectId)).data.reason == request.resource.data.recoveryReason
       )
-    || (
-        resource.data.platformManaged == true
-        && resource.data.assignmentStatus == "platform_managed"
-        && resource.data.assignedSubscriberId == ""
-        && request.resource.data.platformManaged == true
-        && request.resource.data.assignmentStatus == "assigned_to_new_subscriber"
-        && request.resource.data.assignedSubscriberId is string
-        && request.resource.data.assignedSubscriberId.size() > 0
-        && request.resource.data.assignedSubscriberId != resource.data.originalSubscriberId
-        && request.resource.data.assignmentUpdatedAt == request.time
-        && request.resource.data.cutoverAuditId == projectId
-        && request.resource.data.cutoverAt == request.time
-        && request.resource.data.cutoverAdminUid == request.auth.uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-         "assignmentStatus","assignedSubscriberId","assignmentUpdatedAt",
-         "cutoverAuditId","cutoverAt","cutoverAdminUid"
-        ])
-        && getAfter(merchantTransferCasePath(projectId)).data.status == "cutover_completed"
-        && getAfter(merchantTransferCasePath(projectId)).data.proposedSubscriberId == request.resource.data.assignedSubscriberId
-        && getAfter(merchantTransferCasePath(projectId)).data.cutoverAt == request.time
-        && getAfter(merchantCutoverPath(projectId)).data.status == "completed"
-        && getAfter(merchantCutoverPath(projectId)).data.assignedSubscriberId == request.resource.data.assignedSubscriberId
-        && getAfter(merchantCutoverPath(projectId)).data.completedAt == request.time
-       )
+    || validAtomicMerchantProjectCutover(projectId)
     )
    ) || (
     signedIn()
@@ -3500,6 +3509,32 @@ service cloud.firestore {
 
    allow create: if isAdmin() && validMerchantTransferCaseCreate(projectId);
 
+   function validAtomicMerchantConsentFinalize(projectId){
+     let before=resource.data;
+     let next=request.resource.data;
+     let p=getAfter(projectPath(projectId)).data;
+     let witness=getAfter(merchantCutoverPath(projectId)).data;
+     return isAdmin()
+      && before.status == "awaiting_consents"
+      && before.financeClearance == "reviewed"
+      && before.operatorConsent == "accepted"
+      && before.recipientConsent == "accepted"
+      && next.status == "cutover_completed"
+      && next.cutoverAt == request.time
+      && next.cutoverBy == request.auth.uid
+      && next.cutoverAuditId == projectId
+      && subscriptionActive(before.proposedSubscriberId)
+      && p.platformManaged == true
+      && p.assignmentStatus == "assigned_to_new_subscriber"
+      && p.assignedSubscriberId == before.proposedSubscriberId
+      && p.cutoverAt == request.time
+      && witness.status == "completed"
+      && witness.assignedSubscriberId == before.proposedSubscriberId
+      && witness.completedAt == request.time
+      && next.diff(before).affectedKeys().hasOnly([
+       "status","cutoverAt","cutoverBy","cutoverAuditId"
+      ]);
+   }
    // Only the claimed physical merchant operator may record their own consent.
    allow update: if (
      signedIn()
@@ -3540,27 +3575,7 @@ service cloud.firestore {
        "financeClearance","financeReviewedBy","financeReviewedAt"
      ])
    ) || (
-     // Exactly one atomic admin cutover: case + project + immutable witness.
-     isAdmin()
-     && resource.data.status == "awaiting_consents"
-     && resource.data.financeClearance == "reviewed"
-     && resource.data.operatorConsent == "accepted"
-     && resource.data.recipientConsent == "accepted"
-     && request.resource.data.status == "cutover_completed"
-     && request.resource.data.cutoverAt == request.time
-     && request.resource.data.cutoverBy == request.auth.uid
-     && request.resource.data.cutoverAuditId == projectId
-     && subscriptionActive(resource.data.proposedSubscriberId)
-     && getAfter(projectPath(projectId)).data.platformManaged == true
-     && getAfter(projectPath(projectId)).data.assignmentStatus == "assigned_to_new_subscriber"
-     && getAfter(projectPath(projectId)).data.assignedSubscriberId == resource.data.proposedSubscriberId
-     && getAfter(projectPath(projectId)).data.cutoverAt == request.time
-     && getAfter(merchantCutoverPath(projectId)).data.status == "completed"
-     && getAfter(merchantCutoverPath(projectId)).data.assignedSubscriberId == resource.data.proposedSubscriberId
-     && getAfter(merchantCutoverPath(projectId)).data.completedAt == request.time
-     && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-       "status","cutoverAt","cutoverBy","cutoverAuditId"
-     ])
+     validAtomicMerchantConsentFinalize(projectId)
    ) || (
      isAdmin()
      && resource.data.status == "awaiting_consents"
