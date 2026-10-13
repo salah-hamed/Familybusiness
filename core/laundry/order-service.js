@@ -1,5 +1,6 @@
 import db from "../firebase/firebase-db.js";
 import { resolveCommissionBeneficiary } from "../merchants/merchant-commission-beneficiary.js";
+import { commissionCycleStamp } from "../commissions/commission-assignment-cycle.js";
 import { getEffectiveCommissionSnapshot, getProjectCommissionLedgerId } from "../commissions/commission-service.js";
 
 import {
@@ -351,6 +352,7 @@ export async function changeLaundryStage({projectId,orderId,actorUid,nextStage})
           commissionLocked:true,
           commissionAmount:commission.amount,
           commissionAgreementVersion:commission.version,
+          ...commissionCycleStamp(projectSnap.data()).order
           commissionTrigger:"delivery_assignment",
           commissionEarnedAt:earnedAt
         });
@@ -364,6 +366,7 @@ export async function changeLaundryStage({projectId,orderId,actorUid,nextStage})
 
         transaction.set(ledgerRef,{
           userId: resolveCommissionBeneficiary(projectSnap.data(), agreementSnap.data()),
+          ...commissionCycleStamp(projectSnap.data()).ledger,
           projectId,
           orderId,
           sourceType:"project_order",
@@ -454,7 +457,8 @@ export async function changeLaundryStage({projectId,orderId,actorUid,nextStage})
       commissionEligible:true,
       commissionLocked:true,
       commissionAmount:commission.amount,
-      commissionAgreementVersion:commission.version
+      commissionAgreementVersion:commission.version,
+          ...commissionCycleStamp(projectSnap.data()).order
     });
 
     if(fresh.trackingToken){
@@ -466,6 +470,7 @@ export async function changeLaundryStage({projectId,orderId,actorUid,nextStage})
 
     transaction.set(ledgerRef,{
       userId: resolveCommissionBeneficiary(projectSnap.data(), agreementSnap.data()),
+          ...commissionCycleStamp(projectSnap.data()).ledger,
       projectId,
       orderId,
       sourceType:"project_order",
