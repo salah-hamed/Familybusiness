@@ -600,7 +600,7 @@ export async function changeRestaurantOrderStatus({ projectId, orderId, actorUid
           commissionLocked: true,
           commissionAmount: commission.amount,
           commissionAgreementVersion: commission.version,
-          ...commissionCycleStamp(projectSnap.data()).order
+          ...commissionCycleStamp(projectSnap.data()).order,
           commissionTrigger: "delivery_assignment",
           commissionEarnedAt: earnedAt
         });
@@ -734,7 +734,7 @@ export async function changeRestaurantOrderStatus({ projectId, orderId, actorUid
       commissionLocked: true,
       commissionAmount: commission.amount,
       commissionAgreementVersion: commission.version,
-          ...commissionCycleStamp(projectSnap.data()).order
+          ...commissionCycleStamp(projectSnap.data()).order,
     });
 
     if (freshOrder.trackingToken) {
