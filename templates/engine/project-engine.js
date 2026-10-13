@@ -103,22 +103,26 @@ isActive: true,
 
 }
 export async function loadUserProjects(ownerId) {
-
-  const q = query(
-    collection(db, "projects"),
-    where("ownerId", "==", ownerId)
-  );
-
-  const snap = await getDocs(q);
-
-  const list = [];
-
-  snap.forEach(projectDoc => {
-    list.push({
-      projectDocId: projectDoc.id,
-      ...projectDoc.data()
+  // The historical ownerId is immutable, so searching by ownerId alone
+  // misses legitimately reassigned shops and advertises reclaimed ones
+  // to former subscribers. Keep both scopes separate.
+  const col = collection(db, "projects");
+  const [historic,assigned] = await Promise.all([
+    getDocs(query(col,where("ownerId","==",ownerId))),
+    getDocs(query(col,
+      where("assignedSubscriberId","==",ownerId),
+      where("assignmentStatus","==","assigned_to_new_subscriber"),
+      where("platformManaged","==",true)))
+  ]);
+  const byId = new Map();
+  for (const snap of [historic,assigned]) {
+    snap.forEach(projectDoc => {
+      const project = projectDoc.data();
+      if (project.platformManaged === true &&
+          !(project.assignmentStatus === "assigned_to_new_subscriber" &&
+            project.assignedSubscriberId === ownerId)) return;
+      byId.set(projectDoc.id,{projectDocId:projectDoc.id,...project});
     });
-  });
-
-  return list;
+  }
+  return [...byId.values()];
 }
