@@ -4,7 +4,7 @@
       logoutUser,
       observeAuth,
       requestPasswordReset
-    } from './core/auth/auth.js';
+    } from './core/auth/auth.js?v=20261013-trial-activation1';
 import { createGuide } from './core/onboarding/guide.js';
 import { PLATFORM_BILLING } from './core/config/platform-config.js';
 import { buildAuthGuide } from './core/onboarding/guide-state.js';
