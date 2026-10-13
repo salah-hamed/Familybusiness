@@ -16,6 +16,7 @@ import {
 } from "../core/projects/project-service.js";
 import { PLATFORM_BILLING, REFERRAL_CONFIG, formatEgp } from "../core/config/platform-config.js";
 import { isSubscriptionActive, subscriptionExpiryDate } from "../core/subscriptions/subscription-service.js";
+import { resolveSubscriptionAccess } from "../core/subscriptions/trial-policy.js";
 import {
   buildWhatsAppProofMessage,
   buildWhatsAppProofUrl,
@@ -324,6 +325,8 @@ protectPage(async (user) => {
     const data =
     userSnap.data();
     const subscriptionActive = isSubscriptionActive(data);
+    const access = resolveSubscriptionAccess(data);
+    const isTrialWindow = access.phase === "setup_trial" || access.phase === "merchant_grace";
     const myProjects = await loadUserProjects(user.uid);
 
     guideController.update(
@@ -468,17 +471,35 @@ getDiscoverableProjects().forEach(project => {
 
     userName.innerText = `أهلاً ${data.name} 👋`;
     if (projectCount) projectCount.innerText = `${myProjects.length} / 4`;
-    if (workspaceAccountState) workspaceAccountState.innerText = subscriptionActive ? "جاهز للتشغيل" : "بانتظار التفعيل";
+    if (workspaceAccountState) {
+      workspaceAccountState.innerText = isTrialWindow
+        ? "فترة تجربة مجانية"
+        : subscriptionActive ? "جاهز للتشغيل" : "اشتراك مطلوب";
+    }
 
     const expiry = subscriptionExpiryDate(data);
-    subscriptionStatus.innerText = subscriptionActive
-      ? `✅ الاشتراك مفعل${expiry ? ` حتى ${expiry.toLocaleDateString("ar-EG")}` : ""}`
-      : "⏳ الاشتراك قيد المراجعة أو غير مفعل";
+    const trialDeadline = access.deadline instanceof Date
+      ? access.deadline.toLocaleDateString("ar-EG") : "";
+    subscriptionStatus.innerText = isTrialWindow
+      ? access.phase === "merchant_grace"
+        ? `✅ ربط أول محل تم — فترة السماح حتى ${trialDeadline}`
+        : `✅ يمكنك تجهيز مشروعك مجانًا حتى ${trialDeadline}`
+      : subscriptionActive
+        ? `✅ الاشتراك مفعل${expiry ? ` حتى ${expiry.toLocaleDateString("ar-EG")}` : ""}`
+        : data.accessModel === "merchant_trial_v1"
+          ? "⏳ انتهت الفترة المجانية — الاشتراك الشهري 59 جنيه"
+          : "⏳ الاشتراك قيد المراجعة أو غير مفعل";
 
     if (subscriptionHint) {
-      subscriptionHint.innerText = subscriptionActive
-        ? "أداتك جاهزة. اختار مشروع من تحت وابدأ ربط أول نشاط شغال حواليك."
-        : "حوّل عبر InstaPay ثم سجّل مرجع العملية وابعت Screenshot التحويل على واتساب. بعد المراجعة سيتفعل الحساب.";
+      subscriptionHint.innerText = isTrialWindow
+        ? access.phase === "setup_trial"
+          ? "أنشئ مشروعك واربط محلًا حقيقيًا. تبدأ مهلة 3 أيام من أول اتفاق عمولة يقبله المحل."
+          : "تم قبول اتفاق العمولة. ادفع الاشتراك الشهري 59 جنيه قبل انتهاء مهلة التشغيل للاستمرار."
+        : subscriptionActive
+          ? "أداتك جاهزة. اختار مشروع من تحت وابدأ ربط أول نشاط شغال حواليك."
+          : data.accessModel === "merchant_trial_v1"
+            ? "للاستمرار، ادفع 59 جنيه عن طريق InstaPay ثم أرسل الإثبات على واتساب للمراجعة."
+            : "حوّل عبر InstaPay ثم سجّل مرجع العملية وابعت Screenshot التحويل على واتساب. بعد المراجعة سيتفعل الحساب.";
     }
 
     await renderSubscriptionPayment(user, data, subscriptionActive);
