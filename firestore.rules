@@ -1352,6 +1352,15 @@ service cloud.firestore {
    allow create: if signedIn() && subscriptionActive(request.auth.uid) && validActiveProjectCreate(projectId);
    allow update: if (
     isAdmin()
+    && request.resource.data.ownerId == resource.data.ownerId
+    && request.resource.data.projectId == resource.data.projectId
+    && request.resource.data.template == resource.data.template
+    && (!("merchantId" in resource.data) || request.resource.data.merchantId == resource.data.merchantId)
+    && (!("originalSubscriberId" in resource.data) || request.resource.data.originalSubscriberId == resource.data.originalSubscriberId)
+    && (
+      !isVerifiedPlatformManagedMerchant(projectId)
+      || request.resource.data.operatorId == resource.data.operatorId
+    )
     && (
       !request.resource.data.diff(resource.data).affectedKeys().hasAny([
         "platformManaged","assignmentStatus","assignedSubscriberId",
@@ -1449,7 +1458,7 @@ service cloud.firestore {
     && request.resource.data.operatorId == resource.data.operatorId
     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["priceConfig"])
    );
-   allow delete: if isAdmin();
+   allow delete: if isAdmin() && !isVerifiedPlatformManagedMerchant(projectId);
   }
 
   match /orders/{orderId} {
@@ -3113,6 +3122,7 @@ service cloud.firestore {
     && request.resource.data.projectId is string
     && isProjectOperator(request.resource.data.projectId)
     && projectExists(request.resource.data.projectId)
+    && !isVerifiedPlatformManagedMerchant(request.resource.data.projectId)
     && request.resource.data.ownerId == projectData(request.resource.data.projectId).ownerId
     && request.resource.data.operatorId == projectData(request.resource.data.projectId).operatorId
     && request.resource.data.declaredBy == request.auth.uid
