@@ -2511,6 +2511,14 @@ test("C4B11 rejects partial cutover and forged immutable audit while preserving 
   await assertFails(cutoverBatch(adminDb,ids,{forgedAudit:{assignedSubscriberId:"attacker"}}));
   await assertFails(cutoverBatch(recipientDb,ids));
   await assertFails(cutoverBatch(operatorDb,ids));
+  // Terms may have changed AFTER consent and finance review. A forged
+  // client must not bypass the pure JS preflight by skipping its checks.
+  await testEnv.withSecurityRulesDisabled(async ctx=>{
+    await updateDoc(doc(ctx.firestore(),"commissionAgreements",ids.projectId),{
+      currentAmount:18,acceptedVersion:2
+    });
+  });
+  await assertFails(cutoverBatch(adminDb,ids));
   const project=await getDoc(doc(adminDb,"projects",ids.projectId));
   assert.equal(project.data().assignmentStatus,"platform_managed");
   assert.equal(project.data().assignedSubscriberId,"");
