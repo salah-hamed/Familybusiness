@@ -31,6 +31,6 @@ test("all four template products stamp ledger and order at rider-assignment tran
   assert.match(text,/resolveCommissionBeneficiary\(projectSnap\.data\(\), agreementSnap\.data\(\)\)/);
  }
  const payments=readFileSync("core/commissions/settlement-service.js","utf8");
- assert.match(payments,/ledgerScope\.push\(where\("assignmentCycle","==",currentCycle\)\)/);
- assert.match(payments,/paymentScope\.push\(where\("assignmentCycle","==",currentCycle\)\)/);
+ assert.match(payments,/ledgerScope\.push\(where\("assignmentCycle",\s*"==",\s*currentCycle\)\)/);
+ assert.match(payments,/paymentScope\.push\(where\("assignmentCycle",\s*"==",\s*currentCycle\)\)/);
 });
