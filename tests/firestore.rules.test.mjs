@@ -2763,6 +2763,100 @@ test("C4B12 atomic repeat recovery requires reconciled billing and no pending re
  await assertFails(updateDoc(doc(formerDb,"projects",ids.projectId),{businessName:"hijack"}));
  await assertFails(makeBatch());
 });
+test("C4B12 new operator and subscriber consent, private review and reassignment must be atomic",async()=>{
+ const {ids,adminDb,operatorDb}=await seedReviewedCutoverScenario("second_consent");
+ await assertSucceeds(cutoverBatch(adminDb,ids));
+ const cycleId=ids.projectId+"_2",candidate="recipient_second_consent",timestamp=Timestamp.now();
+ await seedUser(candidate,{isActive:true,subscriptionStatus:"active",role:"subscriber"});
+ await testEnv.withSecurityRulesDisabled(async ctx=>{
+  const db=ctx.firestore();
+  await updateDoc(doc(db,"projects",ids.projectId),{
+   assignmentCycle:2,platformManaged:true,assignmentStatus:"platform_managed",
+   assignedSubscriberId:"",recoveryAuditId:cycleId,recoveryAt:timestamp,
+   recoveryAdminUid:ids.admin,recoveryReason:"overdue_renewal",
+   assignmentUpdatedAt:timestamp
+  });
+  await setDoc(doc(db,"merchantRecoveryCycles",cycleId),{
+   cycle:2,cycleId,projectDocId:ids.projectId,
+   merchantId:ids.merchantId,originalSubscriberId:ids.owner,
+   previousSubscriberId:ids.target,previousAssignmentAuditId:ids.projectId,
+   reason:"overdue_renewal",evidenceReference:"overdue_renewal_prior",
+   status:"completed",adminUid:ids.admin,recoveredAt:timestamp
+  });
+  await setDoc(doc(db,"merchantHistoricalAccess",ids.projectId+"_"+ids.target),{
+   projectDocId:ids.projectId,merchantId:ids.merchantId,
+   subscriberUid:ids.target,originalSubscriberId:ids.owner,
+   firstRecoveredCycle:2,sourceRecoveryAuditId:cycleId,
+   status:"historic_only",grantedAt:timestamp
+  });
+ });
+ const caseRef=doc(adminDb,"merchantTransferCycles",cycleId);
+ await assertSucceeds(setDoc(caseRef,{
+  cycle:2,cycleId,projectDocId:ids.projectId,
+  merchantId:ids.merchantId,originalSubscriberId:ids.owner,
+  previousSubscriberId:"",proposedSubscriberId:candidate,
+  status:"awaiting_consents",operatorConsent:"pending",recipientConsent:"pending",
+  operatorConsentedAt:null,recipientConsentedAt:null,
+  commissionAmount:6,commissionVersion:1,commissionCurrency:"EGP",
+  financeClearance:"pending",cutoverAt:null,
+  reason:"After the second platform recovery",
+  createdBy:ids.admin,createdAt:serverTimestamp()
+ }));
+ await assertFails(updateDoc(doc(operatorDb,"merchantTransferCycles",cycleId),{
+  recipientConsent:"accepted",recipientConsentedAt:serverTimestamp()
+ }));
+ await assertSucceeds(updateDoc(doc(operatorDb,"merchantTransferCycles",cycleId),{
+  operatorConsent:"accepted",operatorConsentedAt:serverTimestamp()
+ }));
+ const recipientDb=testEnv.authenticatedContext(candidate).firestore();
+ await assertSucceeds(updateDoc(doc(recipientDb,"merchantTransferCycles",cycleId),{
+  recipientConsent:"accepted",recipientConsentedAt:serverTimestamp()
+ }));
+ await assertFails(getDoc(doc(recipientDb,"merchantTransferCycleFinanceReviews",cycleId)));
+ const financeBatch=writeBatch(adminDb);
+ financeBatch.update(caseRef,{
+  financeClearance:"reviewed",financeReviewedAt:serverTimestamp(),
+  financeReviewedBy:ids.admin
+ });
+ financeBatch.set(doc(adminDb,"merchantTransferCycleFinanceReviews",cycleId),{
+  cycleId,projectDocId:ids.projectId,adminUid:ids.admin,
+  reviewedAt:serverTimestamp(),currency:"EGP",formerSubscriberId:ids.target,
+  formerSubscriberEarnedAmount:30,formerSubscriberOutstandingAmount:15,
+  platformEarnedAmount:24,platformOutstandingAmount:12
+ });
+ await assertSucceeds(financeBatch.commit());
+ const projectRef=doc(adminDb,"projects",ids.projectId);
+ const caseComplete=writeBatch(adminDb);
+ caseComplete.update(projectRef,{
+  assignmentStatus:"assigned_to_new_subscriber",
+  assignedSubscriberId:candidate,
+  assignmentUpdatedAt:serverTimestamp(),cutoverAuditId:cycleId,
+  cutoverAt:serverTimestamp(),cutoverAdminUid:ids.admin
+ });
+ caseComplete.update(caseRef,{
+  status:"cutover_completed",cutoverAt:serverTimestamp(),
+  cutoverBy:ids.admin,cutoverAuditId:cycleId
+ });
+ caseComplete.set(doc(adminDb,"merchantAssignmentCycles",cycleId),{
+  cycle:2,cycleId,projectDocId:ids.projectId,merchantId:ids.merchantId,
+  originalSubscriberId:ids.owner,previousSubscriberId:ids.target,
+  assignedSubscriberId:candidate,recoveryAuditId:cycleId,
+  financeReviewId:cycleId,commissionAmount:6,commissionVersion:1,
+  commissionCurrency:"EGP",status:"completed",completedBy:ids.admin,
+  completedAt:serverTimestamp()
+ });
+ await assertSucceeds(caseComplete.commit());
+ const p=(await getDoc(projectRef)).data();
+ assert.equal(p.ownerId,ids.owner);
+ assert.equal(p.assignmentCycle,2);
+ assert.equal(p.assignedSubscriberId,candidate);
+ await assertSucceeds(getDoc(doc(recipientDb,"projects",ids.projectId)));
+ await assertFails(updateDoc(doc(recipientDb,"merchantAssignmentCycles",cycleId),{assignedSubscriberId:"attacker"}));
+ await assertFails(getDoc(doc(recipientDb,"merchantAssignmentCycles",cycleId)));
+ await assertFails(getDoc(doc(recipientDb,"merchantTransferCycleFinanceReviews",cycleId)));
+ await assertFails(caseComplete.commit());
+});
+
 test("C4B12 second recovery retains historical access and credits platform only in earning cycle 2",async()=>{
  const {ids,adminDb,recipientDb,operatorDb}=await seedReviewedCutoverScenario("repeat_cycle2");
  await assertSucceeds(cutoverBatch(adminDb,ids));
