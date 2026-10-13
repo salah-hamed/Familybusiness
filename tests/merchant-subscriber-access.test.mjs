@@ -20,13 +20,28 @@ test("former subscriber keeps statement only; stranger and incomplete assignee n
  assert.equal(resolveSubscriberMerchantAccess({...assigned,cutoverAuditId:"forged"},pid,"incoming").canViewStatement,false);
  assert.equal(resolveSubscriberMerchantAccess(assigned,pid,"stranger").canViewStatement,false);
 });
+test("C4B12 prior assigned subscriber gets historic-only rights with matching grant",()=>{
+ const project={ownerId:"former",originalSubscriberId:"former",
+  merchantId:"m_"+"a".repeat(32),platformManaged:true,
+  assignmentStatus:"assigned_to_new_subscriber",assignedSubscriberId:"newest",
+  recoveryAuditId:"former_supermarket_3",cutoverAuditId:"former_supermarket_3",
+  cutoverAdminUid:"admin",cutoverAt:new Date(),recoveryAt:new Date()};
+ const grant={projectDocId:"former_supermarket",subscriberUid:"previous",
+  merchantId:project.merchantId,firstRecoveredCycle:3,status:"historic_only"};
+ assert.deepEqual(resolveSubscriberMerchantAccess(project,"former_supermarket","previous",grant),
+  {role:"former",canOperate:false,canViewStatement:true});
+ for(const bad of [{...grant,subscriberUid:"attacker"},
+  {...grant,merchantId:"other"},{...grant,status:"current"},{...grant,firstRecoveredCycle:0}]){
+   assert.equal(resolveSubscriberMerchantAccess(project,"former_supermarket","previous",bad).canViewStatement,false);
+ }
+});
 test("original working subscriber can operate non-recovered merchant",()=>{
  assert.equal(resolveSubscriberMerchantAccess({ownerId:"former",platformManaged:false},pid,"former").canOperate,true);
  assert.equal(resolveSubscriberMerchantAccess({ownerId:"former",platformManaged:false},pid,"incoming").canOperate,false);
 });
 test("historical and incoming statement only queries signed-in user's ledger and settlement scope",()=>{
  const source=readFileSync("merchant-statement/app.js","utf8");
- assert.match(source,/resolveSubscriberMerchantAccess\(project,projectId,user.uid\)/);
+ assert.match(source,/resolveSubscriberMerchantAccess\([\s\S]*?project,projectId,user.uid,grantSnap/);
  assert.match(source,/getProjectCommissionSummary\(user.uid,projectId\)/);
  assert.match(source,/listProjectPaymentRequests\(projectId,\{ownerId:user.uid,pageSize:20\}\)/);
  for(const banned of ["updateDoc(","setDoc(","deleteDoc(","runTransaction(","adminUid:","PLATFORM_COMMISSION_BENEFICIARY"]){
