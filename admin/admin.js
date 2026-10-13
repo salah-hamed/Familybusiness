@@ -1,6 +1,8 @@
 import db from "../core/firebase/firebase-db.js";
 import { projectMerchantOverview } from "../core/merchants/merchant-overview.js";
 import { assessMerchantTransfer, formatMerchantTransferPreflight } from "../core/merchants/merchant-transfer-preflight.js";
+import { PLATFORM_MERCHANT_RECOVERY_ENABLED } from "../core/merchants/platform-recovery-rollout.js";
+import { executePlatformMerchantRecovery } from "../core/merchants/platform-recovery-service.js";
 import { requiredSubscriptionPayment } from "../core/subscriptions/payment-policy.js";
 import { protectAdmin } from "../core/auth/admin-guard.js";
 import {
@@ -645,6 +647,17 @@ function renderProjects() {
           <label class="transferPreflightInput">فحص نقل النشاط للمشترك الجديد
             <input class="candidateSubscriberUid" type="text" maxlength="128" placeholder="UID المشترك الجديد" autocomplete="off">
           </label>
+          ${PLATFORM_MERCHANT_RECOVERY_ENABLED && !merchant.platformManaged && !merchant.legacy ? `
+            <label class="transferPreflightInput">سبب استرداد الإدارة
+              <select class="merchantRecoveryReason">
+                <option value="overdue_renewal">تأخر تجديد الاشتراك</option>
+                <option value="unpaid_first_month">لم يسدد أول اشتراك بعد المهلة</option>
+                <option value="confirmed_violation">مخالفة موثقة ومؤكدة</option>
+              </select>
+            </label>
+            <button class="dangerBtn" data-action="recover-platform-merchant" data-project="${escapeHTML(project.projectDocId)}" type="button">
+              استرداد إدارة المحل للمنصة
+            </button>` : ""}
           <button class="secondaryBtn" data-action="preflight-merchant-transfer" data-project="${escapeHTML(project.projectDocId)}" type="button">
             فحص أهلية النقل (قراءة فقط)
           </button>
@@ -1345,6 +1358,27 @@ $("projectsContainer").addEventListener("click", async event => {
     return;
   }
 
+  if (button.dataset.action === "recover-platform-merchant") {
+    if (!PLATFORM_MERCHANT_RECOVERY_ENABLED) return;
+    const card=button.closest(".adminCard");
+    const reason=card?.querySelector(".merchantRecoveryReason")?.value;
+    const result=card?.querySelector(".transferPreflightResult");
+    const approved=confirm("استرداد إدارة المحل للمنصة بدون موافقة المشترك القديم، مع حفظ جميع حقوقه المالية السابقة. هل تمت مراجعة حالة الدفع ودليل المخالفة؟");
+    if (!approved) return;
+    button.disabled=true;
+    if (result) result.textContent="جاري التحقق وتنفيذ الاسترداد الموثق...";
+    try {
+      await executePlatformMerchantRecovery({projectDocId:projectId,adminUid:adminSession.user.uid,reason});
+      if (result) result.textContent="تم استرداد إدارة المحل للمنصة مع استمرار التشغيل وحفظ المستحقات القديمة.";
+      await Promise.all([loadProjects(),loadOverview()]);
+    } catch (error) {
+      console.error(error);
+      if (result) result.textContent="لم يتم الاسترداد. راجع الاشتراك وأي دفعة معلقة وإثبات المخالفة. لم تتغير البيانات.";
+    } finally {
+      button.disabled=false;
+    }
+    return;
+  }
   if (button.dataset.action === "toggle-project") {
     button.disabled = true;
     try {
