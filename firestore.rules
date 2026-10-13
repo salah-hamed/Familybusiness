@@ -3136,6 +3136,100 @@ service cloud.firestore {
    allow delete: if false;
   }
 
+  // Transfer-consent records are NOT an authorization transfer.
+  // A later independently reviewed cutover must protect historical ledgers
+  // and preserve the existing projectDocId/ownerId runtime identity.
+  match /merchantTransferCases/{projectId} {
+   allow get: if isAdmin() || (
+      signedIn()
+      && (
+        resource.data.originalSubscriberId == request.auth.uid
+        || resource.data.previousSubscriberId == request.auth.uid
+        || resource.data.proposedSubscriberId == request.auth.uid
+        || (operatorExists(projectId) && operatorData(projectId).authUid == request.auth.uid)
+      )
+   );
+   allow list: if isAdmin();
+
+   allow create: if isAdmin()
+    && projectExists(projectId)
+    && operatorExists(projectId)
+    && commissionAgreementExists(projectId)
+    && projectData(projectId).operatingModel == "partner_operated"
+    && projectData(projectId).template in ["supermarket","restaurant","bakery","laundry"]
+    && ("merchantId" in projectData(projectId))
+    && request.resource.data.projectDocId == projectId
+    && request.resource.data.merchantId == projectData(projectId).merchantId
+    && request.resource.data.merchantId.matches('^m_[0-9a-f]{32}$')
+    && request.resource.data.originalSubscriberId == projectData(projectId).originalSubscriberId
+    && request.resource.data.previousSubscriberId == projectData(projectId).assignedSubscriberId
+    && request.resource.data.proposedSubscriberId is string
+    && request.resource.data.proposedSubscriberId.size() > 0
+    && request.resource.data.proposedSubscriberId.size() <= 128
+    && request.resource.data.proposedSubscriberId != request.resource.data.previousSubscriberId
+    && request.resource.data.proposedSubscriberId != request.resource.data.originalSubscriberId
+    && userExists(request.resource.data.proposedSubscriberId)
+    && subscriptionActive(request.resource.data.proposedSubscriberId)
+    && operatorData(projectId).authUid is string
+    && operatorData(projectId).authUid.size() > 0
+    && operatorData(projectId).agreementStatus == "accepted"
+    && operatorData(projectId).isActive == true
+    && commissionAgreementData(projectId).status == "accepted"
+    && commissionAgreementData(projectId).acceptedVersion > 0
+    && request.resource.data.status == "awaiting_consents"
+    && request.resource.data.operatorConsent == "pending"
+    && request.resource.data.recipientConsent == "pending"
+    && request.resource.data.operatorConsentedAt == null
+    && request.resource.data.recipientConsentedAt == null
+    && request.resource.data.financeClearance == "pending"
+    && request.resource.data.cutoverAt == null
+    && request.resource.data.reason is string
+    && request.resource.data.reason.size() >= 15
+    && request.resource.data.reason.size() <= 300
+    && request.resource.data.createdBy == request.auth.uid
+    && request.resource.data.createdAt == request.time
+    && request.resource.data.keys().hasOnly([
+      "projectDocId","merchantId","originalSubscriberId","previousSubscriberId",
+      "proposedSubscriberId","status","operatorConsent","recipientConsent",
+      "operatorConsentedAt","recipientConsentedAt","financeClearance","cutoverAt",
+      "reason","createdBy","createdAt"
+    ]);
+
+   // Only the claimed physical merchant operator may record their own consent.
+   allow update: if (
+     signedIn()
+     && operatorExists(projectId)
+     && operatorData(projectId).authUid == request.auth.uid
+     && resource.data.status == "awaiting_consents"
+     && resource.data.operatorConsent == "pending"
+     && request.resource.data.operatorConsent in ["accepted","declined"]
+     && request.resource.data.operatorConsentedAt == request.time
+     && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+       "operatorConsent","operatorConsentedAt"
+     ])
+   ) || (
+     signedIn()
+     && resource.data.proposedSubscriberId == request.auth.uid
+     && resource.data.status == "awaiting_consents"
+     && resource.data.recipientConsent == "pending"
+     && request.resource.data.recipientConsent in ["accepted","declined"]
+     && request.resource.data.recipientConsentedAt == request.time
+     && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+       "recipientConsent","recipientConsentedAt"
+     ])
+   ) || (
+     isAdmin()
+     && resource.data.status == "awaiting_consents"
+     && request.resource.data.status == "canceled"
+     && request.resource.data.canceledBy == request.auth.uid
+     && request.resource.data.canceledAt == request.time
+     && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+       "status","canceledBy","canceledAt"
+     ])
+   );
+   allow delete: if false;
+  }
+
   match /{document=**} { allow read, write: if false; }
  }
 }
