@@ -1,5 +1,8 @@
 import auth from "../core/firebase/firebase-auth.js";
 import { friendlyOperatorError } from "../core/operators/operator-errors.js";
+import {
+  isImageUploadConfigured, uploadProductImageFile, productImageErrorMessage
+} from "../core/images/image-upload.js";
 import { claimOperatorAccess, getOperator, operatorCanOperate, buildOperatorAuthEmail } from "../core/partners/partner-service.js";
 import { getCommissionAgreement } from "../core/commissions/commission-service.js";
 import { getRestaurant } from "../core/restaurant/restaurant-service.js";
@@ -172,6 +175,7 @@ function renderMenu(){
         <label>السعر<input class="editPrice" type="number" min="0" step="0.5" value="${Number(item.price||0)}"></label>
         <label>الوصف<input class="editDescription" value="${escapeHTML(item.description||"")}"></label>
         <label>الصورة<input class="editImage" value="${escapeHTML(item.image||"")}"></label>
+        ${isImageUploadConfigured() ? '<label>أو اختر صورة من الجهاز<input class="editImageFile" type="file" accept="image/jpeg,image/png,image/webp"></label>' : ""}
       </div>
 
       <div class="productControls">
@@ -188,7 +192,10 @@ function renderMenu(){
 
     card.querySelector(".saveItem").onclick=async()=>{
       try{
-        const image=card.querySelector(".editImage").value.trim();
+        const file=card.querySelector(".editImageFile")?.files?.[0];
+        const image=file
+          ? await uploadProductImageFile(file)
+          : card.querySelector(".editImage").value.trim();
         if(!(await testImageUrl(image))){
           throw new Error("رابط الصورة غير صالح أو الموقع يمنع عرض الصورة خارجيًا.");
         }
@@ -202,7 +209,7 @@ function renderMenu(){
         });
         upsertLocalMenuItem(updated);
         renderMenu();
-      }catch(e){alert(friendlyOperatorError(e,"تعذر تحديث الصنف. راجع البيانات وحاول مرة أخرى."));}
+      }catch(e){alert(String(e?.message || "").startsWith("IMAGE_") ? productImageErrorMessage(e) : friendlyOperatorError(e,"تعذر تحديث الصنف. راجع البيانات وحاول مرة أخرى."));}
     };
 
     card.querySelector(".toggleItem").onclick=async()=>{
@@ -231,7 +238,10 @@ function renderMenu(){
 $("addItemBtn").onclick=async()=>{
   $("itemMessage").innerText="جاري فحص الصورة وإضافة الصنف...";
   try{
-    const image=$("itemImage").value.trim();
+    const selectedImage=$("itemImageFile")?.files?.[0];
+    const image=selectedImage
+      ? await uploadProductImageFile(selectedImage)
+      : $("itemImage").value.trim();
     if(!(await testImageUrl(image))){
       throw new Error("رابط الصورة غير صالح أو الموقع يمنع عرض الصورة خارجيًا.");
     }
@@ -246,9 +256,10 @@ $("addItemBtn").onclick=async()=>{
     const added=await getRestaurantMenuItem(projectId,itemId);
     if(added)upsertLocalMenuItem(added);
     ["itemName","itemCategory","itemPrice","itemDescription","itemImage"].forEach(id=>$(id).value="");
+    if ($("itemImageFile")) $("itemImageFile").value="";
     $("itemMessage").innerText="تمت إضافة الصنف ✅";
     renderMenu();
-  }catch(e){$("itemMessage").innerText=friendlyOperatorError(e,"تعذر حفظ الصنف. راجع الاسم والسعر وحاول مرة أخرى.");}
+  }catch(e){$("itemMessage").innerText=String(e?.message || "").startsWith("IMAGE_") ? productImageErrorMessage(e) : friendlyOperatorError(e,"تعذر حفظ الصنف. راجع الاسم والسعر وحاول مرة أخرى.");}
 };
 
 $("menuSearch").addEventListener("input",event=>{
@@ -256,6 +267,10 @@ $("menuSearch").addEventListener("input",event=>{
   renderMenu();
 });
 
+
+if (isImageUploadConfigured()) {
+  $("itemImagePickerRow")?.classList.remove("hidden");
+}
 
 $("itemImage").addEventListener("input",()=>{
   setImagePreview($("newItemImagePreview"),safeImageUrl($("itemImage").value));
