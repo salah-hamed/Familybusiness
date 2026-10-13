@@ -97,7 +97,7 @@ function stopWorkspaceFinanceLive(){
   workspaceFinanceUserId="";
 }
 
-function startWorkspaceFinanceLive(user,projectDocIds){
+function startWorkspaceFinanceLive(user,projectDocIds,paymentStateIds=projectDocIds){
   stopWorkspaceFinanceLive();
   const ids=[...new Set(projectDocIds.filter(Boolean))];
   workspaceFinanceProjectIds=new Set(ids);
@@ -116,7 +116,10 @@ function startWorkspaceFinanceLive(user,projectDocIds){
     error=>console.error("Workspace commission live update failed",error)
   );
 
-  stopWorkspacePaymentStates=ids.map(projectDocId=>{
+  // Historical payment-state documents stay private to the original subscriber.
+  ids.forEach(projectDocId=>refreshWorkspaceCommission(user.uid,projectDocId));
+  const scopedStateIds=new Set(paymentStateIds);
+  stopWorkspacePaymentStates=ids.filter(projectDocId=>scopedStateIds.has(projectDocId)).map(projectDocId=>{
     let paymentReady=false;
     return subscribeProjectPaymentState(
       projectDocId,
@@ -469,7 +472,10 @@ getDiscoverableProjects().forEach(project => {
     const visibleProjectDocIds = myProjects
       .map(item => item.projectDocId)
       .filter(projectDocId => workspaceCommissionNode(projectDocId));
-    startWorkspaceFinanceLive(user, visibleProjectDocIds);
+    const ownPaymentStateIds=myProjects
+      .filter(item=>item.ownerId===user.uid && item.platformManaged!==true)
+      .map(item=>item.projectDocId);
+    startWorkspaceFinanceLive(user, visibleProjectDocIds, ownPaymentStateIds);
 
     userName.innerText = `أهلاً ${data.name} 👋`;
     if (projectCount) projectCount.innerText = `${myProjects.length} / 4`;
