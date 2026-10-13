@@ -379,7 +379,9 @@ templatesContainer.innerHTML = "";
 // by projectId/templateId or silently open the wrong merchant.
 getDiscoverableProjects().forEach(project => {
   const matches = myProjects.filter(item => item.projectId === project.id);
-  const hasOwnProject = matches.some(item => item.ownerId === user.uid && item.platformManaged !== true);
+  // Runtime ID remains owned historically; never offer a conflicting
+  // createProject() on the same former owner/template document path.
+  const hasOwnProject = matches.some(item => item.ownerId === user.uid);
   const cards = hasOwnProject ? matches : [...matches, null];
   const available = project.status === "active" && project.visibility === "public";
   const creationEnabled = canCreateTemplate(project);
@@ -390,12 +392,16 @@ getDiscoverableProjects().forEach(project => {
       && existingProject.platformManaged === true
       && existingProject.assignmentStatus === "assigned_to_new_subscriber"
       && existingProject.assignedSubscriberId === user.uid;
+    const former = created && existingProject.platformManaged === true
+      && existingProject.ownerId === user.uid && !assigned;
+    const isStatement = assigned || former;
     const projectDocId = existingProject?.projectDocId || getProjectDocId(user.uid, project.id);
-    const disabled = !subscriptionActive || !available || (!created && !creationEnabled);
-    const stateLabel = assigned ? "محل اتخصص لك"
+    const disabled = isStatement ? false :
+      (!subscriptionActive || !available || (!created && !creationEnabled));
+    const stateLabel = former ? "حقوقك المالية السابقة" : assigned ? "محل اتخصص لك"
       : created ? "مضاف لحسابك"
       : creationEnabled ? "جاهز للربط" : "قريبًا";
-    const cardTitle = assigned ? escapeHTML(existingProject.businessName || project.title) : escapeHTML(project.title);
+    const cardTitle = isStatement ? escapeHTML(existingProject.businessName || project.title) : escapeHTML(project.title);
     const safeDocId = escapeHTML(projectDocId);
 
     templatesContainer.innerHTML += `
@@ -417,10 +423,12 @@ getDiscoverableProjects().forEach(project => {
           <button class="projectBtn"
             data-template-id="${escapeHTML(project.id)}"
             data-project-doc-id="${safeDocId}"
+            data-statement="${isStatement}"
             data-created="${created}"
             data-available="${available}"
             ${disabled ? "disabled" : ""}>
-            ${!subscriptionActive ? "فعّل الاشتراك أولاً"
+            ${former ? "عرض مستحقاتي السابقة" : assigned ? "متابعة حساب المحل"
+              : !subscriptionActive ? "فعّل الاشتراك أولاً"
               : created ? "افتح المشروع"
               : creationEnabled ? "شغّل المشروع" : "قريبًا للتشغيل"}
           </button>
@@ -433,6 +441,10 @@ getDiscoverableProjects().forEach(project => {
 
   btn.onclick = async () => {
 
+    if (btn.dataset.statement === "true") {
+      window.location.href = `../merchant-statement/?project=${encodeURIComponent(btn.dataset.projectDocId)}`;
+      return;
+    }
     if (!subscriptionActive || btn.dataset.available !== "true") return;
 
     const templateId = btn.dataset.templateId;
