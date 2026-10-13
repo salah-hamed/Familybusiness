@@ -101,5 +101,5 @@ test("Rules force the three documents into the same authenticated atomic write",
  assert.match(rules,/getAfter\(projectPath\(projectId\)\)/);
  assert.match(rules,/request\.resource\.data\.keys\(\)\.hasOnly/);
  assert.match(rules,/allow update, delete: if false/);
- assert.match(rules,/subscriptionActive\(resource\.data\.proposedSubscriberId\)/);
+ assert.match(rules,/subscriptionActive\(before\.proposedSubscriberId\)/);
 });
