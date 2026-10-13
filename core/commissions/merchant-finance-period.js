@@ -17,6 +17,7 @@ export function resolveMerchantFinancePeriod(project) {
       return {
         beneficiaryId: project.assignedSubscriberId,
         platformPeriod: false,
+        assignmentPeriod: true,
         canDeclarePayment: MERCHANT_REPEAT_ASSIGNMENT_ENABLED,
         requiresExternalVerification: !MERCHANT_REPEAT_ASSIGNMENT_ENABLED,
         settlementLabel: "عمولات المشترك الحالي — تسوية منفصلة عن كل الفترات السابقة"
