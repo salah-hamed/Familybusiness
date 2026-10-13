@@ -54,7 +54,9 @@ test("admin review is gated and cannot create or confirm settlements",()=>{
   assert.ok(from>0);
   assert.match(snippet,/MERCHANT_TRANSFER_CASES_DISABLED/);
   assert.match(snippet,/buildMerchantTransferFinanceReview/);
-  assert.match(snippet,/financeReviewedAt:serverTimestamp\(\)/);
+  assert.match(snippet,/financeReviewedAt:reviewedAt/);
+  assert.match(snippet,/tx.set\(reviewRef,/);
+  assert.match(snippet,/const \{financeSnapshot,\.\.\.publicReview\}=payload/);
   assert.doesNotMatch(snippet,/commissionSettlements|transaction.delete|transaction.set\(doc\(db,"commissionLedger"/);
 });
 
@@ -66,4 +68,18 @@ test("server rules restrict financial review to admin and preserve accounting",(
   assert.match(section,/resource.data.recipientConsent == "accepted"/);
   assert.match(section,/request.resource.data.financeReviewedBy == request.auth.uid/);
   assert.match(section,/request.resource.data.diff\(resource.data\).affectedKeys\(\).hasOnly\(\[/);
+});
+
+test("finance numbers live ONLY in admin-private review docs, never in operator/recipient consent case",()=>{
+  const source=readFileSync("core/merchants/transfer-case-service.js","utf8");
+  const section=source.slice(source.indexOf("export async function reviewMerchantTransferFinance"));
+  assert.match(section,/merchantTransferFinanceReviews/);
+  assert.match(section,/tx.update\(caseRef,\{\.\.\.publicReview,financeReviewedAt:reviewedAt\}\)/);
+  const rules=readFileSync("firestore.rules","utf8");
+  const start=rules.indexOf("match /merchantTransferFinanceReviews/{projectId}");
+  assert.ok(start>0);
+  const block=rules.slice(start,rules.indexOf("match /{document=**}",start));
+  assert.match(block,/allow get, list: if isAdmin\(\)/);
+  assert.match(block,/allow update, delete: if false/);
+  assert.match(rules,/existsAfter\(merchantTransferFinanceReviewPath\(projectId\)\)/);
 });
