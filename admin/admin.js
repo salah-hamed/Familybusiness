@@ -1,6 +1,7 @@
 import db from "../core/firebase/firebase-db.js";
 import { projectMerchantOverview } from "../core/merchants/merchant-overview.js";
 import { requiredSubscriptionPayment } from "../core/subscriptions/payment-policy.js";
+import { TRIAL_REGISTRATION_ENABLED } from "../core/subscriptions/trial-rollout.js";
 import { protectAdmin } from "../core/auth/admin-guard.js";
 import {
   PLATFORM_BILLING,
@@ -91,6 +92,7 @@ function statusPill(status) {
     active: "نشط",
     inactive: "موقوف",
     pending: "معلق",
+    trial: "فترة التجهيز المجانية",
     pending_review: "بانتظار المراجعة",
     approved: "معتمد",
     pending_invite: "دعوة معلقة",
@@ -217,7 +219,9 @@ async function loadOverview() {
     }
 
     $("billingSummary").innerText =
-      `${formatEgp(PLATFORM_BILLING.initialActivationFee)} أول مرة · ${formatEgp(PLATFORM_BILLING.monthlyRenewalFee)} شهري · إحالة ${formatEgp(REFERRAL_CONFIG.qualifiedReferralReward)}`;
+      TRIAL_REGISTRATION_ENABLED
+        ? `التسجيل مجاني · الاشتراك الجديد ${formatEgp(PLATFORM_BILLING.monthlyRenewalFee)} شهري بعد المهلة · الحسابات القديمة تحتفظ بباقة التفعيل السابقة · إحالة ${formatEgp(REFERRAL_CONFIG.qualifiedReferralReward)}`
+        : `${formatEgp(PLATFORM_BILLING.initialActivationFee)} أول مرة · ${formatEgp(PLATFORM_BILLING.monthlyRenewalFee)} شهري · إحالة ${formatEgp(REFERRAL_CONFIG.qualifiedReferralReward)}`;
 
     $("overviewStatus").innerText =
       `آخر تحديث: ${new Intl.DateTimeFormat("ar-EG",{timeStyle:"short"}).format(new Date())}`;
@@ -316,7 +320,7 @@ function renderUsers() {
           ${!initialAlreadyPaid && user.subscriptionStatus !== "active"
             ? `<button class="secondaryBtn" data-action="grant-launch-promo" data-uid="${escapeHTML(user.uid)}">🎁 منحة مجانية من رصيد Launch 50</button>`
             : ""}
-          ${user.subscriptionStatus === "active"
+          ${["active","trial"].includes(user.subscriptionStatus)
             ? `<button class="secondaryBtn" data-action="deactivate-user" data-uid="${escapeHTML(user.uid)}">إيقاف الاشتراك</button>`
             : ""}
         </div>
