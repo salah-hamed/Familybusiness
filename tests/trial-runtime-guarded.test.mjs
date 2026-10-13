@@ -52,8 +52,8 @@ test("first merchant acceptance always stores server timestamp in the same trans
   const accept=source.slice(start,end);
   assert.doesNotMatch(accept,/transaction.get\\(ownerRef\\)/);
   assert.match(accept,/TRIAL_REGISTRATION_ENABLED/);
-  assert.match(accept,/acceptTransaction\\(true\\)/);
-  assert.match(accept,/acceptTransaction\\(false\\)/);
+  assert.equal(accept.includes("acceptTransaction(true)"),true);
+  assert.equal(accept.includes("acceptTransaction(false)"),true);
   assert.match(accept,/firstMerchantLinkedAt: serverTimestamp\(\)/);
   assert.match(accept,/firstMerchantProjectId: projectDocId/);
   assert.equal(source.includes('projectId: `${ownerId}_${templateId}`'),false);
