@@ -1,5 +1,6 @@
 import db from "../core/firebase/firebase-db.js";
 import { buildReviewedBillingGuard } from "../core/subscriptions/subscription-billing-guard.js";
+import { migrateLegacyPendingProof, reconcileLegacyBillingAccount } from "../core/subscriptions/billing-guard-reconciliation-service.js";
 import { projectMerchantOverview } from "../core/merchants/merchant-overview.js";
 import { assessMerchantCutoverReadiness, formatMerchantCutoverReadiness } from "../core/merchants/merchant-cutover-readiness.js";
 import { assessMerchantTransfer, formatMerchantTransferPreflight } from "../core/merchants/merchant-transfer-preflight.js";
@@ -567,7 +568,9 @@ function renderSubscriptionPayments() {
         </div>
         <div class="actions">
           <button class="secondaryBtn" data-action="copy-payment-code" data-code="${escapeHTML(payment.paymentCode || "")}">نسخ كود الدفع</button>
+          <button class="secondaryBtn" data-action="reconcile-billing-uid" data-payment="${escapeHTML(payment.paymentId)}" data-uid="${escapeHTML(payment.userId||"")}">مطابقة حساب الاشتراك القديم</button>
           ${pending ? `
+            <button class="secondaryBtn" data-action="migrate-legacy-payment" data-payment="${escapeHTML(payment.paymentId)}">ترحيل إثبات قديم (عند الحاجة)</button>
             <button class="primaryBtn" data-action="approve-subscription-payment" data-payment="${escapeHTML(payment.paymentId)}">اعتماد وتفعيل</button>
             <button class="dangerBtn" data-action="reject-subscription-payment" data-payment="${escapeHTML(payment.paymentId)}">رفض الإثبات</button>
           ` : ""}
@@ -1224,7 +1227,15 @@ $("subscriptionPaymentsContainer").addEventListener("click", async event => {
   button.disabled = true;
 
   try {
-    if (button.dataset.action === "approve-subscription-payment") {
+    if (button.dataset.action === "migrate-legacy-payment") {
+      if (!confirm("هل هذه دفعة قديمة من قبل تحديث قواعد Firebase؟ سيتم ربطها بسجل المراجعة الآمن، بدون تفعيل الاشتراك.")) return;
+      await migrateLegacyPendingProof({paymentId,adminUid:adminSession.user.uid});
+      $("subscriptionPaymentsMessage").innerText="تم ترحيل الإثبات القديم لمراجعته بأمان.";
+    } else if (button.dataset.action === "reconcile-billing-uid") {
+      if(!confirm("تأكد أولًا أن كل إثباتات InstaPay وواتساب القديمة لهذا الحساب تمت مراجعتها، وأنه لا توجد دفعة معلقة. هذه الخطوة تسمح بفحص الاسترداد لاحقًا.")) return;
+      await reconcileLegacyBillingAccount({uid:button.dataset.uid,adminUid:adminSession.user.uid});
+      $("subscriptionPaymentsMessage").innerText="تم توثيق مطابقة الحساب المالي القديم.";
+    } else if (button.dataset.action === "approve-subscription-payment") {
       const confirmed = confirm("اعتماد هذه الدفعة سيُفعّل/يُجدد الاشتراك فورًا. هل طابقت كود الدفع ومرجع InstaPay مع Screenshot المرسل على واتساب؟");
       if (!confirmed) return;
       await approveSubscriptionPayment(paymentId);
