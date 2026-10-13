@@ -48,8 +48,10 @@ test("a transfer case may only be created after audited platform takeover, never
   const block=rules.slice(start);
   assert.match(service,/MERCHANT_MUST_BE_RECOVERED_FIRST/);
   assert.match(service,/project\.platformManaged !== true/);
-  assert.match(block,/exists\(merchantRecoveryPath\(projectId\)\)/);
-  assert.match(block,/projectData\(projectId\)\.recoveryAuditId == projectId/);
+  assert.match(rules,/function validMerchantTransferCaseCreate\(projectId\)/);
+  assert.match(rules,/audit.status == "completed"/);
+  assert.match(rules,/audit.recoveredAt == p.recoveryAt/);
+  assert.match(block,/validMerchantTransferCaseCreate\(projectId\)/);
   assert.match(block,/projectData\(projectId\)\.assignedSubscriberId == ""/);
   assert.doesNotMatch(block,/originalSubscriberId == request\.auth\.uid/);
 });
