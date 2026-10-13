@@ -71,6 +71,8 @@ service cloud.firestore {
   function projectData(projectId){ return get(projectPath(projectId)).data; }
   function isVerifiedPlatformManagedMerchant(projectId){
    let p = projectData(projectId);
+   let auditExists = exists(merchantRecoveryPath(projectId));
+   let audit = auditExists ? get(merchantRecoveryPath(projectId)).data : {};
    return projectExists(projectId)
     && ("platformManaged" in p) && p.platformManaged == true
     && p.template in ["supermarket","restaurant","bakery","laundry"]
@@ -80,12 +82,12 @@ service cloud.firestore {
     && p.recoveryAuditId == projectId
     && p.recoveryAt is timestamp
     && p.recoveryAdminUid is string
-    && exists(merchantRecoveryPath(projectId))
-    && get(merchantRecoveryPath(projectId)).data.status == "completed"
-    && get(merchantRecoveryPath(projectId)).data.recoveredAt == p.recoveryAt
-    && get(merchantRecoveryPath(projectId)).data.adminUid == p.recoveryAdminUid
-    && get(merchantRecoveryPath(projectId)).data.previousSubscriberId == p.originalSubscriberId
-    && get(merchantRecoveryPath(projectId)).data.merchantId == p.merchantId;
+    && auditExists
+    && audit.status == "completed"
+    && audit.recoveredAt == p.recoveryAt
+    && audit.adminUid == p.recoveryAdminUid
+    && audit.previousSubscriberId == p.originalSubscriberId
+    && audit.merchantId == p.merchantId;
   }
   function historicProjectOwner(projectId){
    return signedIn() && projectExists(projectId)
