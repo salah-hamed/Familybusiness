@@ -2371,3 +2371,90 @@ test("Phase C4 disallows account-owner substitution, pre-consent and backdated c
     await assertFails(setDoc(doc(db,"merchantTransferCases",ids.projectId),sampleTransferCase(ids,extra)));
   }
 });
+
+async function seedRecoverableLaundry(name = "basic") {
+  const ctx=await seedPartnerRuntime("laundry","recovery_"+name);
+  const merchantId="m_"+"b".repeat(32);
+  await testEnv.withSecurityRulesDisabled(async context => {
+    const db=context.firestore();
+    await updateDoc(doc(db,"users",ctx.ownerId),{
+      subscriptionStatus:"inactive",isActive:false,
+      initialActivationPaid:true,
+      subscriptionExpiresAt:new Date(Date.now()-86400000)
+    });
+    await updateDoc(doc(db,"projects",ctx.projectId),{
+      merchantId, originalSubscriberId:ctx.ownerId,
+      assignedSubscriberId:ctx.ownerId,assignmentStatus:"assigned_to_subscriber",
+      platformManaged:false,linkedAt:null,assignmentUpdatedAt:null
+    });
+  });
+  await seedUser("admin_recover",{role:"admin"});
+  return {...ctx,merchantId};
+}
+
+function recoveryBatch(db,{projectId,ownerId,merchantId},reason="overdue_renewal"){
+  const batch=writeBatch(db);
+  const stamp=serverTimestamp();
+  batch.update(doc(db,"projects",projectId),{
+    platformManaged:true,
+    assignmentStatus:"platform_managed",
+    assignedSubscriberId:"",
+    assignmentUpdatedAt:stamp,
+    recoveryAuditId:projectId,
+    recoveryAt:stamp,
+    recoveryAdminUid:"admin_recover",
+    recoveryReason:reason
+  });
+  batch.set(doc(db,"merchantRecoveries",projectId),{
+    recoveryId:projectId,projectDocId:projectId,
+    merchantId,originalSubscriberId:ownerId,previousSubscriberId:ownerId,
+    reason,evidenceReference:"billing-expiry-verified-"+projectId,
+    status:"completed",adminUid:"admin_recover",recoveredAt:stamp
+  });
+  return batch;
+}
+
+test("C4 recovery cannot flip shop management without matching immutable audit",async()=>{
+  const {projectId}=await seedRecoverableLaundry("noaudit");
+  const db=testEnv.authenticatedContext("admin_recover").firestore();
+  await assertFails(updateDoc(doc(db,"projects",projectId),{
+    platformManaged:true,assignmentStatus:"platform_managed",assignedSubscriberId:"",
+    recoveryAuditId:projectId,recoveryAt:serverTimestamp()
+  }));
+  await assertFails(setDoc(doc(db,"merchantRecoveries",projectId),{
+    recoveryId:projectId,projectDocId:projectId,merchantId:"m_"+"b".repeat(32),
+    originalSubscriberId:"x",previousSubscriberId:"x",
+    reason:"overdue_renewal",evidenceReference:"fake-billing-case",
+    status:"completed",adminUid:"admin_recover",recoveredAt:serverTimestamp()
+  }));
+});
+
+test("C4 atomic admin takeover preserves old project ID and physical shop availability",async()=>{
+  const data=await seedRecoverableLaundry("atomic");
+  const admin=testEnv.authenticatedContext("admin_recover").firestore();
+  await assertSucceeds(recoveryBatch(admin,data).commit());
+  const project=await getDoc(doc(admin,"projects",data.projectId));
+  const recovery=await getDoc(doc(admin,"merchantRecoveries",data.projectId));
+  assert.equal(project.data().ownerId,data.ownerId);
+  assert.equal(project.data().isActive,true);
+  assert.equal(project.data().assignmentStatus,"platform_managed");
+  assert.equal(recovery.data().previousSubscriberId,data.ownerId);
+  // Customer can still load the laundry project even though the former
+  // subscriber is inactive and its subscription has expired.
+  const customer=testEnv.unauthenticatedContext().firestore();
+  await assertSucceeds(getDoc(doc(customer,"projects",data.projectId)));
+  await assertFails(updateDoc(doc(testEnv.authenticatedContext(data.ownerId).firestore(),"projects",data.projectId),{
+    businessName:"Old subscriber cannot edit"
+  }));
+  await assertFails(updateDoc(doc(admin,"merchantRecoveries",data.projectId),{reason:"fake"}));
+});
+
+test("C4 shop operator retains read access while departing subscriber loses management",async()=>{
+  const data=await seedRecoverableLaundry("operator");
+  const admin=testEnv.authenticatedContext("admin_recover").firestore();
+  await assertSucceeds(recoveryBatch(admin,data).commit());
+  const operator=testEnv.authenticatedContext("operator_laundry").firestore();
+  await assertSucceeds(getDoc(doc(operator,"projects",data.projectId)));
+  const unauth=testEnv.unauthenticatedContext().firestore();
+  await assertFails(getDoc(doc(unauth,"merchantRecoveries",data.projectId)));
+});
