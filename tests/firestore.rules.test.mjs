@@ -2449,6 +2449,99 @@ test("admin finance review is atomic and sensitive balances are hidden from inco
   await assertFails(updateDoc(reviewRef(adminDb),{platformOutstandingAmount:0}));
 });
 
+async function seedReviewedCutoverScenario(suffix = "ready") {
+  const ids=await seedTransferCaseScenario("cutover_"+suffix);
+  const adminDb=testEnv.authenticatedContext(ids.admin).firestore();
+  const operatorDb=testEnv.authenticatedContext(ids.operatorUid).firestore();
+  const recipientDb=testEnv.authenticatedContext(ids.target).firestore();
+  const casePath=doc(adminDb,"merchantTransferCases",ids.projectId);
+  await assertSucceeds(setDoc(casePath,sampleTransferCase(ids)));
+  await assertSucceeds(updateDoc(doc(operatorDb,"merchantTransferCases",ids.projectId),{
+    operatorConsent:"accepted",operatorConsentedAt:serverTimestamp()
+  }));
+  await assertSucceeds(updateDoc(doc(recipientDb,"merchantTransferCases",ids.projectId),{
+    recipientConsent:"accepted",recipientConsentedAt:serverTimestamp()
+  }));
+  const finance=writeBatch(adminDb);
+  finance.update(casePath,{
+    financeClearance:"reviewed",financeReviewedBy:ids.admin,financeReviewedAt:serverTimestamp()
+  });
+  finance.set(doc(adminDb,"merchantTransferFinanceReviews",ids.projectId),{
+    projectDocId:ids.projectId,adminUid:ids.admin,reviewedAt:serverTimestamp(),
+    currency:"EGP",formerSubscriberId:ids.owner,
+    platformOutstandingAmount:100,platformEarnedAmount:125,
+    formerSubscriberOutstandingAmount:50,formerSubscriberEarnedAmount:250
+  });
+  await assertSucceeds(finance.commit());
+  const caseDoc=(await getDoc(casePath)).data();
+  return {ids,adminDb,operatorDb,recipientDb,caseDoc};
+}
+
+function cutoverBatch(db,ids,options={}) {
+  const batch=writeBatch(db);
+  const timestamp=()=>serverTimestamp();
+  batch.update(doc(db,"projects",ids.projectId),{
+    assignmentStatus:"assigned_to_new_subscriber",
+    assignedSubscriberId:ids.target,
+    assignmentUpdatedAt:timestamp(),
+    cutoverAuditId:ids.projectId,cutoverAt:timestamp(),
+    cutoverAdminUid:ids.admin
+  });
+  batch.update(doc(db,"merchantTransferCases",ids.projectId),{
+    status:"cutover_completed",cutoverAt:timestamp(),
+    cutoverBy:ids.admin,cutoverAuditId:ids.projectId
+  });
+  if(!options.omitAudit){
+    batch.set(doc(db,"merchantAssignmentCutovers",ids.projectId),{
+      projectDocId:ids.projectId,merchantId:ids.merchantId,
+      originalSubscriberId:ids.owner,previousSubscriberId:"",
+      assignedSubscriberId:ids.target,
+      recoveryAuditId:ids.projectId,financeReviewId:ids.projectId,
+      commissionAmount:6,commissionVersion:1,commissionCurrency:"EGP",
+      status:"completed",completedBy:ids.admin,completedAt:timestamp(),
+      ...(options.forgedAudit || {})
+    });
+  }
+  return batch.commit();
+}
+
+test("C4B11 rejects partial cutover and forged immutable audit while preserving merchant operation",async()=>{
+  const {ids,adminDb,recipientDb,operatorDb}=await seedReviewedCutoverScenario("invalid");
+  await assertFails(cutoverBatch(adminDb,ids,{omitAudit:true}));
+  await assertFails(cutoverBatch(adminDb,ids,{forgedAudit:{assignedSubscriberId:"attacker"}}));
+  await assertFails(cutoverBatch(recipientDb,ids));
+  await assertFails(cutoverBatch(operatorDb,ids));
+  const project=await getDoc(doc(adminDb,"projects",ids.projectId));
+  assert.equal(project.data().assignmentStatus,"platform_managed");
+  assert.equal(project.data().assignedSubscriberId,"");
+  const merchant=await getDoc(doc(operatorDb,"projects",ids.projectId));
+  assert.equal(merchant.data().status,"active");
+  await assertFails(getDoc(doc(recipientDb,"merchantTransferFinanceReviews",ids.projectId)));
+});
+
+test("C4B11 verified batch cuts over once, protects old rights, and grants recipient operational access",async()=>{
+  const {ids,adminDb,recipientDb,operatorDb}=await seedReviewedCutoverScenario("valid");
+  const formerDb=testEnv.authenticatedContext(ids.owner).firestore();
+  await assertSucceeds(cutoverBatch(adminDb,ids));
+  const project=(await getDoc(doc(adminDb,"projects",ids.projectId))).data();
+  assert.equal(project.ownerId,ids.owner);
+  assert.equal(project.merchantId,ids.merchantId);
+  assert.equal(project.assignedSubscriberId,ids.target);
+  assert.equal(project.platformManaged,true);
+  assert.equal(project.assignmentStatus,"assigned_to_new_subscriber");
+  await assertSucceeds(getDoc(doc(recipientDb,"projects",ids.projectId)));
+  await assertFails(updateDoc(doc(formerDb,"operators",ids.projectId),{phone:"01000000000"}));
+  await assertFails(updateDoc(doc(formerDb,"commissionAgreements",ids.projectId),{pendingAmount:20}));
+  await assertFails(getDoc(doc(recipientDb,"merchantAssignmentCutovers",ids.projectId)));
+  await assertFails(getDoc(doc(operatorDb,"merchantAssignmentCutovers",ids.projectId)));
+  const audit=await getDoc(doc(adminDb,"merchantAssignmentCutovers",ids.projectId));
+  assert.equal(audit.data().assignedSubscriberId,ids.target);
+  await assertFails(updateDoc(doc(adminDb,"merchantAssignmentCutovers",ids.projectId),{commissionAmount:99}));
+  await assertFails(cutoverBatch(adminDb,ids));
+  const oldProject=await getDoc(doc(formerDb,"projects",ids.projectId));
+  assert.equal(oldProject.data().ownerId,ids.owner);
+});
+
 async function seedRecoverableLaundry(name = "basic") {
   const ctx=await seedPartnerRuntime("laundry","recovery_"+name);
   const merchantId="m_"+"b".repeat(32);
