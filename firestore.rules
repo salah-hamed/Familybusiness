@@ -16,6 +16,7 @@ service cloud.firestore {
   function commissionLedgerPath(entryId){ return /databases/$(database)/documents/commissionLedger/$(entryId); }
   function commissionReversalPath(reversalId){ return /databases/$(database)/documents/commissionReversals/$(reversalId); }
   function subscriptionPaymentPath(paymentId){ return /databases/$(database)/documents/subscriptionPayments/$(paymentId); }
+  function billingGuardPath(uid){ return /databases/$(database)/documents/subscriptionBillingGuards/$(uid); }
   function commissionSettlementPath(settlementId){ return /databases/$(database)/documents/commissionSettlements/$(settlementId); }
   function merchantViolationPath(projectId){ return /databases/$(database)/documents/merchantViolations/$(projectId); }
   function merchantRecoveryPath(projectId){ return /databases/$(database)/documents/merchantRecoveries/$(projectId); }
@@ -1321,9 +1322,80 @@ service cloud.firestore {
    allow delete: if isAdmin();
   }
 
+  match /subscriptionBillingGuards/{uid} {
+   function matchingPendingPayment(paymentId){
+    let p=getAfter(subscriptionPaymentPath(paymentId)).data;
+    return p.userId==uid && p.status=="pending_review";
+   }
+   function reviewedPayment(paymentId){
+    let p=getAfter(subscriptionPaymentPath(paymentId)).data;
+    return p.userId==uid && p.status in ["approved","rejected"]
+      && p.reviewedBy==request.auth.uid;
+   }
+   allow get: if isAdmin() || (signedIn() && request.auth.uid==uid);
+   allow list: if isAdmin();
+   allow create: if request.resource.data.userId==uid
+    && request.resource.data.revision==1
+    && request.resource.data.lastReviewedPaymentId==""
+    && request.resource.data.updatedAt==request.time
+    && (
+     (signedIn() && request.auth.uid==uid
+      && request.resource.data.recoverySafe==false
+      && request.resource.data.pendingPaymentId is string
+      && request.resource.data.pendingPaymentId.size()>0
+      && request.resource.data.keys().hasOnly([
+       "userId","revision","lastReviewedPaymentId","updatedAt",
+       "recoverySafe","pendingPaymentId"])
+      && matchingPendingPayment(request.resource.data.pendingPaymentId))
+     || (isAdmin() && request.resource.data.pendingPaymentId==""
+      && request.resource.data.recoverySafe==true
+      && request.resource.data.reconciledAt==request.time
+      && request.resource.data.reconciledBy==request.auth.uid
+      && request.resource.data.keys().hasOnly([
+       "userId","revision","lastReviewedPaymentId","updatedAt",
+       "recoverySafe","pendingPaymentId","reconciledAt","reconciledBy"]))
+    );
+   allow update: if request.resource.data.userId==uid
+    && resource.data.userId==uid
+    && request.resource.data.revision==resource.data.revision+1
+    && request.resource.data.updatedAt==request.time
+    && (
+     (signedIn() && request.auth.uid==uid
+      && resource.data.pendingPaymentId==""
+      && request.resource.data.pendingPaymentId is string
+      && request.resource.data.pendingPaymentId.size()>0
+      && request.resource.data.lastReviewedPaymentId==resource.data.lastReviewedPaymentId
+      && request.resource.data.recoverySafe==resource.data.recoverySafe
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+       "pendingPaymentId","revision","updatedAt"])
+      && matchingPendingPayment(request.resource.data.pendingPaymentId))
+     || (isAdmin() && resource.data.pendingPaymentId is string
+      && resource.data.pendingPaymentId.size()>0
+      && request.resource.data.pendingPaymentId==""
+      && request.resource.data.lastReviewedPaymentId==resource.data.pendingPaymentId
+      && request.resource.data.recoverySafe==resource.data.recoverySafe
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+       "pendingPaymentId","lastReviewedPaymentId","revision","updatedAt"])
+      && reviewedPayment(resource.data.pendingPaymentId))
+     || (isAdmin() && resource.data.pendingPaymentId==""
+      && request.resource.data.pendingPaymentId==""
+      && resource.data.recoverySafe==false
+      && request.resource.data.recoverySafe==true
+      && request.resource.data.lastReviewedPaymentId==resource.data.lastReviewedPaymentId
+      && request.resource.data.reconciledAt==request.time
+      && request.resource.data.reconciledBy==request.auth.uid
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+       "recoverySafe","reconciledAt","reconciledBy","revision","updatedAt"]))
+    );
+   allow delete: if false;
+  }
+
   match /subscriptionPayments/{paymentId} {
    allow create: if signedIn()
     && request.resource.data.paymentId == paymentId
+    && getAfter(billingGuardPath(request.auth.uid)).data.userId==request.auth.uid
+    && getAfter(billingGuardPath(request.auth.uid)).data.pendingPaymentId==paymentId
+    && getAfter(billingGuardPath(request.auth.uid)).data.updatedAt==request.time
     && request.resource.data.userId == request.auth.uid
     && request.resource.data.userEmail is string
     && request.resource.data.userEmail.size() <= 254
@@ -1368,6 +1440,9 @@ service cloud.firestore {
     ]);
    allow get, list: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
    allow update: if isAdmin()
+    && getAfter(billingGuardPath(resource.data.userId)).data.pendingPaymentId==""
+    && getAfter(billingGuardPath(resource.data.userId)).data.lastReviewedPaymentId==paymentId
+    && getAfter(billingGuardPath(resource.data.userId)).data.updatedAt==request.time
     && resource.data.status == "pending_review"
     && request.resource.data.paymentId == resource.data.paymentId
     && request.resource.data.userId == resource.data.userId
