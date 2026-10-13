@@ -3114,6 +3114,10 @@ service cloud.firestore {
       && resource.data.projectId is string
       && (
         ownsProject(resource.data.projectId)
+        || (
+          historicProjectOwner(resource.data.projectId)
+          && resource.data.ownerId == request.auth.uid
+        )
         || isProjectOperator(resource.data.projectId)
       )
     );
