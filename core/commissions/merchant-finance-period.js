@@ -1,6 +1,7 @@
 import {
   PLATFORM_COMMISSION_BENEFICIARY,
-  isVerifiedPlatformManagedMerchant
+  isVerifiedPlatformManagedMerchant,
+  isVerifiedAssignedAfterCutover
 } from "../merchants/merchant-commission-beneficiary.js";
 
 /**
@@ -11,6 +12,15 @@ import {
 export function resolveMerchantFinancePeriod(project) {
   if (!project || !project.ownerId) throw new Error("PROJECT_REQUIRED");
   if (project.platformManaged === true) {
+    if (isVerifiedAssignedAfterCutover(project)) {
+      return {
+        beneficiaryId: project.assignedSubscriberId,
+        platformPeriod: false,
+        canDeclarePayment: false,
+        requiresExternalVerification: true,
+        settlementLabel: "عمولات المشترك الجديد (التسوية محفوظة للمراجعة حتى اعتماد دورة السداد)"
+      };
+    }
     if (!isVerifiedPlatformManagedMerchant(project)) {
       throw new Error("MERCHANT_RECOVERY_AUDIT_REQUIRED");
     }
