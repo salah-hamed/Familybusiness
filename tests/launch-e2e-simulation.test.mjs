@@ -137,13 +137,21 @@ test("paid referral path: register -> WhatsApp proof record -> admin approval ->
   await assertSucceeds(
     setDoc(doc(userDb, "users", uid), registrationProfile(uid, referrerId))
   );
-  await assertSucceeds(
-    setDoc(doc(userDb, "subscriptionPayments", paymentId), initialPayment(uid, paymentId))
-  );
+  const proofBatch=writeBatch(userDb);
+  proofBatch.set(doc(userDb,"subscriptionBillingGuards",uid),{
+    userId:uid,pendingPaymentId:paymentId,lastReviewedPaymentId:"",
+    revision:1,recoverySafe:false,updatedAt:serverTimestamp()
+  });
+  proofBatch.set(doc(userDb,"subscriptionPayments",paymentId),initialPayment(uid,paymentId));
+  await assertSucceeds(proofBatch.commit());
 
   const adminDb = testEnv.authenticatedContext(adminId).firestore();
   const batch = writeBatch(adminDb);
 
+  batch.update(doc(adminDb,"subscriptionBillingGuards",uid),{
+    pendingPaymentId:"",lastReviewedPaymentId:paymentId,
+    revision:2,updatedAt:serverTimestamp()
+  });
   batch.update(doc(adminDb, "subscriptionPayments", paymentId), {
     status: "approved",
     reviewedAt: serverTimestamp(),
