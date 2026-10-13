@@ -21,6 +21,7 @@ service cloud.firestore {
   function merchantRecoveryPath(projectId){ return /databases/$(database)/documents/merchantRecoveries/$(projectId); }
   function merchantTransferCasePath(projectId){ return /databases/$(database)/documents/merchantTransferCases/$(projectId); }
   function merchantTransferFinanceReviewPath(projectId){ return /databases/$(database)/documents/merchantTransferFinanceReviews/$(projectId); }
+  function merchantCutoverPath(projectId){ return /databases/$(database)/documents/merchantAssignmentCutovers/$(projectId); }
   function subscriptionGrantPath(grantId){ return /databases/$(database)/documents/subscriptionGrants/$(grantId); }
   function platformCounterPath(counterId){ return /databases/$(database)/documents/platformCounters/$(counterId); }
   function userExists(uid){ return exists(userPath(uid)); }
@@ -89,26 +90,72 @@ service cloud.firestore {
     && get(merchantRecoveryPath(projectId)).data.previousSubscriberId == p.originalSubscriberId
     && get(merchantRecoveryPath(projectId)).data.merchantId == p.merchantId;
   }
+  // Live assignment is legal only after BOTH the consent and audit documents exist.
+  function isVerifiedAssignedAfterCutover(projectId){
+   let p = projectData(projectId);
+   let c = get(merchantTransferCasePath(projectId)).data;
+   let a = get(merchantCutoverPath(projectId)).data;
+   return projectExists(projectId)
+    && p.platformManaged == true
+    && p.assignmentStatus == "assigned_to_new_subscriber"
+    && p.assignedSubscriberId is string
+    && p.assignedSubscriberId.size() > 0
+    && p.assignedSubscriberId != p.originalSubscriberId
+    && p.cutoverAuditId == projectId
+    && p.cutoverAt is timestamp
+    && p.cutoverAdminUid is string
+    && p.recoveryAuditId == projectId
+    && c.status == "cutover_completed"
+    && c.projectDocId == projectId
+    && c.merchantId == p.merchantId
+    && c.originalSubscriberId == p.originalSubscriberId
+    && c.proposedSubscriberId == p.assignedSubscriberId
+    && c.operatorConsent == "accepted"
+    && c.recipientConsent == "accepted"
+    && c.financeClearance == "reviewed"
+    && c.cutoverAt == p.cutoverAt
+    && c.cutoverBy == p.cutoverAdminUid
+    && a.status == "completed"
+    && a.projectDocId == projectId
+    && a.merchantId == p.merchantId
+    && a.originalSubscriberId == p.originalSubscriberId
+    && a.assignedSubscriberId == p.assignedSubscriberId
+    && a.completedAt == p.cutoverAt
+    && a.completedBy == p.cutoverAdminUid;
+  }
+  function currentAssignedSubscriber(projectId){
+   return signedIn() && isVerifiedAssignedAfterCutover(projectId)
+    && projectData(projectId).assignedSubscriberId == request.auth.uid
+    && subscriptionActive(request.auth.uid);
+  }
   function historicProjectOwner(projectId){
    return signedIn() && projectExists(projectId)
     && projectData(projectId).ownerId == request.auth.uid;
   }
   function ownsProject(projectId){
-   return historicProjectOwner(projectId)
-    && !isVerifiedPlatformManagedMerchant(projectId)
-    && (!("platformManaged" in projectData(projectId)) || projectData(projectId).platformManaged == false);
+   return currentAssignedSubscriber(projectId)
+    || (historicProjectOwner(projectId)
+      && (!("platformManaged" in projectData(projectId))
+       || projectData(projectId).platformManaged == false));
   }
   function commissionBeneficiary(projectId){
-   return isVerifiedPlatformManagedMerchant(projectId)
-    ? "__fb_platform_commissions__"
-    : projectData(projectId).ownerId;
+   return isVerifiedAssignedAfterCutover(projectId)
+    ? projectData(projectId).assignedSubscriberId
+    : (isVerifiedPlatformManagedMerchant(projectId)
+      ? "__fb_platform_commissions__"
+      : projectData(projectId).ownerId);
   }
   function projectAvailable(projectId){
    let project = projectData(projectId);
    return projectExists(projectId)
     && project.isActive == true
     && project.status == "active"
-    && (subscriptionActive(project.ownerId) || isVerifiedPlatformManagedMerchant(projectId));
+    && ((("platformManaged" in project) && project.platformManaged == true
+        && (isVerifiedPlatformManagedMerchant(projectId)
+        || (isVerifiedAssignedAfterCutover(projectId)
+           && subscriptionActive(project.assignedSubscriberId))))
+        || ((!('platformManaged' in project) || project.platformManaged == false)
+            && subscriptionActive(project.ownerId)));
   }
   function carwashSubscriptionExists(subscriptionId){ return exists(carwashSubscriptionPath(subscriptionId)); }
   function carwashSubscriptionData(subscriptionId){ return get(carwashSubscriptionPath(subscriptionId)).data; }
@@ -1344,6 +1391,7 @@ service cloud.firestore {
   match /projects/{projectId} {
    allow get: if isAdmin()
     || (signedIn() && resource.data.ownerId == request.auth.uid)
+    || currentAssignedSubscriber(projectId)
     || isLinkedProjectOperator(projectId)
     || (
       resource.data.template in ["laundry","cleaning","carwash"]
@@ -1351,7 +1399,11 @@ service cloud.firestore {
       && resource.data.status == "active"
       && projectAvailable(projectId)
     );
-   allow list: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid);
+   allow list: if isAdmin()
+    || (signedIn() && resource.data.ownerId == request.auth.uid)
+    || (signedIn() && resource.data.platformManaged == true
+      && resource.data.assignmentStatus == "assigned_to_new_subscriber"
+      && resource.data.assignedSubscriberId == request.auth.uid);
    allow create: if signedIn() && subscriptionActive(request.auth.uid) && validActiveProjectCreate(projectId);
    allow update: if (
     isAdmin()
@@ -1368,7 +1420,7 @@ service cloud.firestore {
       !request.resource.data.diff(resource.data).affectedKeys().hasAny([
         "platformManaged","assignmentStatus","assignedSubscriberId",
         "assignmentUpdatedAt","recoveryAuditId","recoveryAt",
-        "recoveryAdminUid","recoveryReason"
+        "recoveryAdminUid","recoveryReason","cutoverAuditId","cutoverAt","cutoverAdminUid"
       ])
       || (
         ("platformManaged" in resource.data) && resource.data.platformManaged == false
@@ -1401,6 +1453,30 @@ service cloud.firestore {
         && getAfter(merchantRecoveryPath(projectId)).data.merchantId == resource.data.merchantId
         && getAfter(merchantRecoveryPath(projectId)).data.reason == request.resource.data.recoveryReason
       )
+    || (
+        resource.data.platformManaged == true
+        && resource.data.assignmentStatus == "platform_managed"
+        && resource.data.assignedSubscriberId == ""
+        && request.resource.data.platformManaged == true
+        && request.resource.data.assignmentStatus == "assigned_to_new_subscriber"
+        && request.resource.data.assignedSubscriberId is string
+        && request.resource.data.assignedSubscriberId.size() > 0
+        && request.resource.data.assignedSubscriberId != resource.data.originalSubscriberId
+        && request.resource.data.assignmentUpdatedAt == request.time
+        && request.resource.data.cutoverAuditId == projectId
+        && request.resource.data.cutoverAt == request.time
+        && request.resource.data.cutoverAdminUid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+         "assignmentStatus","assignedSubscriberId","assignmentUpdatedAt",
+         "cutoverAuditId","cutoverAt","cutoverAdminUid"
+        ])
+        && getAfter(merchantTransferCasePath(projectId)).data.status == "cutover_completed"
+        && getAfter(merchantTransferCasePath(projectId)).data.proposedSubscriberId == request.resource.data.assignedSubscriberId
+        && getAfter(merchantTransferCasePath(projectId)).data.cutoverAt == request.time
+        && getAfter(merchantCutoverPath(projectId)).data.status == "completed"
+        && getAfter(merchantCutoverPath(projectId)).data.assignedSubscriberId == request.resource.data.assignedSubscriberId
+        && getAfter(merchantCutoverPath(projectId)).data.completedAt == request.time
+       )
     )
    ) || (
     signedIn()
