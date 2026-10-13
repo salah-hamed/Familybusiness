@@ -13,6 +13,15 @@ export function buildMerchantTransferCase({
   adminUid, reason
 }) {
   if (!UID.test(String(adminUid || ""))) throw new Error("ADMIN_UID_REQUIRED");
+  // New assignment starts only AFTER the platform has recovered the shop;
+  // it cannot bypass paid subscriber allocation while the old one is active.
+  if (!project || project.platformManaged !== true
+      || project.assignmentStatus !== "platform_managed"
+      || project.assignedSubscriberId !== ""
+      || project.recoveryAuditId !== projectDocId
+      || !project.recoveryAt) {
+    throw new Error("MERCHANT_MUST_BE_RECOVERED_FIRST");
+  }
   const safeReason=String(reason || "").trim();
   if (safeReason.length < 15 || safeReason.length > 300) {
     throw new Error("TRANSFER_REASON_REQUIRED");
