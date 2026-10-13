@@ -31,7 +31,8 @@ export function merchantTransferConsentLink(origin, projectDocId) {
 export function summarizeTransferConsent(transferCase, role) {
   if (!transferCase) throw new Error("TRANSFER_CASE_NOT_FOUND");
   if (!["recipient","operator"].includes(role)) throw new Error("TRANSFER_CONSENT_UNAVAILABLE");
+  const terms = formatMerchantTransferTerms(transferCase);
   return role === "operator"
-    ? "تأكيد استمرار إدارة المحل مع مشترك جديد دون تغيير رابط العملاء أو الطلبات السابقة."
-    : "الموافقة على إدارة هذا النشاط مستقبلًا وفق اتفاق عمولة جديد، من غير الحصول على أرباح المشترك السابق.";
+    ? `تأكيد استمرار إدارة المحل مع مشترك جديد دون تغيير رابط العملاء أو الطلبات السابقة. ${terms}`
+    : `الموافقة على إدارة هذا النشاط مستقبلًا وفق العمولة التالية، من غير الحصول على أرباح المشترك السابق. ${terms}`;
 }
