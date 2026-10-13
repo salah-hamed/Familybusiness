@@ -1,5 +1,6 @@
 import db from "../core/firebase/firebase-db.js";
 import { projectMerchantOverview } from "../core/merchants/merchant-overview.js";
+import { assessMerchantCutoverReadiness, formatMerchantCutoverReadiness } from "../core/merchants/merchant-cutover-readiness.js";
 import { assessMerchantTransfer, formatMerchantTransferPreflight } from "../core/merchants/merchant-transfer-preflight.js";
 import { PLATFORM_MERCHANT_RECOVERY_ENABLED } from "../core/merchants/platform-recovery-rollout.js";
 import { MERCHANT_TRANSFER_CASES_ENABLED } from "../core/merchants/transfer-case-rollout.js";
@@ -652,6 +653,11 @@ function renderProjects() {
             data-action="show-platform-recovery-dues"
             data-project="${escapeHTML(project.projectDocId)}" type="button">
             مستحقات المنصة والمشترك السابق
+          </button>` : ""}
+          ${merchant.platformManaged ? `<button class="secondaryBtn"
+            data-action="check-final-cutover"
+            data-project="${escapeHTML(project.projectDocId)}" type="button">
+            مراجعة جاهزية تسليم المحل (بدون تنفيذ)
           </button>` : ""}
           <label class="transferPreflightInput">فحص نقل النشاط للمشترك الجديد
             <input class="candidateSubscriberUid" type="text" maxlength="128" placeholder="UID المشترك الجديد" autocomplete="off">
@@ -1332,6 +1338,47 @@ $("projectsContainer").addEventListener("click", async event => {
   if (!button) return;
 
   const projectId = button.dataset.project;
+
+  if (button.dataset.action === "check-final-cutover") {
+    const result = button.closest(".adminCard")?.querySelector(".transferPreflightResult");
+    button.disabled = true;
+    if (result) result.textContent = "جاري فحص التخصيص والموافقات والمستحقات...";
+    try {
+      const [projectSnap, caseSnap, operatorSnap, agreementSnap, auditSnap] = await Promise.all([
+        getDoc(doc(db, "projects", projectId)),
+        getDoc(doc(db, "merchantTransferCases", projectId)),
+        getDoc(doc(db, "operators", projectId)),
+        getDoc(doc(db, "commissionAgreements", projectId)),
+        getDoc(doc(db, "merchantRecoveries", projectId))
+      ]);
+      const project = projectSnap.exists() ? projectSnap.data() : null;
+      const transferCase = caseSnap.exists() ? caseSnap.data() : null;
+      if (!project || project.platformManaged !== true) throw new Error("NOT_A_RECOVERED_MERCHANT");
+      const newUid = String(transferCase?.proposedSubscriberId || "");
+      const recipientSnap = /^[A-Za-z0-9_-]{1,128}$/.test(newUid)
+        ? await getDoc(doc(db, "users", newUid)) : null;
+      const [platformSummary, historicalSummary] = await Promise.all([
+        getProjectPaymentSummary(projectId),
+        getProjectPaymentSummary(projectId, { ownerId: project.originalSubscriberId || project.ownerId })
+      ]);
+      const report = assessMerchantCutoverReadiness({
+        projectId, project, transferCase,
+        recoveryAudit:auditSnap.exists() ? auditSnap.data() : null,
+        operator:operatorSnap.exists() ? operatorSnap.data() : null,
+        agreement:agreementSnap.exists() ? agreementSnap.data() : null,
+        recipient:recipientSnap?.exists() ? {...recipientSnap.data(),uid:newUid} : null,
+        recipientUid:newUid,
+        platformSummary,historicalSummary
+      });
+      if (result) result.textContent = formatMerchantCutoverReadiness(report);
+    } catch (error) {
+      console.error(error);
+      if (result) result.textContent = "تعذر التحقق من شروط التسليم؛ لم تتغير أي بيانات.";
+    } finally {
+      button.disabled = false;
+    }
+    return;
+  }
 
   if (button.dataset.action === "show-platform-recovery-dues") {
     const container = button.closest(".adminCard")?.querySelector(".transferPreflightResult");
