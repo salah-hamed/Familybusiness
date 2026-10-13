@@ -93,8 +93,6 @@ service cloud.firestore {
   // Live assignment is legal only after BOTH the consent and audit documents exist.
   function isVerifiedAssignedAfterCutover(projectId){
    let p = projectData(projectId);
-   let c = get(merchantTransferCasePath(projectId)).data;
-   let a = get(merchantCutoverPath(projectId)).data;
    return projectExists(projectId)
     && p.platformManaged == true
     && p.assignmentStatus == "assigned_to_new_subscriber"
@@ -105,23 +103,25 @@ service cloud.firestore {
     && p.cutoverAt is timestamp
     && p.cutoverAdminUid is string
     && p.recoveryAuditId == projectId
-    && c.status == "cutover_completed"
-    && c.projectDocId == projectId
-    && c.merchantId == p.merchantId
-    && c.originalSubscriberId == p.originalSubscriberId
-    && c.proposedSubscriberId == p.assignedSubscriberId
-    && c.operatorConsent == "accepted"
-    && c.recipientConsent == "accepted"
-    && c.financeClearance == "reviewed"
-    && c.cutoverAt == p.cutoverAt
-    && c.cutoverBy == p.cutoverAdminUid
-    && a.status == "completed"
-    && a.projectDocId == projectId
-    && a.merchantId == p.merchantId
-    && a.originalSubscriberId == p.originalSubscriberId
-    && a.assignedSubscriberId == p.assignedSubscriberId
-    && a.completedAt == p.cutoverAt
-    && a.completedBy == p.cutoverAdminUid;
+    && exists(merchantTransferCasePath(projectId))
+    && exists(merchantCutoverPath(projectId))
+    && get(merchantTransferCasePath(projectId)).data.status == "cutover_completed"
+    && get(merchantTransferCasePath(projectId)).data.projectDocId == projectId
+    && get(merchantTransferCasePath(projectId)).data.merchantId == p.merchantId
+    && get(merchantTransferCasePath(projectId)).data.originalSubscriberId == p.originalSubscriberId
+    && get(merchantTransferCasePath(projectId)).data.proposedSubscriberId == p.assignedSubscriberId
+    && get(merchantTransferCasePath(projectId)).data.operatorConsent == "accepted"
+    && get(merchantTransferCasePath(projectId)).data.recipientConsent == "accepted"
+    && get(merchantTransferCasePath(projectId)).data.financeClearance == "reviewed"
+    && get(merchantTransferCasePath(projectId)).data.cutoverAt == p.cutoverAt
+    && get(merchantTransferCasePath(projectId)).data.cutoverBy == p.cutoverAdminUid
+    && get(merchantCutoverPath(projectId)).data.status == "completed"
+    && get(merchantCutoverPath(projectId)).data.projectDocId == projectId
+    && get(merchantCutoverPath(projectId)).data.merchantId == p.merchantId
+    && get(merchantCutoverPath(projectId)).data.originalSubscriberId == p.originalSubscriberId
+    && get(merchantCutoverPath(projectId)).data.assignedSubscriberId == p.assignedSubscriberId
+    && get(merchantCutoverPath(projectId)).data.completedAt == p.cutoverAt
+    && get(merchantCutoverPath(projectId)).data.completedBy == p.cutoverAdminUid;
   }
   function currentAssignedSubscriber(projectId){
    return signedIn() && isVerifiedAssignedAfterCutover(projectId)
