@@ -14,3 +14,8 @@ a.back{color:#176747;text-decoration:none;font-weight:700}.mark{font-weight:800;
 .history article:last-child{border:0}.history small{display:block;color:#456051;margin-top:6px}
 #errorPanel{margin-top:18px;padding:16px;background:#fff4f0;color:#873d29;border:1px solid #efc3b8;border-radius:14px}
 @media(max-width:500px){.statement{padding:17px 13px 45px}.hero{padding:24px 18px}}
+
+.statement-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.statement-actions button{border:0;border-radius:10px;padding:9px 12px;background:#167b50;color:#fff;font:inherit;font-weight:700;cursor:pointer}
+.statement-actions button[data-decision="reject"]{background:#7a4545}
+.statement-actions button:disabled{opacity:.6;cursor:progress}
