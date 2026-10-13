@@ -126,7 +126,10 @@ export async function loadUserProjects(ownerId) {
       const project = projectDoc.data();
       if (project.platformManaged === true &&
           !(project.assignmentStatus === "assigned_to_new_subscriber" &&
-            project.assignedSubscriberId === ownerId)) return;
+            project.assignedSubscriberId === ownerId) &&
+          project.ownerId !== ownerId) return;
+      // Former subscribers receive a historical financial statement only,
+      // never a reopened operational project.
       byId.set(projectDoc.id,{projectDocId:projectDoc.id,...project});
     });
   }
