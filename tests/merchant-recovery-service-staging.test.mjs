@@ -18,6 +18,7 @@ test("one transaction preserves original identity and creates permanent audit",(
   const tx=service.slice(start);
   assert.match(tx,/transaction.get\(projectRef\)/);
   assert.match(tx,/transaction.get\(ownerRef\)/);
+  assert.match(tx,/const subscriber=\{\.\.\.ownerSnap\.data\(\),uid:allocatedUid\}/);
   assert.match(tx,/transaction.get\(operatorRef\)/);
   assert.match(tx,/transaction.get\(agreementRef\)/);
   assert.match(tx,/transaction.get\(auditRef\)/);

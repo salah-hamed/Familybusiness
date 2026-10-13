@@ -49,7 +49,7 @@ export function resolveMerchantIdentity(project = {}, projectDocId = "") {
   return {
     merchantId: project.merchantId || (legacyId ? `legacy_${legacyId}` : ""),
     originalSubscriberId: project.originalSubscriberId || ownerId,
-    assignedSubscriberId: project.assignedSubscriberId || ownerId,
+    assignedSubscriberId: typeof project.assignedSubscriberId === "string" ? project.assignedSubscriberId : ownerId,
     assignmentStatus: project.assignmentStatus || MERCHANT_ASSIGNMENT_STATUS.ASSIGNED_TO_SUBSCRIBER,
     platformManaged: project.platformManaged === true,
     linkedAt: project.linkedAt ?? null,

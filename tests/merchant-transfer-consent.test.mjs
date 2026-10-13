@@ -7,6 +7,15 @@ test("transfer case rollout is locked until final Rules deployment and consent s
   assert.equal(MERCHANT_TRANSFER_CASES_ENABLED,false);
 });
 
+test("staged new assignment uses explicit empty platform assignee for previousSubscriberId", () => {
+  const source=readFileSync("core/merchants/transfer-case-service.js","utf8");
+  assert.match(source,/previousSubscriberId:readiness.assignedSubscriberId/);
+  const identity=readFileSync("core/merchants/merchant-identity.js","utf8");
+  assert.match(identity,/typeof project.assignedSubscriberId === "string"/);
+  const rules=readFileSync("firestore.rules","utf8");
+  assert.match(rules,/d.previousSubscriberId == ""/);
+});
+
 test("merchant consent requests never edit operational project or finance history", () => {
   const source=readFileSync("core/merchants/transfer-case-service.js","utf8");
   const start=source.indexOf("export async function openMerchantTransferCase");

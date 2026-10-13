@@ -93,7 +93,8 @@ export async function executePlatformMerchantRecovery({projectDocId,adminUid,rea
       throw new Error("RECOVERY_REQUIRED_DATA_MISSING");
     }
     const project=projectSnap.data();
-    const subscriber=ownerSnap.data();
+    // Firebase users/{uid} need not store an explicit uid property.
+    const subscriber={...ownerSnap.data(),uid:allocatedUid};
     const violation=violationSnap?.exists?.() ? violationSnap.data() : null;
     if (project.assignedSubscriberId !== allocatedUid
         || project.operatorId !== projectDocId

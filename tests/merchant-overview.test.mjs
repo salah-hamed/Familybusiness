@@ -27,6 +27,14 @@ test("central admin projection retains the original owner while showing current 
   assert.equal(summary.runtimeProjectId,"original_supermarket");
 });
 
+test("a platform-managed shop does not show the removed subscriber as assigned", () => {
+  const summary=projectMerchantOverview({ownerId:"old",assignedSubscriberId:"",
+    merchantId:"m_"+"a".repeat(32),assignmentStatus:"platform_managed",platformManaged:true},"old_supermarket");
+  assert.equal(summary.assignedSubscriberId,"");
+  assert.equal(summary.originalSubscriberId,"old");
+  assert.equal(summary.displayState,"تحت إدارة المنصة");
+});
+
 test("central admin remains read only and never changes billing or routing", () => {
   const source=readFileSync("core/merchants/merchant-overview.js","utf8");
   const admin=readFileSync("admin/admin.js","utf8");
