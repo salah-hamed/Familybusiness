@@ -1,4 +1,5 @@
 import db from "../firebase/firebase-db.js";
+import { TRIAL_REGISTRATION_ENABLED } from "../subscriptions/trial-rollout.js";
 
 import {
   doc,
@@ -121,42 +122,25 @@ export async function acceptPendingCommission({
     getCommissionAgreementId(projectDocId)
   );
 
-  await runTransaction(db, async (transaction) => {
+  const acceptTransaction = async (anchorFirstMerchant) => runTransaction(db, async transaction => {
     const agreementSnap = await transaction.get(agreementRef);
-
-    if (!agreementSnap.exists()) {
-      throw new Error("AGREEMENT_NOT_FOUND");
-    }
+    if (!agreementSnap.exists()) throw new Error("AGREEMENT_NOT_FOUND");
 
     const agreement = agreementSnap.data();
     const operatorRef = doc(db, "operators", agreement.operatorId);
     const operatorSnap = await transaction.get(operatorRef);
-
-    if (!operatorSnap.exists()) {
-      throw new Error("OPERATOR_NOT_FOUND");
-    }
+    if (!operatorSnap.exists()) throw new Error("OPERATOR_NOT_FOUND");
 
     const operator = operatorSnap.data();
-
     if (!operator.authUid || operator.authUid !== operatorAuthUid) {
       throw new Error("OPERATOR_NOT_AUTHORIZED");
     }
-
     if (agreement.pendingStatus !== "pending" || agreement.pendingAmount == null) {
       throw new Error("NO_PENDING_COMMISSION");
     }
 
-    // Read before writes. New trial users must have the very first accepted
-    // agreement anchored to server time in this exact atomic transaction.
-    const ownerRef = doc(db, "users", agreement.ownerId);
-    const ownerSnap = await transaction.get(ownerRef);
-    if (!ownerSnap.exists()) throw new Error("SUBSCRIBER_NOT_FOUND");
-    const owner = ownerSnap.data();
-    const linkFirstMerchant = owner.accessModel === "merchant_trial_v1"
-      && owner.subscriptionStatus === "trial"
-      && owner.firstMerchantLinkedAt == null
-      && agreement.status !== "accepted";
-
+    // Never transaction.get(users/{ownerId}) as an operator: Firestore Rules
+    // deliberately prevent operators from reading subscriber personal data.
     transaction.update(agreementRef, {
       currentAmount: agreement.pendingAmount,
       acceptedVersion: Number(agreement.version || 1),
@@ -169,7 +153,6 @@ export async function acceptPendingCommission({
       rejectedAt: null,
       updatedAt: serverTimestamp()
     });
-
     transaction.update(operatorRef, {
       agreementStatus: "accepted",
       status: "active",
@@ -177,13 +160,30 @@ export async function acceptPendingCommission({
       updatedAt: serverTimestamp()
     });
 
-    if (linkFirstMerchant) {
-      transaction.update(ownerRef, {
+    // Under new Rules this atomic write is required for the very first trial
+    // merchant. For a legacy/already-linked account Rules reject this extra
+    // user update, and the transaction can safely retry without it.
+    if (anchorFirstMerchant) {
+      transaction.update(doc(db, "users", agreement.ownerId), {
         firstMerchantLinkedAt: serverTimestamp(),
         firstMerchantProjectId: projectDocId
       });
     }
   });
+
+  if (TRIAL_REGISTRATION_ENABLED) {
+    try {
+      await acceptTransaction(true);
+      return;
+    } catch (error) {
+      // A failed Firestore transaction commits no partial changes.
+      // A plain acceptance is still independently checked by server Rules:
+      // first-time trial acceptance without its timestamp is always denied.
+      if (error?.code !== "permission-denied") throw error;
+    }
+  }
+
+  await acceptTransaction(false);
 }
 
 export async function rejectPendingCommission({
