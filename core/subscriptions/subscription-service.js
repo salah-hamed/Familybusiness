@@ -1,3 +1,5 @@
+import { resolveSubscriptionAccess, MERCHANT_TRIAL_ACCESS_MODEL } from "./trial-policy.js";
+
 export function subscriptionExpiryDate(userData = {}) {
   const value = userData.subscriptionExpiresAt;
   if (!value) return null;
@@ -10,7 +12,7 @@ export function subscriptionExpiryDate(userData = {}) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-export function isSubscriptionActive(userData = {}, now = new Date()) {
+export function isPaidSubscriptionActive(userData = {}, now = new Date()) {
   if (
     userData.isActive !== true ||
     userData.subscriptionStatus !== "active"
@@ -26,4 +28,10 @@ export function isSubscriptionActive(userData = {}, now = new Date()) {
   }
 
   return expiry.getTime() > now.getTime();
+}
+
+export function isSubscriptionActive(userData = {}, now = new Date()) {
+  return userData.accessModel === MERCHANT_TRIAL_ACCESS_MODEL
+    ? resolveSubscriptionAccess(userData, now).allowed
+    : isPaidSubscriptionActive(userData, now);
 }
