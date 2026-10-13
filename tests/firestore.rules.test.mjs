@@ -2292,7 +2292,7 @@ async function seedTransferCaseScenario(suffix="audit") {
     });
     await setDoc(doc(db,"commissionAgreements",projectId),{
       agreementId:projectId,projectId,ownerId:owner,operatorId:projectId,
-      templateId:"supermarket",status:"accepted",acceptedVersion:1
+      templateId:"supermarket",status:"accepted",acceptedVersion:1,currentAmount:6,currency:"EGP"
     });
     await setDoc(doc(db,"merchantRecoveries",projectId),{
       recoveryId:projectId,projectDocId:projectId,merchantId,
@@ -2317,6 +2317,7 @@ function sampleTransferCase(ids, overrides={}){
     recipientConsentedAt:null,
     financeClearance:"pending",
     cutoverAt:null,
+    commissionAmount:6,commissionVersion:1,commissionCurrency:"EGP",
     reason:"المحل يحتاج إعادة تخصيص موثقة بعد انتهاء التعاون السابق",
     createdBy:ids.admin,createdAt:serverTimestamp(),
     ...overrides
@@ -2390,6 +2391,9 @@ test("Phase C4 disallows account-owner substitution, pre-consent and backdated c
     {recipientConsent:"accepted"},
     {financeClearance:"approved"},
     {cutoverAt:serverTimestamp()},
+    {commissionAmount:60},
+    {commissionVersion:10},
+    {commissionCurrency:"USD"},
     {merchantId:"m_"+"b".repeat(32)},
     {createdAt:new Date("2020-01-01T00:00:00Z")},
     {reason:"too short"}
