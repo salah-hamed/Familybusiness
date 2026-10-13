@@ -48,7 +48,7 @@ test("admin and approval UI cannot directly assign ownership or ledger beneficia
   assert.match(admin,/MERCHANT_TRANSFER_CASES_ENABLED && merchant.platformManaged/);
   assert.match(admin,/openMerchantTransferCase\(/);
   assert.match(app,/submitMerchantTransferConsent\(/);
-  assert.match(app,/لا ينقل أرباحًا سابقة/);
+  assert.match(readFileSync("merchant-transfer/index.html","utf8"),/لا ينقل أرباحًا سابقة/);
   for(const disallowed of ["ownerId:","assignedSubscriberId:","transaction.update(","commissionLedger","commissionSettlements"]) {
     assert.equal(app.includes(disallowed),false,disallowed);
   }
