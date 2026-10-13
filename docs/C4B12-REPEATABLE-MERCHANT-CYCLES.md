@@ -51,32 +51,59 @@ project's current cycle before accepting the immutable ledger write.
 The operator's current-cycle statement filters both ledger and payment queries
 by cycle; previously earned rows and receipts are untouched.
 
-## Security and release blockers — MUST NOT enable flags yet
+## Implementation status (code complete, flags OFF)
 
-1. **Trusted billing synchronization**: a preliminary query for pending
-   subscription-payment screenshots is not atomic. Build and verify an
-   independently authenticated billing-state/lock document updated in every
-   payment-submission and payment-review transaction; read the lock in the
-   merchant recovery transaction and enforce it in Firestore Rules. While
-   this isn't done, `executeRepeatMerchantRecovery()` intentionally throws
-   `MERCHANT_REPEAT_RECOVERY_TRUSTED_BILLING_GATE_REQUIRED` even if a feature
-   flag is accidentally switched on.
-2. **No insecure writes**: all five new cycle collections currently deny
-   Firestore client-side create/update/delete. Until admin-only atomic
-   cross-document Rules and new consent/review services pass the Emulator,
-   `executeRepeatMerchantAssignment()` must remain flag-OFF and cannot
-   authorize a production transfer.
-3. Former recipient financial access is read-only and individually scoped;
-   operator and other subscribers cannot read a previous UID's finance review,
-   receipts or historical grant. The platform admin observes money but never
-   creates payment confirmations.
-4. Complete full consent UX and finance-review workflow for cycles 2+;
-   settlement protocol for incoming recipients remains disabled until
-   operator declaration + recipient confirmation is independently verified.
-5. Review indexes, source tests, Firestore Emulator permissions, PWA cached
-   assets and end-to-end supermarket/restaurant/bakery/laundry tests.
-6. One final *coordinated manual* Firebase Rules/index release after PR #146
-   and PR #147 are reviewed; flags stay OFF until explicit rollout approval.
+- Per-user `subscriptionBillingGuards/{uid}` are now created/advanced
+  atomically with new proof submissions, approvals and rejections. Both first
+  recovery and all repeat recoveries read the same guard INSIDE the merchant
+  transaction. No unreviewed payment may coexist with an authorized recovery.
+- Pre-rollout historical pending screenshots can be migrated to the billing
+  gate; an administrator must reconcile the full old payment history before
+  granting `recoverySafe`. This is never automatic.
+- The service now writes the repeat recovery, immutable audit and
+  read-only former subscriber grant atomically; repeat assignment independently
+  writes the consent-case closeout, project state and immutable witness.
+- Admin has guarded tools for repeat recovery, new WhatsApp consent requests,
+  private financial reviews, and verified reassignment.
+- `merchant-transfer/?project=<id>&cycle=<n>` supports a new independent
+  operator+recipient approval for each cycle. The prior subscriber has no veto.
+- Operator declares a per-cycle payment; the correct subscriber independently
+  confirms or rejects it. The platform Admin never settles and a former
+  recipient can confirm an earlier-cycle receipt without operating access.
+- Commission ledger and order are stamped with the active assignment cycle
+  in the same delivery assignment transaction. Financial aggregates isolate
+  the current cycle and retain all historical ledgers.
 
-No code in this staged PR starts a second live recovery, changes a shop's
-stored subscriber, or declares/settles a payment on production.
+## Production blockers — do NOT enable flags or publish yet
+
+1. **Firebase authorization/connection**: the repository is on GitHub Pages,
+   but GitHub access alone cannot deploy Firestore Rules or indexes to
+   `business-2a2e0`. Complete a connected authenticated Firebase deploy.
+2. **Latest head must pass all GitHub tests**, including Rules Emulator,
+   payment+recovery races, cutover witnesses and settlement isolation.
+3. **Old account reconciliations**: every pre-release pending proof must be
+   reviewed or migrated. Confirm billing guard `recoverySafe` for all existing
+   candidate subscriptions before any automatic reclaim.
+4. **Pilot and PWA**: validate at least one supermarket, restaurant, bakery,
+   and laundry customer/order/rider/operator session, installed PWAs and
+   offline cache refresh. Confirm no customer-facing interruption.
+5. **Explicit live rollout**: first publish the combined final Rules and
+   indexes once, coordinate web code deployment, then enable the three
+   recovery/cutover flags plus the settlement flag in a deliberate, independently
+   reviewed follow-up release.
+6. **Keep a rollback**: retain last production Rules and main SHA, a record
+   of before/after project IDs and finance readings. Never roll back
+   financial ledgers or erase historic audit documents.
+
+### Flags that must remain OFF until deployment
+
+- `PLATFORM_MERCHANT_RECOVERY_ENABLED`
+- `MERCHANT_TRANSFER_CASES_ENABLED`
+- `MERCHANT_CUTOVER_ENABLED`
+- `MERCHANT_REPEAT_RECOVERY_ENABLED`
+- `MERCHANT_REPEAT_ASSIGNMENT_ENABLED`
+
+Not yet completed: synchronized Firebase production publish, approved rollout,
+live merchant smoke tests, PWA cache verification, and confirmed active
+billing reconciliations. Those are real activation conditions, NOT optional
+documentation. Current GitHub commits have not changed actual shops or payments.
