@@ -157,7 +157,7 @@ export async function renderOwnerFinancePanel({
   try {
     const [summary, payments, reversals] = await Promise.all([
       getProjectPaymentSummary(projectId, { ownerId }),
-      listProjectPaymentRequests(projectId, { pageSize: 20 }),
+      listProjectPaymentRequests(projectId, { pageSize: 20, ownerId }),
       listProjectCommissionReversals(projectId, { pageSize: 20 })
     ]);
 
