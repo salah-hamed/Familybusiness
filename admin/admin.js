@@ -1,4 +1,5 @@
 import db from "../core/firebase/firebase-db.js";
+import { buildReviewedBillingGuard } from "../core/subscriptions/subscription-billing-guard.js";
 import { projectMerchantOverview } from "../core/merchants/merchant-overview.js";
 import { assessMerchantCutoverReadiness, formatMerchantCutoverReadiness } from "../core/merchants/merchant-cutover-readiness.js";
 import { assessMerchantTransfer, formatMerchantTransferPreflight } from "../core/merchants/merchant-transfer-preflight.js";
@@ -338,8 +339,13 @@ async function approveSubscriptionPayment(paymentId) {
     if (payment.status !== "pending_review") throw new Error("PAYMENT_ALREADY_REVIEWED");
 
     const uid = clean(payment.userId);
+    const guardRef=doc(db,"subscriptionBillingGuards",uid);
     const userRef = doc(db, "users", uid);
-    const userSnap = await transaction.get(userRef);
+    const [guardSnap,userSnap] = await Promise.all([
+      transaction.get(guardRef),transaction.get(userRef)
+    ]);
+    if(!guardSnap.exists())throw new Error("PAYMENT_BILLING_GUARD_MISSING");
+    const guardNext=buildReviewedBillingGuard(guardSnap.data(),uid,paymentId,serverTimestamp());
     if (!userSnap.exists()) throw new Error("USER_NOT_FOUND");
 
     const data = userSnap.data();
@@ -382,6 +388,7 @@ async function approveSubscriptionPayment(paymentId) {
     const expiresAt = new Date(periodStart);
     expiresAt.setDate(expiresAt.getDate() + PLATFORM_BILLING.subscriptionDays);
 
+    transaction.set(guardRef,guardNext);
     transaction.update(paymentRef, {
       status: "approved",
       reviewedAt: serverTimestamp(),
@@ -449,12 +456,24 @@ async function rejectSubscriptionPayment(paymentId, reason) {
   if (cleanReason.length < 3 || cleanReason.length > 300) {
     throw new Error("REJECTION_REASON_REQUIRED");
   }
-
-  await updateDoc(doc(db, "subscriptionPayments", paymentId), {
-    status: "rejected",
-    reviewedAt: serverTimestamp(),
-    reviewedBy: adminSession.user.uid,
-    rejectionReason: cleanReason
+  await runTransaction(db,async tx=>{
+    const paymentRef=doc(db,"subscriptionPayments",paymentId);
+    const paymentSnap=await tx.get(paymentRef);
+    if(!paymentSnap.exists()||paymentSnap.data().status!=="pending_review")
+      throw new Error("PAYMENT_ALREADY_REVIEWED");
+    const uid=paymentSnap.data().userId;
+    const guardRef=doc(db,"subscriptionBillingGuards",uid);
+    const guardSnap=await tx.get(guardRef);
+    if(!guardSnap.exists())throw new Error("PAYMENT_BILLING_GUARD_MISSING");
+    tx.set(guardRef,buildReviewedBillingGuard(
+      guardSnap.data(),uid,paymentId,serverTimestamp()
+    ));
+    tx.update(paymentRef,{
+      status: "rejected",
+      reviewedAt:serverTimestamp(),
+      reviewedBy:adminSession.user.uid,
+      rejectionReason:cleanReason
+    });
   });
 }
 
