@@ -4133,7 +4133,11 @@ service cloud.firestore {
    allow update, delete: if false;
   }
   match /merchantRecoveryCycles/{cycleId} {
-     function verifiedRepeatCycleTransferCreate(cycleId){
+   allow get, list: if isAdmin();
+   allow create: if isAdmin() && validRepeatRecoveryWitness(cycleId);
+   allow update, delete: if false;
+  }
+  function verifiedRepeatCycleTransferCreate(cycleId){
     let c=request.resource.data;
     let p=get(projectPath(c.projectDocId)).data;
     let op=get(operatorPath(c.projectDocId)).data;
