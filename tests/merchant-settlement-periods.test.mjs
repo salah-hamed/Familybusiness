@@ -13,7 +13,7 @@ test("old subscriber earnings and recorded payments use the SAME beneficiary sco
   assert.match(block,/ledgerScope.push\(where\("userId", "==", beneficiaryId\)\)/);
   assert.match(block,/paymentScope.push\(where\("ownerId", "==", beneficiaryId\)\)/);
   assert.match(block,/\.\.\.paymentScope/);
-  assert.match(block,/PLATFORM_COMMISSION_BENEFICIARY/);
+  assert.match(block,/resolveMerchantFinancePeriod\\(projectSnap\\.data\\(\\)\\)\\.beneficiaryId/);
 });
 
 test("former subscriber only receives their own historical payment requests",()=>{
