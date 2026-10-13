@@ -313,7 +313,8 @@ export async function renderOperatorFinancePanel({
     const [summary, payments, reversals] = await Promise.all([
       getProjectPaymentSummary(projectId),
       listProjectPaymentRequests(projectId, {
-        pageSize: 20, ownerId: period.beneficiaryId
+        pageSize: 20, ownerId: period.beneficiaryId,
+        assignmentCycle:period.assignmentCycle ?? null
       }),
       (period.platformPeriod || !period.canDeclarePayment)
         ? Promise.resolve([])
