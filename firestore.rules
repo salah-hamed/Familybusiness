@@ -1391,6 +1391,11 @@ service cloud.firestore {
    allow get: if isAdmin()
     || (signedIn() && resource.data.ownerId == request.auth.uid)
     || currentAssignedSubscriber(projectId)
+    || (signedIn() && ("platformManaged" in resource.data)
+      && resource.data.platformManaged == true
+      && resource.data.assignmentStatus == "assigned_to_new_subscriber"
+      && resource.data.assignedSubscriberId == request.auth.uid
+      && isVerifiedAssignedAfterCutover(projectId))
     || isLinkedProjectOperator(projectId)
     || (
       resource.data.template in ["laundry","cleaning","carwash"]
@@ -3188,6 +3193,7 @@ service cloud.firestore {
 
   match /commissionSettlements/{settlementId} {
    allow get, list: if isAdmin()
+    || (signedIn() && resource.data.ownerId == request.auth.uid)
     || (
       signedIn()
       && resource.data.projectId is string
