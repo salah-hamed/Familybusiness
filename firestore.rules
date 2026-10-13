@@ -3331,9 +3331,7 @@ service cloud.firestore {
    allow get: if isAdmin() || (
       signedIn()
       && (
-        resource.data.originalSubscriberId == request.auth.uid
-        || resource.data.previousSubscriberId == request.auth.uid
-        || resource.data.proposedSubscriberId == request.auth.uid
+        resource.data.proposedSubscriberId == request.auth.uid
         || (operatorExists(projectId) && operatorData(projectId).authUid == request.auth.uid)
       )
    );

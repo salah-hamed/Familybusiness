@@ -59,7 +59,8 @@ With the **old registration still enabled**, test:
 - A paid subscriber who fails to renew or commits a verified policy violation **cannot veto recovery**. The physical operator must stay online while central platform administration takes responsibility. See docs/MERCHANT_PLATFORM_RECOVERY_POLICY.md.
 - No browser-side reassignment, ownership metadata-only change or timed logout can substitute for tested Rules, atomic audit, historical commission protection and future beneficiary routing.
 - Do not enable reassignment merely because a preflight or consent case exists.
-- Complete operator and incoming-subscriber consent UI for a NEW assignment (never the departing subscriber's approval), and historical unsettled balance closeout.
+- Transfer consent UI now exists at `merchant-transfer/` and is still **off** via MERCHANT_TRANSFER_CASES_ENABLED=false. Only the physical operator and incoming subscriber can get new consent cases; the departing subscriber cannot view, accept, reject or veto them. Do not enable until accepted-epoch cutover and accounting tests pass.
+- Complete historical unsettled balance closeout, future incoming beneficiary routing, and actual transaction/permissions cutover; consent alone never changes project assignment.
 - Design and regression-test future-order beneficiary/routing cutover without changing historical `ownerId`, ledgers or prior settlements. Test consent withdrawal, double assignment and stale/broken old subscribers.
 - Until that is complete, keep the case rollout and cutover disabled.
 

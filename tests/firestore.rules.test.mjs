@@ -2328,6 +2328,9 @@ test("Phase C4 only admin opens consent case; existing project identities remain
   assert.equal(projectSnap.data().assignedSubscriberId,ids.owner);
   await assertSucceeds(getDoc(ref(testEnv.authenticatedContext(ids.operatorUid).firestore())));
   await assertSucceeds(getDoc(ref(testEnv.authenticatedContext(ids.target).firestore())));
+  // The departing subscriber retains historical finances but has no right
+  // to inspect, accept or veto the new subscriber's consent case.
+  await assertFails(getDoc(ref(ownerDb)));
   await assertFails(getDoc(ref(outsider)));
   await assertFails(updateDoc(ref(adminDb),{merchantId:"m_"+"b".repeat(32)}));
   await assertFails(deleteDoc(ref(adminDb)));
