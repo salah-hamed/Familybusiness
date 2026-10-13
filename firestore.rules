@@ -1583,6 +1583,65 @@ service cloud.firestore {
      && witness.completedAt == request.time;
   }
 
+  function validRepeatMerchantProjectRecovery(projectId){
+    let before=resource.data;
+    let after=request.resource.data;
+    let id=projectId+"_"+string(after.assignmentCycle);
+    let audit=getAfter(merchantRecoveryCyclePath(id)).data;
+    let grant=getAfter(merchantHistoricGrantPath(projectId+"_"+before.assignedSubscriberId)).data;
+    return before.platformManaged==true
+     && before.assignmentStatus=="assigned_to_new_subscriber"
+     && before.assignedSubscriberId is string
+     && before.assignedSubscriberId.size()>0
+     && after.assignmentCycle is int
+     && after.assignmentCycle==((
+        "assignmentCycle" in before) ? before.assignmentCycle:1)+1
+     && after.platformManaged==true
+     && after.assignmentStatus=="platform_managed"
+     && after.assignedSubscriberId==""
+     && after.assignmentUpdatedAt==request.time
+     && after.recoveryAuditId==id
+     && after.recoveryAt==request.time
+     && after.recoveryAdminUid==request.auth.uid
+     && after.recoveryReason in ["overdue_renewal","unpaid_first_month","confirmed_violation"]
+     && after.diff(before).affectedKeys().hasOnly([
+      "assignmentCycle","platformManaged","assignmentStatus","assignedSubscriberId",
+      "assignmentUpdatedAt","recoveryAuditId","recoveryAt",
+      "recoveryAdminUid","recoveryReason"])
+     && audit.status=="completed" && audit.cycleId==id
+     && audit.previousSubscriberId==before.assignedSubscriberId
+     && audit.recoveredAt==request.time && audit.adminUid==request.auth.uid
+     && grant.subscriberUid==before.assignedSubscriberId
+     && grant.status=="historic_only" && grant.grantedAt==request.time;
+  }
+  function validRepeatMerchantProjectAssignment(projectId){
+    let before=resource.data;
+    let after=request.resource.data;
+    let id=projectId+"_"+string(before.assignmentCycle);
+    let witness=getAfter(merchantAssignmentCyclePath(id)).data;
+    return before.platformManaged==true
+     && before.assignmentStatus=="platform_managed"
+     && before.assignedSubscriberId==""
+     && before.assignmentCycle is int && before.assignmentCycle>=2
+     && before.recoveryAuditId==id
+     && after.platformManaged==true
+     && after.assignmentStatus=="assigned_to_new_subscriber"
+     && after.assignedSubscriberId is string
+     && after.assignedSubscriberId.size()>0
+     && after.assignedSubscriberId!=before.originalSubscriberId
+     && after.assignmentUpdatedAt==request.time
+     && after.cutoverAuditId==id
+     && after.cutoverAt==request.time
+     && after.cutoverAdminUid==request.auth.uid
+     && after.diff(before).affectedKeys().hasOnly([
+      "assignmentStatus","assignedSubscriberId","assignmentUpdatedAt",
+      "cutoverAuditId","cutoverAt","cutoverAdminUid"])
+     && witness.status=="completed" && witness.cycleId==id
+     && witness.assignedSubscriberId==after.assignedSubscriberId
+     && witness.completedAt==request.time
+     && witness.completedBy==request.auth.uid;
+  }
+
   match /projects/{projectId} {
    allow get: if isAdmin()
     || (signedIn() && resource.data.ownerId == request.auth.uid)
@@ -1620,7 +1679,7 @@ service cloud.firestore {
     )
     && (
       !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-        "platformManaged","assignmentStatus","assignedSubscriberId",
+        "platformManaged","assignmentStatus","assignedSubscriberId","assignmentCycle",
         "assignmentUpdatedAt","recoveryAuditId","recoveryAt",
         "recoveryAdminUid","recoveryReason","cutoverAuditId","cutoverAt","cutoverAdminUid"
       ])
@@ -1656,6 +1715,8 @@ service cloud.firestore {
         && getAfter(merchantRecoveryPath(projectId)).data.reason == request.resource.data.recoveryReason
       )
     || validAtomicMerchantProjectCutover(projectId)
+    || validRepeatMerchantProjectRecovery(projectId)
+    || validRepeatMerchantProjectAssignment(projectId)
     )
    ) || (
     signedIn()
