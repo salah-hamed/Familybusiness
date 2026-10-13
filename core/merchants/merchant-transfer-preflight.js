@@ -24,7 +24,7 @@ export function assessMerchantTransfer({
     },
     {
       code:"destination",
-      passed:Boolean(candidate && candidate.uid === candidateUid
+      passed:Boolean(/^[A-Za-z0-9_-]{1,128}$/.test(candidateUid) && candidate && candidate.uid === candidateUid
         && candidateUid !== assignedUid
         && candidateUid !== identity.originalSubscriberId
         && candidate.isActive === true
