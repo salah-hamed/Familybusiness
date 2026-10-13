@@ -17,6 +17,7 @@ service cloud.firestore {
   function commissionReversalPath(reversalId){ return /databases/$(database)/documents/commissionReversals/$(reversalId); }
   function subscriptionPaymentPath(paymentId){ return /databases/$(database)/documents/subscriptionPayments/$(paymentId); }
   function commissionSettlementPath(settlementId){ return /databases/$(database)/documents/commissionSettlements/$(settlementId); }
+  function merchantViolationPath(projectId){ return /databases/$(database)/documents/merchantViolations/$(projectId); }
   function merchantRecoveryPath(projectId){ return /databases/$(database)/documents/merchantRecoveries/$(projectId); }
   function subscriptionGrantPath(grantId){ return /databases/$(database)/documents/subscriptionGrants/$(grantId); }
   function platformCounterPath(counterId){ return /databases/$(database)/documents/platformCounters/$(counterId); }
@@ -3237,6 +3238,56 @@ service cloud.firestore {
    allow delete: if false;
   }
 
+  // A documented admin decision is required; a raw subscriber complaint alone
+  // must never make an operator shop recoverable.
+  match /merchantViolations/{projectId} {
+   allow get, list: if isAdmin();
+   allow create: if isAdmin()
+    && projectExists(projectId)
+    && request.resource.data.projectDocId == projectId
+    && request.resource.data.status == "confirmed"
+    && request.resource.data.reasonCode is string
+    && request.resource.data.reasonCode.matches('^[a-z][a-z0-9_]{2,63}$')
+    && request.resource.data.evidenceReference is string
+    && request.resource.data.evidenceReference.size() >= 8
+    && request.resource.data.evidenceReference.size() <= 200
+    && request.resource.data.confirmedByAdminUid == request.auth.uid
+    && request.resource.data.confirmedAt == request.time
+    && request.resource.data.keys().hasOnly([
+      "projectDocId","status","reasonCode","evidenceReference",
+      "confirmedByAdminUid","confirmedAt"
+    ]);
+   allow update, delete: if false;
+  }
+
+  function validVerifiedRecoveryCause(projectId, reason, evidenceRef) {
+   let subscriber = userData(projectData(projectId).assignedSubscriberId);
+   return userExists(projectData(projectId).assignedSubscriberId)
+    && (
+     (
+       reason == "overdue_renewal"
+       && subscriber.initialActivationPaid == true
+       && subscriber.subscriptionExpiresAt is timestamp
+       && subscriber.subscriptionExpiresAt <= request.time
+     )
+     || (
+       reason == "unpaid_first_month"
+       && subscriber.accessModel == "merchant_trial_v1"
+       && subscriber.firstMerchantLinkedAt is timestamp
+       && subscriber.firstMerchantLinkedAt + duration.value(3, 'd') <= request.time
+       && subscriber.initialActivationPaid == false
+       && subscriber.subscriptionStatus == "trial"
+       && !("lastSubscriptionPaymentId" in subscriber)
+     )
+     || (
+       reason == "confirmed_violation"
+       && exists(merchantViolationPath(projectId))
+       && get(merchantViolationPath(projectId)).data.status == "confirmed"
+       && get(merchantViolationPath(projectId)).data.evidenceReference == evidenceRef
+     )
+    );
+  }
+
   // Immutable recovery audit must be written atomically with platform handover.
   match /merchantRecoveries/{projectId} {
    allow get, list: if isAdmin();
@@ -3248,6 +3299,7 @@ service cloud.firestore {
     && request.resource.data.originalSubscriberId == projectData(projectId).originalSubscriberId
     && request.resource.data.previousSubscriberId == projectData(projectId).assignedSubscriberId
     && request.resource.data.reason in ["overdue_renewal","unpaid_first_month","confirmed_violation"]
+    && validVerifiedRecoveryCause(projectId,request.resource.data.reason,request.resource.data.evidenceReference)
     && request.resource.data.evidenceReference is string
     && request.resource.data.evidenceReference.size() >= 8
     && request.resource.data.evidenceReference.size() <= 200
