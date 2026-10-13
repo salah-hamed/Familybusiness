@@ -2,6 +2,9 @@ import db from "../core/firebase/firebase-db.js";
 import { projectMerchantOverview } from "../core/merchants/merchant-overview.js";
 import { assessMerchantTransfer, formatMerchantTransferPreflight } from "../core/merchants/merchant-transfer-preflight.js";
 import { PLATFORM_MERCHANT_RECOVERY_ENABLED } from "../core/merchants/platform-recovery-rollout.js";
+import { MERCHANT_TRANSFER_CASES_ENABLED } from "../core/merchants/transfer-case-rollout.js";
+import { openMerchantTransferCase } from "../core/merchants/transfer-case-service.js";
+import { merchantTransferConsentLink } from "../core/merchants/transfer-consent-view.js";
 import { executePlatformMerchantRecovery } from "../core/merchants/platform-recovery-service.js";
 import { requiredSubscriptionPayment } from "../core/subscriptions/payment-policy.js";
 import { getProjectPaymentSummary } from "../core/commissions/settlement-service.js";
@@ -667,6 +670,15 @@ function renderProjects() {
           <button class="secondaryBtn" data-action="preflight-merchant-transfer" data-project="${escapeHTML(project.projectDocId)}" type="button">
             فحص أهلية النقل (قراءة فقط)
           </button>
+          ${MERCHANT_TRANSFER_CASES_ENABLED && merchant.platformManaged && !merchant.legacy ? `
+            <label class="transferPreflightInput">سبب التخصيص الجديد
+              <input class="transferCaseReason" type="text" minlength="15" maxlength="300"
+                placeholder="سبب مفصل لا يقل عن 15 حرفًا">
+            </label>
+            <button class="secondaryBtn" type="button" data-action="open-merchant-transfer-case"
+              data-project="${escapeHTML(project.projectDocId)}">إنشاء اتفاق تخصيص جديد</button>
+          ` : ""}
+
         </div>
         <p class="transferPreflightResult" role="status" aria-live="polite"></p>
       </article>
@@ -1353,6 +1365,42 @@ $("projectsContainer").addEventListener("click", async event => {
     $("settlementsSearch").value = projectId;
     switchSection("settlementsSection");
     await loadSettlements();
+    return;
+  }
+
+  if (button.dataset.action === "open-merchant-transfer-case") {
+    if (!MERCHANT_TRANSFER_CASES_ENABLED) return;
+    const card = button.closest(".adminCard");
+    const result = card?.querySelector(".transferPreflightResult");
+    const candidateUid = String(card?.querySelector(".candidateSubscriberUid")?.value || "").trim();
+    const reason = String(card?.querySelector(".transferCaseReason")?.value || "").trim();
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(candidateUid) || reason.length < 15 || reason.length > 300) {
+      if (result) result.textContent = "راجع UID المشترك الجديد واكتب سببًا واضحًا من 15 إلى 300 حرف.";
+      return;
+    }
+    const approved = confirm("هل راجعت أهلية المشترك الجديد؟ الطلب ده لتسجيل موافقات صاحب المحل والمشترك الجديد، وليس نقلًا نهائيًا ولا يحتاج موافقة المشترك السابق.");
+    if (!approved) return;
+    button.disabled = true;
+    try {
+      await openMerchantTransferCase({
+        projectDocId: projectId, candidateUid, reason,
+        adminUid: adminSession.user.uid
+      });
+      const root = new URL("../", window.location.href).href;
+      const link = merchantTransferConsentLink(root, projectId);
+      if (result) result.textContent =
+        "تم إنشاء طلب الموافقات. ابعت الرابط ده لصاحب المحل والمشترك الجديد عبر واتساب: " +
+        link + "\nرابط الاتفاق لا يغيّر الإدارة أو مستحقات أي طرف حتى تتم مرحلة النقل النهائي.";
+      if (navigator.clipboard?.writeText) {
+        try { await navigator.clipboard.writeText(link); } catch { /* display link regardless */ }
+      }
+    } catch (error) {
+      console.error(error);
+      if (result) result.textContent =
+        "تعذر إنشاء طلب الموافقات. راجع النشاط والاشتراك واتفاق العمولة، أو وجود طلب سابق.";
+    } finally {
+      button.disabled = false;
+    }
     return;
   }
 
