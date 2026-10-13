@@ -3525,6 +3525,28 @@ service cloud.firestore {
        "financeClearance","financeReviewedBy","financeReviewedAt"
      ])
    ) || (
+     // Exactly one atomic admin cutover: case + project + immutable witness.
+     isAdmin()
+     && resource.data.status == "awaiting_consents"
+     && resource.data.financeClearance == "reviewed"
+     && resource.data.operatorConsent == "accepted"
+     && resource.data.recipientConsent == "accepted"
+     && request.resource.data.status == "cutover_completed"
+     && request.resource.data.cutoverAt == request.time
+     && request.resource.data.cutoverBy == request.auth.uid
+     && request.resource.data.cutoverAuditId == projectId
+     && subscriptionActive(resource.data.proposedSubscriberId)
+     && getAfter(projectPath(projectId)).data.platformManaged == true
+     && getAfter(projectPath(projectId)).data.assignmentStatus == "assigned_to_new_subscriber"
+     && getAfter(projectPath(projectId)).data.assignedSubscriberId == resource.data.proposedSubscriberId
+     && getAfter(projectPath(projectId)).data.cutoverAt == request.time
+     && getAfter(merchantCutoverPath(projectId)).data.status == "completed"
+     && getAfter(merchantCutoverPath(projectId)).data.assignedSubscriberId == resource.data.proposedSubscriberId
+     && getAfter(merchantCutoverPath(projectId)).data.completedAt == request.time
+     && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+       "status","cutoverAt","cutoverBy","cutoverAuditId"
+     ])
+   ) || (
      isAdmin()
      && resource.data.status == "awaiting_consents"
      && request.resource.data.status == "canceled"
@@ -3540,6 +3562,52 @@ service cloud.firestore {
 
   // Financial snapshot is PRIVATE: consent case readers must never see a
   // former subscriber's outstanding balances. Reviewed is not paid.
+   // C4B11: admin-private witness for the sole platform->subscriber cutover.
+   // No ledger row or historical settlement is ever rewritten.
+   match /merchantAssignmentCutovers/{projectId} {
+    allow get, list: if isAdmin();
+    allow create: if isAdmin()
+     && projectExists(projectId)
+     && exists(merchantTransferCasePath(projectId))
+     && exists(merchantTransferFinanceReviewPath(projectId))
+     && exists(merchantRecoveryPath(projectId))
+     && get(projectPath(projectId)).data.platformManaged == true
+     && get(projectPath(projectId)).data.assignmentStatus == "platform_managed"
+     && get(projectPath(projectId)).data.assignedSubscriberId == ""
+     && get(merchantTransferCasePath(projectId)).data.status == "awaiting_consents"
+     && get(merchantTransferCasePath(projectId)).data.financeClearance == "reviewed"
+     && get(merchantTransferCasePath(projectId)).data.operatorConsent == "accepted"
+     && get(merchantTransferCasePath(projectId)).data.recipientConsent == "accepted"
+     && get(merchantTransferFinanceReviewPath(projectId)).data.reviewedAt
+        == get(merchantTransferCasePath(projectId)).data.financeReviewedAt
+     && get(merchantRecoveryPath(projectId)).data.status == "completed"
+     && request.resource.data.projectDocId == projectId
+     && request.resource.data.merchantId == get(projectPath(projectId)).data.merchantId
+     && request.resource.data.originalSubscriberId == get(projectPath(projectId)).data.originalSubscriberId
+     && request.resource.data.previousSubscriberId == ""
+     && request.resource.data.assignedSubscriberId == get(merchantTransferCasePath(projectId)).data.proposedSubscriberId
+     && request.resource.data.recoveryAuditId == projectId
+     && request.resource.data.financeReviewId == projectId
+     && request.resource.data.commissionAmount == get(merchantTransferCasePath(projectId)).data.commissionAmount
+     && request.resource.data.commissionVersion == get(merchantTransferCasePath(projectId)).data.commissionVersion
+     && request.resource.data.commissionCurrency == "EGP"
+     && request.resource.data.status == "completed"
+     && request.resource.data.completedBy == request.auth.uid
+     && request.resource.data.completedAt == request.time
+     && request.resource.data.keys().hasOnly([
+       "projectDocId","merchantId","originalSubscriberId","previousSubscriberId",
+       "assignedSubscriberId","recoveryAuditId","financeReviewId",
+       "commissionAmount","commissionVersion","commissionCurrency",
+       "status","completedBy","completedAt"
+     ])
+     && getAfter(projectPath(projectId)).data.assignmentStatus == "assigned_to_new_subscriber"
+     && getAfter(projectPath(projectId)).data.assignedSubscriberId == request.resource.data.assignedSubscriberId
+     && getAfter(projectPath(projectId)).data.cutoverAt == request.time
+     && getAfter(merchantTransferCasePath(projectId)).data.status == "cutover_completed"
+     && getAfter(merchantTransferCasePath(projectId)).data.cutoverAt == request.time;
+    allow update, delete: if false;
+   }
+
   match /merchantTransferFinanceReviews/{projectId} {
    allow get, list: if isAdmin();
    allow create: if isAdmin()
