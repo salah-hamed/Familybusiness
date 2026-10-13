@@ -2,6 +2,7 @@ import db from "../firebase/firebase-db.js";
 import { buildRepeatMerchantRecovery,buildRepeatMerchantAssignment,merchantCycleId,nextMerchantCycle } from "./merchant-assignment-cycle.js";
 import { MERCHANT_REPEAT_RECOVERY_ENABLED,MERCHANT_REPEAT_ASSIGNMENT_ENABLED } from "./merchant-cycle-rollout.js";
 import { MERCHANT_RECOVERY_REASON } from "./merchant-recovery-policy.js";
+import { assertTrustedRecoveryBillingGuard } from "../subscriptions/subscription-billing-guard.js";
 import { assessMerchantTransfer } from "./merchant-transfer-preflight.js";
 import { snapshotMerchantTransferTerms } from "./transfer-financial-terms.js";
 import {
@@ -24,9 +25,51 @@ export async function executeRepeatMerchantRecovery({projectId,adminUid,reason}=
   if(!MERCHANT_REPEAT_RECOVERY_ENABLED)throw new Error("MERCHANT_REPEAT_RECOVERY_DISABLED");
   requiredId(projectId);requiredId(adminUid);
   if(!REASONS.has(reason))throw new Error("MERCHANT_REPEAT_RECOVERY_INVALID_REASON");
-  // This guard remains deliberately fail closed even if the rollout flag is
-  // changed accidentally without the trusted billing confirmation release.
-  throw new Error("MERCHANT_REPEAT_RECOVERY_TRUSTED_BILLING_GATE_REQUIRED");
+
+  const projectRef=doc(db,"projects",projectId);
+  return runTransaction(db,async tx=>{
+    const projectSnap=await tx.get(projectRef);
+    if(!projectSnap.exists())throw new Error("MERCHANT_REPEAT_PROJECT_NOT_FOUND");
+    const project=projectSnap.data();
+    const cycle=nextMerchantCycle(project);
+    const id=merchantCycleId(projectId,cycle);
+    const previousUid=requiredId(project.assignedSubscriberId);
+    const previousAssignmentId=cycle===2?projectId:merchantCycleId(projectId,cycle-1);
+    const assignmentRef=doc(db,cycle===2?"merchantAssignmentCutovers":"merchantAssignmentCycles",previousAssignmentId);
+    const recoveryRef=doc(db,"merchantRecoveryCycles",id);
+    const grantRef=doc(db,"merchantHistoricalAccess",projectId+"_"+previousUid);
+    const userRef=doc(db,"users",previousUid);
+    const billingRef=doc(db,"subscriptionBillingGuards",previousUid);
+    const operatorRef=doc(db,"operators",projectId);
+    const agreementRef=doc(db,"commissionAgreements",projectId);
+    const violationRef=doc(db,"merchantViolations",projectId);
+    const [assignmentSnap,existingRecovery,existingGrant,userSnap,billingSnap,operatorSnap,agreementSnap,violationSnap]=
+      await Promise.all([
+       tx.get(assignmentRef),tx.get(recoveryRef),tx.get(grantRef),tx.get(userRef),
+       tx.get(billingRef),tx.get(operatorRef),tx.get(agreementRef),tx.get(violationRef)
+      ]);
+    if(existingRecovery.exists()||existingGrant.exists())
+      throw new Error("MERCHANT_REPEAT_ALREADY_RECOVERED");
+    if([assignmentSnap,userSnap,billingSnap,operatorSnap,agreementSnap].some(s=>!s.exists()))
+      throw new Error("MERCHANT_REPEAT_RECOVERY_REQUIRED_DATA_MISSING");
+    assertTrustedRecoveryBillingGuard(billingSnap.data(),previousUid);
+    const next=buildRepeatMerchantRecovery({
+      projectId,adminUid,project,
+      priorAssignmentAudit:assignmentSnap.data(),
+      subscriber:{...userSnap.data(),uid:previousUid},
+      operator:operatorSnap.data(),agreement:agreementSnap.data(),
+      reason,violation:violationSnap.exists()?violationSnap.data():null,
+      pendingPayment:false,now:new Date()
+    });
+    const when=serverTimestamp();
+    tx.update(projectRef,{
+      ...next.projectPatch,
+      assignmentUpdatedAt:when,recoveryAt:when
+    });
+    tx.set(recoveryRef,{...next.recoveryAudit,recoveredAt:when});
+    tx.set(grantRef,{...next.historicAccess,grantedAt:when});
+    return {projectId,cycle,previousSubscriberId:previousUid};
+  });
 }
 
 /**
