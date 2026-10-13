@@ -3770,6 +3770,10 @@ service cloud.firestore {
    allow get, list: if isAdmin();
    allow create: if isAdmin()
     && projectExists(projectId)
+    && exists(billingGuardPath(projectData(projectId).assignedSubscriberId))
+    && get(billingGuardPath(projectData(projectId).assignedSubscriberId)).data.userId==projectData(projectId).assignedSubscriberId
+    && get(billingGuardPath(projectData(projectId).assignedSubscriberId)).data.recoverySafe==true
+    && get(billingGuardPath(projectData(projectId).assignedSubscriberId)).data.pendingPaymentId==""
     && request.resource.data.recoveryId == projectId
     && request.resource.data.projectDocId == projectId
     && request.resource.data.merchantId == projectData(projectId).merchantId
