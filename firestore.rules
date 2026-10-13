@@ -139,7 +139,7 @@ service cloud.firestore {
     let p=projectData(projectId);
     return ("assignmentCycle" in p) && p.assignmentCycle is int
      && p.assignmentCycle>=2
-     && p.recoveryAuditId==projectId+"_"+p.assignmentCycle
+     && p.recoveryAuditId==projectId+"_"+string(p.assignmentCycle)
      && exists(merchantRecoveryCyclePath(p.recoveryAuditId))
      && repeatPlatformEvidence(projectId,p);
   }
@@ -158,7 +158,7 @@ service cloud.firestore {
     let p=projectData(projectId);
     return ("assignmentCycle" in p) && p.assignmentCycle is int
      && p.assignmentCycle>=2
-     && p.cutoverAuditId==projectId+"_"+p.assignmentCycle
+     && p.cutoverAuditId==projectId+"_"+string(p.assignmentCycle)
      && p.recoveryAuditId==p.cutoverAuditId
      && exists(merchantRecoveryCyclePath(p.recoveryAuditId))
      && exists(merchantAssignmentCyclePath(p.cutoverAuditId))
