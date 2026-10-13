@@ -137,40 +137,50 @@ service cloud.firestore {
   // C4B12: v2+ epoch witnesses are isolated from immutable C4B11 records.
   function verifiedRepeatPlatformMerchant(projectId){
     let p=projectData(projectId);
-    let cid=projectId+"_"+p.assignmentCycle;
-    let a=get(merchantRecoveryCyclePath(cid)).data;
-    return projectExists(projectId)
-     && p.platformManaged==true && p.assignmentStatus=="platform_managed"
+    return ("assignmentCycle" in p) && p.assignmentCycle is int
+     && p.assignmentCycle>=2
+     && p.recoveryAuditId==projectId+"_"+p.assignmentCycle
+     && exists(merchantRecoveryCyclePath(p.recoveryAuditId))
+     && repeatPlatformEvidence(projectId,p);
+  }
+  function repeatPlatformEvidence(projectId,p){
+    let a=get(merchantRecoveryCyclePath(p.recoveryAuditId)).data;
+    return p.platformManaged==true && p.assignmentStatus=="platform_managed"
      && p.assignedSubscriberId==""
-     && p.assignmentCycle is int && p.assignmentCycle>=2
-     && p.recoveryAuditId==cid && p.recoveryAt is timestamp
-     && p.recoveryAdminUid is string
+     && p.recoveryAt is timestamp && p.recoveryAdminUid is string
      && a.status=="completed" && a.cycle==p.assignmentCycle
-     && a.cycleId==cid && a.projectDocId==projectId
+     && a.cycleId==p.recoveryAuditId && a.projectDocId==projectId
      && a.merchantId==p.merchantId
      && a.originalSubscriberId==p.originalSubscriberId
      && a.recoveredAt==p.recoveryAt && a.adminUid==p.recoveryAdminUid;
   }
   function verifiedRepeatAssignedMerchant(projectId){
     let p=projectData(projectId);
-    let cid=projectId+"_"+p.assignmentCycle;
-    let a=get(merchantAssignmentCyclePath(cid)).data;
-    let c=get(merchantTransferCyclePath(cid)).data;
-    return projectExists(projectId)
-     && p.platformManaged==true
+    return ("assignmentCycle" in p) && p.assignmentCycle is int
+     && p.assignmentCycle>=2
+     && p.cutoverAuditId==projectId+"_"+p.assignmentCycle
+     && p.recoveryAuditId==p.cutoverAuditId
+     && exists(merchantRecoveryCyclePath(p.recoveryAuditId))
+     && exists(merchantAssignmentCyclePath(p.cutoverAuditId))
+     && exists(merchantTransferCyclePath(p.cutoverAuditId))
+     && repeatAssignmentEvidence(projectId,p);
+  }
+  function repeatAssignmentEvidence(projectId,p){
+    let a=get(merchantAssignmentCyclePath(p.cutoverAuditId)).data;
+    let c=get(merchantTransferCyclePath(p.cutoverAuditId)).data;
+    return p.platformManaged==true
      && p.assignmentStatus=="assigned_to_new_subscriber"
-     && p.assignmentCycle is int && p.assignmentCycle>=2
      && p.assignedSubscriberId is string && p.assignedSubscriberId.size()>0
      && p.assignedSubscriberId!=p.originalSubscriberId
-     && p.recoveryAuditId==cid && p.cutoverAuditId==cid
      && p.cutoverAt is timestamp && p.cutoverAdminUid is string
      && a.status=="completed" && a.cycle==p.assignmentCycle
-     && a.cycleId==cid && a.projectDocId==projectId
-     && a.merchantId==p.merchantId && a.originalSubscriberId==p.originalSubscriberId
-     && a.recoveryAuditId==cid
+     && a.cycleId==p.cutoverAuditId && a.projectDocId==projectId
+     && a.merchantId==p.merchantId
+     && a.originalSubscriberId==p.originalSubscriberId
+     && a.recoveryAuditId==p.recoveryAuditId
      && a.assignedSubscriberId==p.assignedSubscriberId
      && a.completedAt==p.cutoverAt && a.completedBy==p.cutoverAdminUid
-     && c.status=="cutover_completed" && c.cycleId==cid
+     && c.status=="cutover_completed" && c.cycleId==p.cutoverAuditId
      && c.proposedSubscriberId==p.assignedSubscriberId
      && c.operatorConsent=="accepted" && c.recipientConsent=="accepted"
      && c.financeClearance=="reviewed"
