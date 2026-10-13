@@ -2586,7 +2586,7 @@ service cloud.firestore {
   match /operators/{operatorId} {
    allow get: if isAdmin()
     || ownsProject(operatorId)
-    || (signedIn() && resource.data.ownerId == request.auth.uid)
+    || (signedIn() && resource.data.ownerId == request.auth.uid && ownsProject(resource.data.projectId))
     || (signedIn() && resource.data.authUid == request.auth.uid)
     || (
       signedIn()
@@ -2606,7 +2606,7 @@ service cloud.firestore {
     );
 
    allow list: if isAdmin()
-    || (signedIn() && resource.data.ownerId == request.auth.uid)
+    || (signedIn() && resource.data.ownerId == request.auth.uid && ownsProject(resource.data.projectId))
     || (signedIn() && resource.data.authUid == request.auth.uid);
 
    allow create: if signedIn()
@@ -2628,6 +2628,7 @@ service cloud.firestore {
     || (
       signedIn()
       && resource.data.ownerId == request.auth.uid
+      && ownsProject(resource.data.projectId)
       && request.resource.data.operatorId == resource.data.operatorId
       && request.resource.data.projectId == resource.data.projectId
       && request.resource.data.ownerId == resource.data.ownerId
@@ -2731,7 +2732,7 @@ service cloud.firestore {
   match /commissionAgreements/{agreementId} {
    allow get: if isAdmin()
     || ownsProject(agreementId)
-    || (signedIn() && resource.data.ownerId == request.auth.uid)
+    || (signedIn() && resource.data.ownerId == request.auth.uid && ownsProject(resource.data.projectId))
     || (
       signedIn()
       && operatorExists(resource.data.operatorId)
@@ -2739,7 +2740,7 @@ service cloud.firestore {
     );
 
    allow list: if isAdmin()
-    || (signedIn() && resource.data.ownerId == request.auth.uid)
+    || (signedIn() && resource.data.ownerId == request.auth.uid && ownsProject(resource.data.projectId))
     || (
       signedIn()
       && operatorExists(resource.data.operatorId)
@@ -2772,6 +2773,7 @@ service cloud.firestore {
     || (
       signedIn()
       && resource.data.ownerId == request.auth.uid
+      && ownsProject(resource.data.projectId)
       && request.resource.data.agreementId == resource.data.agreementId
       && request.resource.data.projectId == resource.data.projectId
       && request.resource.data.ownerId == resource.data.ownerId
@@ -3191,7 +3193,7 @@ service cloud.firestore {
       signedIn()
       && resource.data.projectId is string
       && (
-        ownsProject(resource.data.projectId)
+        (ownsProject(resource.data.projectId) && resource.data.ownerId == request.auth.uid)
         || (
           historicProjectOwner(resource.data.projectId)
           && resource.data.ownerId == request.auth.uid
@@ -3205,7 +3207,8 @@ service cloud.firestore {
     && request.resource.data.projectId is string
     && isProjectOperator(request.resource.data.projectId)
     && projectExists(request.resource.data.projectId)
-    && !isVerifiedPlatformManagedMerchant(request.resource.data.projectId)
+    && (!("platformManaged" in projectData(request.resource.data.projectId))
+       || projectData(request.resource.data.projectId).platformManaged == false)
     && request.resource.data.ownerId == projectData(request.resource.data.projectId).ownerId
     && request.resource.data.operatorId == projectData(request.resource.data.projectId).operatorId
     && request.resource.data.declaredBy == request.auth.uid
@@ -3276,7 +3279,7 @@ service cloud.firestore {
 
    allow create: if signedIn()
     && (
-      ownsProject(projectId)
+      (ownsProject(projectId) && projectData(projectId).ownerId == request.auth.uid)
       || isProjectOperator(projectId)
       || (
         historicProjectOwner(projectId)
@@ -3306,7 +3309,7 @@ service cloud.firestore {
     ]);
 
    allow update: if signedIn()
-    && (ownsProject(projectId) || isProjectOperator(projectId))
+    && ((ownsProject(projectId) && resource.data.ownerId == request.auth.uid) || isProjectOperator(projectId))
     && request.resource.data.projectId == resource.data.projectId
     && request.resource.data.ownerId == resource.data.ownerId
     && request.resource.data.operatorId == resource.data.operatorId
