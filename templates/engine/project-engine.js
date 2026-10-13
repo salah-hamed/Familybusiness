@@ -5,6 +5,7 @@ import {
 import { canCreateTemplate } from "../projects.js";
 import { isSubscriptionActive } from "../../core/subscriptions/subscription-service.js";
 import { buildInitialMerchantIdentity } from "../../core/merchants/merchant-identity.js";
+import { MERCHANT_CUTOVER_ENABLED } from "../../core/merchants/merchant-cutover-rollout.js";
 
 import {
   doc,
@@ -107,15 +108,17 @@ export async function loadUserProjects(ownerId) {
   // misses legitimately reassigned shops and advertises reclaimed ones
   // to former subscribers. Keep both scopes separate.
   const col = collection(db, "projects");
+  // During staged rollout, the *deployed* Rules do not permit assignee
+  // list queries. Do not issue one until the final Rules are live.
+  // One-field query also avoids a new composite index requirement.
   const [historic,assigned] = await Promise.all([
     getDocs(query(col,where("ownerId","==",ownerId))),
-    getDocs(query(col,
-      where("assignedSubscriberId","==",ownerId),
-      where("assignmentStatus","==","assigned_to_new_subscriber"),
-      where("platformManaged","==",true)))
+    MERCHANT_CUTOVER_ENABLED
+      ? getDocs(query(col,where("assignedSubscriberId","==",ownerId)))
+      : Promise.resolve(null)
   ]);
   const byId = new Map();
-  for (const snap of [historic,assigned]) {
+  for (const snap of [historic,assigned].filter(Boolean)) {
     snap.forEach(projectDoc => {
       const project = projectDoc.data();
       if (project.platformManaged === true &&
