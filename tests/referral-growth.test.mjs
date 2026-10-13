@@ -27,10 +27,10 @@ test("platform WhatsApp stays separate from subscriber/operator business contact
   assert.doesNotMatch(config, /operatorWhatsapp|subscriberWhatsapp|workerWhatsapp/);
 });
 
-test("Launch 50 is a flexible admin-selected pool, not the first 50 registrations", () => {
+test("retired Launch50 stays historical with no new admin activation buttons", () => {
   assert.match(config, /selectionMode:\s*"admin_selected"/);
-  assert.match(adminJs, /يمكنك توزيع المنح في أي وقت وعلى المستخدمين الذين تختارهم/);
-  assert.match(adminHtml, /50 منحة مجانية تختارها الإدارة بمرونة/);
+  assert.doesNotMatch(adminJs, /grantLaunchPromo|grant-launch-promo|LAUNCH_PROMO/);
+  assert.doesNotMatch(adminHtml, /metricLaunchPromo/);
   assert.doesNotMatch(authApp, /grantLaunchPromo|LAUNCH_PROMO/);
 });
 
