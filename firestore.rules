@@ -210,11 +210,14 @@ service cloud.firestore {
        || projectData(projectId).platformManaged == false));
   }
   function commissionBeneficiary(projectId){
+   let p=projectData(projectId);
    return isVerifiedAssignedAfterCutover(projectId)
-    ? projectData(projectId).assignedSubscriberId
+    ? p.assignedSubscriberId
     : (isVerifiedPlatformManagedMerchant(projectId)
       ? "__fb_platform_commissions__"
-      : projectData(projectId).ownerId);
+      : ((("platformManaged" in p) && p.platformManaged==true)
+          || (("assignedSubscriberId" in p) && p.assignedSubscriberId!=p.ownerId)
+        ? "" : p.ownerId));
   }
   function projectAvailable(projectId){
    let project = projectData(projectId);
@@ -292,6 +295,7 @@ service cloud.firestore {
    return signedIn()
     && !(order.templateType == "laundry" && ("trackingToken" in order))
     && ledger.sourceType == "project_order"
+     && ledger.userId is string && ledger.userId.size()>0
     && ledger.projectId is string
     && ledger.orderId is string
     && entryId == "project_order_" + ledger.orderId
@@ -321,6 +325,7 @@ service cloud.firestore {
    let order = getAfter(orderPath(ledger.orderId)).data;
    return signedIn()
     && ledger.sourceType == "project_order"
+     && ledger.userId is string && ledger.userId.size()>0
     && ledger.projectId is string
     && ledger.orderId is string
     && entryId == "project_order_" + ledger.orderId
