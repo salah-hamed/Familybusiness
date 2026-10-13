@@ -3,7 +3,7 @@ import { friendlyOperatorError } from "../core/operators/operator-errors.js";
 import { renderCustomerQr } from "../core/qr/customer-qr.js?v=20261010-operator-qr2";
 import { claimOperatorAccess, getOperator, operatorCanOperate, buildOperatorAuthEmail } from "../core/partners/partner-service.js";
 import { acceptPendingCommission, rejectPendingCommission, getCommissionAgreement } from "../core/commissions/commission-service.js?v=20261013-acceptfix1";
-import { renderOperatorFinancePanel } from "../core/commissions/finance-panel.js";
+import { renderOperatorFinancePanel } from "../core/commissions/finance-panel.js?v=20261013-financeperiod1";
 import { getRestaurant, updateRestaurantSettings } from "../core/restaurant/restaurant-service.js";
 import { WORKER_ROLES, createWorker, listProjectWorkers, setWorkerActive } from "../core/workers/worker-service.js";
 import { assignWorkerAndPrepareWhatsApp, rollbackPreparedAssignment } from "../core/workers/worker-dispatch-service.js";
