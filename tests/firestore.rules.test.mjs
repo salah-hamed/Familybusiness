@@ -2535,3 +2535,33 @@ test("C4 dispatch credits ONLY the platform after recovery, not the old subscrib
   const saved=await getDoc(doc(admin,"commissionLedger","project_order_"+orderId));
   assert.equal(saved.data().userId,"__fb_platform_commissions__");
 });
+
+test("C4 verified violation requires an immutable admin evidence record",async()=>{
+  const data=await seedRecoverableLaundry("violation");
+  const admin=testEnv.authenticatedContext("admin_recover").firestore();
+  const owner=testEnv.authenticatedContext(data.ownerId).firestore();
+  await assertFails(setDoc(doc(owner,"merchantViolations",data.projectId),{
+    projectDocId:data.projectId,status:"confirmed",reasonCode:"fraud",
+    evidenceReference:"case-owner-fake",confirmedByAdminUid:data.ownerId,
+    confirmedAt:serverTimestamp()
+  }));
+  await assertFails(recoveryBatch(admin,data,"confirmed_violation").commit());
+  await assertSucceeds(setDoc(doc(admin,"merchantViolations",data.projectId),{
+    projectDocId:data.projectId,status:"confirmed",reasonCode:"fraud",
+    evidenceReference:"billing-expiry-verified-"+data.projectId,
+    confirmedByAdminUid:"admin_recover",confirmedAt:serverTimestamp()
+  }));
+  await assertSucceeds(recoveryBatch(admin,data,"confirmed_violation").commit());
+  await assertFails(updateDoc(doc(admin,"merchantViolations",data.projectId),{status:"removed"}));
+});
+
+test("C4 paid subscription not overdue cannot trigger recovery even if admin attempts it",async()=>{
+  const data=await seedRecoverableLaundry("not_expired");
+  await testEnv.withSecurityRulesDisabled(async ctx=>{
+    await updateDoc(doc(ctx.firestore(),"users",data.ownerId),{
+      isActive:true,subscriptionStatus:"active",subscriptionExpiresAt:new Date(Date.now()+86400000)
+    });
+  });
+  const admin=testEnv.authenticatedContext("admin_recover").firestore();
+  await assertFails(recoveryBatch(admin,data,"overdue_renewal").commit());
+});
