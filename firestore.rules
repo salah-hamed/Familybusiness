@@ -3580,6 +3580,68 @@ service cloud.firestore {
    // C4B11: admin-private witness for the sole platform->subscriber cutover.
    // No ledger row or historical settlement is ever rewritten.
    match /merchantAssignmentCutovers/{projectId} {
+    // Cache every read in one evaluation rather than repeatedly dereferencing
+    // the same six documents. Firestore has a 1000-expression evaluation limit.
+    function validCutoverAuditCreate(projectId){
+     let p = get(projectPath(projectId)).data;
+     let c = get(merchantTransferCasePath(projectId)).data;
+     let review = get(merchantTransferFinanceReviewPath(projectId)).data;
+     let recovery = get(merchantRecoveryPath(projectId)).data;
+     let op = get(operatorPath(projectId)).data;
+     let agreement = get(commissionAgreementPath(projectId)).data;
+     let afterProject = getAfter(projectPath(projectId)).data;
+     let afterCase = getAfter(merchantTransferCasePath(projectId)).data;
+     let d = request.resource.data;
+     return p.platformManaged == true
+      && p.assignmentStatus == "platform_managed"
+      && p.assignedSubscriberId == ""
+      && p.operatorId == projectId
+      && p.recoveryAuditId == projectId
+      && recovery.status == "completed"
+      && recovery.projectDocId == projectId
+      && recovery.merchantId == p.merchantId
+      && op.authUid is string
+      && op.authUid.size() > 0
+      && op.isActive == true
+      && op.status == "active"
+      && op.agreementStatus == "accepted"
+      && agreement.status == "accepted"
+      && agreement.ownerId == p.ownerId
+      && agreement.currency == "EGP"
+      && agreement.currentAmount == c.commissionAmount
+      && agreement.acceptedVersion == c.commissionVersion
+      && c.status == "awaiting_consents"
+      && c.financeClearance == "reviewed"
+      && c.operatorConsent == "accepted"
+      && c.recipientConsent == "accepted"
+      && review.projectDocId == projectId
+      && review.formerSubscriberId == p.originalSubscriberId
+      && review.reviewedAt == c.financeReviewedAt
+      && d.projectDocId == projectId
+      && d.merchantId == p.merchantId
+      && d.originalSubscriberId == p.originalSubscriberId
+      && d.previousSubscriberId == ""
+      && d.assignedSubscriberId == c.proposedSubscriberId
+      && d.recoveryAuditId == projectId
+      && d.financeReviewId == projectId
+      && d.commissionAmount == c.commissionAmount
+      && d.commissionVersion == c.commissionVersion
+      && d.commissionCurrency == "EGP"
+      && d.status == "completed"
+      && d.completedBy == request.auth.uid
+      && d.completedAt == request.time
+      && d.keys().hasOnly([
+       "projectDocId","merchantId","originalSubscriberId","previousSubscriberId",
+       "assignedSubscriberId","recoveryAuditId","financeReviewId",
+       "commissionAmount","commissionVersion","commissionCurrency",
+       "status","completedBy","completedAt"
+      ])
+      && afterProject.assignmentStatus == "assigned_to_new_subscriber"
+      && afterProject.assignedSubscriberId == d.assignedSubscriberId
+      && afterProject.cutoverAt == request.time
+      && afterCase.status == "cutover_completed"
+      && afterCase.cutoverAt == request.time;
+    }
     allow get, list: if isAdmin();
     allow create: if isAdmin()
      && projectExists(projectId)
@@ -3588,51 +3650,7 @@ service cloud.firestore {
      && exists(merchantRecoveryPath(projectId))
      && exists(operatorPath(projectId))
      && exists(commissionAgreementPath(projectId))
-     && get(operatorPath(projectId)).data.authUid is string
-     && get(operatorPath(projectId)).data.authUid.size() > 0
-     && get(operatorPath(projectId)).data.isActive == true
-     && get(operatorPath(projectId)).data.status == "active"
-     && get(operatorPath(projectId)).data.agreementStatus == "accepted"
-     && get(commissionAgreementPath(projectId)).data.status == "accepted"
-     && get(commissionAgreementPath(projectId)).data.currentAmount
-       == get(merchantTransferCasePath(projectId)).data.commissionAmount
-     && get(commissionAgreementPath(projectId)).data.acceptedVersion
-       == get(merchantTransferCasePath(projectId)).data.commissionVersion
-     && get(commissionAgreementPath(projectId)).data.currency == "EGP"
-     && get(projectPath(projectId)).data.platformManaged == true
-     && get(projectPath(projectId)).data.assignmentStatus == "platform_managed"
-     && get(projectPath(projectId)).data.assignedSubscriberId == ""
-     && get(merchantTransferCasePath(projectId)).data.status == "awaiting_consents"
-     && get(merchantTransferCasePath(projectId)).data.financeClearance == "reviewed"
-     && get(merchantTransferCasePath(projectId)).data.operatorConsent == "accepted"
-     && get(merchantTransferCasePath(projectId)).data.recipientConsent == "accepted"
-     && get(merchantTransferFinanceReviewPath(projectId)).data.reviewedAt
-        == get(merchantTransferCasePath(projectId)).data.financeReviewedAt
-     && get(merchantRecoveryPath(projectId)).data.status == "completed"
-     && request.resource.data.projectDocId == projectId
-     && request.resource.data.merchantId == get(projectPath(projectId)).data.merchantId
-     && request.resource.data.originalSubscriberId == get(projectPath(projectId)).data.originalSubscriberId
-     && request.resource.data.previousSubscriberId == ""
-     && request.resource.data.assignedSubscriberId == get(merchantTransferCasePath(projectId)).data.proposedSubscriberId
-     && request.resource.data.recoveryAuditId == projectId
-     && request.resource.data.financeReviewId == projectId
-     && request.resource.data.commissionAmount == get(merchantTransferCasePath(projectId)).data.commissionAmount
-     && request.resource.data.commissionVersion == get(merchantTransferCasePath(projectId)).data.commissionVersion
-     && request.resource.data.commissionCurrency == "EGP"
-     && request.resource.data.status == "completed"
-     && request.resource.data.completedBy == request.auth.uid
-     && request.resource.data.completedAt == request.time
-     && request.resource.data.keys().hasOnly([
-       "projectDocId","merchantId","originalSubscriberId","previousSubscriberId",
-       "assignedSubscriberId","recoveryAuditId","financeReviewId",
-       "commissionAmount","commissionVersion","commissionCurrency",
-       "status","completedBy","completedAt"
-     ])
-     && getAfter(projectPath(projectId)).data.assignmentStatus == "assigned_to_new_subscriber"
-     && getAfter(projectPath(projectId)).data.assignedSubscriberId == request.resource.data.assignedSubscriberId
-     && getAfter(projectPath(projectId)).data.cutoverAt == request.time
-     && getAfter(merchantTransferCasePath(projectId)).data.status == "cutover_completed"
-     && getAfter(merchantTransferCasePath(projectId)).data.cutoverAt == request.time;
+     && validCutoverAuditCreate(projectId);
     allow update, delete: if false;
    }
 
