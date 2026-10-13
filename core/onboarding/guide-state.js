@@ -1,4 +1,6 @@
 import { PLATFORM_BILLING, formatEgp } from "../config/platform-config.js";
+import { resolveSubscriptionAccess } from "../subscriptions/trial-policy.js";
+import { TRIAL_REGISTRATION_ENABLED } from "../subscriptions/trial-rollout.js";
 
 function step(id, title, description, status, options = {}) {
   return {
@@ -35,7 +37,9 @@ export function buildMarketingGuide() {
       step(
         "activate",
         "ادفع وفعّل الاشتراك",
-        `أول تفعيل حاليًا ${formatEgp(PLATFORM_BILLING.initialActivationFee)}، وبعد مراجعة الدفع يتفعّل حسابك.`,
+        TRIAL_REGISTRATION_ENABLED
+          ? "جهّز نشاطك 7 أيام مجانًا، وبعد أول اتفاق مقبول تبدأ مهلة 3 أيام. الاشتراك الشهري 59 جنيه."
+          : `أول تفعيل حاليًا ${formatEgp(PLATFORM_BILLING.initialActivationFee)}، وبعد مراجعة الدفع يتفعّل حسابك.`,
         "pending",
         { selector: "#pricing", actionLabel: "شوف تفاصيل الاشتراك" }
       ),
@@ -125,6 +129,40 @@ export function buildWorkspaceGuide({
       intro: "ثواني بسيطة لقراءة حالة حسابك ومشاريعك.",
       steps: [
         step("loading", "جاري تحميل رحلتك", "هنظهر لك الخطوة المطلوبة فورًا.", "current")
+      ]
+    };
+  }
+
+  if (userData.accessModel === "merchant_trial_v1") {
+    const access = resolveSubscriptionAccess(userData);
+    const hasMerchant = access.phase === "merchant_grace" || access.phase === "merchant_grace_expired";
+    const withinTrial = access.phase === "setup_trial" || access.phase === "merchant_grace";
+    const hasProjects = projects.length > 0;
+    const subscriberMessage = access.phase === "setup_trial"
+      ? "ابدأ تجهيز مشروعك خلال 7 أيام من التسجيل. مهلة 3 أيام تبدأ من قبول أول اتفاق عمولة."
+      : hasMerchant
+        ? "تم الاتفاق مع أول محل. لديك مهلة 3 أيام من وقت الموافقة لإكمال الاشتراك الشهري."
+        : "افتح حسابك وشغّل أنشطتك المدفوعة.";
+    return {
+      id: "owner-workspace-trial",
+      title: "انطلق بالمشروع قبل أول اشتراك",
+      intro: withinTrial ? subscriberMessage : access.allowed
+        ? "اشتراكك الشهري مفعل. تقدر تكمل تشغيل أنشطتك."
+        : "انتهت المهلة المجانية. مطلوب اشتراك شهري بقيمة 59 جنيه للاستمرار.",
+      steps: [
+        step("account", "إنشاء الحساب", "حسابك جاهز.", "done"),
+        step("project", "اربط أول محل", hasProjects
+          ? "مشروعك موجود. أرسل الدعوة لصاحب المحل واتفِقوا على العمولة."
+          : "أنشئ مشروعًا واربط محلًا شغالًا مع زباينه.",
+          hasMerchant ? "done" : withinTrial ? "current" : "pending",
+          {selector: ".projectBtn:not([disabled])", actionLabel: "اختار المشروع"}),
+        step("agreement", "تأكيد اتفاق العمولة", hasMerchant
+          ? "صاحب المحل وافق على أول اتفاق عمولة."
+          : "دعوة المحل وحدها لا تبدأ مهلة الثلاثة أيام؛ تبدأ عند موافقته.",
+          hasMerchant ? "done" : (hasProjects ? "current" : "pending")),
+        step("monthly", "ابدأ الاشتراك الشهري", "59 جنيه شهريًا بعد انتهاء المهلة، عبر InstaPay وواتساب.",
+          access.phase === "paid" ? "done" : withinTrial ? "pending" : "current",
+          {selector:"#subscriptionStatus",actionLabel:"حالة الاشتراك"})
       ]
     };
   }
