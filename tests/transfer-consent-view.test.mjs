@@ -48,7 +48,7 @@ test("safe transfer link stays within the repository and rejects path traversal"
 test("admin and approval UI cannot directly assign ownership or ledger beneficiary",()=>{
   const admin=readFileSync("admin/admin.js","utf8");
   const app=readFileSync("merchant-transfer/app.js","utf8");
-  assert.match(admin,/MERCHANT_TRANSFER_CASES_ENABLED && merchant.platformManaged/);
+  assert.match(admin,/MERCHANT_TRANSFER_CASES_ENABLED && merchant.assignmentStatus === "platform_managed"/);
   assert.match(admin,/openMerchantTransferCase\(/);
   assert.match(app,/submitMerchantTransferConsent\(/);
   assert.match(readFileSync("merchant-transfer/index.html","utf8"),/لا ينقل أرباحًا سابقة/);
