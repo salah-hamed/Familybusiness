@@ -2542,6 +2542,88 @@ test("C4B11 verified batch cuts over once, protects old rights, and grants recip
   assert.equal(oldProject.data().ownerId,ids.owner);
 });
 
+
+test("C4B11 incoming workspace query is Rules-compatible; broad assignee queries are rejected",async()=>{
+  const {ids,adminDb,recipientDb}=await seedReviewedCutoverScenario("workspace_query");
+  await assertSucceeds(cutoverBatch(adminDb,ids));
+  const projects=collection(recipientDb,"projects");
+  const result=await assertSucceeds(getDocs(query(projects,
+    where("assignedSubscriberId","==",ids.target),
+    where("assignmentStatus","==","assigned_to_new_subscriber"),
+    where("platformManaged","==",true)
+  )));
+  assert.equal(result.docs.some(d=>d.id===ids.projectId),true);
+  await assertFails(getDocs(query(projects,where("assignedSubscriberId","==",ids.target))));
+});
+
+test("C4B11 open orders earn at rider assignment: old epochs are immutable and future credit goes to recipient",async()=>{
+  const {ids,adminDb,operatorDb,recipientDb}=await seedReviewedCutoverScenario("inflight");
+  const oldOrder="order_before_cutover_platform";
+  const pendingOrder="order_before_cutover_after";
+  const workerId="rider_after_cutover";
+  await testEnv.withSecurityRulesDisabled(async ctx=>{
+    const db=ctx.firestore();
+    await setDoc(doc(db,"workers",workerId),{projectId:ids.projectId,role:"rider"});
+    for(const orderId of [oldOrder,pendingOrder]){
+      await setDoc(doc(db,"orders",orderId),{
+        projectId:ids.projectId,providerId:ids.projectId,templateType:"supermarket",
+        status:"ready",pricingLocked:true,assignedWorkerId:workerId,assignedWorkerRole:"rider",
+        items:[{name:"Bread",quantity:1}],subtotal:20,deliveryFee:10,total:30,price:30,
+        createdAt:Timestamp.fromDate(new Date("2026-10-12T00:00:00Z"))
+      });
+    }
+  });
+  const dispatch=(orderId,beneficiary)=>{
+    const b=writeBatch(operatorDb);
+    b.update(doc(operatorDb,"orders",orderId),{
+      status:"assigned",statusUpdatedAt:serverTimestamp(),statusUpdatedBy:ids.operatorUid,
+      commissionEligible:true,commissionLocked:true,commissionAmount:6,
+      commissionAgreementVersion:1,commissionTrigger:"delivery_assignment",
+      commissionEarnedAt:serverTimestamp()
+    });
+    b.set(doc(operatorDb,"commissionLedger","project_order_"+orderId),{
+      userId:beneficiary,projectId:ids.projectId,orderId,
+      sourceType:"project_order",sourceId:orderId,agreementId:ids.projectId,
+      agreementVersion:1,amount:6,currency:"EGP",status:"earned",
+      trigger:"delivery_assignment",createdAt:serverTimestamp(),
+      earnedAt:serverTimestamp(),paidAt:null
+    });
+    return b.commit();
+  };
+  await assertSucceeds(dispatch(oldOrder,"__fb_platform_commissions__"));
+  await assertSucceeds(cutoverBatch(adminDb,ids));
+  await assertFails(dispatch(pendingOrder,ids.owner));
+  await assertFails(dispatch(pendingOrder,"__fb_platform_commissions__"));
+  await assertSucceeds(dispatch(pendingOrder,ids.target));
+  await assertFails(dispatch(pendingOrder,ids.target));
+  const oldLedger=(await getDoc(doc(adminDb,"commissionLedger","project_order_"+oldOrder))).data();
+  const newLedger=(await getDoc(doc(adminDb,"commissionLedger","project_order_"+pendingOrder))).data();
+  assert.equal(oldLedger.userId,"__fb_platform_commissions__");
+  assert.equal(newLedger.userId,ids.target);
+  assert.equal(oldLedger.amount,6);
+  assert.equal(newLedger.amount,6);
+  await assertFails(getDoc(doc(recipientDb,"merchantTransferFinanceReviews",ids.projectId)));
+});
+
+test("C4B11 expired incoming subscription blocks management but not physical merchant operation",async()=>{
+  const {ids,adminDb,operatorDb,recipientDb}=await seedReviewedCutoverScenario("expired_continuity");
+  await assertSucceeds(cutoverBatch(adminDb,ids));
+  await testEnv.withSecurityRulesDisabled(async ctx=>{
+    const db=ctx.firestore();
+    await updateDoc(doc(db,"users",ids.target),{
+      isActive:false,subscriptionStatus:"inactive",
+      subscriptionExpiresAt:Timestamp.fromDate(new Date("2026-10-01T00:00:00Z"))
+    });
+    await setDoc(doc(db,"supermarkets",ids.projectId),{
+      isAcceptingOrders:true,deliveryFee:10
+    });
+  });
+  await assertSucceeds(getDoc(doc(operatorDb,"projects",ids.projectId)));
+  const publicDb=testEnv.unauthenticatedContext().firestore();
+  await assertSucceeds(getDoc(doc(publicDb,"supermarkets",ids.projectId)));
+  await assertFails(getDocs(query(collection(recipientDb,"orders"),where("projectId","==",ids.projectId))));
+  await assertFails(updateDoc(doc(recipientDb,"projects",ids.projectId),{businessName:"Unauthorised"}));
+});
 async function seedRecoverableLaundry(name = "basic") {
   const ctx=await seedPartnerRuntime("laundry","recovery_"+name);
   const merchantId="m_"+"b".repeat(32);
