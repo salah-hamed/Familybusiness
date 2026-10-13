@@ -3579,6 +3579,19 @@ service cloud.firestore {
      && exists(merchantTransferCasePath(projectId))
      && exists(merchantTransferFinanceReviewPath(projectId))
      && exists(merchantRecoveryPath(projectId))
+     && exists(operatorPath(projectId))
+     && exists(commissionAgreementPath(projectId))
+     && get(operatorPath(projectId)).data.authUid is string
+     && get(operatorPath(projectId)).data.authUid.size() > 0
+     && get(operatorPath(projectId)).data.isActive == true
+     && get(operatorPath(projectId)).data.status == "active"
+     && get(operatorPath(projectId)).data.agreementStatus == "accepted"
+     && get(commissionAgreementPath(projectId)).data.status == "accepted"
+     && get(commissionAgreementPath(projectId)).data.currentAmount
+       == get(merchantTransferCasePath(projectId)).data.commissionAmount
+     && get(commissionAgreementPath(projectId)).data.acceptedVersion
+       == get(merchantTransferCasePath(projectId)).data.commissionVersion
+     && get(commissionAgreementPath(projectId)).data.currency == "EGP"
      && get(projectPath(projectId)).data.platformManaged == true
      && get(projectPath(projectId)).data.assignmentStatus == "platform_managed"
      && get(projectPath(projectId)).data.assignedSubscriberId == ""
