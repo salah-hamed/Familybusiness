@@ -1,3 +1,4 @@
+import { MERCHANT_REPEAT_ASSIGNMENT_ENABLED } from "../merchants/merchant-cycle-rollout.js";
 import {
   PLATFORM_COMMISSION_BENEFICIARY,
   isVerifiedPlatformManagedMerchant,
@@ -16,9 +17,9 @@ export function resolveMerchantFinancePeriod(project) {
       return {
         beneficiaryId: project.assignedSubscriberId,
         platformPeriod: false,
-        canDeclarePayment: false,
-        requiresExternalVerification: true,
-        settlementLabel: "عمولات المشترك الجديد (التسوية محفوظة للمراجعة حتى اعتماد دورة السداد)"
+        canDeclarePayment: MERCHANT_REPEAT_ASSIGNMENT_ENABLED,
+        requiresExternalVerification: !MERCHANT_REPEAT_ASSIGNMENT_ENABLED,
+        settlementLabel: "عمولات المشترك الحالي — تسوية منفصلة عن كل الفترات السابقة"
       };
     }
     if (!isVerifiedPlatformManagedMerchant(project)) {
