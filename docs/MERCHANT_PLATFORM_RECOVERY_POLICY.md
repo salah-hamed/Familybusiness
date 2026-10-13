@@ -9,8 +9,9 @@ The operator still owns and runs the physical shop; its customer app, customer l
 
 ## Qualified reasons
 1. **overdue_renewal** — a previously paid monthly subscription's verified expiration has passed. Pending renewal proofs must be reviewed first. Missing dates, trial onboarding and free grants do not constitute proof of an overdue paid renewal.
-2. **confirmed_violation** — a distinct admin-confirmed, timestamped violation with category and evidence reference. An unchecked complaint or a self-reported reason is not sufficient.
-3. Both reasons require an audit entry and transparent notice (notice is not an approval request). Future fully automated sweeps require a trusted scheduler; browsers/Firestore Rules alone cannot run a reliable periodic job.
+2. **unpaid_first_month** — first real merchant agreement was accepted, its 3-day payment grace has elapsed, and the new subscriber has not made a validated first payment. A pending first-month payment proof requires review before reclaiming the merchant. Merely creating a trial account or inviting an operator cannot trigger this.
+3. **confirmed_violation** — a distinct admin-confirmed, timestamped violation with category and evidence reference. An unchecked complaint or a self-reported reason is not sufficient.
+4. All reasons require an audit entry and transparent notice (notice is not an approval request). Future fully automated sweeps require a trusted scheduler; browsers/Firestore Rules alone cannot run a reliable periodic job.
 
 ## Mandatory safeguards for actual takeover (C4b)
 - Read current project, current assignee, operator, agreement and verified cause in a single protected transaction; write a tamper-resistant audit entry.
