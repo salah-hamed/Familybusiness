@@ -8,6 +8,7 @@
 import { createGuide } from './core/onboarding/guide.js';
 import { PLATFORM_BILLING } from './core/config/platform-config.js';
 import { buildAuthGuide } from './core/onboarding/guide-state.js';
+import { TRIAL_REGISTRATION_ENABLED } from './core/subscriptions/trial-rollout.js';
 
     const nameInput =
       document.getElementById("name");
@@ -116,9 +117,11 @@ registerBtn.addEventListener("click", async () => {
 
     if (result.success) {
 
-      status.innerText = referralUserId
-        ? "✅ تم إنشاء الحساب وربط الإحالة بنجاح. في انتظار تفعيل الاشتراك."
-        : "✅ تم إنشاء الحساب بنجاح. في انتظار تفعيل الاشتراك.";
+      status.innerText = TRIAL_REGISTRATION_ENABLED
+        ? "✅ حسابك جاهز! افتح مساحة العمل وابدأ تجهيز مشروعك مجانًا لمدة 7 أيام."
+        : referralUserId
+          ? "✅ تم إنشاء الحساب وربط الإحالة بنجاح. في انتظار تفعيل الاشتراك."
+          : "✅ تم إنشاء الحساب بنجاح. في انتظار تفعيل الاشتراك.";
 
       guideController.update(buildAuthGuide({ mode: "registered" }), { autoOpen: true });
       guideController.open();
