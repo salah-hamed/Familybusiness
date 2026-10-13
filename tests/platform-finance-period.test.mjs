@@ -68,7 +68,7 @@ test("admin observes both separated balances without modifying ledgers",()=>{
   const j=src.indexOf('if (button.dataset.action === "view-project-payments")',i);
   const body=src.slice(i,j);
   assert.ok(body.length>400);
-  assert.match(body,/getProjectPaymentSummary\(projectId\)/);
+  assert.match(body,/getProjectPaymentSummary\(projectId, \{ ownerId: PLATFORM_COMMISSION_BENEFICIARY \}\)/);
   assert.match(body,/getProjectPaymentSummary\(projectId, \{ ownerId: oldUid \}\)/);
   for(const v of ["updateDoc(", "runTransaction(", "setDoc(", "deleteDoc("]) {
     assert.equal(body.includes(v),false,v);
