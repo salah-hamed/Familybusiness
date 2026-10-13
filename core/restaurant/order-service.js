@@ -1,4 +1,5 @@
 import db from "../firebase/firebase-db.js";
+import { resolveCommissionBeneficiary } from "../merchants/merchant-commission-beneficiary.js";
 import { getCommissionAgreement, getEffectiveCommissionSnapshot, getProjectCommissionLedgerId } from "../commissions/commission-service.js";
 
 import {
@@ -561,6 +562,7 @@ export async function changeRestaurantOrderStatus({ projectId, orderId, actorUid
   if (nextStatus === "assigned") {
     if (!order.assignedWorkerId) throw new Error("RIDER_REQUIRED_BEFORE_ASSIGNMENT");
 
+    const projectRef = doc(db, "projects", projectId);
     const agreementRef = doc(db, "commissionAgreements", projectId);
     const ledgerRef = doc(db, "commissionLedger", getProjectCommissionLedgerId(orderId));
 
@@ -568,9 +570,11 @@ export async function changeRestaurantOrderStatus({ projectId, orderId, actorUid
       await runTransaction(db, async transaction => {
         const freshOrderSnap = await transaction.get(orderRef);
         const agreementSnap = await transaction.get(agreementRef);
+        const projectSnap = await transaction.get(projectRef);
 
         if (!freshOrderSnap.exists()) throw new Error("ORDER_NOT_FOUND");
         if (!agreementSnap.exists()) throw new Error("AGREEMENT_NOT_FOUND");
+        if (!projectSnap.exists()) throw new Error("PROJECT_NOT_FOUND");
 
         const freshOrder = freshOrderSnap.data();
         const commission = getEffectiveCommissionSnapshot(agreementSnap.data());
@@ -607,7 +611,7 @@ export async function changeRestaurantOrderStatus({ projectId, orderId, actorUid
         }
 
         transaction.set(ledgerRef, {
-          userId: agreementSnap.data().ownerId,
+          userId: resolveCommissionBeneficiary(projectSnap.data(), agreementSnap.data()),
           projectId,
           orderId,
           sourceType: "project_order",
@@ -691,15 +695,18 @@ export async function changeRestaurantOrderStatus({ projectId, orderId, actorUid
   }
 
   // Legacy compatibility for orders already in flight before FB-LAUNCH01.
-  const agreementRef = doc(db, "commissionAgreements", projectId);
+  const projectRef = doc(db, "projects", projectId);
+    const agreementRef = doc(db, "commissionAgreements", projectId);
   const ledgerRef = doc(db, "commissionLedger", getProjectCommissionLedgerId(orderId));
 
   await runTransaction(db, async transaction => {
     const freshOrderSnap = await transaction.get(orderRef);
     const agreementSnap = await transaction.get(agreementRef);
+        const projectSnap = await transaction.get(projectRef);
 
     if (!freshOrderSnap.exists()) throw new Error("ORDER_NOT_FOUND");
     if (!agreementSnap.exists()) throw new Error("AGREEMENT_NOT_FOUND");
+        if (!projectSnap.exists()) throw new Error("PROJECT_NOT_FOUND");
 
     const freshOrder = freshOrderSnap.data();
     const commission = getEffectiveCommissionSnapshot(agreementSnap.data());
@@ -734,7 +741,7 @@ export async function changeRestaurantOrderStatus({ projectId, orderId, actorUid
     }
 
     transaction.set(ledgerRef, {
-      userId: agreementSnap.data().ownerId,
+      userId: resolveCommissionBeneficiary(projectSnap.data(), agreementSnap.data()),
       projectId,
       orderId,
       sourceType: "project_order",
