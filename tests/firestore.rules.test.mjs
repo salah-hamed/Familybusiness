@@ -2371,3 +2371,167 @@ test("Phase C4 disallows account-owner substitution, pre-consent and backdated c
     await assertFails(setDoc(doc(db,"merchantTransferCases",ids.projectId),sampleTransferCase(ids,extra)));
   }
 });
+
+async function seedRecoverableLaundry(name = "basic") {
+  const ctx=await seedPartnerRuntime("laundry","recovery_"+name);
+  const merchantId="m_"+"b".repeat(32);
+  await testEnv.withSecurityRulesDisabled(async context => {
+    const db=context.firestore();
+    await updateDoc(doc(db,"users",ctx.ownerId),{
+      subscriptionStatus:"inactive",isActive:false,
+      initialActivationPaid:true,
+      subscriptionExpiresAt:new Date(Date.now()-86400000)
+    });
+    await updateDoc(doc(db,"projects",ctx.projectId),{
+      merchantId, originalSubscriberId:ctx.ownerId,
+      assignedSubscriberId:ctx.ownerId,assignmentStatus:"assigned_to_subscriber",
+      platformManaged:false,linkedAt:null,assignmentUpdatedAt:null
+    });
+  });
+  await seedUser("admin_recover",{role:"admin"});
+  return {...ctx,merchantId};
+}
+
+function recoveryBatch(db,{projectId,ownerId,merchantId},reason="overdue_renewal"){
+  const batch=writeBatch(db);
+  const stamp=serverTimestamp();
+  batch.update(doc(db,"projects",projectId),{
+    platformManaged:true,
+    assignmentStatus:"platform_managed",
+    assignedSubscriberId:"",
+    assignmentUpdatedAt:stamp,
+    recoveryAuditId:projectId,
+    recoveryAt:stamp,
+    recoveryAdminUid:"admin_recover",
+    recoveryReason:reason
+  });
+  batch.set(doc(db,"merchantRecoveries",projectId),{
+    recoveryId:projectId,projectDocId:projectId,
+    merchantId,originalSubscriberId:ownerId,previousSubscriberId:ownerId,
+    reason,evidenceReference:"billing-expiry-verified-"+projectId,
+    status:"completed",adminUid:"admin_recover",recoveredAt:stamp
+  });
+  return batch;
+}
+
+test("C4 recovery cannot flip shop management without matching immutable audit",async()=>{
+  const {projectId}=await seedRecoverableLaundry("noaudit");
+  const db=testEnv.authenticatedContext("admin_recover").firestore();
+  await assertFails(updateDoc(doc(db,"projects",projectId),{
+    platformManaged:true,assignmentStatus:"platform_managed",assignedSubscriberId:"",
+    recoveryAuditId:projectId,recoveryAt:serverTimestamp()
+  }));
+  await assertFails(setDoc(doc(db,"merchantRecoveries",projectId),{
+    recoveryId:projectId,projectDocId:projectId,merchantId:"m_"+"b".repeat(32),
+    originalSubscriberId:"x",previousSubscriberId:"x",
+    reason:"overdue_renewal",evidenceReference:"fake-billing-case",
+    status:"completed",adminUid:"admin_recover",recoveredAt:serverTimestamp()
+  }));
+});
+
+test("C4 atomic admin takeover preserves old project ID and physical shop availability",async()=>{
+  const data=await seedRecoverableLaundry("atomic");
+  const admin=testEnv.authenticatedContext("admin_recover").firestore();
+  await assertSucceeds(recoveryBatch(admin,data).commit());
+  const project=await getDoc(doc(admin,"projects",data.projectId));
+  const recovery=await getDoc(doc(admin,"merchantRecoveries",data.projectId));
+  assert.equal(project.data().ownerId,data.ownerId);
+  assert.equal(project.data().isActive,true);
+  assert.equal(project.data().assignmentStatus,"platform_managed");
+  assert.equal(recovery.data().previousSubscriberId,data.ownerId);
+  // Customer can still load the laundry project even though the former
+  // subscriber is inactive and its subscription has expired.
+  const customer=testEnv.unauthenticatedContext().firestore();
+  await assertSucceeds(getDoc(doc(customer,"projects",data.projectId)));
+  await assertFails(updateDoc(doc(testEnv.authenticatedContext(data.ownerId).firestore(),"projects",data.projectId),{
+    businessName:"Old subscriber cannot edit"
+  }));
+  await assertFails(updateDoc(doc(admin,"merchantRecoveries",data.projectId),{reason:"fake"}));
+});
+
+test("C4 shop operator retains read access while departing subscriber loses management",async()=>{
+  const data=await seedRecoverableLaundry("operator");
+  const admin=testEnv.authenticatedContext("admin_recover").firestore();
+  await assertSucceeds(recoveryBatch(admin,data).commit());
+  const operator=testEnv.authenticatedContext("operator_laundry").firestore();
+  await assertSucceeds(getDoc(doc(operator,"projects",data.projectId)));
+  const unauth=testEnv.unauthenticatedContext().firestore();
+  await assertFails(getDoc(doc(unauth,"merchantRecoveries",data.projectId)));
+});
+
+test("C4 dispatch credits ONLY the platform after recovery, not the old subscriber",async()=>{
+  const ownerUid="owner_supermarket_c4ledger";
+  const projectId=ownerUid+"_supermarket";
+  const operatorUid="operator_supermarket_c4ledger";
+  const workerId="rider_c4ledger";
+  const orderId="order_c4ledger";
+  const merchantId="m_"+"c".repeat(32);
+  await seedUser("admin_recover",{role:"admin"});
+  await seedUser(ownerUid,{
+    subscriptionStatus:"inactive",isActive:false,initialActivationPaid:true,
+    subscriptionExpiresAt:new Date(Date.now()-86400000)
+  });
+  await testEnv.withSecurityRulesDisabled(async context=>{
+    const db=context.firestore();
+    await setDoc(doc(db,"projects",projectId),{
+      ownerId:ownerUid,originalSubscriberId:ownerUid,assignedSubscriberId:ownerUid,
+      assignmentStatus:"assigned_to_subscriber",platformManaged:false,
+      merchantId,linkedAt:null,assignmentUpdatedAt:null,
+      projectId:"supermarket",template:"supermarket",operatingModel:"partner_operated",
+      templateVersion:1,operatorId:projectId,partnerSetupStatus:"active",
+      businessName:"Shop",status:"active",isActive:true,priceConfig:{}
+    });
+    await setDoc(doc(db,"operators",projectId),{
+      authUid:operatorUid,ownerId:ownerUid,projectId,status:"active",
+      agreementStatus:"accepted",isActive:true
+    });
+    await setDoc(doc(db,"commissionAgreements",projectId),{
+      agreementId:projectId,ownerId:ownerUid,projectId,
+      status:"accepted",currentAmount:5,acceptedVersion:1
+    });
+    await setDoc(doc(db,"workers",workerId),{projectId,role:"rider"});
+    await setDoc(doc(db,"orders",orderId),{
+      projectId,providerId:projectId,templateType:"supermarket",status:"ready",
+      pricingLocked:true,assignedWorkerId:workerId,assignedWorkerRole:"rider",
+      items:[{name:"Bread",quantity:1}],subtotal:20,deliveryFee:10,
+      total:30,price:30
+    });
+  });
+  const admin=testEnv.authenticatedContext("admin_recover").firestore();
+  const audit=writeBatch(admin);
+  audit.update(doc(admin,"projects",projectId),{
+    platformManaged:true,assignmentStatus:"platform_managed",assignedSubscriberId:"",
+    assignmentUpdatedAt:serverTimestamp(),recoveryAuditId:projectId,
+    recoveryAt:serverTimestamp(),recoveryAdminUid:"admin_recover",
+    recoveryReason:"overdue_renewal"
+  });
+  audit.set(doc(admin,"merchantRecoveries",projectId),{
+    recoveryId:projectId,projectDocId:projectId,merchantId,
+    originalSubscriberId:ownerUid,previousSubscriberId:ownerUid,
+    reason:"overdue_renewal",evidenceReference:"billing-expiry-c4ledger",
+    status:"completed",adminUid:"admin_recover",recoveredAt:serverTimestamp()
+  });
+  await assertSucceeds(audit.commit());
+
+  const operator=testEnv.authenticatedContext(operatorUid).firestore();
+  function dispatchTo(beneficiary){
+    const batch=writeBatch(operator);
+    batch.update(doc(operator,"orders",orderId),{
+      status:"assigned",statusUpdatedAt:serverTimestamp(),statusUpdatedBy:operatorUid,
+      commissionEligible:true,commissionLocked:true,commissionAmount:5,
+      commissionAgreementVersion:1,commissionTrigger:"delivery_assignment",
+      commissionEarnedAt:serverTimestamp()
+    });
+    batch.set(doc(operator,"commissionLedger","project_order_"+orderId),{
+      userId:beneficiary,projectId,orderId,sourceType:"project_order",sourceId:orderId,
+      agreementId:projectId,agreementVersion:1,amount:5,currency:"EGP",
+      status:"earned",trigger:"delivery_assignment",
+      createdAt:serverTimestamp(),earnedAt:serverTimestamp(),paidAt:null
+    });
+    return batch.commit();
+  }
+  await assertFails(dispatchTo(ownerUid));
+  await assertSucceeds(dispatchTo("__fb_platform_commissions__"));
+  const saved=await getDoc(doc(admin,"commissionLedger","project_order_"+orderId));
+  assert.equal(saved.data().userId,"__fb_platform_commissions__");
+});

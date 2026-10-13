@@ -16,6 +16,8 @@ service cloud.firestore {
   function commissionLedgerPath(entryId){ return /databases/$(database)/documents/commissionLedger/$(entryId); }
   function commissionReversalPath(reversalId){ return /databases/$(database)/documents/commissionReversals/$(reversalId); }
   function subscriptionPaymentPath(paymentId){ return /databases/$(database)/documents/subscriptionPayments/$(paymentId); }
+  function commissionSettlementPath(settlementId){ return /databases/$(database)/documents/commissionSettlements/$(settlementId); }
+  function merchantRecoveryPath(projectId){ return /databases/$(database)/documents/merchantRecoveries/$(projectId); }
   function subscriptionGrantPath(grantId){ return /databases/$(database)/documents/subscriptionGrants/$(grantId); }
   function platformCounterPath(counterId){ return /databases/$(database)/documents/platformCounters/$(counterId); }
   function userExists(uid){ return exists(userPath(uid)); }
@@ -66,13 +68,44 @@ service cloud.firestore {
   }
   function projectExists(projectId){ return exists(projectPath(projectId)); }
   function projectData(projectId){ return get(projectPath(projectId)).data; }
-  function ownsProject(projectId){ return signedIn() && projectExists(projectId) && projectData(projectId).ownerId == request.auth.uid; }
+  function isVerifiedPlatformManagedMerchant(projectId){
+   let p = projectData(projectId);
+   return projectExists(projectId)
+    && ("platformManaged" in p) && p.platformManaged == true
+    && p.template in ["supermarket","restaurant","bakery","laundry"]
+    && p.operatingModel == "partner_operated"
+    && p.assignmentStatus == "platform_managed"
+    && p.assignedSubscriberId == ""
+    && p.recoveryAuditId == projectId
+    && p.recoveryAt is timestamp
+    && p.recoveryAdminUid is string
+    && exists(merchantRecoveryPath(projectId))
+    && get(merchantRecoveryPath(projectId)).data.status == "completed"
+    && get(merchantRecoveryPath(projectId)).data.recoveredAt == p.recoveryAt
+    && get(merchantRecoveryPath(projectId)).data.adminUid == p.recoveryAdminUid
+    && get(merchantRecoveryPath(projectId)).data.previousSubscriberId == p.originalSubscriberId
+    && get(merchantRecoveryPath(projectId)).data.merchantId == p.merchantId;
+  }
+  function historicProjectOwner(projectId){
+   return signedIn() && projectExists(projectId)
+    && projectData(projectId).ownerId == request.auth.uid;
+  }
+  function ownsProject(projectId){
+   return historicProjectOwner(projectId)
+    && !isVerifiedPlatformManagedMerchant(projectId)
+    && (!("platformManaged" in projectData(projectId)) || projectData(projectId).platformManaged == false);
+  }
+  function commissionBeneficiary(projectId){
+   return isVerifiedPlatformManagedMerchant(projectId)
+    ? "__fb_platform_commissions__"
+    : projectData(projectId).ownerId;
+  }
   function projectAvailable(projectId){
    let project = projectData(projectId);
    return projectExists(projectId)
     && project.isActive == true
     && project.status == "active"
-    && subscriptionActive(project.ownerId);
+    && (subscriptionActive(project.ownerId) || isVerifiedPlatformManagedMerchant(projectId));
   }
   function carwashSubscriptionExists(subscriptionId){ return exists(carwashSubscriptionPath(subscriptionId)); }
   function carwashSubscriptionData(subscriptionId){ return get(carwashSubscriptionPath(subscriptionId)).data; }
@@ -142,7 +175,7 @@ service cloud.firestore {
     && projectData(ledger.projectId).template in ["supermarket","laundry","restaurant","bakery"]
     && commissionAgreementData(ledger.projectId).status == "accepted"
     && commissionAgreementData(ledger.projectId).currentAmount is number
-    && ledger.userId == projectData(ledger.projectId).ownerId
+    && ledger.userId == commissionBeneficiary(ledger.projectId)
     && ledger.amount == commissionAgreementData(ledger.projectId).currentAmount
     && ledger.agreementVersion == commissionAgreementData(ledger.projectId).acceptedVersion
     && order.projectId == ledger.projectId
@@ -173,7 +206,7 @@ service cloud.firestore {
     && order.commissionLocked == true
     && order.commissionAmount == ledger.amount
     && order.commissionAgreementVersion == ledger.agreementVersion
-    && ledger.userId == projectData(ledger.projectId).ownerId
+    && ledger.userId == commissionBeneficiary(ledger.projectId)
     && isProjectOperator(ledger.projectId);
   }
 
@@ -1313,12 +1346,62 @@ service cloud.firestore {
       resource.data.template in ["laundry","cleaning","carwash"]
       && resource.data.isActive == true
       && resource.data.status == "active"
-      && subscriptionActive(resource.data.ownerId)
+      && projectAvailable(projectId)
     );
    allow list: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid);
    allow create: if signedIn() && subscriptionActive(request.auth.uid) && validActiveProjectCreate(projectId);
-   allow update: if isAdmin() || (
+   allow update: if (
+    isAdmin()
+    && request.resource.data.ownerId == resource.data.ownerId
+    && request.resource.data.projectId == resource.data.projectId
+    && request.resource.data.template == resource.data.template
+    && (!("merchantId" in resource.data) || request.resource.data.merchantId == resource.data.merchantId)
+    && (!("originalSubscriberId" in resource.data) || request.resource.data.originalSubscriberId == resource.data.originalSubscriberId)
+    && (
+      !isVerifiedPlatformManagedMerchant(projectId)
+      || request.resource.data.operatorId == resource.data.operatorId
+    )
+    && (
+      !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        "platformManaged","assignmentStatus","assignedSubscriberId",
+        "assignmentUpdatedAt","recoveryAuditId","recoveryAt",
+        "recoveryAdminUid","recoveryReason"
+      ])
+      || (
+        ("platformManaged" in resource.data) && resource.data.platformManaged == false
+        && request.resource.data.platformManaged == true
+        && request.resource.data.assignmentStatus == "platform_managed"
+        && request.resource.data.assignedSubscriberId == ""
+        && request.resource.data.assignmentUpdatedAt == request.time
+        && request.resource.data.recoveryAuditId == projectId
+        && request.resource.data.recoveryAt == request.time
+        && request.resource.data.recoveryAdminUid == request.auth.uid
+        && request.resource.data.recoveryReason in ["overdue_renewal","unpaid_first_month","confirmed_violation"]
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.projectId == resource.data.projectId
+        && request.resource.data.template == resource.data.template
+        && request.resource.data.operatorId == resource.data.operatorId
+        && request.resource.data.isActive == resource.data.isActive
+        && request.resource.data.status == resource.data.status
+        && request.resource.data.merchantId == resource.data.merchantId
+        && request.resource.data.originalSubscriberId == resource.data.originalSubscriberId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "platformManaged","assignmentStatus","assignedSubscriberId",
+          "assignmentUpdatedAt","recoveryAuditId","recoveryAt",
+          "recoveryAdminUid","recoveryReason"
+        ])
+        && existsAfter(merchantRecoveryPath(projectId))
+        && getAfter(merchantRecoveryPath(projectId)).data.status == "completed"
+        && getAfter(merchantRecoveryPath(projectId)).data.recoveredAt == request.time
+        && getAfter(merchantRecoveryPath(projectId)).data.adminUid == request.auth.uid
+        && getAfter(merchantRecoveryPath(projectId)).data.previousSubscriberId == resource.data.assignedSubscriberId
+        && getAfter(merchantRecoveryPath(projectId)).data.merchantId == resource.data.merchantId
+        && getAfter(merchantRecoveryPath(projectId)).data.reason == request.resource.data.recoveryReason
+      )
+    )
+   ) || (
     signedIn()
+    && (!("platformManaged" in resource.data) || resource.data.platformManaged == false)
     && resource.data.ownerId == request.auth.uid
     && request.resource.data.ownerId == resource.data.ownerId
     && request.resource.data.projectId == resource.data.projectId
@@ -1342,6 +1425,7 @@ service cloud.firestore {
    )
    || (
     signedIn()
+    && (!("platformManaged" in resource.data) || resource.data.platformManaged == false)
     && resource.data.ownerId == request.auth.uid
     && resource.data.template == "laundry"
     && (
@@ -1374,7 +1458,7 @@ service cloud.firestore {
     && request.resource.data.operatorId == resource.data.operatorId
     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["priceConfig"])
    );
-   allow delete: if isAdmin();
+   allow delete: if isAdmin() && !isVerifiedPlatformManagedMerchant(projectId);
   }
 
   match /orders/{orderId} {
@@ -3038,6 +3122,7 @@ service cloud.firestore {
     && request.resource.data.projectId is string
     && isProjectOperator(request.resource.data.projectId)
     && projectExists(request.resource.data.projectId)
+    && !isVerifiedPlatformManagedMerchant(request.resource.data.projectId)
     && request.resource.data.ownerId == projectData(request.resource.data.projectId).ownerId
     && request.resource.data.operatorId == projectData(request.resource.data.projectId).operatorId
     && request.resource.data.declaredBy == request.auth.uid
@@ -3055,7 +3140,7 @@ service cloud.firestore {
 
    allow update: if signedIn()
     && resource.data.projectId is string
-    && ownsProject(resource.data.projectId)
+    && historicProjectOwner(resource.data.projectId)
     && resource.data.ownerId == request.auth.uid
     && resource.data.status == "pending_owner_confirmation"
     && request.resource.data.settlementId == resource.data.settlementId
@@ -3103,11 +3188,27 @@ service cloud.firestore {
 
   match /commissionPaymentStates/{projectId} {
    allow get, list: if isAdmin()
-    || ownsProject(projectId)
+    || historicProjectOwner(projectId)
     || isProjectOperator(projectId);
 
    allow create: if signedIn()
-    && (ownsProject(projectId) || isProjectOperator(projectId))
+    && (
+      ownsProject(projectId)
+      || isProjectOperator(projectId)
+      || (
+        historicProjectOwner(projectId)
+        && resource.data.pendingSettlementId is string
+        && resource.data.pendingSettlementId.size() > 0
+        && request.resource.data.pendingSettlementId == ""
+        && exists(commissionSettlementPath(resource.data.pendingSettlementId))
+        && get(commissionSettlementPath(resource.data.pendingSettlementId)).data.ownerId == request.auth.uid
+        && getAfter(commissionSettlementPath(resource.data.pendingSettlementId)).data.status in ["confirmed","rejected"]
+        && (
+          getAfter(commissionSettlementPath(resource.data.pendingSettlementId)).data.confirmedBy == request.auth.uid
+          || getAfter(commissionSettlementPath(resource.data.pendingSettlementId)).data.rejectedBy == request.auth.uid
+        )
+      )
+    )
     && request.resource.data.projectId == projectId
     && request.resource.data.ownerId == projectData(projectId).ownerId
     && request.resource.data.operatorId == projectData(projectId).operatorId
@@ -3134,6 +3235,37 @@ service cloud.firestore {
     ]);
 
    allow delete: if false;
+  }
+
+  // Immutable recovery audit must be written atomically with platform handover.
+  match /merchantRecoveries/{projectId} {
+   allow get, list: if isAdmin();
+   allow create: if isAdmin()
+    && projectExists(projectId)
+    && request.resource.data.recoveryId == projectId
+    && request.resource.data.projectDocId == projectId
+    && request.resource.data.merchantId == projectData(projectId).merchantId
+    && request.resource.data.originalSubscriberId == projectData(projectId).originalSubscriberId
+    && request.resource.data.previousSubscriberId == projectData(projectId).assignedSubscriberId
+    && request.resource.data.reason in ["overdue_renewal","unpaid_first_month","confirmed_violation"]
+    && request.resource.data.evidenceReference is string
+    && request.resource.data.evidenceReference.size() >= 8
+    && request.resource.data.evidenceReference.size() <= 200
+    && request.resource.data.status == "completed"
+    && request.resource.data.adminUid == request.auth.uid
+    && request.resource.data.recoveredAt == request.time
+    && request.resource.data.keys().hasOnly([
+      "recoveryId","projectDocId","merchantId","originalSubscriberId",
+      "previousSubscriberId","reason","evidenceReference","status","adminUid","recoveredAt"
+    ])
+    && existsAfter(projectPath(projectId))
+    && getAfter(projectPath(projectId)).data.platformManaged == true
+    && getAfter(projectPath(projectId)).data.assignmentStatus == "platform_managed"
+    && getAfter(projectPath(projectId)).data.assignedSubscriberId == ""
+    && getAfter(projectPath(projectId)).data.recoveryAuditId == projectId
+    && getAfter(projectPath(projectId)).data.recoveryAt == request.time
+    && getAfter(projectPath(projectId)).data.recoveryReason == request.resource.data.reason;
+   allow update, delete: if false;
   }
 
   // Transfer-consent records are NOT an authorization transfer.
