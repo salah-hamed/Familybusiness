@@ -2,6 +2,8 @@ import db from "../firebase/firebase-db.js";
 import { assessMerchantTransfer } from "./merchant-transfer-preflight.js";
 import { MERCHANT_TRANSFER_CASES_ENABLED } from "./transfer-case-rollout.js";
 import { snapshotMerchantTransferTerms } from "./transfer-financial-terms.js";
+import { buildMerchantTransferFinanceReview } from "./transfer-finance-review.js";
+import { getProjectPaymentSummary } from "../commissions/settlement-service.js";
 
 import {
   doc, getDoc, runTransaction, serverTimestamp, updateDoc
@@ -105,4 +107,45 @@ export async function loadMerchantTransferCase(projectDocId) {
   if (!UID.test(projectDocId)) throw new Error("INVALID_TRANSFER_IDENTIFIERS");
   const snap=await getDoc(doc(db,"merchantTransferCases",projectDocId));
   return snap.exists()?{caseId:snap.id,...snap.data()}:null;
+}
+
+/**
+ * Financial RECONCILIATION ONLY. This never marks a debt as paid or
+ * moves old commissions. Only an authenticated Admin can submit the
+ * Firestore write (checked independently by Rules).
+ */
+export async function reviewMerchantTransferFinance({projectDocId,adminUid}) {
+  if (!MERCHANT_TRANSFER_CASES_ENABLED) throw new Error("MERCHANT_TRANSFER_CASES_DISABLED");
+  if (!UID.test(String(projectDocId||"")) || !UID.test(String(adminUid||""))) {
+    throw new Error("INVALID_TRANSFER_IDENTIFIERS");
+  }
+  const projectRef=doc(db,"projects",projectDocId);
+  const caseRef=doc(db,"merchantTransferCases",projectDocId);
+  const agreementRef=doc(db,"commissionAgreements",projectDocId);
+  const projectSnap=await getDoc(projectRef);
+  if (!projectSnap.exists() || projectSnap.data().platformManaged !== true) {
+    throw new Error("FINANCE_REVIEW_MERCHANT_NOT_RECOVERED");
+  }
+  const originalUid=String(projectSnap.data().originalSubscriberId||"");
+  if (!UID.test(originalUid)) throw new Error("FINANCE_REVIEW_OLD_SUBSCRIBER_MISSING");
+  // These totals are a dated REVIEW SNAPSHOT, not a payment confirmation.
+  // A separate server-verified settlement/reconciliation is required
+  // before any payment is counted as completed.
+  const [platformSummary,historicalSummary]=await Promise.all([
+    getProjectPaymentSummary(projectDocId),
+    getProjectPaymentSummary(projectDocId,{ownerId:originalUid})
+  ]);
+  await runTransaction(db,async tx=>{
+    const [projectSnap2,caseSnap,agreementSnap]=await Promise.all([
+      tx.get(projectRef),tx.get(caseRef),tx.get(agreementRef)
+    ]);
+    const payload=buildMerchantTransferFinanceReview({
+      projectId:projectDocId,
+      project:projectSnap2.exists()?projectSnap2.data():null,
+      transferCase:caseSnap.exists()?caseSnap.data():null,
+      agreement:agreementSnap.exists()?agreementSnap.data():null,
+      adminUid,platformSummary,historicalSummary
+    });
+    tx.update(caseRef,{...payload,financeReviewedAt:serverTimestamp()});
+  });
 }
