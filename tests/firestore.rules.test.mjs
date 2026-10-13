@@ -2195,3 +2195,70 @@ test("Phase B2 locks the first merchant anchor against edits even by the subscri
   await assertFails(updateDoc(doc(db,"users",uid),{firstMerchantLinkedAt:serverTimestamp()}));
   await assertFails(updateDoc(doc(db,"users",uid),{firstMerchantProjectId:"other"}));
 });
+
+async function seedTrialFirstAgreement(suffix) {
+  const ownerUid="trial_first_"+suffix;
+  const operatorUid="trial_operator_"+suffix;
+  const projectId=ownerUid+"_supermarket";
+  await testEnv.withSecurityRulesDisabled(async context=>{
+    const db=context.firestore();
+    await setDoc(doc(db,"users",ownerUid),{
+      uid:ownerUid,name:"Trial owner",email:ownerUid+"@example.com",
+      accessModel:"merchant_trial_v1",
+      firstMerchantLinkedAt:null,createdAt:new Date(Date.now()-86400000),
+      subscriptionStatus:"trial",isActive:true,initialActivationPaid:false,
+      billingCycle:"initial"
+    });
+    await setDoc(doc(db,"projects",projectId),{
+      ...trialProject(ownerUid),operatorId:projectId,partnerSetupStatus:"partner_linked",
+      createdAt:new Date(Date.now()-86400000)
+    });
+    await setDoc(doc(db,"operators",projectId),{
+      operatorId:projectId,projectId,ownerId:ownerUid,templateId:"supermarket",
+      authUid:operatorUid,status:"pending_agreement",
+      agreementStatus:"pending",isActive:false
+    });
+    await setDoc(doc(db,"commissionAgreements",projectId),{
+      agreementId:projectId,projectId,ownerId:ownerUid,operatorId:projectId,
+      templateId:"supermarket",currency:"EGP",unit:"per_completed_order",
+      currentAmount:null,acceptedVersion:0,pendingAmount:5,status:"pending",
+      pendingStatus:"pending",version:1,acceptedAt:null,acceptedBy:""
+    });
+  });
+  return {ownerUid,operatorUid,projectId};
+}
+
+function firstCommissionAcceptance(batch, db, operatorUid, projectId) {
+  batch.update(doc(db,"commissionAgreements",projectId),{
+    currentAmount:5,acceptedVersion:1,pendingAmount:null,
+    status:"accepted",pendingStatus:"none",lastDecision:"accepted",
+    acceptedAt:serverTimestamp(),acceptedBy:operatorUid,
+    rejectedAt:null,updatedAt:serverTimestamp()
+  });
+  batch.update(doc(db,"operators",projectId),{
+    agreementStatus:"accepted",status:"active",isActive:true,
+    updatedAt:serverTimestamp()
+  });
+}
+
+test("Phase B2 first accepted commission and first link timestamp must commit atomically", async () => {
+  const {ownerUid,operatorUid,projectId}=await seedTrialFirstAgreement("atomic");
+  const db=testEnv.authenticatedContext(operatorUid).firestore();
+  const batch=writeBatch(db);
+  firstCommissionAcceptance(batch,db,operatorUid,projectId);
+  batch.update(doc(db,"users",ownerUid),{
+    firstMerchantLinkedAt:serverTimestamp(),firstMerchantProjectId:projectId
+  });
+  await assertSucceeds(batch.commit());
+  const user=await getDoc(doc(testEnv.authenticatedContext(ownerUid).firestore(),"users",ownerUid));
+  assert.equal(user.data().firstMerchantProjectId,projectId);
+  assert.ok(user.data().firstMerchantLinkedAt.toMillis()>0);
+});
+
+test("Phase B2 cannot accept first agreement without starting three-day clock", async () => {
+  const {operatorUid,projectId}=await seedTrialFirstAgreement("without_anchor");
+  const db=testEnv.authenticatedContext(operatorUid).firestore();
+  const batch=writeBatch(db);
+  firstCommissionAcceptance(batch,db,operatorUid,projectId);
+  await assertFails(batch.commit());
+});
