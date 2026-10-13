@@ -3339,6 +3339,8 @@ service cloud.firestore {
 
    allow create: if isAdmin()
     && projectExists(projectId)
+    && isVerifiedPlatformManagedMerchant(projectId)
+    && projectData(projectId).assignedSubscriberId == ""
     && operatorExists(projectId)
     && commissionAgreementExists(projectId)
     && projectData(projectId).operatingModel == "partner_operated"
