@@ -605,6 +605,24 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "projects",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "assignedSubscriberId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "assignmentStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "platformManaged",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []
