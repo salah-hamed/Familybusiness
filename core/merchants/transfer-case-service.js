@@ -1,0 +1,97 @@
+import db from "../firebase/firebase-db.js";
+import { assessMerchantTransfer } from "./merchant-transfer-preflight.js";
+import { MERCHANT_TRANSFER_CASES_ENABLED } from "./transfer-case-rollout.js";
+
+import {
+  doc, getDoc, runTransaction, serverTimestamp, updateDoc
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const UID = /^[A-Za-z0-9_-]{1,128}$/;
+
+export function buildMerchantTransferCase({
+  projectDocId, project, operator, agreement, candidate, candidateUid,
+  adminUid, reason
+}) {
+  if (!UID.test(String(adminUid || ""))) throw new Error("ADMIN_UID_REQUIRED");
+  const safeReason=String(reason || "").trim();
+  if (safeReason.length < 15 || safeReason.length > 300) {
+    throw new Error("TRANSFER_REASON_REQUIRED");
+  }
+  const readiness=assessMerchantTransfer({
+    projectDocId,project,operator,agreement,candidate,candidateUid
+  });
+  if (!readiness.canOpenCase) throw new Error("MERCHANT_NOT_ELIGIBLE_FOR_CASE");
+
+  return {
+    projectDocId,
+    merchantId:readiness.merchantId,
+    originalSubscriberId:readiness.originalSubscriberId,
+    previousSubscriberId:readiness.assignedSubscriberId,
+    proposedSubscriberId:candidateUid,
+    status:"awaiting_consents",
+    operatorConsent:"pending",
+    recipientConsent:"pending",
+    operatorConsentedAt:null,
+    recipientConsentedAt:null,
+    financeClearance:"pending",
+    cutoverAt:null,
+    reason:safeReason,
+    createdBy:adminUid,
+    createdAt:serverTimestamp()
+  };
+}
+
+// Creates a consent CASE only. Never updates the running project, ownership,
+// orders, ledger, settlement, client links or entitlement.
+export async function openMerchantTransferCase({projectDocId,candidateUid,adminUid,reason}) {
+  if (!MERCHANT_TRANSFER_CASES_ENABLED) throw new Error("MERCHANT_TRANSFER_CASES_DISABLED");
+  if (!UID.test(projectDocId) || !UID.test(candidateUid)) throw new Error("INVALID_TRANSFER_IDENTIFIERS");
+
+  const caseRef=doc(db,"merchantTransferCases",projectDocId);
+  const projectRef=doc(db,"projects",projectDocId);
+  const operatorRef=doc(db,"operators",projectDocId);
+  const agreementRef=doc(db,"commissionAgreements",projectDocId);
+  const recipientRef=doc(db,"users",candidateUid);
+
+  await runTransaction(db,async transaction=>{
+    const [existing,project,operator,agreement,candidate]=await Promise.all([
+      transaction.get(caseRef),
+      transaction.get(projectRef),
+      transaction.get(operatorRef),
+      transaction.get(agreementRef),
+      transaction.get(recipientRef)
+    ]);
+    if (existing.exists()) throw new Error("TRANSFER_CASE_ALREADY_EXISTS");
+    const payload=buildMerchantTransferCase({
+      projectDocId,
+      project:project.exists()?project.data():null,
+      operator:operator.exists()?operator.data():null,
+      agreement:agreement.exists()?agreement.data():null,
+      candidate:candidate.exists()?candidate.data():null,
+      candidateUid,adminUid,reason
+    });
+    transaction.set(caseRef,payload);
+  });
+  return projectDocId;
+}
+
+export async function submitMerchantTransferConsent(projectDocId,role,decision) {
+  if (!MERCHANT_TRANSFER_CASES_ENABLED) throw new Error("MERCHANT_TRANSFER_CASES_DISABLED");
+  if (!UID.test(projectDocId)) throw new Error("INVALID_TRANSFER_IDENTIFIERS");
+  if (!["accepted","declined"].includes(decision)) throw new Error("INVALID_TRANSFER_CONSENT");
+
+  const patch=role === "operator"
+    ? {operatorConsent:decision,operatorConsentedAt:serverTimestamp()}
+    : role === "recipient"
+      ? {recipientConsent:decision,recipientConsentedAt:serverTimestamp()}
+      : null;
+  if (!patch) throw new Error("INVALID_TRANSFER_ROLE");
+  await updateDoc(doc(db,"merchantTransferCases",projectDocId),patch);
+}
+
+export async function loadMerchantTransferCase(projectDocId) {
+  if (!MERCHANT_TRANSFER_CASES_ENABLED) return null;
+  if (!UID.test(projectDocId)) throw new Error("INVALID_TRANSFER_IDENTIFIERS");
+  const snap=await getDoc(doc(db,"merchantTransferCases",projectDocId));
+  return snap.exists()?{caseId:snap.id,...snap.data()}:null;
+}
