@@ -141,3 +141,50 @@ test("recovery policy has no write or subscriber approval dependencies",()=>{
   assert.match(source,/operatorShutdownRequired: false/);
   assert.match(source,/deferredSafetyRequirements/);
 });
+
+
+test("first 59 EGP payment overdue after first merchant 3-day grace qualifies without old subscriber veto", () => {
+  const subscriber = {
+    uid:"initial_subscriber",
+    accessModel:"merchant_trial_v1", subscriptionStatus:"trial",
+    initialActivationPaid:false, firstMerchantLinkedAt:day(-4)
+  };
+  const result=assessPlatformMerchantRecovery(fixture({
+    reason:MERCHANT_RECOVERY_REASON.UNPAID_FIRST_MONTH,subscriber
+  }));
+  assert.equal(result.eligibleForRecovery,true);
+  assert.equal(result.oldSubscriberApprovalRequired,false);
+  assert.equal(result.mayApplyTakeoverNow,false);
+});
+
+test("first month is NOT overdue before 3 days, before link, or while payment is awaiting review",()=>{
+  const base={
+    uid:"initial_subscriber",accessModel:"merchant_trial_v1",
+    subscriptionStatus:"trial",initialActivationPaid:false,
+    firstMerchantLinkedAt:day(-2)
+  };
+  for(const v of [
+    {subscriber:base},
+    {subscriber:{...base,firstMerchantLinkedAt:day(-3),initialActivationPaid:true}},
+    {subscriber:{...base,firstMerchantLinkedAt:null}},
+    {subscriber:{...base,firstMerchantLinkedAt:day(-4)},hasUnreviewedFirstPayment:true},
+    {subscriber:{...base,firstMerchantLinkedAt:day(1)}},
+  ]) {
+    const result=assessPlatformMerchantRecovery(fixture({
+      reason:MERCHANT_RECOVERY_REASON.UNPAID_FIRST_MONTH,...v
+    }));
+    assert.equal(result.eligibleForRecovery,false);
+  }
+});
+
+test("a missing first merchant link cannot be manufactured from expired seven-day registration",()=>{
+  const subscriber={
+    uid:"initial_subscriber",accessModel:"merchant_trial_v1",
+    subscriptionStatus:"trial",initialActivationPaid:false,
+    createdAt:day(-8),firstMerchantLinkedAt:null
+  };
+  const result=assessPlatformMerchantRecovery(fixture({
+    reason:MERCHANT_RECOVERY_REASON.UNPAID_FIRST_MONTH,subscriber
+  }));
+  assert.equal(result.eligibleForRecovery,false);
+});
