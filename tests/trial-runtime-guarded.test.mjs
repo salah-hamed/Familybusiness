@@ -50,7 +50,7 @@ test("first merchant acceptance always stores server timestamp in the same trans
   const start=source.indexOf("export async function acceptPendingCommission");
   const end=source.indexOf("export async function rejectPendingCommission",start);
   const accept=source.slice(start,end);
-  assert.doesNotMatch(accept,/transaction.get\\(ownerRef\\)/);
+  assert.equal(accept.includes("transaction.get(ownerRef)"),false);
   assert.match(accept,/TRIAL_REGISTRATION_ENABLED/);
   assert.equal(accept.includes("acceptTransaction(true)"),true);
   assert.equal(accept.includes("acceptTransaction(false)"),true);
