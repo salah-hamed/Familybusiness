@@ -1399,7 +1399,6 @@ service cloud.firestore {
   function validAtomicMerchantProjectCutover(projectId){
     let before = resource.data;
     let next = request.resource.data;
-    let consent = getAfter(merchantTransferCasePath(projectId)).data;
     let witness = getAfter(merchantCutoverPath(projectId)).data;
     return before.platformManaged == true
      && before.assignmentStatus == "platform_managed"
@@ -1417,9 +1416,6 @@ service cloud.firestore {
        "assignmentStatus","assignedSubscriberId","assignmentUpdatedAt",
        "cutoverAuditId","cutoverAt","cutoverAdminUid"
      ])
-     && consent.status == "cutover_completed"
-     && consent.proposedSubscriberId == next.assignedSubscriberId
-     && consent.cutoverAt == request.time
      && witness.status == "completed"
      && witness.assignedSubscriberId == next.assignedSubscriberId
      && witness.completedAt == request.time;
@@ -3512,7 +3508,6 @@ service cloud.firestore {
    function validAtomicMerchantConsentFinalize(projectId){
      let before=resource.data;
      let next=request.resource.data;
-     let p=getAfter(projectPath(projectId)).data;
      let witness=getAfter(merchantCutoverPath(projectId)).data;
      return isAdmin()
       && before.status == "awaiting_consents"
@@ -3524,10 +3519,6 @@ service cloud.firestore {
       && next.cutoverBy == request.auth.uid
       && next.cutoverAuditId == projectId
       && subscriptionActive(before.proposedSubscriberId)
-      && p.platformManaged == true
-      && p.assignmentStatus == "assigned_to_new_subscriber"
-      && p.assignedSubscriberId == before.proposedSubscriberId
-      && p.cutoverAt == request.time
       && witness.status == "completed"
       && witness.assignedSubscriberId == before.proposedSubscriberId
       && witness.completedAt == request.time
@@ -3632,6 +3623,7 @@ service cloud.firestore {
       && review.projectDocId == projectId
       && review.formerSubscriberId == p.originalSubscriberId
       && review.reviewedAt == c.financeReviewedAt
+      && subscriptionActive(c.proposedSubscriberId)
       && d.projectDocId == projectId
       && d.merchantId == p.merchantId
       && d.originalSubscriberId == p.originalSubscriberId
@@ -3658,13 +3650,10 @@ service cloud.firestore {
       && afterCase.cutoverAt == request.time;
     }
     allow get, list: if isAdmin();
+    // Missing records make validCutoverAuditCreate fail closed via get().
+    // Duplicating exists()+get() for six records exhausts the batch's
+    // expression budget during a valid three-document transfer.
     allow create: if isAdmin()
-     && projectExists(projectId)
-     && exists(merchantTransferCasePath(projectId))
-     && exists(merchantTransferFinanceReviewPath(projectId))
-     && exists(merchantRecoveryPath(projectId))
-     && exists(operatorPath(projectId))
-     && exists(commissionAgreementPath(projectId))
      && validCutoverAuditCreate(projectId);
     allow update, delete: if false;
    }
