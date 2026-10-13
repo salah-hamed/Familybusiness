@@ -56,7 +56,8 @@ export function assessPlatformMerchantRecovery({
     ACTIVE_MERCHANT_TEMPLATES.has(project.template) &&
     project.operatingModel === "partner_operated" &&
     project.ownerId === identity.originalSubscriberId &&
-    identity.assignedSubscriberId === identity.originalSubscriberId &&
+    Boolean(identity.assignedSubscriberId) &&
+    subscriber?.uid === identity.assignedSubscriberId &&
     project.isActive === true && project.status === "active");
 
   const operatorReady = isQualifyingMerchantLink(operator || {}, agreement || {});
