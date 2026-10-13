@@ -3018,6 +3018,11 @@ async function seedRecoverableLaundry(name = "basic") {
       initialActivationPaid:true,
       subscriptionExpiresAt:new Date(Date.now()-86400000)
     });
+    await setDoc(doc(db,"subscriptionBillingGuards",ctx.ownerId),{
+      userId:ctx.ownerId,pendingPaymentId:"",lastReviewedPaymentId:"",
+      revision:1,recoverySafe:true,updatedAt:Timestamp.now(),
+      reconciledAt:Timestamp.now(),reconciledBy:"admin_recover"
+    });
     await updateDoc(doc(db,"projects",ctx.projectId),{
       merchantId, originalSubscriberId:ctx.ownerId,
       assignedSubscriberId:ctx.ownerId,assignmentStatus:"assigned_to_subscriber",
@@ -3109,6 +3114,11 @@ test("C4 dispatch credits ONLY the platform after recovery, not the old subscrib
   });
   await testEnv.withSecurityRulesDisabled(async context=>{
     const db=context.firestore();
+    await setDoc(doc(db,"subscriptionBillingGuards",ownerUid),{
+      userId:ownerUid,pendingPaymentId:"",lastReviewedPaymentId:"",
+      revision:1,recoverySafe:true,updatedAt:Timestamp.now(),
+      reconciledAt:Timestamp.now(),reconciledBy:"admin_recover"
+    });
     await setDoc(doc(db,"projects",projectId),{
       ownerId:ownerUid,originalSubscriberId:ownerUid,assignedSubscriberId:ownerUid,
       assignmentStatus:"assigned_to_subscriber",platformManaged:false,
