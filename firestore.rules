@@ -3916,14 +3916,81 @@ service cloud.firestore {
 
   // C4B12 read access is already fenced; all state-changing writes stay
   // DENIED until a trusted billing gate and atomic v2 Rules are implemented.
+  function validRepeatRecoveryWitness(cycleId){
+   let d=request.resource.data;
+   let p=get(projectPath(d.projectDocId)).data;
+   let n=getAfter(projectPath(d.projectDocId)).data;
+   let guard=get(billingGuardPath(p.assignedSubscriberId)).data;
+   let priorId=p.cutoverAuditId;
+   let previous=p.assignmentCycle;
+   return d.cycle is int && d.cycle>=2
+    && cycleId==d.projectDocId+"_"+string(d.cycle)
+    && d.cycleId==cycleId
+    && p.platformManaged==true
+    && p.assignmentStatus=="assigned_to_new_subscriber"
+    && p.assignedSubscriberId is string && p.assignedSubscriberId.size()>0
+    && p.originalSubscriberId==d.originalSubscriberId
+    && p.merchantId==d.merchantId
+    && p.operatorId==d.projectDocId
+    && d.previousSubscriberId==p.assignedSubscriberId
+    && d.previousAssignmentAuditId==priorId
+    && d.cycle==( ("assignmentCycle" in p) ? previous+1:2)
+    && p.cutoverAuditId==(d.cycle==2?d.projectDocId:
+       d.projectDocId+"_"+string(d.cycle-1))
+    && guard.userId==p.assignedSubscriberId
+    && guard.recoverySafe==true
+    && guard.pendingPaymentId==""
+    && guard.revision is int && guard.revision>0
+    && d.reason in ["overdue_renewal","unpaid_first_month","confirmed_violation"]
+    && d.evidenceReference is string && d.evidenceReference.size()>=8
+    && d.evidenceReference.size()<=200
+    && validVerifiedRecoveryCause(d.projectDocId,d.reason,d.evidenceReference)
+    && d.status=="completed" && d.adminUid==request.auth.uid
+    && d.recoveredAt==request.time
+    && n.ownerId==p.ownerId && n.merchantId==p.merchantId
+    && n.operatorId==p.operatorId
+    && n.assignmentStatus=="platform_managed"
+    && n.assignedSubscriberId==""
+    && n.assignmentCycle==d.cycle
+    && n.recoveryAuditId==cycleId
+    && n.recoveryAt==request.time
+    && n.recoveryAdminUid==request.auth.uid
+    && getAfter(merchantHistoricGrantPath(d.projectDocId+"_"+p.assignedSubscriberId)).data.sourceRecoveryAuditId==cycleId
+    && d.keys().hasOnly([
+      "cycle","cycleId","projectDocId","merchantId","originalSubscriberId",
+      "previousSubscriberId","previousAssignmentAuditId","reason",
+      "evidenceReference","status","adminUid","recoveredAt"]);
+  }
+  function validRepeatHistoricGrant(grantId){
+   let g=request.resource.data;
+   let r=getAfter(merchantRecoveryCyclePath(g.sourceRecoveryAuditId)).data;
+   let p=getAfter(projectPath(g.projectDocId)).data;
+   return grantId==g.projectDocId+"_"+g.subscriberUid
+    && g.subscriberUid is string && g.subscriberUid.size()>0
+    && g.merchantId==p.merchantId
+    && g.originalSubscriberId==p.originalSubscriberId
+    && g.sourceRecoveryAuditId==g.projectDocId+"_"+string(g.firstRecoveredCycle)
+    && g.firstRecoveredCycle is int && g.firstRecoveredCycle>=2
+    && g.status=="historic_only" && g.grantedAt==request.time
+    && r.status=="completed" && r.cycleId==g.sourceRecoveryAuditId
+    && r.previousSubscriberId==g.subscriberUid
+    && r.recoveredAt==request.time
+    && p.recoveryAuditId==g.sourceRecoveryAuditId
+    && p.assignmentCycle==g.firstRecoveredCycle
+    && g.keys().hasOnly([
+      "projectDocId","merchantId","subscriberUid","originalSubscriberId",
+      "firstRecoveredCycle","sourceRecoveryAuditId","status","grantedAt"]);
+  }
   match /merchantHistoricalAccess/{grantId} {
    allow get, list: if isAdmin()
     || (signedIn() && resource.data.subscriberUid==request.auth.uid);
-   allow create, update, delete: if false;
+   allow create: if isAdmin() && validRepeatHistoricGrant(grantId);
+   allow update, delete: if false;
   }
   match /merchantRecoveryCycles/{cycleId} {
    allow get, list: if isAdmin();
-   allow create, update, delete: if false;
+   allow create: if isAdmin() && validRepeatRecoveryWitness(cycleId);
+   allow update, delete: if false;
   }
   match /merchantAssignmentCycles/{cycleId} {
    allow get, list: if isAdmin();
