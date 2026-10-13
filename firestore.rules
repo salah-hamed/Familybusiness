@@ -3430,6 +3430,38 @@ service cloud.firestore {
        "recipientConsent","recipientConsentedAt"
      ])
    ) || (
+     // Admin reviews finance statements; NOT a payment confirmation.
+     isAdmin()
+     && resource.data.status == "awaiting_consents"
+     && resource.data.operatorConsent == "accepted"
+     && resource.data.recipientConsent == "accepted"
+     && resource.data.financeClearance == "pending"
+     && request.resource.data.financeClearance == "reviewed"
+     && request.resource.data.financeReviewedBy == request.auth.uid
+     && request.resource.data.financeReviewedAt == request.time
+     && request.resource.data.financeSnapshot is map
+     && request.resource.data.financeSnapshot.keys().hasOnly([
+       "currency","formerSubscriberId","platformOutstandingAmount",
+       "formerSubscriberOutstandingAmount","platformEarnedAmount","formerSubscriberEarnedAmount"
+     ])
+     && request.resource.data.financeSnapshot.keys().hasAll([
+       "currency","formerSubscriberId","platformOutstandingAmount",
+       "formerSubscriberOutstandingAmount","platformEarnedAmount","formerSubscriberEarnedAmount"
+     ])
+     && request.resource.data.financeSnapshot.currency == "EGP"
+     && request.resource.data.financeSnapshot.formerSubscriberId == resource.data.originalSubscriberId
+     && request.resource.data.financeSnapshot.platformOutstandingAmount is number
+     && request.resource.data.financeSnapshot.platformOutstandingAmount >= 0
+     && request.resource.data.financeSnapshot.formerSubscriberOutstandingAmount is number
+     && request.resource.data.financeSnapshot.formerSubscriberOutstandingAmount >= 0
+     && request.resource.data.financeSnapshot.platformEarnedAmount is number
+     && request.resource.data.financeSnapshot.platformEarnedAmount >= 0
+     && request.resource.data.financeSnapshot.formerSubscriberEarnedAmount is number
+     && request.resource.data.financeSnapshot.formerSubscriberEarnedAmount >= 0
+     && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+       "financeClearance","financeReviewedBy","financeReviewedAt","financeSnapshot"
+     ])
+   ) || (
      isAdmin()
      && resource.data.status == "awaiting_consents"
      && request.resource.data.status == "canceled"
