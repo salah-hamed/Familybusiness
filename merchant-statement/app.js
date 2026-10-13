@@ -17,7 +17,13 @@ protectPage(async user=>{
     const projectSnap=await getDoc(doc(db,"projects",projectId));
     if(!projectSnap.exists())throw new Error("NOT_FOUND");
     const project=projectSnap.data();
-    const access=resolveSubscriberMerchantAccess(project,projectId,user.uid);
+    // A revoked assigned subscriber can read only their own historic grant.
+    // Missing grants are expected for original and current subscribers.
+    const grantRef=doc(db,"merchantHistoricalAccess",projectId+"_"+user.uid);
+    const grantSnap=await getDoc(grantRef).catch(()=>null);
+    const access=resolveSubscriberMerchantAccess(
+      project,projectId,user.uid,grantSnap?.exists?.()?grantSnap.data():null
+    );
     if(!access.canViewStatement)throw new Error("ACCESS_DENIED");
     const role=access.role;
     el("merchantTitle").textContent=project.businessName||"المحل";
