@@ -2702,6 +2702,67 @@ test("C4B11 former and expired incoming subscriber retain only their own financi
   await assertFails(updateDoc(doc(recipientDb,"projects",ids.projectId),{businessName:"expired"}));
 });
 
+test("C4B12 atomic repeat recovery requires reconciled billing and no pending receipt",async()=>{
+ const {ids,adminDb}=await seedReviewedCutoverScenario("repeat_atomic");
+ await assertSucceeds(cutoverBatch(adminDb,ids));
+ const uid=ids.target,cycleId=ids.projectId+"_2";
+ const makeBatch=()=>{
+  const batch=writeBatch(adminDb),at=serverTimestamp();
+  batch.update(doc(adminDb,"projects",ids.projectId),{
+   assignmentCycle:2,platformManaged:true,assignmentStatus:"platform_managed",
+   assignedSubscriberId:"",assignmentUpdatedAt:at,
+   recoveryAuditId:cycleId,recoveryAt:at,recoveryAdminUid:ids.admin,
+   recoveryReason:"overdue_renewal"
+  });
+  batch.set(doc(adminDb,"merchantRecoveryCycles",cycleId),{
+   cycle:2,cycleId,projectDocId:ids.projectId,
+   merchantId:ids.merchantId,originalSubscriberId:ids.owner,
+   previousSubscriberId:uid,previousAssignmentAuditId:ids.projectId,
+   reason:"overdue_renewal",evidenceReference:"overdue_renewal_"+uid+"_123",
+   status:"completed",adminUid:ids.admin,recoveredAt:at
+  });
+  batch.set(doc(adminDb,"merchantHistoricalAccess",ids.projectId+"_"+uid),{
+   projectDocId:ids.projectId,merchantId:ids.merchantId,
+   subscriberUid:uid,originalSubscriberId:ids.owner,
+   firstRecoveredCycle:2,sourceRecoveryAuditId:cycleId,
+   status:"historic_only",grantedAt:at
+  });
+  return batch.commit();
+ };
+ await testEnv.withSecurityRulesDisabled(async ctx=>{
+  const db=ctx.firestore();
+  await updateDoc(doc(db,"users",uid),{
+   initialActivationPaid:true,subscriptionStatus:"inactive",
+   subscriptionExpiresAt:Timestamp.fromDate(new Date("2026-09-01T00:00:00Z"))
+  });
+  await setDoc(doc(db,"subscriptionBillingGuards",uid),{
+   userId:uid,pendingPaymentId:"",lastReviewedPaymentId:"",
+   revision:1,recoverySafe:false,updatedAt:Timestamp.now()
+  });
+ });
+ await assertFails(makeBatch());
+ await testEnv.withSecurityRulesDisabled(async ctx=>{
+  await updateDoc(doc(ctx.firestore(),"subscriptionBillingGuards",uid),{
+   recoverySafe:true,pendingPaymentId:"old_pending_receipt",revision:2
+  });
+ });
+ await assertFails(makeBatch());
+ await testEnv.withSecurityRulesDisabled(async ctx=>{
+  await updateDoc(doc(ctx.firestore(),"subscriptionBillingGuards",uid),{
+   recoverySafe:true,pendingPaymentId:"",revision:3
+  });
+ });
+ await assertSucceeds(makeBatch());
+ const p=(await getDoc(doc(adminDb,"projects",ids.projectId))).data();
+ const formerDb=testEnv.authenticatedContext(uid).firestore();
+ assert.equal(p.ownerId,ids.owner);
+ assert.equal(p.merchantId,ids.merchantId);
+ assert.equal(p.assignmentCycle,2);
+ assert.equal(p.assignmentStatus,"platform_managed");
+ await assertSucceeds(getDoc(doc(formerDb,"projects",ids.projectId)));
+ await assertFails(updateDoc(doc(formerDb,"projects",ids.projectId),{businessName:"hijack"}));
+ await assertFails(makeBatch());
+});
 test("C4B12 second recovery retains historical access and credits platform only in earning cycle 2",async()=>{
  const {ids,adminDb,recipientDb,operatorDb}=await seedReviewedCutoverScenario("repeat_cycle2");
  await assertSucceeds(cutoverBatch(adminDb,ids));
