@@ -1,4 +1,5 @@
 import db from "../core/firebase/firebase-db.js";
+import { escapeHTML } from "../core/utils/helpers.js";
 import { protectPage } from "../core/auth/auth-guard.js";
 import { logoutUser } from "../core/auth/auth.js";
 
@@ -370,59 +371,60 @@ protectPage(async (user) => {
 const myProjectIds = myProjects.map(project => project.projectId);
 templatesContainer.innerHTML = "";
 
+// A subscriber may have TWO shops from the same template: one created
+// originally and a second assigned by the platform. Never collapse them
+// by projectId/templateId or silently open the wrong merchant.
 getDiscoverableProjects().forEach(project => {
-
-  const existingProject =
-    myProjects.find(item => item.projectId === project.id);
-  const created = myProjectIds.includes(project.id);
-  const projectDocId =
-    existingProject?.projectDocId ||
-    getProjectDocId(user.uid, project.id);
+  const matches = myProjects.filter(item => item.projectId === project.id);
+  const hasOwnProject = matches.some(item => item.ownerId === user.uid && item.platformManaged !== true);
+  const cards = hasOwnProject ? matches : [...matches, null];
   const available = project.status === "active" && project.visibility === "public";
   const creationEnabled = canCreateTemplate(project);
-  const disabled = !subscriptionActive || !available || (!created && !creationEnabled);
 
-  templatesContainer.innerHTML += `
+  cards.forEach(existingProject => {
+    const created = Boolean(existingProject);
+    const assigned = created
+      && existingProject.platformManaged === true
+      && existingProject.assignmentStatus === "assigned_to_new_subscriber"
+      && existingProject.assignedSubscriberId === user.uid;
+    const projectDocId = existingProject?.projectDocId || getProjectDocId(user.uid, project.id);
+    const disabled = !subscriptionActive || !available || (!created && !creationEnabled);
+    const stateLabel = assigned ? "محل اتخصص لك"
+      : created ? "مشروعك الحالي"
+      : creationEnabled ? "جاهز للربط" : "قريبًا";
+    const cardTitle = assigned ? escapeHTML(existingProject.businessName || project.title) : escapeHTML(project.title);
+    const safeDocId = escapeHTML(projectDocId);
 
-    <article class="projectCard ${projectClass[project.id] || ""} ${available ? "" : "comingSoon"}">
-      <div class="projectCardTop">
-        <div class="projectIcon">${project.icon}</div>
-        <span class="projectState">${created ? "مضاف لحسابك" : creationEnabled ? "جاهز للربط" : "قريبًا"}</span>
-      </div>
-
-      <div class="projectInfo">
-        <h3>${project.title}</h3>
-        <p>${projectCopy[project.id] || project.description || ""}</p>
-
-        ${created ? `
-          <div class="projectCommissionMini loading" data-project-commission="${projectDocId}">
-            <div><span>إجمالي العمولة</span><strong data-earned>جاري التحديث...</strong></div>
-            <div><span>المستحق لك</span><strong data-due>جاري التحديث...</strong></div>
-            <small data-count>جاري حساب الطلبات...</small>
-          </div>
-        ` : ""}
-
-        <button
-          class="projectBtn"
-          data-template-id="${project.id}"
-          data-project-doc-id="${projectDocId}"
-          data-created="${created}"
-          data-available="${available}"
-          ${disabled ? "disabled" : ""}>
-          ${
-            !subscriptionActive
-              ? "فعّل الاشتراك أولاً"
-              : created
-                ? "افتح المشروع"
-                : creationEnabled
-                  ? "شغّل المشروع"
-                  : "قريبًا للتشغيل"
-          }
-        </button>
-      </div>
-    </article>
-  `;
-
+    templatesContainer.innerHTML += `
+      <article class="projectCard ${projectClass[project.id] || ""} ${available ? "" : "comingSoon"}">
+        <div class="projectCardTop">
+          <div class="projectIcon">${project.icon}</div>
+          <span class="projectState">${stateLabel}</span>
+        </div>
+        <div class="projectInfo">
+          <h3>${cardTitle}</h3>
+          <p>${projectCopy[project.id] || project.description || ""}</p>
+          ${created ? `
+            <div class="projectCommissionMini loading" data-project-commission="${safeDocId}">
+              <div><span>إجمالي العمولة</span><strong data-earned>جاري التحديث...</strong></div>
+              <div><span>المستحق لك</span><strong data-due>جاري التحديث...</strong></div>
+              <small data-count>جاري حساب الطلبات...</small>
+            </div>
+          ` : ""}
+          <button class="projectBtn"
+            data-template-id="${escapeHTML(project.id)}"
+            data-project-doc-id="${safeDocId}"
+            data-created="${created}"
+            data-available="${available}"
+            ${disabled ? "disabled" : ""}>
+            ${!subscriptionActive ? "فعّل الاشتراك أولاً"
+              : created ? "افتح المشروع"
+              : creationEnabled ? "شغّل المشروع" : "قريبًا للتشغيل"}
+          </button>
+        </div>
+      </article>
+    `;
+  });
 });
     document.querySelectorAll(".projectBtn").forEach(btn => {
 
