@@ -3,7 +3,7 @@ import { friendlyOperatorError } from "../core/operators/operator-errors.js";
 import db from "../core/firebase/firebase-db.js";
 import { claimOperatorAccess,getOperator,operatorCanOperate,buildOperatorAuthEmail } from "../core/partners/partner-service.js";
 import { acceptPendingCommission,rejectPendingCommission,getCommissionAgreement } from "../core/commissions/commission-service.js?v=20261013-acceptfix1";
-import { renderOperatorFinancePanel } from "../core/commissions/finance-panel.js";
+import { renderOperatorFinancePanel } from "../core/commissions/finance-panel.js?v=20261013-financeperiod1";
 import { getLaundry,updateLaundrySettings } from "../core/laundry/laundry-service.js";
 import { WORKER_ROLES,createWorker,listProjectWorkers,setWorkerActive } from "../core/workers/worker-service.js";
 import { assignWorkerAndPrepareWhatsApp, rollbackPreparedAssignment } from "../core/workers/worker-dispatch-service.js";
