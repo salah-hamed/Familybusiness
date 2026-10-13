@@ -16,6 +16,7 @@ service cloud.firestore {
   function commissionLedgerPath(entryId){ return /databases/$(database)/documents/commissionLedger/$(entryId); }
   function commissionReversalPath(reversalId){ return /databases/$(database)/documents/commissionReversals/$(reversalId); }
   function subscriptionPaymentPath(paymentId){ return /databases/$(database)/documents/subscriptionPayments/$(paymentId); }
+  function commissionSettlementPath(settlementId){ return /databases/$(database)/documents/commissionSettlements/$(settlementId); }
   function merchantRecoveryPath(projectId){ return /databases/$(database)/documents/merchantRecoveries/$(projectId); }
   function subscriptionGrantPath(grantId){ return /databases/$(database)/documents/subscriptionGrants/$(grantId); }
   function platformCounterPath(counterId){ return /databases/$(database)/documents/platformCounters/$(counterId); }
@@ -1345,7 +1346,7 @@ service cloud.firestore {
       resource.data.template in ["laundry","cleaning","carwash"]
       && resource.data.isActive == true
       && resource.data.status == "active"
-      && subscriptionActive(resource.data.ownerId)
+      && projectAvailable(projectId)
     );
    allow list: if isAdmin() || (signedIn() && resource.data.ownerId == request.auth.uid);
    allow create: if signedIn() && subscriptionActive(request.auth.uid) && validActiveProjectCreate(projectId);
@@ -3177,11 +3178,27 @@ service cloud.firestore {
 
   match /commissionPaymentStates/{projectId} {
    allow get, list: if isAdmin()
-    || ownsProject(projectId)
+    || historicProjectOwner(projectId)
     || isProjectOperator(projectId);
 
    allow create: if signedIn()
-    && (ownsProject(projectId) || isProjectOperator(projectId))
+    && (
+      ownsProject(projectId)
+      || isProjectOperator(projectId)
+      || (
+        historicProjectOwner(projectId)
+        && resource.data.pendingSettlementId is string
+        && resource.data.pendingSettlementId.size() > 0
+        && request.resource.data.pendingSettlementId == ""
+        && exists(commissionSettlementPath(resource.data.pendingSettlementId))
+        && get(commissionSettlementPath(resource.data.pendingSettlementId)).data.ownerId == request.auth.uid
+        && getAfter(commissionSettlementPath(resource.data.pendingSettlementId)).data.status in ["confirmed","rejected"]
+        && (
+          getAfter(commissionSettlementPath(resource.data.pendingSettlementId)).data.confirmedBy == request.auth.uid
+          || getAfter(commissionSettlementPath(resource.data.pendingSettlementId)).data.rejectedBy == request.auth.uid
+        )
+      )
+    )
     && request.resource.data.projectId == projectId
     && request.resource.data.ownerId == projectData(projectId).ownerId
     && request.resource.data.operatorId == projectData(projectId).operatorId
