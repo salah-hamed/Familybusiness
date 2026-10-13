@@ -2072,3 +2072,193 @@ test("subscriber cannot grant themselves Launch 50", async () => {
     setDoc(doc(db, "subscriptionGrants", `launch50_${uid}`), promoGrantRecord(uid, adminId))
   );
 });
+
+
+function trialAccount(uid, extra={}) {
+  return {
+    uid, name:"New Trial", email:`${uid}@example.com`, projectType:"",
+    isActive:true, subscriptionStatus:"trial", initialActivationPaid:false,
+    billingCycle:"initial", referredByUserId:"", referralQualified:false,
+    accessModel:"merchant_trial_v1", firstMerchantLinkedAt:null,
+    createdAt:serverTimestamp(), ...extra
+  };
+}
+
+function trialProject(uid, type="supermarket") {
+  return {
+    ownerId:uid, projectId:type, template:type, operatingModel:"partner_operated",
+    templateVersion:type==="laundry"?3:1,
+    operatorId:"", partnerSetupStatus:"not_started", businessName:"Trial Shop",
+    status:"active", isActive:true, createdAt:serverTimestamp(),
+    whatsappNumber:"", instapayLink:"", logo:"", coverImage:"",
+    primaryColor:"#168a63", priceConfig:{}
+  };
+}
+
+test("Phase B2 permits trusted server-anchored signup while preserving legacy registration", async () => {
+  const uid="trial_reg1", db=testEnv.authenticatedContext(uid).firestore();
+  await assertSucceeds(setDoc(doc(db,"users",uid),trialAccount(uid)));
+  const legacyUid="legacy_reg1", legacy=testEnv.authenticatedContext(legacyUid).firestore();
+  const legacyData=trialAccount(legacyUid,{isActive:false,subscriptionStatus:"pending"});
+  delete legacyData.accessModel;
+  delete legacyData.firstMerchantLinkedAt;
+  await assertSucceeds(setDoc(doc(legacy,"users",legacyUid),legacyData));
+});
+
+test("Phase B2 forbids forged signup merchant timestamps, subscriptions and authorization", async () => {
+  const uid="trial_bad", db=testEnv.authenticatedContext(uid).firestore();
+  await assertFails(setDoc(doc(db,"users",uid),trialAccount(uid,{firstMerchantLinkedAt:new Date()})));
+  await assertFails(setDoc(doc(db,"users",uid),trialAccount(uid,{role:"admin"})));
+  await assertFails(setDoc(doc(db,"users",uid),trialAccount(uid,{createdAt:new Date("2000-01-01T00:00:00Z")})));
+  await assertFails(setDoc(doc(db,"users",uid),trialAccount(uid,{subscriptionStatus:"active"})));
+});
+
+test("Phase B2 trial can create project during setup week but not after signup window expires", async () => {
+  const fresh="trial_project_fresh";
+  const db=testEnv.authenticatedContext(fresh).firestore();
+  await assertSucceeds(setDoc(doc(db,"users",fresh),trialAccount(fresh)));
+  await assertSucceeds(setDoc(doc(db,"projects",fresh+"_supermarket"),trialProject(fresh)));
+
+  const expired="trial_project_expired";
+  await seedUser(expired,{
+    accessModel:"merchant_trial_v1", firstMerchantLinkedAt:null,
+    isActive:true, subscriptionStatus:"trial", initialActivationPaid:false,
+    createdAt:new Date(Date.now()-8*86400000)
+  });
+  const oldDb=testEnv.authenticatedContext(expired).firestore();
+  await assertFails(setDoc(doc(oldDb,"projects",expired+"_restaurant"),trialProject(expired,"restaurant")));
+});
+
+test("Phase B2 validates linked merchant grace using immutable server timestamp", async () => {
+  const uid="trial_project_grace";
+  await seedUser(uid,{
+    accessModel:"merchant_trial_v1",
+    isActive:true, subscriptionStatus:"trial", initialActivationPaid:false,
+    createdAt:new Date(Date.now()-8*86400000),
+    firstMerchantLinkedAt:new Date(Date.now()-1*86400000),
+    firstMerchantProjectId:"accepted_merchant"
+  });
+  const db=testEnv.authenticatedContext(uid).firestore();
+  await assertSucceeds(setDoc(doc(db,"projects",uid+"_restaurant"),trialProject(uid,"restaurant")));
+
+  const expired="trial_grace_expired";
+  await seedUser(expired,{
+    accessModel:"merchant_trial_v1", isActive:true,subscriptionStatus:"trial",
+    initialActivationPaid:false,
+    createdAt:new Date(Date.now()-8*86400000),
+    firstMerchantLinkedAt:new Date(Date.now()-4*86400000),
+    firstMerchantProjectId:"accepted_merchant"
+  });
+  await assertFails(setDoc(doc(testEnv.authenticatedContext(expired).firestore(),"projects",expired+"_restaurant"),trialProject(expired,"restaurant")));
+});
+
+test("Phase B2 first payment is 59 for opted-in trial and old 350 for legacy users", async () => {
+  const uid="trial_payment_59", db=testEnv.authenticatedContext(uid).firestore();
+  await assertSucceeds(setDoc(doc(db,"users",uid),trialAccount(uid)));
+  await assertSucceeds(setDoc(doc(db,"subscriptionPayments",uid+"_59"),subscriptionPaymentRecord(uid,uid+"_59",{amount:59})));
+  await assertFails(setDoc(doc(db,"subscriptionPayments",uid+"_350"),subscriptionPaymentRecord(uid,uid+"_350",{amount:350})));
+  const oldUid="old_payment_350";
+  await seedUser(oldUid,{isActive:false,subscriptionStatus:"pending"});
+  const oldDb=testEnv.authenticatedContext(oldUid).firestore();
+  await assertSucceeds(setDoc(doc(oldDb,"subscriptionPayments",oldUid+"_350"),subscriptionPaymentRecord(oldUid,oldUid+"_350")));
+  await assertFails(setDoc(doc(oldDb,"subscriptionPayments",oldUid+"_59"),subscriptionPaymentRecord(oldUid,oldUid+"_59",{amount:59})));
+});
+
+test("Phase B2 blocks subscribers and strangers from forging first-merchant acceptance timestamps", async () => {
+  const uid="trial_forged_link";
+  await seedUser(uid,{
+    accessModel:"merchant_trial_v1",firstMerchantLinkedAt:null,
+    isActive:true,subscriptionStatus:"trial",initialActivationPaid:false,
+    createdAt:new Date(Date.now()-86400000)
+  });
+  const subscriber=testEnv.authenticatedContext(uid).firestore();
+  await assertFails(updateDoc(doc(subscriber,"users",uid),{
+    firstMerchantLinkedAt:serverTimestamp(),
+    firstMerchantProjectId:uid+"_supermarket"
+  }));
+  await assertFails(updateDoc(doc(testEnv.authenticatedContext("attacker").firestore(),"users",uid),{
+    firstMerchantLinkedAt:serverTimestamp(),
+    firstMerchantProjectId:uid+"_supermarket"
+  }));
+});
+
+test("Phase B2 locks the first merchant anchor against edits even by the subscriber", async () => {
+  const uid="trial_immutable_link";
+  await seedUser(uid,{
+    accessModel:"merchant_trial_v1",
+    firstMerchantLinkedAt:new Date(Date.now()-86400000),
+    firstMerchantProjectId:uid+"_restaurant",
+    createdAt:new Date(Date.now()-2*86400000),
+    subscriptionStatus:"trial",isActive:true,initialActivationPaid:false
+  });
+  const db=testEnv.authenticatedContext(uid).firestore();
+  await assertFails(updateDoc(doc(db,"users",uid),{firstMerchantLinkedAt:serverTimestamp()}));
+  await assertFails(updateDoc(doc(db,"users",uid),{firstMerchantProjectId:"other"}));
+});
+
+async function seedTrialFirstAgreement(suffix) {
+  const ownerUid="trial_first_"+suffix;
+  const operatorUid="trial_operator_"+suffix;
+  const projectId=ownerUid+"_supermarket";
+  await testEnv.withSecurityRulesDisabled(async context=>{
+    const db=context.firestore();
+    await setDoc(doc(db,"users",ownerUid),{
+      uid:ownerUid,name:"Trial owner",email:ownerUid+"@example.com",
+      accessModel:"merchant_trial_v1",
+      firstMerchantLinkedAt:null,createdAt:new Date(Date.now()-86400000),
+      subscriptionStatus:"trial",isActive:true,initialActivationPaid:false,
+      billingCycle:"initial"
+    });
+    await setDoc(doc(db,"projects",projectId),{
+      ...trialProject(ownerUid),operatorId:projectId,partnerSetupStatus:"partner_linked",
+      createdAt:new Date(Date.now()-86400000)
+    });
+    await setDoc(doc(db,"operators",projectId),{
+      operatorId:projectId,projectId,ownerId:ownerUid,templateId:"supermarket",
+      authUid:operatorUid,status:"pending_agreement",
+      agreementStatus:"pending",isActive:false
+    });
+    await setDoc(doc(db,"commissionAgreements",projectId),{
+      agreementId:projectId,projectId,ownerId:ownerUid,operatorId:projectId,
+      templateId:"supermarket",currency:"EGP",unit:"per_completed_order",
+      currentAmount:null,acceptedVersion:0,pendingAmount:5,status:"pending",
+      pendingStatus:"pending",version:1,acceptedAt:null,acceptedBy:""
+    });
+  });
+  return {ownerUid,operatorUid,projectId};
+}
+
+function firstCommissionAcceptance(batch, db, operatorUid, projectId) {
+  batch.update(doc(db,"commissionAgreements",projectId),{
+    currentAmount:5,acceptedVersion:1,pendingAmount:null,
+    status:"accepted",pendingStatus:"none",lastDecision:"accepted",
+    acceptedAt:serverTimestamp(),acceptedBy:operatorUid,
+    rejectedAt:null,updatedAt:serverTimestamp()
+  });
+  batch.update(doc(db,"operators",projectId),{
+    agreementStatus:"accepted",status:"active",isActive:true,
+    updatedAt:serverTimestamp()
+  });
+}
+
+test("Phase B2 first accepted commission and first link timestamp must commit atomically", async () => {
+  const {ownerUid,operatorUid,projectId}=await seedTrialFirstAgreement("atomic");
+  const db=testEnv.authenticatedContext(operatorUid).firestore();
+  const batch=writeBatch(db);
+  firstCommissionAcceptance(batch,db,operatorUid,projectId);
+  batch.update(doc(db,"users",ownerUid),{
+    firstMerchantLinkedAt:serverTimestamp(),firstMerchantProjectId:projectId
+  });
+  await assertSucceeds(batch.commit());
+  const user=await getDoc(doc(testEnv.authenticatedContext(ownerUid).firestore(),"users",ownerUid));
+  assert.equal(user.data().firstMerchantProjectId,projectId);
+  assert.ok(user.data().firstMerchantLinkedAt.toMillis()>0);
+});
+
+test("Phase B2 cannot accept first agreement without starting three-day clock", async () => {
+  const {operatorUid,projectId}=await seedTrialFirstAgreement("without_anchor");
+  const db=testEnv.authenticatedContext(operatorUid).firestore();
+  const batch=writeBatch(db);
+  firstCommissionAcceptance(batch,db,operatorUid,projectId);
+  await assertFails(batch.commit());
+});

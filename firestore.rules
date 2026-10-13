@@ -25,8 +25,44 @@ service cloud.firestore {
    let user = userData(uid);
    return userExists(uid)
     && user.isActive == true
-    && user.subscriptionStatus == "active"
-    && (!("subscriptionExpiresAt" in user) || user.subscriptionExpiresAt > request.time);
+    && (
+      (
+        user.subscriptionStatus == "active"
+        && (!("subscriptionExpiresAt" in user) || user.subscriptionExpiresAt > request.time)
+        && (
+          !("accessModel" in user) || user.accessModel != "merchant_trial_v1"
+          || (
+            ("subscriptionExpiresAt" in user)
+            && (
+              user.initialActivationPaid == true
+              || ("lastSubscriptionPaymentId" in user && user.lastSubscriptionPaymentId is string)
+              || ("lastActivationSource" in user && user.lastActivationSource == "launch_promo")
+            )
+          )
+        )
+      )
+      || (
+        ("accessModel" in user)
+        && user.accessModel == "merchant_trial_v1"
+        && user.subscriptionStatus == "trial"
+        && user.initialActivationPaid == false
+        && !("lastSubscriptionPaymentId" in user)
+        && user.createdAt is timestamp
+        && user.createdAt <= request.time
+        && (
+          (
+            user.firstMerchantLinkedAt == null
+            && request.time < user.createdAt + duration.value(7, 'd')
+          )
+          || (
+            user.firstMerchantLinkedAt is timestamp
+            && user.firstMerchantLinkedAt >= user.createdAt
+            && user.firstMerchantLinkedAt <= request.time
+            && request.time < user.firstMerchantLinkedAt + duration.value(3, 'd')
+          )
+        )
+      )
+    );
   }
   function projectExists(projectId){ return exists(projectPath(projectId)); }
   function projectData(projectId){ return get(projectPath(projectId)).data; }
@@ -985,8 +1021,20 @@ service cloud.firestore {
     && request.resource.data.email.size() > 0
     && request.resource.data.email.size() <= 254
     && request.resource.data.projectType == ""
-    && request.resource.data.isActive == false
-    && request.resource.data.subscriptionStatus == "pending"
+    && (
+      (
+        request.resource.data.isActive == false
+        && request.resource.data.subscriptionStatus == "pending"
+        && !request.resource.data.keys().hasAny(["accessModel","firstMerchantLinkedAt","firstMerchantProjectId"])
+      )
+      || (
+        request.resource.data.isActive == true
+        && request.resource.data.subscriptionStatus == "trial"
+        && request.resource.data.accessModel == "merchant_trial_v1"
+        && request.resource.data.firstMerchantLinkedAt == null
+        && !("firstMerchantProjectId" in request.resource.data)
+      )
+    )
     && request.resource.data.initialActivationPaid == false
     && request.resource.data.billingCycle == "initial"
     && request.resource.data.referralQualified == false
@@ -998,7 +1046,7 @@ service cloud.firestore {
     && request.resource.data.keys().hasOnly([
       "uid","name","email","projectType","isActive","subscriptionStatus",
       "initialActivationPaid","billingCycle","referredByUserId",
-      "referralQualified","createdAt"
+      "referralQualified","createdAt","accessModel","firstMerchantLinkedAt"
     ]);
    allow get: if isAdmin() || (signedIn() && request.auth.uid == uid);
    allow list: if isAdmin();
@@ -1066,6 +1114,28 @@ service cloud.firestore {
     )
    ) || (
     signedIn()
+    && resource.data.accessModel == "merchant_trial_v1"
+    && resource.data.isActive == true
+    && resource.data.subscriptionStatus == "trial"
+    && resource.data.firstMerchantLinkedAt == null
+    && request.resource.data.firstMerchantLinkedAt == request.time
+    && request.resource.data.firstMerchantProjectId is string
+    && request.resource.data.firstMerchantProjectId.size() > 0
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+      "firstMerchantLinkedAt","firstMerchantProjectId"
+    ])
+    && projectExists(request.resource.data.firstMerchantProjectId)
+    && projectData(request.resource.data.firstMerchantProjectId).ownerId == uid
+    && commissionAgreementExists(request.resource.data.firstMerchantProjectId)
+    && get(commissionAgreementPath(request.resource.data.firstMerchantProjectId)).data.status != "accepted"
+    && getAfter(commissionAgreementPath(request.resource.data.firstMerchantProjectId)).data.status == "accepted"
+    && getAfter(commissionAgreementPath(request.resource.data.firstMerchantProjectId)).data.acceptedAt == request.time
+    && getAfter(commissionAgreementPath(request.resource.data.firstMerchantProjectId)).data.acceptedBy == request.auth.uid
+    && getAfter(commissionAgreementPath(request.resource.data.firstMerchantProjectId)).data.acceptedVersion > 0
+    && operatorExists(request.resource.data.firstMerchantProjectId)
+    && operatorData(request.resource.data.firstMerchantProjectId).authUid == request.auth.uid
+   ) || (
+    signedIn()
     && request.auth.uid == uid
     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name"])
     && request.resource.data.name is string
@@ -1084,7 +1154,20 @@ service cloud.firestore {
     && request.resource.data.paymentType in ["initial","renewal"]
     && request.resource.data.amount is number
     && (
-      (request.resource.data.paymentType == "initial" && request.resource.data.amount == 350)
+      (
+        request.resource.data.paymentType == "initial"
+        && (
+          (userExists(request.auth.uid)
+            && ("accessModel" in userData(request.auth.uid))
+            && userData(request.auth.uid).accessModel == "merchant_trial_v1"
+            && request.resource.data.amount == 59)
+          || (
+            userExists(request.auth.uid)
+            && (!("accessModel" in userData(request.auth.uid)) || userData(request.auth.uid).accessModel != "merchant_trial_v1")
+            && request.resource.data.amount == 350
+          )
+        )
+      )
       || (request.resource.data.paymentType == "renewal" && request.resource.data.amount == 59)
     )
     && request.resource.data.currency == "EGP"
@@ -2568,6 +2651,18 @@ service cloud.firestore {
           && request.resource.data.currentAmount == resource.data.pendingAmount
           && request.resource.data.acceptedVersion == resource.data.version
           && request.resource.data.acceptedBy == request.auth.uid
+          && (
+            !userExists(resource.data.ownerId)
+            || !("accessModel" in userData(resource.data.ownerId))
+            || userData(resource.data.ownerId).accessModel != "merchant_trial_v1"
+            || userData(resource.data.ownerId).subscriptionStatus != "trial"
+            || userData(resource.data.ownerId).firstMerchantLinkedAt != null
+            || (
+              existsAfter(userPath(resource.data.ownerId))
+              && getAfter(userPath(resource.data.ownerId)).data.firstMerchantLinkedAt == request.time
+              && getAfter(userPath(resource.data.ownerId)).data.firstMerchantProjectId == resource.data.projectId
+            )
+          )
         )
         || (
           request.resource.data.lastDecision == "rejected"
