@@ -38,7 +38,8 @@ export function resolveCommissionBeneficiary(project = {}, agreement = {}) {
   if (project.platformManaged === true) {
     if (isVerifiedPlatformManagedMerchant(project)) return PLATFORM_COMMISSION_BENEFICIARY;
     if (isVerifiedAssignedAfterCutover(project)) return project.assignedSubscriberId;
-    throw new Error("MERCHANT_CUTOVER_AUDIT_REQUIRED");
+    throw new Error(project.assignmentStatus === "assigned_to_new_subscriber"
+      ? "MERCHANT_CUTOVER_AUDIT_REQUIRED" : "MERCHANT_RECOVERY_AUDIT_REQUIRED");
   }
 
   if (project.assignmentStatus === "platform_managed") {
