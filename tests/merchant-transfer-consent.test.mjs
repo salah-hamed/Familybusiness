@@ -40,3 +40,19 @@ test("new Rules are deny-by-default for financial cutover and require independen
   assert.match(block,/allow delete: if false/);
   assert.equal(block.includes('request.resource.data.status == "cutover_completed"'),false);
 });
+
+test("a transfer case may only be created after audited platform takeover, never as an old subscriber workaround",()=>{
+  const service=readFileSync("core/merchants/transfer-case-service.js","utf8");
+  const rules=readFileSync("firestore.rules","utf8");
+  const start=rules.indexOf("match /merchantTransferCases/{projectId}");
+  const block=rules.slice(start);
+  assert.match(service,/MERCHANT_MUST_BE_RECOVERED_FIRST/);
+  assert.match(service,/project\.platformManaged !== true/);
+  assert.match(rules,/function validMerchantTransferCaseCreate\(projectId\)/);
+  assert.match(rules,/audit.status == "completed"/);
+  assert.match(rules,/audit.recoveredAt == p.recoveryAt/);
+  assert.match(block,/validMerchantTransferCaseCreate\(projectId\)/);
+  assert.match(rules,/p.assignedSubscriberId == ""/);
+  assert.match(rules,/d.previousSubscriberId == ""/);
+  assert.doesNotMatch(block,/originalSubscriberId == request\.auth\.uid/);
+});

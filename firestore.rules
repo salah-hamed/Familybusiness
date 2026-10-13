@@ -3327,6 +3327,67 @@ service cloud.firestore {
   // Transfer-consent records are NOT an authorization transfer.
   // A later independently reviewed cutover must protect historical ledgers
   // and preserve the existing projectDocId/ownerId runtime identity.
+  // Use each referenced document once: Firestore enforces a 10-read
+  // access budget per single write. Repeating get()/exists() in a
+  // transferred shop's audit check can otherwise deny valid consent cases.
+  function validMerchantTransferCaseCreate(projectId){
+   let p = get(projectPath(projectId)).data;
+   let op = get(operatorPath(projectId)).data;
+   let agreement = get(commissionAgreementPath(projectId)).data;
+   let audit = get(merchantRecoveryPath(projectId)).data;
+   let d = request.resource.data;
+   return p.operatingModel == "partner_operated"
+    && p.template in ["supermarket","restaurant","bakery","laundry"]
+    && p.platformManaged == true
+    && p.assignmentStatus == "platform_managed"
+    && p.assignedSubscriberId == ""
+    && p.operatorId == projectId
+    && p.recoveryAuditId == projectId
+    && p.recoveryAt is timestamp
+    && p.merchantId.matches('^m_[0-9a-f]{32}$')
+    && audit.status == "completed"
+    && audit.recoveryId == projectId
+    && audit.projectDocId == projectId
+    && audit.merchantId == p.merchantId
+    && audit.originalSubscriberId == p.originalSubscriberId
+    && audit.previousSubscriberId == p.originalSubscriberId
+    && audit.adminUid == p.recoveryAdminUid
+    && audit.recoveredAt == p.recoveryAt
+    && op.authUid is string
+    && op.authUid.size() > 0
+    && op.agreementStatus == "accepted"
+    && op.isActive == true
+    && agreement.status == "accepted"
+    && agreement.acceptedVersion > 0
+    && d.projectDocId == projectId
+    && d.merchantId == p.merchantId
+    && d.originalSubscriberId == p.originalSubscriberId
+    && d.previousSubscriberId == ""
+    && d.proposedSubscriberId is string
+    && d.proposedSubscriberId.size() > 0
+    && d.proposedSubscriberId.size() <= 128
+    && d.proposedSubscriberId != d.originalSubscriberId
+    && subscriptionActive(d.proposedSubscriberId)
+    && d.status == "awaiting_consents"
+    && d.operatorConsent == "pending"
+    && d.recipientConsent == "pending"
+    && d.operatorConsentedAt == null
+    && d.recipientConsentedAt == null
+    && d.financeClearance == "pending"
+    && d.cutoverAt == null
+    && d.reason is string
+    && d.reason.size() >= 15
+    && d.reason.size() <= 300
+    && d.createdBy == request.auth.uid
+    && d.createdAt == request.time
+    && d.keys().hasOnly([
+      "projectDocId","merchantId","originalSubscriberId","previousSubscriberId",
+      "proposedSubscriberId","status","operatorConsent","recipientConsent",
+      "operatorConsentedAt","recipientConsentedAt","financeClearance","cutoverAt",
+      "reason","createdBy","createdAt"
+    ]);
+  }
+
   match /merchantTransferCases/{projectId} {
    allow get: if isAdmin() || (
       signedIn()
@@ -3337,49 +3398,7 @@ service cloud.firestore {
    );
    allow list: if isAdmin();
 
-   allow create: if isAdmin()
-    && projectExists(projectId)
-    && operatorExists(projectId)
-    && commissionAgreementExists(projectId)
-    && projectData(projectId).operatingModel == "partner_operated"
-    && projectData(projectId).template in ["supermarket","restaurant","bakery","laundry"]
-    && ("merchantId" in projectData(projectId))
-    && request.resource.data.projectDocId == projectId
-    && request.resource.data.merchantId == projectData(projectId).merchantId
-    && request.resource.data.merchantId.matches('^m_[0-9a-f]{32}$')
-    && request.resource.data.originalSubscriberId == projectData(projectId).originalSubscriberId
-    && request.resource.data.previousSubscriberId == projectData(projectId).assignedSubscriberId
-    && request.resource.data.proposedSubscriberId is string
-    && request.resource.data.proposedSubscriberId.size() > 0
-    && request.resource.data.proposedSubscriberId.size() <= 128
-    && request.resource.data.proposedSubscriberId != request.resource.data.previousSubscriberId
-    && request.resource.data.proposedSubscriberId != request.resource.data.originalSubscriberId
-    && userExists(request.resource.data.proposedSubscriberId)
-    && subscriptionActive(request.resource.data.proposedSubscriberId)
-    && operatorData(projectId).authUid is string
-    && operatorData(projectId).authUid.size() > 0
-    && operatorData(projectId).agreementStatus == "accepted"
-    && operatorData(projectId).isActive == true
-    && commissionAgreementData(projectId).status == "accepted"
-    && commissionAgreementData(projectId).acceptedVersion > 0
-    && request.resource.data.status == "awaiting_consents"
-    && request.resource.data.operatorConsent == "pending"
-    && request.resource.data.recipientConsent == "pending"
-    && request.resource.data.operatorConsentedAt == null
-    && request.resource.data.recipientConsentedAt == null
-    && request.resource.data.financeClearance == "pending"
-    && request.resource.data.cutoverAt == null
-    && request.resource.data.reason is string
-    && request.resource.data.reason.size() >= 15
-    && request.resource.data.reason.size() <= 300
-    && request.resource.data.createdBy == request.auth.uid
-    && request.resource.data.createdAt == request.time
-    && request.resource.data.keys().hasOnly([
-      "projectDocId","merchantId","originalSubscriberId","previousSubscriberId",
-      "proposedSubscriberId","status","operatorConsent","recipientConsent",
-      "operatorConsentedAt","recipientConsentedAt","financeClearance","cutoverAt",
-      "reason","createdBy","createdAt"
-    ]);
+   allow create: if isAdmin() && validMerchantTransferCaseCreate(projectId);
 
    // Only the claimed physical merchant operator may record their own consent.
    allow update: if (
