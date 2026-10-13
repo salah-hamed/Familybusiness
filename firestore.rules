@@ -579,17 +579,20 @@ service cloud.firestore {
     && operatorExists(projectData(projectId).operatorId)
     && operatorData(projectData(projectId).operatorId).authUid == request.auth.uid;
   }
+  function linkedOperatorActive(operatorId){
+    let op=operatorData(operatorId);
+    return op.authUid==request.auth.uid
+     && op.status=="active" && op.agreementStatus=="accepted"
+     && op.isActive==true;
+  }
   function isProjectOperator(projectId){
-   return signedIn()
-    && projectExists(projectId)
-    && projectData(projectId).operatingModel == "partner_operated"
-    && projectData(projectId).operatorId is string
-    && projectData(projectId).operatorId.size() > 0
-    && operatorExists(projectData(projectId).operatorId)
-    && operatorData(projectData(projectId).operatorId).authUid == request.auth.uid
-    && operatorData(projectData(projectId).operatorId).status == "active"
-    && operatorData(projectData(projectId).operatorId).agreementStatus == "accepted"
-    && operatorData(projectData(projectId).operatorId).isActive == true;
+    let p=projectData(projectId);
+    return signedIn()
+     && projectExists(projectId)
+     && p.operatingModel=="partner_operated"
+     && p.operatorId is string && p.operatorId.size()>0
+     && operatorExists(p.operatorId)
+     && linkedOperatorActive(p.operatorId);
   }
   function canOperateProject(projectId){
    return isAdmin()
