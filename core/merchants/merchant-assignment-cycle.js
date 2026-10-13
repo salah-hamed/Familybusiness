@@ -52,7 +52,7 @@ function checkReason({reason,subscriber,violation,now,pendingPayment}){
       ||violation.evidenceReference.trim().length<8
       ||!ID.test(String(violation.confirmedByAdminUid||""))
       ||!Number.isFinite(millis(violation.confirmedAt))
-      ||millis(violation.confirmedAt)>millis(now)))
+      ||millis(violation.confirmedAt)>millis(now))
       throw new Error("MERCHANT_RECOVERY_UNVERIFIED_VIOLATION");
     return violation.evidenceReference.trim();
   }
