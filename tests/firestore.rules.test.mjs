@@ -2344,6 +2344,20 @@ test("Phase C4 only admin opens consent case; existing project identities remain
   await assertFails(deleteDoc(ref(adminDb)));
 });
 
+test("Phase C4 refuses new assignment while old subscriber still controls the shop",async()=>{
+  const ids=await seedTransferCaseScenario("not_recovered");
+  await testEnv.withSecurityRulesDisabled(async ctx=>{
+    await updateDoc(doc(ctx.firestore(),"projects",ids.projectId),{
+      platformManaged:false,
+      assignmentStatus:"assigned_to_subscriber",
+      assignedSubscriberId:ids.owner
+    });
+  });
+  const admin=testEnv.authenticatedContext(ids.admin).firestore();
+  await assertFails(setDoc(doc(admin,"merchantTransferCases",ids.projectId),
+    sampleTransferCase(ids,{previousSubscriberId:ids.owner})));
+});
+
 test("Phase C4 consent can only be recorded by physical operator and intended recipient",async()=>{
   const ids=await seedTransferCaseScenario("consent");
   const adminDb=testEnv.authenticatedContext(ids.admin).firestore();
