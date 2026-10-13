@@ -11,9 +11,9 @@ function currentId(journey) {
   return journey.steps.find(step => step.status === "current")?.id;
 }
 
-test("newly registered account is guided to payment", () => {
+test("newly registered trial account is guided to launch a project", () => {
   const journey = buildAuthGuide({ mode: "registered" });
-  assert.equal(currentId(journey), "payment");
+  assert.equal(currentId(journey), "project");
 });
 
 test("inactive workspace stays on payment/activation before project creation", () => {
