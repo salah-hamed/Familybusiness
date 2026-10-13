@@ -1,3 +1,5 @@
+import { formatMerchantTransferTerms } from "./transfer-financial-terms.js";
+
 const UID = /^[A-Za-z0-9_-]{1,128}$/;
 
 export function identifyTransferConsentRole(transferCase, operator, currentUid) {
