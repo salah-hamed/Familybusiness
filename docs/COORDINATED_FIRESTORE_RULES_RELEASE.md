@@ -54,10 +54,12 @@ With the **old registration still enabled**, test:
 - Verify first monthly charge is 59 EGP for trial accounts, whereas legacy subscription contracts remain unchanged. Check approved payment and first referral eligibility, expired access, and hostile client permission tests.
 - No new-user activation claim should appear until a real approval is recorded.
 
-### E. Merchant transfer is a separate controlled launch
+### E. Unilateral recovery comes before optional merchant reassignment
 
+- A paid subscriber who fails to renew or commits a verified policy violation **cannot veto recovery**. The physical operator must stay online while central platform administration takes responsibility. See docs/MERCHANT_PLATFORM_RECOVERY_POLICY.md.
+- No browser-side reassignment, ownership metadata-only change or timed logout can substitute for tested Rules, atomic audit, historical commission protection and future beneficiary routing.
 - Do not enable reassignment merely because a preflight or consent case exists.
-- Complete operator and incoming-subscriber consent UI and historical unsettled balance closeout.
+- Complete operator and incoming-subscriber consent UI for a NEW assignment (never the departing subscriber's approval), and historical unsettled balance closeout.
 - Design and regression-test future-order beneficiary/routing cutover without changing historical `ownerId`, ledgers or prior settlements. Test consent withdrawal, double assignment and stale/broken old subscribers.
 - Until that is complete, keep the case rollout and cutover disabled.
 
