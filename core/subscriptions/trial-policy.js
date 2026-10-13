@@ -32,17 +32,33 @@ export function resolveSubscriptionAccess(user = {}, now = new Date()) {
     remainingMilliseconds: deadline ? Math.max(0, deadline.getTime() - when.getTime()) : null
   });
 
-  if (isSubscriptionActive(user, when)) {
-    return result("paid", true, subscriptionExpiryDate(user));
+  const newModel = user.accessModel === MERCHANT_TRIAL_ACCESS_MODEL;
+  const expiry = subscriptionExpiryDate(user);
+  // Legacy paid accounts may not have an expiry. New-model users may NEVER
+  // inherit that legacy exception; an explicit dated payment/grant is required.
+  const verifiedNewPaid = newModel
+    && Boolean(expiry)
+    && (
+      user.initialActivationPaid === true
+      || Boolean(user.lastSubscriptionPaymentId)
+      || user.lastActivationSource === "launch_promo"
+    );
+  if (isSubscriptionActive(user, when) && (!newModel || verifiedNewPaid)) {
+    return result("paid", true, expiry);
   }
 
-  if (user.accessModel !== MERCHANT_TRIAL_ACCESS_MODEL) {
+  if (!newModel) {
     // Never grant free access to a legacy account with missing/new fake metadata.
     return result("legacy_requires_activation", false);
   }
 
   if (user.isActive !== true || !["trial", "active"].includes(user.subscriptionStatus)) {
     return result("account_inactive", false);
+  }
+
+  // An unverified "active" status cannot grant a trial as a fallback.
+  if (user.subscriptionStatus === "active") {
+    return result("payment_required", false);
   }
 
   // Once the paid subscription expired, old onboarding/grace windows must not reopen.
