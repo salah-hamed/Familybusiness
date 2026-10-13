@@ -22,6 +22,10 @@ service cloud.firestore {
   function merchantTransferCasePath(projectId){ return /databases/$(database)/documents/merchantTransferCases/$(projectId); }
   function merchantTransferFinanceReviewPath(projectId){ return /databases/$(database)/documents/merchantTransferFinanceReviews/$(projectId); }
   function merchantCutoverPath(projectId){ return /databases/$(database)/documents/merchantAssignmentCutovers/$(projectId); }
+  function merchantRecoveryCyclePath(id){ return /databases/$(database)/documents/merchantRecoveryCycles/$(id); }
+  function merchantAssignmentCyclePath(id){ return /databases/$(database)/documents/merchantAssignmentCycles/$(id); }
+  function merchantTransferCyclePath(id){ return /databases/$(database)/documents/merchantTransferCycles/$(id); }
+  function merchantHistoricGrantPath(id){ return /databases/$(database)/documents/merchantHistoricalAccess/$(id); }
   function subscriptionGrantPath(grantId){ return /databases/$(database)/documents/subscriptionGrants/$(grantId); }
   function platformCounterPath(counterId){ return /databases/$(database)/documents/platformCounters/$(counterId); }
   function userExists(uid){ return exists(userPath(uid)); }
@@ -74,7 +78,7 @@ service cloud.firestore {
   function projectData(projectId){ return get(projectPath(projectId)).data; }
   function isVerifiedPlatformManagedMerchant(projectId){
    let p = projectData(projectId);
-   return projectExists(projectId)
+   return (projectExists(projectId)
     && ("platformManaged" in p) && p.platformManaged == true
     && p.template in ["supermarket","restaurant","bakery","laundry"]
     && p.operatingModel == "partner_operated"
@@ -88,7 +92,7 @@ service cloud.firestore {
     && get(merchantRecoveryPath(projectId)).data.recoveredAt == p.recoveryAt
     && get(merchantRecoveryPath(projectId)).data.adminUid == p.recoveryAdminUid
     && get(merchantRecoveryPath(projectId)).data.previousSubscriberId == p.originalSubscriberId
-    && get(merchantRecoveryPath(projectId)).data.merchantId == p.merchantId;
+    && get(merchantRecoveryPath(projectId)).data.merchantId == p.merchantId) || verifiedRepeatPlatformMerchant(projectId);
   }
   // Live assignment is legal only after BOTH the consent and audit documents exist.
   // Read EACH referenced document once. Ledger creation and order update
@@ -116,7 +120,7 @@ service cloud.firestore {
   }
   function isVerifiedAssignedAfterCutover(projectId){
    let p = projectData(projectId);
-   return projectExists(projectId)
+   return (projectExists(projectId)
     && ("platformManaged" in p) && p.platformManaged == true
     && ("assignmentStatus" in p) && p.assignmentStatus == "assigned_to_new_subscriber"
     && p.assignedSubscriberId is string
@@ -128,7 +132,57 @@ service cloud.firestore {
     && p.recoveryAuditId == projectId
     && exists(merchantTransferCasePath(projectId))
     && exists(merchantCutoverPath(projectId))
-    && cutoverDocumentsMatch(projectId,p);
+    && cutoverDocumentsMatch(projectId,p)) || verifiedRepeatAssignedMerchant(projectId);
+  }
+  // C4B12: v2+ epoch witnesses are isolated from immutable C4B11 records.
+  function verifiedRepeatPlatformMerchant(projectId){
+    let p=projectData(projectId);
+    let cid=projectId+"_"+p.assignmentCycle;
+    let a=get(merchantRecoveryCyclePath(cid)).data;
+    return projectExists(projectId)
+     && p.platformManaged==true && p.assignmentStatus=="platform_managed"
+     && p.assignedSubscriberId==""
+     && p.assignmentCycle is int && p.assignmentCycle>=2
+     && p.recoveryAuditId==cid && p.recoveryAt is timestamp
+     && p.recoveryAdminUid is string
+     && a.status=="completed" && a.cycle==p.assignmentCycle
+     && a.cycleId==cid && a.projectDocId==projectId
+     && a.merchantId==p.merchantId
+     && a.originalSubscriberId==p.originalSubscriberId
+     && a.recoveredAt==p.recoveryAt && a.adminUid==p.recoveryAdminUid;
+  }
+  function verifiedRepeatAssignedMerchant(projectId){
+    let p=projectData(projectId);
+    let cid=projectId+"_"+p.assignmentCycle;
+    let a=get(merchantAssignmentCyclePath(cid)).data;
+    let c=get(merchantTransferCyclePath(cid)).data;
+    return projectExists(projectId)
+     && p.platformManaged==true
+     && p.assignmentStatus=="assigned_to_new_subscriber"
+     && p.assignmentCycle is int && p.assignmentCycle>=2
+     && p.assignedSubscriberId is string && p.assignedSubscriberId.size()>0
+     && p.assignedSubscriberId!=p.originalSubscriberId
+     && p.recoveryAuditId==cid && p.cutoverAuditId==cid
+     && p.cutoverAt is timestamp && p.cutoverAdminUid is string
+     && a.status=="completed" && a.cycle==p.assignmentCycle
+     && a.cycleId==cid && a.projectDocId==projectId
+     && a.merchantId==p.merchantId && a.originalSubscriberId==p.originalSubscriberId
+     && a.recoveryAuditId==cid
+     && a.assignedSubscriberId==p.assignedSubscriberId
+     && a.completedAt==p.cutoverAt && a.completedBy==p.cutoverAdminUid
+     && c.status=="cutover_completed" && c.cycleId==cid
+     && c.proposedSubscriberId==p.assignedSubscriberId
+     && c.operatorConsent=="accepted" && c.recipientConsent=="accepted"
+     && c.financeClearance=="reviewed"
+     && c.cutoverAt==p.cutoverAt && c.cutoverBy==p.cutoverAdminUid;
+  }
+  function historicCycleStatementAccess(projectId){
+    let path=merchantHistoricGrantPath(projectId+"_"+request.auth.uid);
+    return signedIn() && exists(path)
+     && get(path).data.projectDocId==projectId
+     && get(path).data.subscriberUid==request.auth.uid
+     && get(path).data.merchantId==projectData(projectId).merchantId
+     && get(path).data.status=="historic_only";
   }
   function currentAssignedSubscriber(projectId){
    return signedIn() && isVerifiedAssignedAfterCutover(projectId)
@@ -1441,6 +1495,7 @@ service cloud.firestore {
    allow get: if isAdmin()
     || (signedIn() && resource.data.ownerId == request.auth.uid)
     || currentAssignedSubscriber(projectId)
+    || historicCycleStatementAccess(projectId)
     || (signedIn() && ("platformManaged" in resource.data)
       && resource.data.platformManaged == true
       && resource.data.assignmentStatus == "assigned_to_new_subscriber"
