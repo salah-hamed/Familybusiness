@@ -393,7 +393,7 @@ getDiscoverableProjects().forEach(project => {
     const projectDocId = existingProject?.projectDocId || getProjectDocId(user.uid, project.id);
     const disabled = !subscriptionActive || !available || (!created && !creationEnabled);
     const stateLabel = assigned ? "محل اتخصص لك"
-      : created ? "مشروعك الحالي"
+      : created ? "مضاف لحسابك"
       : creationEnabled ? "جاهز للربط" : "قريبًا";
     const cardTitle = assigned ? escapeHTML(existingProject.businessName || project.title) : escapeHTML(project.title);
     const safeDocId = escapeHTML(projectDocId);
