@@ -4,6 +4,9 @@ import { assessMerchantCutoverReadiness, formatMerchantCutoverReadiness } from "
 import { assessMerchantTransfer, formatMerchantTransferPreflight } from "../core/merchants/merchant-transfer-preflight.js";
 import { PLATFORM_MERCHANT_RECOVERY_ENABLED } from "../core/merchants/platform-recovery-rollout.js";
 import { MERCHANT_TRANSFER_CASES_ENABLED } from "../core/merchants/transfer-case-rollout.js";
+import { MERCHANT_CUTOVER_ENABLED } from "../core/merchants/merchant-cutover-rollout.js";
+import { executeMerchantCutover } from "../core/merchants/merchant-cutover-service.js";
+import { PLATFORM_COMMISSION_BENEFICIARY } from "../core/merchants/merchant-commission-beneficiary.js";
 import { openMerchantTransferCase, reviewMerchantTransferFinance } from "../core/merchants/transfer-case-service.js";
 import { merchantTransferConsentLink } from "../core/merchants/transfer-consent-view.js";
 import { executePlatformMerchantRecovery } from "../core/merchants/platform-recovery-service.js";
@@ -654,7 +657,7 @@ function renderProjects() {
             data-project="${escapeHTML(project.projectDocId)}" type="button">
             مستحقات المنصة والمشترك السابق
           </button>` : ""}
-          ${merchant.platformManaged ? `<button class="secondaryBtn"
+          ${merchant.assignmentStatus === "platform_managed" ? `<button class="secondaryBtn"
             data-action="check-final-cutover"
             data-project="${escapeHTML(project.projectDocId)}" type="button">
             مراجعة جاهزية تسليم المحل (بدون تنفيذ)
@@ -676,7 +679,7 @@ function renderProjects() {
           <button class="secondaryBtn" data-action="preflight-merchant-transfer" data-project="${escapeHTML(project.projectDocId)}" type="button">
             فحص أهلية النقل (قراءة فقط)
           </button>
-          ${MERCHANT_TRANSFER_CASES_ENABLED && merchant.platformManaged && !merchant.legacy ? `
+          ${MERCHANT_TRANSFER_CASES_ENABLED && merchant.assignmentStatus === "platform_managed" && !merchant.legacy ? `
             <label class="transferPreflightInput">سبب التخصيص الجديد
               <input class="transferCaseReason" type="text" minlength="15" maxlength="300"
                 placeholder="سبب مفصل لا يقل عن 15 حرفًا">
@@ -685,6 +688,8 @@ function renderProjects() {
               data-project="${escapeHTML(project.projectDocId)}">إنشاء اتفاق تخصيص جديد</button>
             <button class="secondaryBtn" type="button" data-action="review-merchant-transfer-finance"
               data-project="${escapeHTML(project.projectDocId)}">توثيق مراجعة الحسابات (بدون سداد)</button>
+            ${MERCHANT_CUTOVER_ENABLED ? `<button class="dangerBtn" type="button" data-action="execute-merchant-cutover"
+              data-project="${escapeHTML(project.projectDocId)}">تنفيذ النقل الفعلي بعد المراجعة</button>` : ""}
           ` : ""}
 
         </div>
@@ -1392,17 +1397,40 @@ $("projectsContainer").addEventListener("click", async event => {
         throw new Error("NOT_A_RECOVERED_MERCHANT");
       }
       const oldUid = projectSnap.data().originalSubscriberId || projectSnap.data().ownerId;
-      const [platform, historical] = await Promise.all([
-        getProjectPaymentSummary(projectId),
-        getProjectPaymentSummary(projectId, { ownerId: oldUid })
+      const allocated = projectSnap.data().assignmentStatus === "assigned_to_new_subscriber";
+      const newUid = allocated ? String(projectSnap.data().assignedSubscriberId || "") : "";
+      const [platform, historical, incoming] = await Promise.all([
+        getProjectPaymentSummary(projectId, { ownerId: PLATFORM_COMMISSION_BENEFICIARY }),
+        getProjectPaymentSummary(projectId, { ownerId: oldUid }),
+        allocated && newUid ? getProjectPaymentSummary(projectId,{ownerId:newUid}) : Promise.resolve(null)
       ]);
       if (container) container.textContent =
-        `مستحقات المنصة بعد الاسترداد: ${money(platform.outstandingAmount)} | إجمالي المتحقق: ${money(platform.earnedAmount)}\n` +
+        `مستحقات المنصة بعد الاسترداد وقبل التسليم: ${money(platform.outstandingAmount)} | إجمالي المتحقق: ${money(platform.earnedAmount)}\n` +
         `حقوق المشترك القديم (لم تُنقل): ${money(historical.outstandingAmount)} | إجمالي أرباحه السابقة: ${money(historical.earnedAmount)}\n` +
+        (incoming ? `حقوق المشترك الجديد بعد النقل: ${money(incoming.outstandingAmount)} | إجمالي عمولته: ${money(incoming.earnedAmount)}\n` : "") +
         "للعرض والمتابعة فقط؛ لا يتم تأكيد سداد أو إعادة توزيع أي رصيد من هنا.";
     } catch (error) {
       console.error(error);
       if (container) container.textContent = "تعذر تحميل فصل المستحقات. لم تتغير أي بيانات.";
+    } finally {
+      button.disabled = false;
+    }
+    return;
+  }
+
+  if (button.dataset.action === "execute-merchant-cutover") {
+    if (!MERCHANT_CUTOVER_ENABLED || !MERCHANT_TRANSFER_CASES_ENABLED) return;
+    const result = button.closest(".adminCard")?.querySelector(".transferPreflightResult");
+    const approved = confirm("تنفيذ نقل الإدارة والعمولات المستقبلية للمشترك المستلم؟ الموافقتان ومراجعة المستحقات شرط إلزامي. لا تتغير أي سجلات أو مدفوعات قديمة، ولا يلزم موافقة المشترك السابق.");
+    if (!approved) return;
+    button.disabled = true;
+    try {
+      await executeMerchantCutover({projectId,adminUid:adminSession.user.uid});
+      if (result) result.textContent = "تم النقل الموثق. هوية المحل وسجلات المشترك السابق سليمة، وعمولات الطلبات الجديدة تتبع المشترك الجديد.";
+      await loadProjects();
+    } catch (error) {
+      console.error(error);
+      if (result) result.textContent = "لم يتم النقل؛ حالة المشروع أو الموافقات أو مراجعة المستحقات غير مكتملة. لم تُغيَّر الصلاحيات.";
     } finally {
       button.disabled = false;
     }
