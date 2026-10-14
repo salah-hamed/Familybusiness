@@ -51,7 +51,7 @@ test("all four launch project owner dashboards render QR from their customer lin
 
 test("PWA cache includes the local QR generator", () => {
   const source = readFileSync("service-worker.js", "utf8");
-  assert.match(source, /family-business-pwa-v3/);
+  assert.match(source, /family-business-pwa-v4/);
   assert.match(source, /core\/qr\/customer-qr\.js/);
   assert.match(source, /core\/qr\/vendor\/qrcode\.mjs/);
 });
