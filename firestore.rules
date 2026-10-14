@@ -1953,9 +1953,24 @@ service cloud.firestore {
     )
     && validLockedCommissionDeliveryUpdate(orderId);
 
+   // Current commission dispatch paths above exclusively own these
+   // transitions. Skip the legacy mega-rule BEFORE canOperateProject() and
+   // older settlement checks; evaluating both can exceed 1000 expressions.
+   // Strict dispatch rules still verify the paired immutable ledger write.
    allow update: if !(
       resource.data.templateType == "laundry"
       && ("trackingToken" in resource.data)
+    )
+    && !(
+      resource.data.templateType in ["supermarket","restaurant","bakery"]
+      && resource.data.status == "ready"
+      && request.resource.data.status == "assigned"
+    )
+    && !(
+      resource.data.templateType == "laundry"
+      && resource.data.status == "accepted"
+      && resource.data.laundryStage == "ready_delivery"
+      && request.resource.data.laundryStage == "out_for_delivery"
     )
     && (
     (
