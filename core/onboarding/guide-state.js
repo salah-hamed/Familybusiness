@@ -36,7 +36,7 @@ export function buildMarketingGuide() {
       ),
       step(
         "activate",
-        "ادفع وفعّل الاشتراك",
+        TRIAL_REGISTRATION_ENABLED ? "ابدأ من غير دفع" : "ادفع وفعّل الاشتراك",
         TRIAL_REGISTRATION_ENABLED
           ? "جهّز نشاطك 7 أيام مجانًا، وبعد أول اتفاق مقبول تبدأ مهلة 3 أيام. الاشتراك الشهري 59 جنيه."
           : `أول تفعيل حاليًا ${formatEgp(PLATFORM_BILLING.initialActivationFee)}، وبعد مراجعة الدفع يتفعّل حسابك.`,
@@ -46,7 +46,7 @@ export function buildMarketingGuide() {
       step(
         "launch",
         "اختار مشروعك وشغّله",
-        "بعد التفعيل اختار مشروع، اربط جهة التشغيل، وبعد جاهزيته شارك رابط العملاء.",
+        TRIAL_REGISTRATION_ENABLED ? "اختار مشروعك فور التسجيل واربط أول محل لتبدأ فترة السماح." : "بعد التفعيل اختار مشروع، اربط جهة التشغيل، وبعد جاهزيته شارك رابط العملاء.",
         "pending",
         { selector: "#projects", actionLabel: "شوف المشاريع" }
       )
@@ -55,6 +55,36 @@ export function buildMarketingGuide() {
 }
 
 export function buildAuthGuide({ mode = "register" } = {}) {
+  if (mode === "registered" && TRIAL_REGISTRATION_ENABLED) {
+    return {
+      id: "account-start-trial",
+      title: "حسابك جاهز — ابدأ مشروعك",
+      intro: "ابدأ 7 أيام مجانية للتجهيز؛ ومهلة 3 أيام تبدأ بعد أول اتفاق عمولة مقبول مع محل.",
+      steps: [
+        step("account","إنشاء الحساب","تم إنشاء الحساب.","done"),
+        step("project","اختار أول مشروع","اختار نشاطًا شغالًا حواليك، وابعت له دعوة التشغيل.","current",
+          {href:"./workspace/",actionLabel:"افتح مساحة العمل"}),
+        step("agreement","المحل يقبل العمولة","بمجرد موافقته تبدأ 3 أيام سماح.","pending"),
+        step("payment","الاشتراك الشهري","بعد المهلة 59 جنيه شهريًا عبر InstaPay.","pending")
+      ]
+    };
+  }
+
+  if (mode === "register" && TRIAL_REGISTRATION_ENABLED) {
+    return {
+      id:"account-register-trial",
+      title:"ابدأ مجانًا خلال دقيقة",
+      intro:"سجّل بياناتك الآن. ما فيش دفع مطلوب قبل تجهيز وربط نشاطك.",
+      steps:[
+        step("register","اكتب بيانات الحساب","الاسم والبريد وكلمة المرور.","current",
+          {selector:"#registerBtn",actionLabel:"أنشئ حسابك"}),
+        step("project","اربط أول محل","ابدأ 7 أيام مجانية من وقت التسجيل.","pending"),
+        step("agreement","تأكيد العمولة","بعد موافقة أول محل تبدأ 3 أيام.","pending"),
+        step("payment","الاشتراك الشهري","59 جنيه شهريًا بعد انتهاء المهلة.","pending")
+      ]
+    };
+  }
+
   if (mode === "registered") {
     return {
       id: "account-start",

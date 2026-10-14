@@ -19,6 +19,7 @@ import { executeRepeatMerchantRecovery,executeRepeatMerchantAssignment }
 import { openRepeatMerchantTransferCase,reviewRepeatMerchantFinances }
   from "../core/merchants/merchant-cycle-consent-service.js";
 import { requiredSubscriptionPayment } from "../core/subscriptions/payment-policy.js";
+import { TRIAL_REGISTRATION_ENABLED } from "../core/subscriptions/trial-rollout.js";
 import { getProjectPaymentSummary } from "../core/commissions/settlement-service.js";
 import { protectAdmin } from "../core/auth/admin-guard.js";
 import {
@@ -109,6 +110,7 @@ function statusPill(status) {
     active: "نشط",
     inactive: "موقوف",
     pending: "معلق",
+    trial: "فترة التجهيز المجانية",
     pending_review: "بانتظار المراجعة",
     approved: "معتمد",
     pending_invite: "دعوة معلقة",
@@ -229,7 +231,9 @@ async function loadOverview() {
     }
 
     $("billingSummary").innerText =
-      `${formatEgp(PLATFORM_BILLING.initialActivationFee)} أول مرة · ${formatEgp(PLATFORM_BILLING.monthlyRenewalFee)} شهري · إحالة ${formatEgp(REFERRAL_CONFIG.qualifiedReferralReward)}`;
+      TRIAL_REGISTRATION_ENABLED
+        ? `التسجيل مجاني · الاشتراك الجديد ${formatEgp(PLATFORM_BILLING.monthlyRenewalFee)} شهري بعد المهلة · الحسابات القديمة تحتفظ بباقة التفعيل السابقة · إحالة ${formatEgp(REFERRAL_CONFIG.qualifiedReferralReward)}`
+        : `${formatEgp(PLATFORM_BILLING.initialActivationFee)} أول مرة · ${formatEgp(PLATFORM_BILLING.monthlyRenewalFee)} شهري · إحالة ${formatEgp(REFERRAL_CONFIG.qualifiedReferralReward)}`;
 
     $("overviewStatus").innerText =
       `آخر تحديث: ${new Intl.DateTimeFormat("ar-EG",{timeStyle:"short"}).format(new Date())}`;
@@ -325,7 +329,7 @@ function renderUsers() {
         </div>
         <div class="actions">
           <button class="primaryBtn" data-action="view-user-payments" data-uid="${escapeHTML(user.uid)}">راجع دفعات الاشتراك</button>
-          ${user.subscriptionStatus === "active"
+          ${["active","trial"].includes(user.subscriptionStatus)
             ? `<button class="secondaryBtn" data-action="deactivate-user" data-uid="${escapeHTML(user.uid)}">إيقاف الاشتراك</button>`
             : ""}
         </div>
