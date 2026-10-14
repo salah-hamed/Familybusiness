@@ -86,8 +86,10 @@ test("future ledger beneficiary is incoming subscriber, old epochs remain separa
  assert.equal(resolveCommissionBeneficiary(assigned,base.agreement),"new");
  const period=resolveMerchantFinancePeriod(assigned);
  assert.equal(period.beneficiaryId,"new");
- assert.equal(period.canDeclarePayment,false);
- assert.equal(period.requiresExternalVerification,true);
+ // The fully enabled release permits the new recipient to confirm only
+ // their own independently scoped payment period; old epochs remain immutable.
+ assert.equal(period.canDeclarePayment,true);
+ assert.equal(period.requiresExternalVerification,false);
  for(const field of ["cutoverAuditId","cutoverAt","assignedSubscriberId"]) {
   const forged={...assigned,[field]:field==="assignedSubscriberId"?"old":null};
   assert.throws(()=>resolveCommissionBeneficiary(forged,base.agreement));
