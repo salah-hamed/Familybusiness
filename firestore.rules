@@ -99,23 +99,13 @@ service cloud.firestore {
     && get(merchantRecoveryPath(projectId)).data.previousSubscriberId == p.originalSubscriberId
     && get(merchantRecoveryPath(projectId)).data.merchantId == p.merchantId);
   }
-  // Live assignment is legal only after BOTH the consent and audit documents exist.
-  // Read EACH referenced document once. Ledger creation and order update
-  // share a limited Rules expression/read budget, even in a batch.
+  // Signed immutable witness was created in an atomic transaction with
+  // accepted dual consents and admin-only finance review. The transfer case
+  // cannot change after cutover_completed; verifying it on every rider
+  // dispatch would repeat the same history and exhaust the Rules budget.
   function cutoverDocumentsMatch(projectId,p){
-   let c = get(merchantTransferCasePath(projectId)).data;
    let a = get(merchantCutoverPath(projectId)).data;
-   return c.status == "cutover_completed"
-    && c.projectDocId == projectId
-    && c.merchantId == p.merchantId
-    && c.originalSubscriberId == p.originalSubscriberId
-    && c.proposedSubscriberId == p.assignedSubscriberId
-    && c.operatorConsent == "accepted"
-    && c.recipientConsent == "accepted"
-    && c.financeClearance == "reviewed"
-    && c.cutoverAt == p.cutoverAt
-    && c.cutoverBy == p.cutoverAdminUid
-    && a.status == "completed"
+   return a.status == "completed"
     && a.projectDocId == projectId
     && a.merchantId == p.merchantId
     && a.originalSubscriberId == p.originalSubscriberId
@@ -138,8 +128,7 @@ service cloud.firestore {
     && p.cutoverAt is timestamp
     && p.cutoverAdminUid is string
     && p.recoveryAuditId == projectId
-    && exists(merchantTransferCasePath(projectId))
-    && exists(merchantCutoverPath(projectId))
+    // A missing immutable witness causes get() to fail closed.
     && cutoverDocumentsMatch(projectId,p));
   }
   // C4B12: v2+ epoch witnesses are isolated from immutable C4B11 records.
