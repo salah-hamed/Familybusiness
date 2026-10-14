@@ -2,7 +2,7 @@ import auth from "../core/firebase/firebase-auth.js";
 import { friendlyOperatorError } from "../core/operators/operator-errors.js";
 import { renderCustomerQr } from "../core/qr/customer-qr.js?v=20261010-operator-qr2";
 import { claimOperatorAccess, getOperator, operatorCanOperate, buildOperatorAuthEmail } from "../core/partners/partner-service.js";
-import { acceptPendingCommission, rejectPendingCommission, getCommissionAgreement } from "../core/commissions/commission-service.js?v=20261013-acceptfix1";
+import { acceptPendingCommission, rejectPendingCommission, getCommissionAgreement } from "../core/commissions/commission-service.js?v=20261014-final-mobile1";
 import { renderOperatorFinancePanel } from "../core/commissions/finance-panel.js?v=20261013-financeperiod1";
 import { getSupermarket, updateSupermarketSettings } from "../core/supermarket/supermarket-service.js";
 import { WORKER_ROLES, createWorker, listProjectWorkers, setWorkerActive } from "../core/workers/worker-service.js";
