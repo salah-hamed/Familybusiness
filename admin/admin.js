@@ -1,4 +1,6 @@
 import db from "../core/firebase/firebase-db.js";
+import { buildReviewedBillingGuard } from "../core/subscriptions/subscription-billing-guard.js";
+import { migrateLegacyPendingProof, reconcileLegacyBillingAccount } from "../core/subscriptions/billing-guard-reconciliation-service.js";
 import { projectMerchantOverview } from "../core/merchants/merchant-overview.js";
 import { assessMerchantCutoverReadiness, formatMerchantCutoverReadiness } from "../core/merchants/merchant-cutover-readiness.js";
 import { assessMerchantTransfer, formatMerchantTransferPreflight } from "../core/merchants/merchant-transfer-preflight.js";
@@ -10,6 +12,12 @@ import { PLATFORM_COMMISSION_BENEFICIARY } from "../core/merchants/merchant-comm
 import { openMerchantTransferCase, reviewMerchantTransferFinance } from "../core/merchants/transfer-case-service.js";
 import { merchantTransferConsentLink } from "../core/merchants/transfer-consent-view.js";
 import { executePlatformMerchantRecovery } from "../core/merchants/platform-recovery-service.js";
+import { MERCHANT_REPEAT_RECOVERY_ENABLED,MERCHANT_REPEAT_ASSIGNMENT_ENABLED }
+  from "../core/merchants/merchant-cycle-rollout.js";
+import { executeRepeatMerchantRecovery,executeRepeatMerchantAssignment }
+  from "../core/merchants/merchant-cycle-service.js";
+import { openRepeatMerchantTransferCase,reviewRepeatMerchantFinances }
+  from "../core/merchants/merchant-cycle-consent-service.js";
 import { requiredSubscriptionPayment } from "../core/subscriptions/payment-policy.js";
 import { getProjectPaymentSummary } from "../core/commissions/settlement-service.js";
 import { protectAdmin } from "../core/auth/admin-guard.js";
@@ -338,8 +346,13 @@ async function approveSubscriptionPayment(paymentId) {
     if (payment.status !== "pending_review") throw new Error("PAYMENT_ALREADY_REVIEWED");
 
     const uid = clean(payment.userId);
+    const guardRef=doc(db,"subscriptionBillingGuards",uid);
     const userRef = doc(db, "users", uid);
-    const userSnap = await transaction.get(userRef);
+    const [guardSnap,userSnap] = await Promise.all([
+      transaction.get(guardRef),transaction.get(userRef)
+    ]);
+    if(!guardSnap.exists())throw new Error("PAYMENT_BILLING_GUARD_MISSING");
+    const guardNext=buildReviewedBillingGuard(guardSnap.data(),uid,paymentId,serverTimestamp());
     if (!userSnap.exists()) throw new Error("USER_NOT_FOUND");
 
     const data = userSnap.data();
@@ -382,6 +395,7 @@ async function approveSubscriptionPayment(paymentId) {
     const expiresAt = new Date(periodStart);
     expiresAt.setDate(expiresAt.getDate() + PLATFORM_BILLING.subscriptionDays);
 
+    transaction.set(guardRef,guardNext);
     transaction.update(paymentRef, {
       status: "approved",
       reviewedAt: serverTimestamp(),
@@ -449,12 +463,24 @@ async function rejectSubscriptionPayment(paymentId, reason) {
   if (cleanReason.length < 3 || cleanReason.length > 300) {
     throw new Error("REJECTION_REASON_REQUIRED");
   }
-
-  await updateDoc(doc(db, "subscriptionPayments", paymentId), {
-    status: "rejected",
-    reviewedAt: serverTimestamp(),
-    reviewedBy: adminSession.user.uid,
-    rejectionReason: cleanReason
+  await runTransaction(db,async tx=>{
+    const paymentRef=doc(db,"subscriptionPayments",paymentId);
+    const paymentSnap=await tx.get(paymentRef);
+    if(!paymentSnap.exists()||paymentSnap.data().status!=="pending_review")
+      throw new Error("PAYMENT_ALREADY_REVIEWED");
+    const uid=paymentSnap.data().userId;
+    const guardRef=doc(db,"subscriptionBillingGuards",uid);
+    const guardSnap=await tx.get(guardRef);
+    if(!guardSnap.exists())throw new Error("PAYMENT_BILLING_GUARD_MISSING");
+    tx.set(guardRef,buildReviewedBillingGuard(
+      guardSnap.data(),uid,paymentId,serverTimestamp()
+    ));
+    tx.update(paymentRef,{
+      status: "rejected",
+      reviewedAt:serverTimestamp(),
+      reviewedBy:adminSession.user.uid,
+      rejectionReason:cleanReason
+    });
   });
 }
 
@@ -548,7 +574,9 @@ function renderSubscriptionPayments() {
         </div>
         <div class="actions">
           <button class="secondaryBtn" data-action="copy-payment-code" data-code="${escapeHTML(payment.paymentCode || "")}">نسخ كود الدفع</button>
+          <button class="secondaryBtn" data-action="reconcile-billing-uid" data-payment="${escapeHTML(payment.paymentId)}" data-uid="${escapeHTML(payment.userId||"")}">مطابقة حساب الاشتراك القديم</button>
           ${pending ? `
+            <button class="secondaryBtn" data-action="migrate-legacy-payment" data-payment="${escapeHTML(payment.paymentId)}">ترحيل إثبات قديم (عند الحاجة)</button>
             <button class="primaryBtn" data-action="approve-subscription-payment" data-payment="${escapeHTML(payment.paymentId)}">اعتماد وتفعيل</button>
             <button class="dangerBtn" data-action="reject-subscription-payment" data-payment="${escapeHTML(payment.paymentId)}">رفض الإثبات</button>
           ` : ""}
@@ -676,6 +704,33 @@ function renderProjects() {
             <button class="dangerBtn" data-action="recover-platform-merchant" data-project="${escapeHTML(project.projectDocId)}" type="button">
               استرداد إدارة المحل للمنصة
             </button>` : ""}
+          ${MERCHANT_REPEAT_RECOVERY_ENABLED
+            && merchant.platformManaged && merchant.assignmentStatus==="assigned_to_new_subscriber"
+            && (project.assignmentCycle??1)>=1 ? `
+            <label class="transferPreflightInput">سبب استرداد المحل بعد انتهاء تخصيصه
+              <select class="merchantRepeatReason">
+                <option value="overdue_renewal">تأخر التجديد</option>
+                <option value="unpaid_first_month">أول اشتراك غير مسدد</option>
+                <option value="confirmed_violation">مخالفة موثقة</option>
+              </select>
+            </label>
+            <button class="dangerBtn" type="button" data-action="repeat-recover-merchant"
+              data-project="${escapeHTML(project.projectDocId)}">استرداد جديد مع حفظ المستحقات</button>`:""}
+          ${MERCHANT_REPEAT_ASSIGNMENT_ENABLED && merchant.platformManaged
+            && merchant.assignmentStatus==="platform_managed"
+            && Number.isSafeInteger(project.assignmentCycle)
+            && project.assignmentCycle>=2 ? `
+            <label class="transferPreflightInput">سبب التخصيص المتكرر
+              <input class="repeatTransferReason" minlength="15" maxlength="300"
+                placeholder="اكتب سببًا واضحًا لا يقل عن 15 حرفًا">
+            </label>
+            <button class="secondaryBtn" type="button" data-action="repeat-open-transfer"
+              data-project="${escapeHTML(project.projectDocId)}">طلب موافقات جديدة</button>
+            <button class="secondaryBtn" type="button" data-action="repeat-review-finance"
+              data-project="${escapeHTML(project.projectDocId)}">توثيق الحسابات دون سداد</button>
+            <button class="dangerBtn" type="button" data-action="repeat-execute-transfer"
+              data-project="${escapeHTML(project.projectDocId)}">نقل المحل بعد مراجعة الموافقات</button>
+          `:""}
           <button class="secondaryBtn" data-action="preflight-merchant-transfer" data-project="${escapeHTML(project.projectDocId)}" type="button">
             فحص أهلية النقل (قراءة فقط)
           </button>
@@ -1205,7 +1260,15 @@ $("subscriptionPaymentsContainer").addEventListener("click", async event => {
   button.disabled = true;
 
   try {
-    if (button.dataset.action === "approve-subscription-payment") {
+    if (button.dataset.action === "migrate-legacy-payment") {
+      if (!confirm("هل هذه دفعة قديمة من قبل تحديث قواعد Firebase؟ سيتم ربطها بسجل المراجعة الآمن، بدون تفعيل الاشتراك.")) return;
+      await migrateLegacyPendingProof({paymentId,adminUid:adminSession.user.uid});
+      $("subscriptionPaymentsMessage").innerText="تم ترحيل الإثبات القديم لمراجعته بأمان.";
+    } else if (button.dataset.action === "reconcile-billing-uid") {
+      if(!confirm("تأكد أولًا أن كل إثباتات InstaPay وواتساب القديمة لهذا الحساب تمت مراجعتها، وأنه لا توجد دفعة معلقة. هذه الخطوة تسمح بفحص الاسترداد لاحقًا.")) return;
+      await reconcileLegacyBillingAccount({uid:button.dataset.uid,adminUid:adminSession.user.uid});
+      $("subscriptionPaymentsMessage").innerText="تم توثيق مطابقة الحساب المالي القديم.";
+    } else if (button.dataset.action === "approve-subscription-payment") {
       const confirmed = confirm("اعتماد هذه الدفعة سيُفعّل/يُجدد الاشتراك فورًا. هل طابقت كود الدفع ومرجع InstaPay مع Screenshot المرسل على واتساب؟");
       if (!confirmed) return;
       await approveSubscriptionPayment(paymentId);
@@ -1415,6 +1478,77 @@ $("projectsContainer").addEventListener("click", async event => {
     } finally {
       button.disabled = false;
     }
+    return;
+  }
+
+  if (button.dataset.action === "repeat-recover-merchant") {
+    if (!MERCHANT_REPEAT_RECOVERY_ENABLED) return;
+    const card=button.closest(".adminCard");
+    const reason=card?.querySelector(".merchantRepeatReason")?.value;
+    const result=card?.querySelector(".transferPreflightResult");
+    if(!confirm("هل تحققت من انتهاء الاشتراك أو المخالفة، وعدم وجود إثبات دفع معلق، وتوثيق حقوق المشترك السابق؟"))return;
+    button.disabled=true;
+    try{
+      const done=await executeRepeatMerchantRecovery({
+        projectId,adminUid:adminSession.user.uid,reason
+      });
+      if(result)result.textContent="تم الاسترداد الموثق لدورة "+done.cycle+". المحل شغال ومستحقات المشترك السابق محفوظة.";
+      await Promise.all([loadProjects(),loadOverview()]);
+    }catch(error){
+      console.error(error);
+      if(result)result.textContent="تعذر الاسترداد: يلزم مطابقة المدفوعات والأدلة مع سجل الدورة السابقة.";
+    }finally{button.disabled=false;}
+    return;
+  }
+  if (button.dataset.action === "repeat-open-transfer") {
+    if(!MERCHANT_REPEAT_ASSIGNMENT_ENABLED)return;
+    const card=button.closest(".adminCard");
+    const candidateUid=String(card?.querySelector(".candidateSubscriberUid")?.value||"").trim();
+    const reason=String(card?.querySelector(".repeatTransferReason")?.value||"").trim();
+    const result=card?.querySelector(".transferPreflightResult");
+    if(!/^[A-Za-z0-9_-]{1,128}$/.test(candidateUid)||reason.length<15||reason.length>300){
+      if(result)result.textContent="راجع UID المشترك الجديد وسبب التخصيص أولًا.";return;
+    }
+    if(!confirm("سجل طلب موافقة مستقل للمشغل والمشترك الجديد، بدون تدخل المشترك السابق؟"))return;
+    button.disabled=true;
+    try{
+      const r=await openRepeatMerchantTransferCase({
+        projectId,candidateUid,reason,adminUid:adminSession.user.uid
+      });
+      const root=new URL("../",window.location.href).href;
+      const link=merchantTransferConsentLink(root,projectId,Number(r.cycleId.split("_").at(-1)));
+      if(result)result.textContent="ابعت رابط الموافقات لصاحب المحل والمشترك المستلم عبر واتساب: "+link;
+      try{await navigator.clipboard?.writeText(link);}catch{}
+    }catch(error){console.error(error);
+      if(result)result.textContent="تعذر إنشاء طلب جديد؛ تأكد من المشغل والحساب والعمولة.";
+    }finally{button.disabled=false;}
+    return;
+  }
+  if (button.dataset.action === "repeat-review-finance") {
+    if(!MERCHANT_REPEAT_ASSIGNMENT_ENABLED)return;
+    const result=button.closest(".adminCard")?.querySelector(".transferPreflightResult");
+    if(!confirm("تسجيل مراجعة مالية فقط، بدون إلغاء ديون أو سداد نيابة عن الطرفين؟"))return;
+    button.disabled=true;
+    try{
+      await reviewRepeatMerchantFinances({projectId,adminUid:adminSession.user.uid});
+      if(result)result.textContent="تمت مراجعة المستحقات السابقة بصورة منفصلة.";
+    }catch(error){console.error(error);
+      if(result)result.textContent="تعذر مراجعة الحسابات؛ تحقق من الموافقات وثبات العمولة.";
+    }finally{button.disabled=false;}
+    return;
+  }
+  if (button.dataset.action === "repeat-execute-transfer") {
+    if(!MERCHANT_REPEAT_ASSIGNMENT_ENABLED)return;
+    const result=button.closest(".adminCard")?.querySelector(".transferPreflightResult");
+    if(!confirm("تسليم المحل للمشترك الجديد بعد توثيق الموافقتين والمراجعة المالية، مع الاحتفاظ بكل السجلات القديمة؟"))return;
+    button.disabled=true;
+    try{
+      await executeRepeatMerchantAssignment({projectId,adminUid:adminSession.user.uid});
+      if(result)result.textContent="تم النقل الذري للدورة الجديدة بدون تغيير رقم المحل أو سجلاته القديمة.";
+      await loadProjects();
+    }catch(error){console.error(error);
+      if(result)result.textContent="لم يتم النقل؛ سجل الموافقة أو الاستحقاقات أو الحساب المستلم غير مكتمل.";
+    }finally{button.disabled=false;}
     return;
   }
 

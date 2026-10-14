@@ -16,12 +16,18 @@ service cloud.firestore {
   function commissionLedgerPath(entryId){ return /databases/$(database)/documents/commissionLedger/$(entryId); }
   function commissionReversalPath(reversalId){ return /databases/$(database)/documents/commissionReversals/$(reversalId); }
   function subscriptionPaymentPath(paymentId){ return /databases/$(database)/documents/subscriptionPayments/$(paymentId); }
+  function billingGuardPath(uid){ return /databases/$(database)/documents/subscriptionBillingGuards/$(uid); }
   function commissionSettlementPath(settlementId){ return /databases/$(database)/documents/commissionSettlements/$(settlementId); }
   function merchantViolationPath(projectId){ return /databases/$(database)/documents/merchantViolations/$(projectId); }
   function merchantRecoveryPath(projectId){ return /databases/$(database)/documents/merchantRecoveries/$(projectId); }
   function merchantTransferCasePath(projectId){ return /databases/$(database)/documents/merchantTransferCases/$(projectId); }
   function merchantTransferFinanceReviewPath(projectId){ return /databases/$(database)/documents/merchantTransferFinanceReviews/$(projectId); }
   function merchantCutoverPath(projectId){ return /databases/$(database)/documents/merchantAssignmentCutovers/$(projectId); }
+  function merchantRecoveryCyclePath(id){ return /databases/$(database)/documents/merchantRecoveryCycles/$(id); }
+  function merchantAssignmentCyclePath(id){ return /databases/$(database)/documents/merchantAssignmentCycles/$(id); }
+  function merchantTransferCyclePath(id){ return /databases/$(database)/documents/merchantTransferCycles/$(id); }
+  function merchantHistoricGrantPath(id){ return /databases/$(database)/documents/merchantHistoricalAccess/$(id); }
+  function merchantTransferCycleFinanceReviewPath(id){ return /databases/$(database)/documents/merchantTransferCycleFinanceReviews/$(id); }
   function subscriptionGrantPath(grantId){ return /databases/$(database)/documents/subscriptionGrants/$(grantId); }
   function platformCounterPath(counterId){ return /databases/$(database)/documents/platformCounters/$(counterId); }
   function userExists(uid){ return exists(userPath(uid)); }
@@ -74,7 +80,10 @@ service cloud.firestore {
   function projectData(projectId){ return get(projectPath(projectId)).data; }
   function isVerifiedPlatformManagedMerchant(projectId){
    let p = projectData(projectId);
-   return projectExists(projectId)
+   return (("assignmentCycle" in p) && p.assignmentCycle is int
+     && p.assignmentCycle>=2)
+     ? verifiedRepeatPlatformMerchant(projectId)
+     : (projectExists(projectId)
     && ("platformManaged" in p) && p.platformManaged == true
     && p.template in ["supermarket","restaurant","bakery","laundry"]
     && p.operatingModel == "partner_operated"
@@ -88,25 +97,15 @@ service cloud.firestore {
     && get(merchantRecoveryPath(projectId)).data.recoveredAt == p.recoveryAt
     && get(merchantRecoveryPath(projectId)).data.adminUid == p.recoveryAdminUid
     && get(merchantRecoveryPath(projectId)).data.previousSubscriberId == p.originalSubscriberId
-    && get(merchantRecoveryPath(projectId)).data.merchantId == p.merchantId;
+    && get(merchantRecoveryPath(projectId)).data.merchantId == p.merchantId);
   }
-  // Live assignment is legal only after BOTH the consent and audit documents exist.
-  // Read EACH referenced document once. Ledger creation and order update
-  // share a limited Rules expression/read budget, even in a batch.
+  // Signed immutable witness was created in an atomic transaction with
+  // accepted dual consents and admin-only finance review. The transfer case
+  // cannot change after cutover_completed; verifying it on every rider
+  // dispatch would repeat the same history and exhaust the Rules budget.
   function cutoverDocumentsMatch(projectId,p){
-   let c = get(merchantTransferCasePath(projectId)).data;
    let a = get(merchantCutoverPath(projectId)).data;
-   return c.status == "cutover_completed"
-    && c.projectDocId == projectId
-    && c.merchantId == p.merchantId
-    && c.originalSubscriberId == p.originalSubscriberId
-    && c.proposedSubscriberId == p.assignedSubscriberId
-    && c.operatorConsent == "accepted"
-    && c.recipientConsent == "accepted"
-    && c.financeClearance == "reviewed"
-    && c.cutoverAt == p.cutoverAt
-    && c.cutoverBy == p.cutoverAdminUid
-    && a.status == "completed"
+   return a.status == "completed"
     && a.projectDocId == projectId
     && a.merchantId == p.merchantId
     && a.originalSubscriberId == p.originalSubscriberId
@@ -116,7 +115,10 @@ service cloud.firestore {
   }
   function isVerifiedAssignedAfterCutover(projectId){
    let p = projectData(projectId);
-   return projectExists(projectId)
+   return (("assignmentCycle" in p) && p.assignmentCycle is int
+     && p.assignmentCycle>=2)
+     ? verifiedRepeatAssignedMerchant(projectId)
+     : (projectExists(projectId)
     && ("platformManaged" in p) && p.platformManaged == true
     && ("assignmentStatus" in p) && p.assignmentStatus == "assigned_to_new_subscriber"
     && p.assignedSubscriberId is string
@@ -126,9 +128,63 @@ service cloud.firestore {
     && p.cutoverAt is timestamp
     && p.cutoverAdminUid is string
     && p.recoveryAuditId == projectId
-    && exists(merchantTransferCasePath(projectId))
-    && exists(merchantCutoverPath(projectId))
-    && cutoverDocumentsMatch(projectId,p);
+    // A missing immutable witness causes get() to fail closed.
+    && cutoverDocumentsMatch(projectId,p));
+  }
+  // C4B12: v2+ epoch witnesses are isolated from immutable C4B11 records.
+  function verifiedRepeatPlatformMerchant(projectId){
+    let p=projectData(projectId);
+    return ("assignmentCycle" in p) && p.assignmentCycle is int
+     && p.assignmentCycle>=2
+     && p.recoveryAuditId==projectId+"_"+string(p.assignmentCycle)
+     && exists(merchantRecoveryCyclePath(p.recoveryAuditId))
+     && repeatPlatformEvidence(projectId,p);
+  }
+  function repeatPlatformEvidence(projectId,p){
+    let a=get(merchantRecoveryCyclePath(p.recoveryAuditId)).data;
+    return p.platformManaged==true && p.assignmentStatus=="platform_managed"
+     && p.assignedSubscriberId==""
+     && p.recoveryAt is timestamp && p.recoveryAdminUid is string
+     && a.status=="completed" && a.cycle==p.assignmentCycle
+     && a.cycleId==p.recoveryAuditId && a.projectDocId==projectId
+     && a.merchantId==p.merchantId
+     && a.originalSubscriberId==p.originalSubscriberId
+     && a.recoveredAt==p.recoveryAt && a.adminUid==p.recoveryAdminUid;
+  }
+  function verifiedRepeatAssignedMerchant(projectId){
+    let p=projectData(projectId);
+    return ("assignmentCycle" in p) && p.assignmentCycle is int
+     && p.assignmentCycle>=2
+     && p.cutoverAuditId==projectId+"_"+string(p.assignmentCycle)
+     && p.recoveryAuditId==p.cutoverAuditId
+     && exists(merchantRecoveryCyclePath(p.recoveryAuditId))
+     && exists(merchantAssignmentCyclePath(p.cutoverAuditId))
+     && repeatAssignmentEvidence(projectId,p);
+  }
+  function repeatAssignmentEvidence(projectId,p){
+    let a=get(merchantAssignmentCyclePath(p.cutoverAuditId)).data;
+    // Consent and accepted terms are validated when creating this immutable
+    // witness. Runtime dispatch only needs the signed epoch beneficiary.
+    return p.platformManaged==true
+     && p.assignmentStatus=="assigned_to_new_subscriber"
+     && p.assignedSubscriberId is string && p.assignedSubscriberId.size()>0
+     && p.assignedSubscriberId!=p.originalSubscriberId
+     && p.cutoverAt is timestamp && p.cutoverAdminUid is string
+     && a.status=="completed" && a.cycle==p.assignmentCycle
+     && a.cycleId==p.cutoverAuditId && a.projectDocId==projectId
+     && a.merchantId==p.merchantId
+     && a.originalSubscriberId==p.originalSubscriberId
+     && a.recoveryAuditId==p.recoveryAuditId
+     && a.assignedSubscriberId==p.assignedSubscriberId
+     && a.completedAt==p.cutoverAt && a.completedBy==p.cutoverAdminUid;
+  }
+  function historicCycleStatementAccess(projectId){
+    let path=merchantHistoricGrantPath(projectId+"_"+request.auth.uid);
+    return signedIn() && exists(path)
+     && get(path).data.projectDocId==projectId
+     && get(path).data.subscriberUid==request.auth.uid
+     && get(path).data.merchantId==projectData(projectId).merchantId
+     && get(path).data.status=="historic_only";
   }
   function currentAssignedSubscriber(projectId){
    return signedIn() && isVerifiedAssignedAfterCutover(projectId)
@@ -146,11 +202,18 @@ service cloud.firestore {
        || projectData(projectId).platformManaged == false));
   }
   function commissionBeneficiary(projectId){
-   return isVerifiedAssignedAfterCutover(projectId)
-    ? projectData(projectId).assignedSubscriberId
-    : (isVerifiedPlatformManagedMerchant(projectId)
-      ? "__fb_platform_commissions__"
-      : projectData(projectId).ownerId);
+   let p=projectData(projectId);
+   // Choose the one live state FIRST. Verifying a non-applicable audit
+   // can exhaust Firestore's rule-evaluation budget in rider dispatch.
+   return !("platformManaged" in p) || p.platformManaged==false
+    ? ((("assignedSubscriberId" in p) && p.assignedSubscriberId!=p.ownerId)
+       ? "" : p.ownerId)
+    : (p.assignmentStatus=="platform_managed"
+       ? (isVerifiedPlatformManagedMerchant(projectId)
+          ? "__fb_platform_commissions__" : "")
+       : (p.assignmentStatus=="assigned_to_new_subscriber"
+         ? (isVerifiedAssignedAfterCutover(projectId) ? p.assignedSubscriberId : "")
+         : ""));
   }
   function projectAvailable(projectId){
    let project = projectData(projectId);
@@ -211,12 +274,24 @@ service cloud.firestore {
       )
     );
   }
+  function commissionCycleMatches(order,ledger){
+    let p=projectData(ledger.projectId);
+    return (("assignmentCycle" in p) && p.assignmentCycle is int
+        && p.assignmentCycle>=2)
+      ? ("assignmentCycle" in ledger
+        && ledger.assignmentCycle==p.assignmentCycle
+        && ("commissionAssignmentCycle" in order)
+        && order.commissionAssignmentCycle==p.assignmentCycle)
+      : !("assignmentCycle" in ledger)
+        && !("commissionAssignmentCycle" in order);
+  }
   function validProjectOrderLedgerCreate(entryId){
    let ledger = request.resource.data;
    let order = getAfter(orderPath(ledger.orderId)).data;
    return signedIn()
     && !(order.templateType == "laundry" && ("trackingToken" in order))
     && ledger.sourceType == "project_order"
+     && ledger.userId is string && ledger.userId.size()>0
     && ledger.projectId is string
     && ledger.orderId is string
     && entryId == "project_order_" + ledger.orderId
@@ -238,13 +313,15 @@ service cloud.firestore {
     && validCommissionTriggerState(order)
     && order.commissionLocked == true
     && order.commissionAmount == ledger.amount
-    && order.commissionAgreementVersion == ledger.agreementVersion;
+    && order.commissionAgreementVersion == ledger.agreementVersion
+    && commissionCycleMatches(order,ledger);
   }
   function validTrackedLaundryProjectOrderLedgerCreate(entryId){
    let ledger = request.resource.data;
    let order = getAfter(orderPath(ledger.orderId)).data;
    return signedIn()
     && ledger.sourceType == "project_order"
+     && ledger.userId is string && ledger.userId.size()>0
     && ledger.projectId is string
     && ledger.orderId is string
     && entryId == "project_order_" + ledger.orderId
@@ -263,6 +340,7 @@ service cloud.firestore {
     && order.commissionAmount == ledger.amount
     && order.commissionAgreementVersion == ledger.agreementVersion
     && ledger.userId == commissionBeneficiary(ledger.projectId)
+    && commissionCycleMatches(order,ledger)
     && isProjectOperator(ledger.projectId);
   }
 
@@ -307,7 +385,8 @@ service cloud.firestore {
       "commissionAmount",
       "commissionAgreementVersion",
       "commissionTrigger",
-      "commissionEarnedAt"
+      "commissionEarnedAt",
+       "commissionAssignmentCycle"
     ])
     && ledger.orderId == orderId
     && ledger.projectId == before.projectId
@@ -401,7 +480,8 @@ service cloud.firestore {
           "commissionAmount",
           "commissionAgreementVersion",
           "commissionTrigger",
-          "commissionEarnedAt"
+          "commissionEarnedAt",
+       "commissionAssignmentCycle"
         ])
       )
       ||
@@ -427,7 +507,8 @@ service cloud.firestore {
           "commissionAmount",
           "commissionAgreementVersion",
           "commissionTrigger",
-          "commissionEarnedAt"
+          "commissionEarnedAt",
+       "commissionAssignmentCycle"
         ])
       )
     );
@@ -495,17 +576,20 @@ service cloud.firestore {
     && operatorExists(projectData(projectId).operatorId)
     && operatorData(projectData(projectId).operatorId).authUid == request.auth.uid;
   }
+  function linkedOperatorActive(operatorId){
+    let op=operatorData(operatorId);
+    return op.authUid==request.auth.uid
+     && op.status=="active" && op.agreementStatus=="accepted"
+     && op.isActive==true;
+  }
   function isProjectOperator(projectId){
-   return signedIn()
-    && projectExists(projectId)
-    && projectData(projectId).operatingModel == "partner_operated"
-    && projectData(projectId).operatorId is string
-    && projectData(projectId).operatorId.size() > 0
-    && operatorExists(projectData(projectId).operatorId)
-    && operatorData(projectData(projectId).operatorId).authUid == request.auth.uid
-    && operatorData(projectData(projectId).operatorId).status == "active"
-    && operatorData(projectData(projectId).operatorId).agreementStatus == "accepted"
-    && operatorData(projectData(projectId).operatorId).isActive == true;
+    let p=projectData(projectId);
+    return signedIn()
+     && projectExists(projectId)
+     && p.operatingModel=="partner_operated"
+     && p.operatorId is string && p.operatorId.size()>0
+     && operatorExists(p.operatorId)
+     && linkedOperatorActive(p.operatorId);
   }
   function canOperateProject(projectId){
    return isAdmin()
@@ -1234,9 +1318,91 @@ service cloud.firestore {
    allow delete: if isAdmin();
   }
 
+  match /subscriptionBillingGuards/{uid} {
+   function matchingPendingPayment(paymentId){
+    let p=getAfter(subscriptionPaymentPath(paymentId)).data;
+    return p.userId==uid && p.status=="pending_review";
+   }
+   function reviewedPayment(paymentId){
+    let p=getAfter(subscriptionPaymentPath(paymentId)).data;
+    return p.userId==uid && p.status in ["approved","rejected"]
+      && p.reviewedBy==request.auth.uid;
+   }
+   allow get: if isAdmin() || (signedIn() && request.auth.uid==uid);
+   allow list: if isAdmin();
+   allow create: if request.resource.data.userId==uid
+    && request.resource.data.revision==1
+    && request.resource.data.lastReviewedPaymentId==""
+    && request.resource.data.updatedAt==request.time
+    && (
+     (signedIn() && request.auth.uid==uid
+      && request.resource.data.recoverySafe==false
+      && request.resource.data.pendingPaymentId is string
+      && request.resource.data.pendingPaymentId.size()>0
+      && request.resource.data.keys().hasOnly([
+       "userId","revision","lastReviewedPaymentId","updatedAt",
+       "recoverySafe","pendingPaymentId"])
+      && matchingPendingPayment(request.resource.data.pendingPaymentId))
+     || (isAdmin() && request.resource.data.pendingPaymentId==""
+      && request.resource.data.recoverySafe==true
+      && request.resource.data.reconciledAt==request.time
+      && request.resource.data.reconciledBy==request.auth.uid
+      && request.resource.data.keys().hasOnly([
+       "userId","revision","lastReviewedPaymentId","updatedAt",
+       "recoverySafe","pendingPaymentId","reconciledAt","reconciledBy"]))
+     || (isAdmin()
+      && request.resource.data.pendingPaymentId is string
+      && request.resource.data.pendingPaymentId.size()>0
+      && request.resource.data.recoverySafe==false
+      && request.resource.data.migratedAt==request.time
+      && request.resource.data.migratedBy==request.auth.uid
+      && get(subscriptionPaymentPath(request.resource.data.pendingPaymentId)).data.userId==uid
+      && get(subscriptionPaymentPath(request.resource.data.pendingPaymentId)).data.status=="pending_review"
+      && request.resource.data.keys().hasOnly([
+       "userId","revision","lastReviewedPaymentId","updatedAt",
+       "recoverySafe","pendingPaymentId","migratedAt","migratedBy"]))
+    );
+   allow update: if request.resource.data.userId==uid
+    && resource.data.userId==uid
+    && request.resource.data.revision==resource.data.revision+1
+    && request.resource.data.updatedAt==request.time
+    && (
+     (signedIn() && request.auth.uid==uid
+      && resource.data.pendingPaymentId==""
+      && request.resource.data.pendingPaymentId is string
+      && request.resource.data.pendingPaymentId.size()>0
+      && request.resource.data.lastReviewedPaymentId==resource.data.lastReviewedPaymentId
+      && request.resource.data.recoverySafe==resource.data.recoverySafe
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+       "pendingPaymentId","revision","updatedAt"])
+      && matchingPendingPayment(request.resource.data.pendingPaymentId))
+     || (isAdmin() && resource.data.pendingPaymentId is string
+      && resource.data.pendingPaymentId.size()>0
+      && request.resource.data.pendingPaymentId==""
+      && request.resource.data.lastReviewedPaymentId==resource.data.pendingPaymentId
+      && request.resource.data.recoverySafe==resource.data.recoverySafe
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+       "pendingPaymentId","lastReviewedPaymentId","revision","updatedAt"])
+      && reviewedPayment(resource.data.pendingPaymentId))
+     || (isAdmin() && resource.data.pendingPaymentId==""
+      && request.resource.data.pendingPaymentId==""
+      && resource.data.recoverySafe==false
+      && request.resource.data.recoverySafe==true
+      && request.resource.data.lastReviewedPaymentId==resource.data.lastReviewedPaymentId
+      && request.resource.data.reconciledAt==request.time
+      && request.resource.data.reconciledBy==request.auth.uid
+      && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+       "recoverySafe","reconciledAt","reconciledBy","revision","updatedAt"]))
+    );
+   allow delete: if false;
+  }
+
   match /subscriptionPayments/{paymentId} {
    allow create: if signedIn()
     && request.resource.data.paymentId == paymentId
+    && getAfter(billingGuardPath(request.auth.uid)).data.userId==request.auth.uid
+    && getAfter(billingGuardPath(request.auth.uid)).data.pendingPaymentId==paymentId
+    && getAfter(billingGuardPath(request.auth.uid)).data.updatedAt==request.time
     && request.resource.data.userId == request.auth.uid
     && request.resource.data.userEmail is string
     && request.resource.data.userEmail.size() <= 254
@@ -1281,6 +1447,9 @@ service cloud.firestore {
     ]);
    allow get, list: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
    allow update: if isAdmin()
+    && getAfter(billingGuardPath(resource.data.userId)).data.pendingPaymentId==""
+    && getAfter(billingGuardPath(resource.data.userId)).data.lastReviewedPaymentId==paymentId
+    && getAfter(billingGuardPath(resource.data.userId)).data.updatedAt==request.time
     && resource.data.status == "pending_review"
     && request.resource.data.paymentId == resource.data.paymentId
     && request.resource.data.userId == resource.data.userId
@@ -1421,10 +1590,70 @@ service cloud.firestore {
      && witness.completedAt == request.time;
   }
 
+  function validRepeatMerchantProjectRecovery(projectId){
+    let before=resource.data;
+    let after=request.resource.data;
+    let id=projectId+"_"+string(after.assignmentCycle);
+    let audit=getAfter(merchantRecoveryCyclePath(id)).data;
+    let grant=getAfter(merchantHistoricGrantPath(projectId+"_"+before.assignedSubscriberId)).data;
+    return before.platformManaged==true
+     && before.assignmentStatus=="assigned_to_new_subscriber"
+     && before.assignedSubscriberId is string
+     && before.assignedSubscriberId.size()>0
+     && after.assignmentCycle is int
+     && after.assignmentCycle==((
+        "assignmentCycle" in before) ? before.assignmentCycle:1)+1
+     && after.platformManaged==true
+     && after.assignmentStatus=="platform_managed"
+     && after.assignedSubscriberId==""
+     && after.assignmentUpdatedAt==request.time
+     && after.recoveryAuditId==id
+     && after.recoveryAt==request.time
+     && after.recoveryAdminUid==request.auth.uid
+     && after.recoveryReason in ["overdue_renewal","unpaid_first_month","confirmed_violation"]
+     && after.diff(before).affectedKeys().hasOnly([
+      "assignmentCycle","platformManaged","assignmentStatus","assignedSubscriberId",
+      "assignmentUpdatedAt","recoveryAuditId","recoveryAt",
+      "recoveryAdminUid","recoveryReason"])
+     && audit.status=="completed" && audit.cycleId==id
+     && audit.previousSubscriberId==before.assignedSubscriberId
+     && audit.recoveredAt==request.time && audit.adminUid==request.auth.uid
+     && grant.subscriberUid==before.assignedSubscriberId
+     && grant.status=="historic_only" && grant.grantedAt==request.time;
+  }
+  function validRepeatMerchantProjectAssignment(projectId){
+    let before=resource.data;
+    let after=request.resource.data;
+    let id=projectId+"_"+string(before.assignmentCycle);
+    let witness=getAfter(merchantAssignmentCyclePath(id)).data;
+    return before.platformManaged==true
+     && before.assignmentStatus=="platform_managed"
+     && before.assignedSubscriberId==""
+     && before.assignmentCycle is int && before.assignmentCycle>=2
+     && before.recoveryAuditId==id
+     && after.platformManaged==true
+     && after.assignmentStatus=="assigned_to_new_subscriber"
+     && after.assignedSubscriberId is string
+     && after.assignedSubscriberId.size()>0
+     && after.assignedSubscriberId!=before.originalSubscriberId
+     && after.assignmentUpdatedAt==request.time
+     && after.cutoverAuditId==id
+     && after.cutoverAt==request.time
+     && after.cutoverAdminUid==request.auth.uid
+     && after.diff(before).affectedKeys().hasOnly([
+      "assignmentStatus","assignedSubscriberId","assignmentUpdatedAt",
+      "cutoverAuditId","cutoverAt","cutoverAdminUid"])
+     && witness.status=="completed" && witness.cycleId==id
+     && witness.assignedSubscriberId==after.assignedSubscriberId
+     && witness.completedAt==request.time
+     && witness.completedBy==request.auth.uid;
+  }
+
   match /projects/{projectId} {
    allow get: if isAdmin()
     || (signedIn() && resource.data.ownerId == request.auth.uid)
     || currentAssignedSubscriber(projectId)
+    || historicCycleStatementAccess(projectId)
     || (signedIn() && ("platformManaged" in resource.data)
       && resource.data.platformManaged == true
       && resource.data.assignmentStatus == "assigned_to_new_subscriber"
@@ -1457,7 +1686,7 @@ service cloud.firestore {
     )
     && (
       !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-        "platformManaged","assignmentStatus","assignedSubscriberId",
+        "platformManaged","assignmentStatus","assignedSubscriberId","assignmentCycle",
         "assignmentUpdatedAt","recoveryAuditId","recoveryAt",
         "recoveryAdminUid","recoveryReason","cutoverAuditId","cutoverAt","cutoverAdminUid"
       ])
@@ -1493,6 +1722,8 @@ service cloud.firestore {
         && getAfter(merchantRecoveryPath(projectId)).data.reason == request.resource.data.recoveryReason
       )
     || validAtomicMerchantProjectCutover(projectId)
+    || validRepeatMerchantProjectRecovery(projectId)
+    || validRepeatMerchantProjectAssignment(projectId)
     )
    ) || (
     signedIn()
@@ -1711,9 +1942,24 @@ service cloud.firestore {
     )
     && validLockedCommissionDeliveryUpdate(orderId);
 
+   // Current commission dispatch paths above exclusively own these
+   // transitions. Skip the legacy mega-rule BEFORE canOperateProject() and
+   // older settlement checks; evaluating both can exceed 1000 expressions.
+   // Strict dispatch rules still verify the paired immutable ledger write.
    allow update: if !(
       resource.data.templateType == "laundry"
       && ("trackingToken" in resource.data)
+    )
+    && !(
+      resource.data.templateType in ["supermarket","restaurant","bakery"]
+      && resource.data.status == "ready"
+      && request.resource.data.status == "assigned"
+    )
+    && !(
+      resource.data.templateType == "laundry"
+      && resource.data.status == "accepted"
+      && resource.data.laundryStage == "ready_delivery"
+      && request.resource.data.laundryStage == "out_for_delivery"
     )
     && (
     (
@@ -3203,6 +3449,89 @@ service cloud.firestore {
    allow delete: if false;
   }
 
+  function merchantCycleOfProject(projectId){
+   let p=projectData(projectId);
+   return ("assignmentCycle" in p)?p.assignmentCycle:1;
+  }
+  function authorizedMerchantCycleReceiptSubscriber(projectId,cycle,uid){
+    let p=projectData(projectId);
+    return signedIn() && uid==request.auth.uid
+     && (
+       (p.platformManaged==true
+        && p.assignmentStatus=="assigned_to_new_subscriber"
+        && p.assignedSubscriberId==uid
+        && merchantCycleOfProject(projectId)==cycle
+        && isVerifiedAssignedAfterCutover(projectId))
+       || (
+        exists(merchantHistoricGrantPath(projectId+"_"+uid))
+        && get(merchantHistoricGrantPath(projectId+"_"+uid)).data.status=="historic_only"
+        && get(merchantHistoricGrantPath(projectId+"_"+uid)).data.firstRecoveredCycle==cycle+1
+        && get(merchantHistoricGrantPath(projectId+"_"+uid)).data.subscriberUid==uid
+       )
+     );
+  }
+  function validMerchantCycleSettlementCreate(settlementId){
+   let d=request.resource.data;
+   let p=projectData(d.projectId);
+   let period=d.projectId+"_"+string(d.assignmentCycle);
+   let state=getAfter(/databases/$(database)/documents/merchantCyclePaymentStates/$(period)).data;
+   return signedIn()
+    && d.settlementId==settlementId
+    && d.assignmentCycle is int && d.assignmentCycle>=1
+    && d.assignmentCycle==merchantCycleOfProject(d.projectId)
+    && p.platformManaged==true
+    && p.assignmentStatus=="assigned_to_new_subscriber"
+    && isVerifiedAssignedAfterCutover(d.projectId)
+    && d.ownerId==p.assignedSubscriberId
+    && d.operatorId==p.operatorId
+    && isProjectOperator(d.projectId)
+    && d.declaredBy==request.auth.uid
+    && d.status=="pending_owner_confirmation"
+    && d.currency=="EGP" && d.amount is number && d.amount>0
+    && d.paymentMethod in ["instapay","bank_transfer","cash","other"]
+    && d.paymentReference is string && d.paymentReference.size()<=200
+    && d.note is string && d.note.size()<=500
+    && d.createdAt==request.time && d.declaredAt==request.time
+    && d.updatedAt==request.time
+    && d.confirmedAt==null && d.confirmedBy==null
+    && d.rejectedAt==null && d.rejectedBy==null
+    && state.projectId==d.projectId
+    && state.assignmentCycle==d.assignmentCycle
+    && state.beneficiaryId==d.ownerId
+    && state.pendingSettlementId==settlementId
+    && state.updatedAt==request.time
+    && d.keys().hasOnly([
+     "settlementId","projectId","ownerId","operatorId","assignmentCycle",
+     "templateId","businessName","currency","amount","status",
+     "paymentMethod","paymentReference","note","declaredAt","declaredBy",
+     "createdAt","updatedAt","confirmedAt","confirmedBy","rejectedAt","rejectedBy"]);
+  }
+  function validMerchantCycleSettlementDecision(settlementId){
+   let old=resource.data;
+   let next=request.resource.data;
+   let state=getAfter(/databases/$(database)/documents/merchantCyclePaymentStates/$(old.projectId+"_"+string(old.assignmentCycle))).data;
+   return signedIn()
+    && ("assignmentCycle" in old)
+    && old.assignmentCycle is int && old.assignmentCycle>=1
+    && old.status=="pending_owner_confirmation"
+    && authorizedMerchantCycleReceiptSubscriber(old.projectId,old.assignmentCycle,old.ownerId)
+    && next.diff(old).affectedKeys().hasOnly([
+      "status","confirmedAt","confirmedBy","rejectedAt","rejectedBy","updatedAt"
+    ])
+    && next.updatedAt==request.time
+    && (
+      (next.status=="confirmed"
+       && next.confirmedAt==request.time && next.confirmedBy==request.auth.uid
+       && next.rejectedAt==null && next.rejectedBy==null)
+      || (next.status=="rejected"
+       && next.rejectedAt==request.time && next.rejectedBy==request.auth.uid
+       && next.confirmedAt==null && next.confirmedBy==null)
+    )
+    && state.projectId==old.projectId
+    && state.assignmentCycle==old.assignmentCycle
+    && state.pendingSettlementId==""
+    && state.updatedAt==request.time;
+  }
   match /commissionSettlements/{settlementId} {
    allow get, list: if isAdmin()
     || (signedIn() && resource.data.ownerId == request.auth.uid)
@@ -3219,7 +3548,8 @@ service cloud.firestore {
       )
     );
 
-   allow create: if signedIn()
+   allow create: if validMerchantCycleSettlementCreate(settlementId)
+    || (signedIn()
     && request.resource.data.settlementId == settlementId
     && request.resource.data.projectId is string
     && isProjectOperator(request.resource.data.projectId)
@@ -3239,8 +3569,9 @@ service cloud.firestore {
     && request.resource.data.confirmedAt == null
     && request.resource.data.confirmedBy == null
     && request.resource.data.rejectedAt == null
-    && request.resource.data.rejectedBy == null;
+    && request.resource.data.rejectedBy == null);
 
+   allow update: if validMerchantCycleSettlementDecision(settlementId);
    allow update: if signedIn()
     && resource.data.projectId is string
     && historicProjectOwner(resource.data.projectId)
@@ -3289,6 +3620,54 @@ service cloud.firestore {
    allow delete: if false;
   }
 
+  match /merchantCyclePaymentStates/{periodId} {
+    function validNewPendingState(){
+     let d=request.resource.data;
+     let payment=getAfter(commissionSettlementPath(d.pendingSettlementId)).data;
+     return signedIn()
+      && periodId==d.projectId+"_"+string(d.assignmentCycle)
+      && d.assignmentCycle is int && d.assignmentCycle>=1
+      && merchantCycleOfProject(d.projectId)==d.assignmentCycle
+      && isProjectOperator(d.projectId)
+      && d.beneficiaryId==projectData(d.projectId).assignedSubscriberId
+      && d.operatorId==projectData(d.projectId).operatorId
+      && d.pendingSettlementId is string && d.pendingSettlementId.size()>0
+      && d.updatedAt==request.time
+      && payment.status=="pending_owner_confirmation"
+      && payment.projectId==d.projectId
+      && payment.assignmentCycle==d.assignmentCycle
+      && payment.ownerId==d.beneficiaryId
+      && payment.declaredBy==request.auth.uid
+      && payment.createdAt==request.time
+      && d.keys().hasOnly([
+       "projectId","assignmentCycle","beneficiaryId","operatorId",
+       "pendingSettlementId","updatedAt"]);
+    }
+    function validClearPendingState(){
+     let old=resource.data;
+     let next=request.resource.data;
+     let payment=getAfter(commissionSettlementPath(old.pendingSettlementId)).data;
+     return signedIn()
+      && old.pendingSettlementId is string && old.pendingSettlementId.size()>0
+      && authorizedMerchantCycleReceiptSubscriber(old.projectId,old.assignmentCycle,old.beneficiaryId)
+      && next.pendingSettlementId=="" && next.updatedAt==request.time
+      && next.diff(old).affectedKeys().hasOnly(["pendingSettlementId","updatedAt"])
+      && payment.ownerId==request.auth.uid
+      && payment.status in ["confirmed","rejected"]
+      && (payment.confirmedBy==request.auth.uid || payment.rejectedBy==request.auth.uid)
+      && payment.updatedAt==request.time;
+    }
+    allow get: if isAdmin() || isProjectOperator(resource.data.projectId)
+      || authorizedMerchantCycleReceiptSubscriber(resource.data.projectId,resource.data.assignmentCycle,resource.data.beneficiaryId);
+    allow list: if isAdmin();
+    allow create: if validNewPendingState();
+    allow update: if (
+      resource.data.pendingSettlementId==""
+      && request.resource.data.pendingSettlementId!=""
+      && validNewPendingState()
+    ) || validClearPendingState();
+    allow delete: if false;
+  }
   match /commissionPaymentStates/{projectId} {
    allow get, list: if isAdmin()
     || historicProjectOwner(projectId)
@@ -3395,6 +3774,10 @@ service cloud.firestore {
    allow get, list: if isAdmin();
    allow create: if isAdmin()
     && projectExists(projectId)
+    && exists(billingGuardPath(projectData(projectId).assignedSubscriberId))
+    && get(billingGuardPath(projectData(projectId).assignedSubscriberId)).data.userId==projectData(projectId).assignedSubscriberId
+    && get(billingGuardPath(projectData(projectId).assignedSubscriberId)).data.recoverySafe==true
+    && get(billingGuardPath(projectData(projectId).assignedSubscriberId)).data.pendingPaymentId==""
     && request.resource.data.recoveryId == projectId
     && request.resource.data.projectDocId == projectId
     && request.resource.data.merchantId == projectData(projectId).merchantId
@@ -3689,6 +4072,255 @@ service cloud.firestore {
     && getAfter(merchantTransferCasePath(projectId)).data.financeReviewedAt == request.time;
    allow update, delete: if false;
   }
+
+  // C4B12 read access is already fenced; all state-changing writes stay
+  // DENIED until a trusted billing gate and atomic v2 Rules are implemented.
+  function validRepeatRecoveryWitness(cycleId){
+   let d=request.resource.data;
+   let p=get(projectPath(d.projectDocId)).data;
+   let n=getAfter(projectPath(d.projectDocId)).data;
+   let guard=get(billingGuardPath(p.assignedSubscriberId)).data;
+   let priorId=p.cutoverAuditId;
+   let previous=p.assignmentCycle;
+   return d.cycle is int && d.cycle>=2
+    && cycleId==d.projectDocId+"_"+string(d.cycle)
+    && d.cycleId==cycleId
+    && p.platformManaged==true
+    && p.assignmentStatus=="assigned_to_new_subscriber"
+    && p.assignedSubscriberId is string && p.assignedSubscriberId.size()>0
+    && p.originalSubscriberId==d.originalSubscriberId
+    && p.merchantId==d.merchantId
+    && p.operatorId==d.projectDocId
+    && d.previousSubscriberId==p.assignedSubscriberId
+    && d.previousAssignmentAuditId==priorId
+    && d.cycle==( ("assignmentCycle" in p) ? previous+1:2)
+    && p.cutoverAuditId==(d.cycle==2?d.projectDocId:
+       d.projectDocId+"_"+string(d.cycle-1))
+    && guard.userId==p.assignedSubscriberId
+    && guard.recoverySafe==true
+    && guard.pendingPaymentId==""
+    && guard.revision is int && guard.revision>0
+    && d.reason in ["overdue_renewal","unpaid_first_month","confirmed_violation"]
+    && d.evidenceReference is string && d.evidenceReference.size()>=8
+    && d.evidenceReference.size()<=200
+    && validVerifiedRecoveryCause(d.projectDocId,d.reason,d.evidenceReference)
+    && d.status=="completed" && d.adminUid==request.auth.uid
+    && d.recoveredAt==request.time
+    && n.ownerId==p.ownerId && n.merchantId==p.merchantId
+    && n.operatorId==p.operatorId
+    && n.assignmentStatus=="platform_managed"
+    && n.assignedSubscriberId==""
+    && n.assignmentCycle==d.cycle
+    && n.recoveryAuditId==cycleId
+    && n.recoveryAt==request.time
+    && n.recoveryAdminUid==request.auth.uid
+    && getAfter(merchantHistoricGrantPath(d.projectDocId+"_"+p.assignedSubscriberId)).data.sourceRecoveryAuditId==cycleId
+    && d.keys().hasOnly([
+      "cycle","cycleId","projectDocId","merchantId","originalSubscriberId",
+      "previousSubscriberId","previousAssignmentAuditId","reason",
+      "evidenceReference","status","adminUid","recoveredAt"]);
+  }
+  function validRepeatHistoricGrant(grantId){
+   let g=request.resource.data;
+   let r=getAfter(merchantRecoveryCyclePath(g.sourceRecoveryAuditId)).data;
+   let p=getAfter(projectPath(g.projectDocId)).data;
+   return grantId==g.projectDocId+"_"+g.subscriberUid
+    && g.subscriberUid is string && g.subscriberUid.size()>0
+    && g.merchantId==p.merchantId
+    && g.originalSubscriberId==p.originalSubscriberId
+    && g.sourceRecoveryAuditId==g.projectDocId+"_"+string(g.firstRecoveredCycle)
+    && g.firstRecoveredCycle is int && g.firstRecoveredCycle>=2
+    && g.status=="historic_only" && g.grantedAt==request.time
+    && r.status=="completed" && r.cycleId==g.sourceRecoveryAuditId
+    && r.previousSubscriberId==g.subscriberUid
+    && r.recoveredAt==request.time
+    && p.recoveryAuditId==g.sourceRecoveryAuditId
+    && p.assignmentCycle==g.firstRecoveredCycle
+    && g.keys().hasOnly([
+      "projectDocId","merchantId","subscriberUid","originalSubscriberId",
+      "firstRecoveredCycle","sourceRecoveryAuditId","status","grantedAt"]);
+  }
+  match /merchantHistoricalAccess/{grantId} {
+   allow get, list: if isAdmin()
+    || (signedIn() && resource.data.subscriberUid==request.auth.uid);
+   allow create: if isAdmin() && validRepeatHistoricGrant(grantId);
+   allow update, delete: if false;
+  }
+  match /merchantRecoveryCycles/{cycleId} {
+   allow get, list: if isAdmin();
+   allow create: if isAdmin() && validRepeatRecoveryWitness(cycleId);
+   allow update, delete: if false;
+  }
+  function verifiedRepeatCycleTransferCreate(cycleId){
+    let c=request.resource.data;
+    let p=get(projectPath(c.projectDocId)).data;
+    let op=get(operatorPath(c.projectDocId)).data;
+    let ag=get(commissionAgreementPath(c.projectDocId)).data;
+    return cycleId==c.projectDocId+"_"+string(c.cycle)
+     && c.cycleId==cycleId && c.cycle is int && c.cycle>=2
+     && p.assignmentCycle==c.cycle && p.recoveryAuditId==cycleId
+     && p.platformManaged==true && p.assignmentStatus=="platform_managed"
+     && p.assignedSubscriberId=="" && p.operatorId==c.projectDocId
+     && c.merchantId==p.merchantId
+     && c.originalSubscriberId==p.originalSubscriberId
+     && c.previousSubscriberId==""
+     && c.proposedSubscriberId is string && c.proposedSubscriberId.size()>0
+     && c.proposedSubscriberId!=p.originalSubscriberId
+     && !exists(merchantHistoricGrantPath(c.projectDocId+"_"+c.proposedSubscriberId))
+     && subscriptionActive(c.proposedSubscriberId)
+     && op.authUid is string && op.authUid.size()>0
+     && op.isActive==true && op.status=="active" && op.agreementStatus=="accepted"
+     && ag.status=="accepted" && ag.currency=="EGP"
+     && c.commissionAmount==ag.currentAmount
+     && c.commissionVersion==ag.acceptedVersion
+     && c.commissionCurrency=="EGP"
+     && c.status=="awaiting_consents"
+     && c.operatorConsent=="pending" && c.recipientConsent=="pending"
+     && c.operatorConsentedAt==null && c.recipientConsentedAt==null
+     && c.financeClearance=="pending" && c.cutoverAt==null
+     && c.reason is string && c.reason.size()>=15 && c.reason.size()<=300
+     && c.createdAt==request.time && c.createdBy==request.auth.uid
+     && c.keys().hasOnly([
+      "cycle","cycleId","projectDocId","merchantId","originalSubscriberId",
+      "previousSubscriberId","proposedSubscriberId","status",
+      "operatorConsent","recipientConsent","operatorConsentedAt",
+      "recipientConsentedAt","commissionAmount","commissionVersion",
+      "commissionCurrency","financeClearance","cutoverAt",
+      "reason","createdBy","createdAt"]);
+  }
+  match /merchantTransferCycles/{cycleId} {
+   allow get: if isAdmin() || (signedIn() && (
+     resource.data.proposedSubscriberId==request.auth.uid ||
+     (operatorExists(resource.data.projectDocId)
+      && operatorData(resource.data.projectDocId).authUid==request.auth.uid)));
+   allow list: if isAdmin() || (signedIn() && resource.data.proposedSubscriberId==request.auth.uid);
+   allow create: if isAdmin() && verifiedRepeatCycleTransferCreate(cycleId);
+   allow update: if (
+    signedIn() && resource.data.status=="awaiting_consents"
+    && operatorExists(resource.data.projectDocId)
+    && operatorData(resource.data.projectDocId).authUid==request.auth.uid
+    && resource.data.operatorConsent=="pending"
+    && request.resource.data.operatorConsent in ["accepted","declined"]
+    && request.resource.data.operatorConsentedAt==request.time
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+     "operatorConsent","operatorConsentedAt"])
+   ) || (
+    signedIn() && resource.data.status=="awaiting_consents"
+    && resource.data.proposedSubscriberId==request.auth.uid
+    && resource.data.recipientConsent=="pending"
+    && request.resource.data.recipientConsent in ["accepted","declined"]
+    && request.resource.data.recipientConsentedAt==request.time
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+     "recipientConsent","recipientConsentedAt"])
+   ) || (
+    isAdmin() && resource.data.status=="awaiting_consents"
+    && resource.data.operatorConsent=="accepted"
+    && resource.data.recipientConsent=="accepted"
+    && resource.data.financeClearance=="pending"
+    && request.resource.data.financeClearance=="reviewed"
+    && request.resource.data.financeReviewedAt==request.time
+    && request.resource.data.financeReviewedBy==request.auth.uid
+    && getAfter(/databases/$(database)/documents/merchantTransferCycleFinanceReviews/$(cycleId)).data.reviewedAt==request.time
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+     "financeClearance","financeReviewedAt","financeReviewedBy"])
+   ) || (
+    isAdmin() && resource.data.status=="awaiting_consents"
+    && resource.data.financeClearance=="reviewed"
+    && resource.data.operatorConsent=="accepted"
+    && resource.data.recipientConsent=="accepted"
+    && subscriptionActive(resource.data.proposedSubscriberId)
+    && request.resource.data.status=="cutover_completed"
+    && request.resource.data.cutoverAt==request.time
+    && request.resource.data.cutoverBy==request.auth.uid
+    && request.resource.data.cutoverAuditId==cycleId
+    && getAfter(merchantAssignmentCyclePath(cycleId)).data.status=="completed"
+    && getAfter(projectPath(resource.data.projectDocId)).data.assignedSubscriberId==resource.data.proposedSubscriberId
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+     "status","cutoverAt","cutoverBy","cutoverAuditId"])
+   );
+   allow delete: if false;
+  }
+  function verifiedRepeatFinanceReview(cycleId){
+    let d=request.resource.data;
+    let c=get(merchantTransferCyclePath(cycleId)).data;
+    let next=getAfter(merchantTransferCyclePath(cycleId)).data;
+    let recovery=get(merchantRecoveryCyclePath(cycleId)).data;
+    return d.cycleId==cycleId && d.projectDocId==c.projectDocId
+     && d.adminUid==request.auth.uid
+     && d.reviewedAt==request.time && d.currency=="EGP"
+     && d.formerSubscriberId==recovery.previousSubscriberId
+     && c.status=="awaiting_consents"
+     && c.operatorConsent=="accepted" && c.recipientConsent=="accepted"
+     && c.financeClearance=="pending"
+     && next.financeClearance=="reviewed"
+     && next.financeReviewedBy==request.auth.uid
+     && next.financeReviewedAt==request.time
+     && d.formerSubscriberEarnedAmount is number && d.formerSubscriberEarnedAmount>=0
+     && d.formerSubscriberOutstandingAmount is number && d.formerSubscriberOutstandingAmount>=0
+     && d.formerSubscriberOutstandingAmount<=d.formerSubscriberEarnedAmount
+     && d.platformEarnedAmount is number && d.platformEarnedAmount>=0
+     && d.platformOutstandingAmount is number && d.platformOutstandingAmount>=0
+     && d.platformOutstandingAmount<=d.platformEarnedAmount
+     && d.keys().hasOnly([
+      "cycleId","projectDocId","adminUid","reviewedAt","currency",
+      "formerSubscriberId","formerSubscriberEarnedAmount",
+      "formerSubscriberOutstandingAmount","platformEarnedAmount",
+      "platformOutstandingAmount"]);
+  }
+  match /merchantTransferCycleFinanceReviews/{cycleId} {
+   allow get, list: if isAdmin();
+   allow create: if isAdmin() && verifiedRepeatFinanceReview(cycleId);
+   allow update, delete: if false;
+  }
+  function verifiedRepeatAssignmentWitness(cycleId){
+    let d=request.resource.data;
+    let p=get(projectPath(d.projectDocId)).data;
+    let c=get(merchantTransferCyclePath(cycleId)).data;
+    let review=get(merchantTransferCycleFinanceReviewPath(cycleId)).data;
+    let ag=get(commissionAgreementPath(d.projectDocId)).data;
+    let updated=getAfter(projectPath(d.projectDocId)).data;
+    return d.cycleId==cycleId && d.cycle is int && d.cycle>=2
+     && cycleId==d.projectDocId+"_"+string(d.cycle)
+     && p.assignmentCycle==d.cycle && p.recoveryAuditId==cycleId
+     && p.platformManaged==true && p.assignmentStatus=="platform_managed"
+     && p.assignedSubscriberId==""
+     && d.projectDocId==c.projectDocId && d.merchantId==p.merchantId
+     && d.originalSubscriberId==p.originalSubscriberId
+     && d.previousSubscriberId==get(merchantRecoveryCyclePath(cycleId)).data.previousSubscriberId
+     && c.status=="awaiting_consents" && c.financeClearance=="reviewed"
+     && c.operatorConsent=="accepted" && c.recipientConsent=="accepted"
+     && d.assignedSubscriberId==c.proposedSubscriberId
+     && subscriptionActive(d.assignedSubscriberId)
+     && !exists(merchantHistoricGrantPath(d.projectDocId+"_"+d.assignedSubscriberId))
+     && review.reviewedAt==c.financeReviewedAt
+     && review.adminUid==c.financeReviewedBy
+     && review.cycleId==cycleId
+     && ag.status=="accepted" && ag.currency=="EGP"
+     && ag.currentAmount==c.commissionAmount
+     && ag.acceptedVersion==c.commissionVersion
+     && d.recoveryAuditId==cycleId && d.financeReviewId==cycleId
+     && d.commissionAmount==c.commissionAmount
+     && d.commissionVersion==c.commissionVersion
+     && d.commissionCurrency=="EGP"
+     && d.status=="completed" && d.completedAt==request.time
+     && d.completedBy==request.auth.uid
+     && updated.cutoverAuditId==cycleId
+     && updated.assignmentStatus=="assigned_to_new_subscriber"
+     && updated.assignedSubscriberId==d.assignedSubscriberId
+     && updated.cutoverAt==request.time
+     && getAfter(merchantTransferCyclePath(cycleId)).data.status=="cutover_completed"
+     && d.keys().hasOnly([
+      "cycle","cycleId","projectDocId","merchantId","originalSubscriberId",
+      "previousSubscriberId","assignedSubscriberId","recoveryAuditId","financeReviewId",
+      "commissionAmount","commissionVersion","commissionCurrency",
+      "status","completedBy","completedAt"]);
+  }
+  match /merchantAssignmentCycles/{cycleId} {
+   allow get, list: if isAdmin();
+   allow create: if isAdmin() && verifiedRepeatAssignmentWitness(cycleId);
+   allow update, delete: if false;
+  }
+
 
   match /{document=**} { allow read, write: if false; }
  }

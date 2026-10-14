@@ -393,7 +393,8 @@ getDiscoverableProjects().forEach(project => {
       && existingProject.assignmentStatus === "assigned_to_new_subscriber"
       && existingProject.assignedSubscriberId === user.uid;
     const former = created && existingProject.platformManaged === true
-      && existingProject.ownerId === user.uid && !assigned;
+      && (existingProject.ownerId === user.uid || existingProject.historicalGrant === true)
+      && !assigned;
     const isStatement = assigned || former;
     const projectDocId = existingProject?.projectDocId || getProjectDocId(user.uid, project.id);
     const disabled = isStatement ? false :

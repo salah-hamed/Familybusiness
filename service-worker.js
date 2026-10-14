@@ -1,4 +1,4 @@
-const CACHE_NAME = "family-business-pwa-v3";
+const CACHE_NAME = "family-business-pwa-v4";
 const ROOT = new URL("./", self.location.href).pathname;
 
 const PRECACHE = [
@@ -46,7 +46,8 @@ async function networkFirst(request){
     if(response && response.ok && sameOrigin(request)) cache.put(request, response.clone());
     return response;
   }catch{
-    return (await cache.match(request)) || (await cache.match(ROOT + "pwa/offline.html"));
+    return (await cache.match(request)) || (request.mode === "navigate"
+      ? await cache.match(ROOT + "pwa/offline.html") : Response.error());
   }
 }
 
@@ -72,7 +73,11 @@ self.addEventListener("fetch", event => {
   }
 
   const destination = request.destination;
-  if(["script","style","image","font","manifest"].includes(destination)){
+  // Post-cutover beneficiary and Firestore Rules must never disagree because
+  // a PWA ran yesterday's cached JS during the cutover rollout.
+  if(destination === "script"){
+    event.respondWith(networkFirst(request));
+  } else if(["style","image","font","manifest"].includes(destination)){
     event.respondWith(staleWhileRevalidate(request));
   }
 });

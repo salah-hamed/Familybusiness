@@ -15,7 +15,7 @@ const operator={authUid:"physical_shop",status:"active"};
 test("disabled consent UI cannot submit before final Firestore Rules rollout",()=>{
   assert.equal(MERCHANT_TRANSFER_CASES_ENABLED,false);
   const source=readFileSync("merchant-transfer/app.js","utf8");
-  assert.match(source,/if \(!MERCHANT_TRANSFER_CASES_ENABLED\)/);
+  assert.match(source,/repeatCycle \? !MERCHANT_REPEAT_ASSIGNMENT_ENABLED : !MERCHANT_TRANSFER_CASES_ENABLED/);
   assert.match(source,/onAuthStateChanged\(auth/);
 });
 

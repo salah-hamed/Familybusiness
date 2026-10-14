@@ -80,6 +80,15 @@ export async function getProjectPaymentSummary(
     ledgerScope.push(where("userId", "==", beneficiaryId));
     paymentScope.push(where("ownerId", "==", beneficiaryId));
   }
+  // Each *new* platform or assigned-subscriber earning epoch is independent.
+  // Never subtract an older cycle's settlements from the current cycle.
+  // Historic former subscribers use ownerId explicitly; repeat assignment to
+  // that same UID is forbidden by an immutable merchantHistoricalAccess grant.
+  const currentCycle = projectSnap?.exists?.() ? projectSnap.data().assignmentCycle : null;
+  if (Number.isSafeInteger(currentCycle) && currentCycle >= 2) {
+    ledgerScope.push(where("assignmentCycle", "==", currentCycle));
+    paymentScope.push(where("assignmentCycle", "==", currentCycle));
+  }
 
   const [earned, reversed, confirmed, legacyPaid, pending] = await Promise.all([
     aggregateAmount(query(ledger, ...ledgerScope)),
@@ -124,7 +133,7 @@ export async function getProjectPaymentSummary(
 
 export async function listProjectPaymentRequests(
   projectId,
-  { pageSize = 20, ownerId = "" } = {}
+  { pageSize = 20, ownerId = "", assignmentCycle = null } = {}
 ) {
   const pid = clean(projectId);
   if (!pid) throw new Error("PROJECT_ID_REQUIRED");
@@ -135,6 +144,8 @@ export async function listProjectPaymentRequests(
       collection(db, "commissionSettlements"),
       where("projectId", "==", pid),
       ...(ownerId ? [where("ownerId", "==", clean(ownerId))] : []),
+      ...(Number.isSafeInteger(assignmentCycle) && assignmentCycle >= 2
+        ? [where("assignmentCycle", "==", assignmentCycle)] : []),
       orderBy("createdAt", "desc"),
       limit(size)
     )

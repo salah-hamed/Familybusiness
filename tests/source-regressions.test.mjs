@@ -288,7 +288,8 @@ test("PF06 menu service skips full metadata scans for non-structural edits", () 
   assert.equal(source.includes('("isActive" in next'), true);
   assert.equal(source.includes('("isAvailable" in next'), true);
   assert.equal(source.includes("if (metadataChanged)"), true);
-  assert.equal(source.includes("return {\n    itemId,\n    ...current,\n    ...next,"), true);
+  // Git checks out CRLF on Windows: assert structure, not line ending format.
+  assert.match(source, /return\s*\{\s*itemId,\s*\.\.\.current,\s*\.\.\.next,/);
 });
 
 

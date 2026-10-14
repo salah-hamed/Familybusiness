@@ -1,5 +1,6 @@
 import db from "../firebase/firebase-db.js";
 import { resolveCommissionBeneficiary } from "../merchants/merchant-commission-beneficiary.js";
+import { commissionCycleStamp } from "../commissions/commission-assignment-cycle.js";
 import { getCommissionAgreement, getEffectiveCommissionSnapshot, getProjectCommissionLedgerId } from "../commissions/commission-service.js";
 
 import {
@@ -611,6 +612,7 @@ export async function changeSupermarketOrderStatus({
           commissionLocked: true,
           commissionAmount: commission.amount,
           commissionAgreementVersion: commission.version,
+          ...commissionCycleStamp(projectSnap.data()).order,
           commissionTrigger: "delivery_assignment",
           commissionEarnedAt: earnedAt
         });
@@ -624,6 +626,7 @@ export async function changeSupermarketOrderStatus({
 
         transaction.set(ledgerRef, {
           userId: resolveCommissionBeneficiary(projectSnap.data(), agreementSnap.data()),
+          ...commissionCycleStamp(projectSnap.data()).ledger,
           projectId,
           orderId,
           sourceType: "project_order",
@@ -749,7 +752,8 @@ export async function changeSupermarketOrderStatus({
       commissionEligible: true,
       commissionLocked: true,
       commissionAmount: commission.amount,
-      commissionAgreementVersion: commission.version
+      commissionAgreementVersion: commission.version,
+          ...commissionCycleStamp(projectSnap.data()).order,
     });
 
     if (freshOrder.trackingToken) {
@@ -761,6 +765,7 @@ export async function changeSupermarketOrderStatus({
 
     transaction.set(ledgerRef, {
       userId: resolveCommissionBeneficiary(projectSnap.data(), agreementSnap.data()),
+          ...commissionCycleStamp(projectSnap.data()).ledger,
       projectId,
       orderId,
       sourceType: "project_order",
