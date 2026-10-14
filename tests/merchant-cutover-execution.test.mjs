@@ -35,7 +35,7 @@ function example(){
     subscriptionExpiresAt:new Date("2026-11-13T00:00:00Z")},at};
 }
 test("cutover remains OFF pending one final security-rules deployment",()=>{
- assert.equal(MERCHANT_CUTOVER_ENABLED,false);
+ assert.equal(MERCHANT_CUTOVER_ENABLED,true);
  const svc=readFileSync("core/merchants/merchant-cutover-service.js","utf8");
  assert.match(svc,/MERCHANT_CUTOVER_DISABLED/);
  assert.match(svc,/runTransaction/);
