@@ -455,63 +455,27 @@ test("admin can perform controlled project deletion", async () => {
   await assertSucceeds(deleteDoc(doc(db, "projects", projectId)));
 });
 
-test("public order create rejects oversized customer fields", async () => {
-  const ownerId = "cleaning_owner";
-  const projectId = `${ownerId}_cleaning`;
-  await seedUser(ownerId);
-  await seedProject(projectId, {
-    ownerId,
-    projectId: "cleaning",
-    template: "cleaning",
-    operatingModel: "owner_operated",
-    templateVersion: 1,
-    status: "active",
-    isActive: true,
-    priceConfig: { base: 100, room: 20, bathroom: 20, kitchen: 30, stairs: 30 }
-  });
+test("retired cleaning and carwash projects cannot accept public orders", async () => {
+  for (const templateType of ["cleaning", "carwash"]) {
+    const ownerId = `retired_owner_${templateType}`;
+    const projectId = `${ownerId}_${templateType}`;
+    await seedUser(ownerId);
+    await seedProject(projectId, {
+      ownerId,
+      projectId: templateType,
+      template: templateType,
+      operatingModel: "owner_operated",
+      templateVersion: 1,
+      status: "active",
+      isActive: true,
+      priceConfig: { base: 100, room: 20, bathroom: 20, kitchen: 30, stairs: 30, monthly: 100, monthlyWashes: 4 }
+    });
 
-  const db = testEnv.unauthenticatedContext().firestore();
-  await assertFails(
-    setDoc(doc(db, "orders", "oversized_order"), {
+    const db = testEnv.unauthenticatedContext().firestore();
+    await assertFails(setDoc(doc(db, "orders", `retired_${templateType}_order`), {
       projectId,
       providerId: projectId,
-      templateType: "cleaning",
-      status: "new",
-      customerName: "x".repeat(101),
-      customerPhone: "01000000000",
-      customerAddress: "Test address",
-      location: "",
-      rooms: 0,
-      bathrooms: 0,
-      kitchen: "no",
-      stairs: "no",
-      price: 100,
-      createdAt: serverTimestamp()
-    })
-  );
-});
-
-test("public order create still accepts bounded valid customer data", async () => {
-  const ownerId = "cleaning_owner_valid";
-  const projectId = `${ownerId}_cleaning`;
-  await seedUser(ownerId);
-  await seedProject(projectId, {
-    ownerId,
-    projectId: "cleaning",
-    template: "cleaning",
-    operatingModel: "owner_operated",
-    templateVersion: 1,
-    status: "active",
-    isActive: true,
-    priceConfig: { base: 100, room: 20, bathroom: 20, kitchen: 30, stairs: 30 }
-  });
-
-  const db = testEnv.unauthenticatedContext().firestore();
-  await assertSucceeds(
-    setDoc(doc(db, "orders", "valid_order"), {
-      projectId,
-      providerId: projectId,
-      templateType: "cleaning",
+      templateType,
       status: "new",
       customerName: "عميل اختبار",
       customerPhone: "01000000000",
@@ -521,10 +485,15 @@ test("public order create still accepts bounded valid customer data", async () =
       bathrooms: 0,
       kitchen: "no",
       stairs: "no",
+      serviceType: "external_car_wash",
+      planType: "monthly_new",
+      subscriptionKey: "retired-plan",
+      renewal: false,
+      packageWashes: 4,
       price: 100,
       createdAt: serverTimestamp()
-    })
-  );
+    }));
+  }
 });
 
 test("user cannot expand display name beyond the validated limit", async () => {
