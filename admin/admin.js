@@ -19,7 +19,7 @@ import { executeRepeatMerchantRecovery,executeRepeatMerchantAssignment }
 import { openRepeatMerchantTransferCase,reviewRepeatMerchantFinances }
   from "../core/merchants/merchant-cycle-consent-service.js";
 import { requiredSubscriptionPayment } from "../core/subscriptions/payment-policy.js";
-import { TRIAL_REGISTRATION_ENABLED } from "../core/subscriptions/trial-rollout.js";
+import { TRIAL_REGISTRATION_ENABLED } from "../core/subscriptions/trial-rollout.js?v=20261016-free-trial1";
 import { getProjectPaymentSummary } from "../core/commissions/settlement-service.js";
 import { protectAdmin } from "../core/auth/admin-guard.js";
 import {

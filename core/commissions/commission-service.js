@@ -1,5 +1,5 @@
 import db from "../firebase/firebase-db.js";
-import { TRIAL_REGISTRATION_ENABLED } from "../subscriptions/trial-rollout.js";
+import { TRIAL_REGISTRATION_ENABLED } from "../subscriptions/trial-rollout.js?v=20261016-free-trial1";
 
 import {
   doc,
