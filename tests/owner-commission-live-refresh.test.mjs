@@ -67,7 +67,7 @@ test("owner dashboard cache keys are bumped for the finance refresh", () => {
     "laundry/index.html"
   ]) {
     const html = readFileSync(path, "utf8");
-    assert.match(html, /app\.js\?v=20261010-commission1/, path);
+    assert.match(html, /app\.js\?v=20261017-nearby1/, path);
   }
 });
 

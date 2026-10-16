@@ -3719,6 +3719,50 @@ service cloud.firestore {
    allow update, delete: if false;
   }
 
+  match /nearbyShops/{projectId} {
+   function validNearbyProjection(){
+    let d=request.resource.data;
+    let hasLatitude = "latitude" in d;
+    let hasLongitude = "longitude" in d;
+    let hasGeohash = "geohash" in d;
+    return d.keys().hasOnly([
+      "projectId","template","name","area","areaKey","latitude","longitude",
+      "geohash","deliveryAvailable","isListed","updatedAt"
+    ])
+    && d.keys().hasAll([
+      "projectId","template","name","area","areaKey","deliveryAvailable","isListed","updatedAt"
+    ])
+    && d.projectId == projectId
+    && d.template == projectData(projectId).template
+    && d.template in ["supermarket","restaurant","bakery","laundry"]
+    && d.name is string && d.name.size() > 0 && d.name.size() <= 120
+    && d.area is string && d.area.size() <= 80
+    && d.areaKey is string && d.areaKey.size() <= 80
+    && d.deliveryAvailable is bool
+    && d.isListed is bool
+    && d.updatedAt == request.time
+    && hasLatitude == hasLongitude
+    && hasLatitude == hasGeohash
+    && (!hasLatitude || (
+      d.latitude is number && d.latitude >= -90 && d.latitude <= 90
+      && d.longitude is number && d.longitude >= -180 && d.longitude <= 180
+      && d.geohash is string && d.geohash.size() == 5
+    ))
+    && (!d.isListed || hasLatitude || d.areaKey.size() > 0);
+   }
+
+   allow get: if isAdmin()
+    || (signedIn() && ownsProject(projectId))
+    || resource.data.isListed == true;
+   allow list: if resource.data.isListed == true;
+   allow create, update: if signedIn()
+    && projectExists(projectId)
+    && ownsProject(projectId)
+    && projectData(projectId).operatingModel == "partner_operated"
+    && validNearbyProjection();
+   allow delete: if false;
+  }
+
   // C4B12 read access is already fenced; all state-changing writes stay
   // DENIED until a trusted billing gate and atomic v2 Rules are implemented.
 

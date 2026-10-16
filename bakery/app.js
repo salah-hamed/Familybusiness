@@ -10,6 +10,7 @@ import { renderOwnerFinancePanel } from "../core/commissions/finance-panel.js";
 import { createGuide } from "../core/onboarding/guide.js";
 import { buildPartnerProjectGuide } from "../core/onboarding/guide-state.js";
 import { renderCustomerQr } from "../core/qr/customer-qr.js?v=20261010-qr2";
+import { bindNearbyShopManager } from "../core/nearby/merchant-location.js";
 
 import {
   doc,
@@ -170,6 +171,12 @@ async function refresh(){
   }
   render();
   if(bundle.restaurant){
+    await bindNearbyShopManager({
+      projectId,
+      templateId:"bakery",
+      ownerId:currentUser.uid,
+      shopName:()=>bundle?.restaurant?.name
+    });
     await refreshOwnerFinance();
   }
 }

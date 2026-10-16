@@ -4,6 +4,7 @@ import { createOrResumeLaundrySetup, getLaundryBundle, migrateLegacyLaundryProje
 import { proposeCommission } from "../core/commissions/commission-service.js";
 import { getProjectCommissionSummary, subscribeLatestUserCommission, subscribeProjectPaymentState } from "../core/commissions/earnings-service.js?v=20261010-commission1";
 import { renderOwnerFinancePanel } from "../core/commissions/finance-panel.js";
+import { bindNearbyShopManager } from "../core/nearby/merchant-location.js";
 import { ensureOperatorInviteAccess, getOperatorInviteToken, rotateOperatorInviteAccess } from "../core/partners/partner-service.js";
 import { normalizeWhatsAppPhone } from "../core/whatsapp/dispatch-service.js";
 import { createGuide } from "../core/onboarding/guide.js";
@@ -132,7 +133,7 @@ function render(){
   $("linksHint").innerText=accepted&&operator.isActive?"المغسلة جاهزة للتشغيل.":"رابط العملاء يتفعل بعد قبول أول اتفاق عمولة وتفعيل حساب المغسلة.";
 }
 
-async function refresh(){bundle=await getLaundryBundle(projectId);if(bundle?.operator&&!bundle.operator.authLoginEmail&&!bundle.operator.authUid){bundle.operator=await ensureOperatorInviteAccess(projectId,user.uid);}render();if(bundle.laundry)await refreshOwnerFinance();}
+async function refresh(){bundle=await getLaundryBundle(projectId);if(bundle?.operator&&!bundle.operator.authLoginEmail&&!bundle.operator.authUid){bundle.operator=await ensureOperatorInviteAccess(projectId,user.uid);}render();if(bundle.laundry){await bindNearbyShopManager({projectId,templateId:"laundry",ownerId:user.uid,shopName:()=>bundle?.laundry?.name});await refreshOwnerFinance();}}
 
 protectPage(async current=>{
   user=current;

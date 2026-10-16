@@ -1,6 +1,7 @@
 import { createOrder, getLaundryOrderTracking, subscribeLaundryOrderTracking } from "./orders.js";
 import db from "../../core/firebase/firebase-db.js";
 import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { bindNearbyShopDiscovery } from "../../core/nearby/discovery-ui.js";
 
 const $ = id => document.getElementById(id);
 let currentProjectId = "";
@@ -259,6 +260,7 @@ async function init(){
   if(!hasConfiguredPricing(data.priceConfig||{})){unavailable("المغسلة لم تجهز أسعار الغسيل والمكواة بعد. يرجى المحاولة لاحقًا.");return;}
 
   const installName=laundry.name||data.businessName||"غسيل ومكواة الملابس";
+  bindNearbyShopDiscovery({currentProjectId});
   $("businessTitle").innerText=installName;
   window.FamilyBusinessPwa?.setBrand(installName);
   priceConfig={...priceConfig,...data.priceConfig};

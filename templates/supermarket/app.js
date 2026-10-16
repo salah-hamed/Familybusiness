@@ -1,5 +1,6 @@
 import db from "../../core/firebase/firebase-db.js";
 import { neutralCatalogProductName } from "../../core/supermarket/catalog-branding.js";
+import { bindNearbyShopDiscovery } from "../../core/nearby/discovery-ui.js";
 import {
   createSupermarketOrder,
   getSupermarketOrderTracking,
@@ -94,6 +95,7 @@ async function init(){
     if(!storeSnap.exists()){showClosed("السوبرماركت لسه ماكملش الإعداد.");return;}
 
     store={supermarketId:storeSnap.id,...storeSnap.data()};
+    bindNearbyShopDiscovery({currentProjectId:projectId});
     if(store.isAcceptingOrders!==true){showClosed("السوبرماركت موقف استقبال الطلبات مؤقتًا.");return;}
 
     const installName=store.name||"السوبرماركت";

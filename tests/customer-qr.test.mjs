@@ -51,7 +51,7 @@ test("all four launch project owner dashboards render QR from their customer lin
 
 test("PWA cache includes the local QR generator", () => {
   const source = readFileSync("service-worker.js", "utf8");
-  assert.match(source, /family-business-pwa-v4/);
+  assert.match(source, /family-business-pwa-v5/);
   assert.match(source, /core\/qr\/customer-qr\.js/);
   assert.match(source, /core\/qr\/vendor\/qrcode\.mjs/);
 });
@@ -66,7 +66,7 @@ test("owner dashboards expose a fixed QR mount and bust stale app cache", () => 
   ]) {
     const html = readFileSync(path, "utf8");
     assert.match(html, /id="customerQrMount"/, path);
-    assert.match(html, /src="\.\/app\.js\?v=20261010-commission1"/, path);
+    assert.match(html, /src="\.\/app\.js\?v=20261017-nearby1"/, path);
   }
 
   const source = readFileSync("core/qr/customer-qr.js", "utf8");

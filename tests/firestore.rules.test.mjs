@@ -60,6 +60,74 @@ async function seedProject(projectId, data) {
   });
 }
 
+test("nearby listings are public only when opted in and contain only the projection fields", async () => {
+  const ownerId = "nearby_owner";
+  const projectId = "nearby_owner_supermarket";
+  await seedUser(ownerId);
+  await seedProject(projectId, {
+    ownerId,
+    template: "supermarket",
+    operatingModel: "partner_operated"
+  });
+
+  const ownerDb = testEnv.authenticatedContext(ownerId).firestore();
+  const listing = {
+    projectId,
+    template: "supermarket",
+    name: "Test Market",
+    area: "Nasr City",
+    areaKey: "nasr city",
+    deliveryAvailable: true,
+    isListed: true,
+    updatedAt: serverTimestamp()
+  };
+  await assertSucceeds(setDoc(doc(ownerDb, "nearbyShops", projectId), listing));
+
+  const publicDb = testEnv.unauthenticatedContext().firestore();
+  const results = await assertSucceeds(getDocs(query(
+    collection(publicDb, "nearbyShops"),
+    where("isListed", "==", true)
+  )));
+  assert.equal(results.size, 1);
+  assert.deepEqual(Object.keys(results.docs[0].data()).sort(), Object.keys(listing).sort());
+  await assertFails(getDocs(collection(publicDb, "nearbyShops")));
+  await assertFails(setDoc(doc(ownerDb, "nearbyShops", projectId), {
+    ...listing,
+    phone: "01000000000"
+  }));
+});
+
+test("a merchant must explicitly opt in before their nearby listing becomes public", async () => {
+  const ownerId = "nearby_private_owner";
+  const projectId = "nearby_private_owner_laundry";
+  await seedUser(ownerId);
+  await seedProject(projectId, {
+    ownerId,
+    template: "laundry",
+    operatingModel: "partner_operated"
+  });
+
+  const ownerDb = testEnv.authenticatedContext(ownerId).firestore();
+  await assertSucceeds(setDoc(doc(ownerDb, "nearbyShops", projectId), {
+    projectId,
+    template: "laundry",
+    name: "Test Laundry",
+    area: "",
+    areaKey: "",
+    deliveryAvailable: false,
+    isListed: false,
+    updatedAt: serverTimestamp()
+  }));
+
+  const publicDb = testEnv.unauthenticatedContext().firestore();
+  await assertFails(getDoc(doc(publicDb, "nearbyShops", projectId)));
+  const listed = await assertSucceeds(getDocs(query(
+    collection(publicDb, "nearbyShops"),
+    where("isListed", "==", true)
+  )));
+  assert.equal(listed.size, 0);
+});
+
 async function seedPartnerRuntime(templateId, suffix = "runtime") {
   const ownerId = `owner_${templateId}_${suffix}`;
   const projectId = `${ownerId}_${templateId}`;

@@ -20,7 +20,7 @@ This roadmap tracks the approved operating model against the current application
 | Direct commission settlement | Operator declaration and project-owner receipt confirmation are implemented; platform admin monitors the records. | Complete the operational flow check on the deployed client and Rules before broad launch. |
 | Free registration | Client code is on main and Pages; `platformSettings/trialRegistration.enabled=true` was enabled in Firestore on 2026-10-17. New signups do not pay EGP 350 upfront. | Verify one fresh account gets the 7-day setup period, 3-day first-merchant grace, and EGP 59 monthly amount; confirm legacy behavior remains unchanged. |
 | Merchant pause/recovery | Admin controls and staged recovery/cutover code exist, but critical recovery and cutover rollout flags remain OFF. | Complete and validate continuity, consent, financial isolation, and Rules checks before enabling recovery or reassignment. |
-| Nearby shop discovery | Not implemented. Current merchant records have text addresses/locations, but no normalized coordinates, geospatial index, or customer discovery flow. | Add optional coordinates, on-demand customer location, bounded geohash lookup, category grouping, approximate distance, and privacy/read-cost checks. |
+| Nearby shop discovery | Code is on `codex/nearby-shop-discovery` as an opt-in public projection for the four active shop types. Customer location is requested only on tap; the projection excludes contact and account data. Not released. | Review the code and Rules, merge/publish only after CI and Rules validation, then test with an existing account on a phone. Merchants must opt in and add an area or approximate location before they appear. |
 | Production release | GitHub Pages and Firestore Rules/indexes are separate release operations. | Complete operating-flow smoke checks on real phones and prepare paired rollback materials for future Rules/client changes. |
 
 ## Execution sequence
@@ -33,22 +33,27 @@ This roadmap tracks the approved operating model against the current application
 4. Verify a fresh test account registers without the EGP 350 initial payment, gets the 7-day setup period, receives 3 days after accepting its first merchant, and sees EGP 59 as the monthly amount. Verify an existing account still uses its prior policy. **Pending live account verification.**
 5. Keep recovery, transfer, repeat-cycle, and cycle-settlement flags OFF. **Confirmed unchanged.**
 
-### Phase 2 — Launch operating-flow verification — next
+### Phase 2 — Nearby shop discovery — in implementation
+
+1. Store only a small public projection for supermarkets, restaurants, bakeries, and laundries; keep phone numbers, WhatsApp, owner IDs, and full addresses out of it.
+2. Let merchants opt in, add an area or approximate location, and indicate whether they deliver farther.
+3. Let customers search by area or request approximate location only after tapping discovery. Start at 2 km and offer an optional 5 km search for delivery shops.
+4. Review Rules, indexes, read bounds, and CI before release. The code is not live until the paired Firebase Rules and indexes are published.
+
+### Phase 3 — Phone validation — next after the feature is published
+
+1. Use a registered account and a real phone to check permission prompts, both search paths, category grouping, approximate distance, and opening another shop.
+2. Check all four merchant dashboards can opt in/out and save location without disrupting ordering.
+3. Record defects before calling the feature launched.
+
+### Phase 4 — Launch operating-flow verification
 
 1. Walk through registration, project creation, operator invite/claim, commission agreement, customer order, dispatch, commission earning, direct payment declaration, and receipt confirmation.
 2. Repeat for supermarket, restaurant, bakery, and laundry.
 3. Confirm admin can pause accounts/projects and inspect operations without taking or holding commission money.
 4. Confirm PWA update and customer/operator flows on real phones.
 
-### Phase 3 — Nearby shop discovery
-
-1. Add optional latitude/longitude capture to each merchant profile; retain the text address as a fallback.
-2. Add one customer action that asks for location only when tapped. If permission is declined, let the customer search by area/address.
-3. Use geohash range queries with client-side distance filtering. Query only on demand; show category headings and a short nearby list rather than loading every merchant at app start.
-4. Start with an approximate 2 km radius and offer expansion to 5 km where delivery is available. Label distances approximate; do not promise a walking-time estimate.
-5. Add indexes, Rules/privacy coverage, read-count checks, and mobile tests before release.
-
-### Phase 4 — Merchant recovery and reassignment
+### Phase 5 — Merchant recovery and reassignment
 
 1. Keep recovery and reassignment disabled while pending subscription billing, historical earnings, operator continuity, recipient consent, and admin finance review are not all enforced together.
 2. Finish the fail-closed recovery/cutover path and any required backend or Rules changes.
