@@ -3382,7 +3382,7 @@ service cloud.firestore {
     && request.resource.data.confirmedAt == null
     && request.resource.data.confirmedBy == null
     && request.resource.data.rejectedAt == null
-    && request.resource.data.rejectedBy == null);
+    && request.resource.data.rejectedBy == null;
    allow update: if signedIn()
     && resource.data.projectId is string
     && historicProjectOwner(resource.data.projectId)
