@@ -2120,6 +2120,14 @@ function trialAccount(uid, extra={}) {
   };
 }
 
+async function enableTrialRegistration(adminId) {
+  await seedUser(adminId,{role:"admin"});
+  const adminDb=testEnv.authenticatedContext(adminId).firestore();
+  await assertSucceeds(setDoc(doc(adminDb,"platformSettings","trialRegistration"),{
+    enabled:true,updatedBy:adminId,updatedAt:serverTimestamp()
+  }));
+}
+
 function trialProject(uid, type="supermarket") {
   return {
     ownerId:uid, projectId:type, template:type, operatingModel:"partner_operated",
@@ -2131,9 +2139,9 @@ function trialProject(uid, type="supermarket") {
   };
 }
 
-test("Phase B2 permits trusted server-anchored signup while preserving legacy registration", async () => {
+test("Phase B2 keeps trial signup disabled by default and preserves legacy registration", async () => {
   const uid="trial_reg1", db=testEnv.authenticatedContext(uid).firestore();
-  await assertSucceeds(setDoc(doc(db,"users",uid),trialAccount(uid)));
+  await assertFails(setDoc(doc(db,"users",uid),trialAccount(uid)));
   const legacyUid="legacy_reg1", legacy=testEnv.authenticatedContext(legacyUid).firestore();
   const legacyData=trialAccount(legacyUid,{isActive:false,subscriptionStatus:"pending"});
   delete legacyData.accessModel;
@@ -2141,7 +2149,19 @@ test("Phase B2 permits trusted server-anchored signup while preserving legacy re
   await assertSucceeds(setDoc(doc(legacy,"users",legacyUid),legacyData));
 });
 
+test("Phase B2 only an admin can enable trial signup at the Rules layer", async () => {
+  const userDb=testEnv.authenticatedContext("trial_flag_user").firestore();
+  await assertFails(setDoc(doc(userDb,"platformSettings","trialRegistration"),{
+    enabled:true,updatedBy:"trial_flag_user",updatedAt:serverTimestamp()
+  }));
+  await assertFails(setDoc(doc(userDb,"users","trial_flag_user"),trialAccount("trial_flag_user")));
+  await enableTrialRegistration("trial_flag_admin");
+  const newUserDb=testEnv.authenticatedContext("trial_flag_enabled").firestore();
+  await assertSucceeds(setDoc(doc(newUserDb,"users","trial_flag_enabled"),trialAccount("trial_flag_enabled")));
+});
+
 test("Phase B2 forbids forged signup merchant timestamps, subscriptions and authorization", async () => {
+  await enableTrialRegistration("trial_bad_admin");
   const uid="trial_bad", db=testEnv.authenticatedContext(uid).firestore();
   await assertFails(setDoc(doc(db,"users",uid),trialAccount(uid,{firstMerchantLinkedAt:new Date()})));
   await assertFails(setDoc(doc(db,"users",uid),trialAccount(uid,{role:"admin"})));
@@ -2150,6 +2170,7 @@ test("Phase B2 forbids forged signup merchant timestamps, subscriptions and auth
 });
 
 test("Phase B2 trial can create project during setup week but not after signup window expires", async () => {
+  await enableTrialRegistration("trial_project_admin");
   const fresh="trial_project_fresh";
   const db=testEnv.authenticatedContext(fresh).firestore();
   await assertSucceeds(setDoc(doc(db,"users",fresh),trialAccount(fresh)));
@@ -2189,6 +2210,7 @@ test("Phase B2 validates linked merchant grace using immutable server timestamp"
 });
 
 test("Phase B2 first payment is 59 for opted-in trial and old 350 for legacy users", async () => {
+  await enableTrialRegistration("trial_payment_admin");
   const uid="trial_payment_59", db=testEnv.authenticatedContext(uid).firestore();
   await assertSucceeds(setDoc(doc(db,"users",uid),trialAccount(uid)));
   await assertSucceeds(atomicSubscriptionProof(db,uid,uid+"_59",{amount:59}));
