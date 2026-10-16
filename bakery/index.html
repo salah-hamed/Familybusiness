@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#D97706">
   <title>مشروع مخبوزات وفطائر | Family Business</title>
   <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="../core/nearby/nearby.css">
 </head>
 <body>
   <main class="shell">
@@ -93,9 +94,20 @@
         </div>
         <div id="customerQrMount"><p class="hint">جاري تجهيز QR رابط العملاء...</p></div>
         <p id="linksHint" class="hint"></p>
+        <section id="nearbyListingCard" class="nearbyManagerCard nearbyListingCard">
+          <h3>ظهور المخبز للمحلات القريبة</h3>
+          <p>اختياري: أضف المنطقة أو موقعًا تقريبيًا ليظهر المخبز للعملاء القريبين.</p>
+          <label>المنطقة أو الحي<input id="nearbyShopArea" maxlength="80" placeholder="مثال: مدينة نصر"></label>
+          <div class="nearbyActionRow"><button id="captureNearbyLocationBtn" type="button">📍 تحديد موقع المخبز</button></div>
+          <p id="nearbyCoordinateStatus" class="nearbyStatus" role="status"></p>
+          <label class="nearbyCheck"><input id="nearbyShopDelivery" type="checkbox"> نوصل للمناطق الأبعد</label>
+          <label class="nearbyCheck"><input id="nearbyShopListed" type="checkbox" checked> إظهار المخبز في البحث القريب</label>
+          <button id="saveNearbyListingBtn" type="button">حفظ إعدادات الظهور</button>
+          <p id="nearbyListingMessage" class="nearbyStatus" role="status"></p>
+        </section>
       </section>
     </section>
   </main>
-  <script type="module" src="./app.js?v=20261010-commission1"></script>
+  <script type="module" src="./app.js?v=20261017-nearby1"></script>
 </body>
 </html>

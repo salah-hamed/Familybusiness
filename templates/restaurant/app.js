@@ -5,6 +5,7 @@ import {
   subscribeRestaurantOrderTracking
 } from "../../core/restaurant/order-service.js";
 import { listRestaurantMenuPage } from "../../core/restaurant/menu-service.js";
+import { bindNearbyShopDiscovery } from "../../core/nearby/discovery-ui.js";
 
 import {
   doc,
@@ -65,6 +66,7 @@ async function init(){
     }
 
     restaurant={restaurantId:restaurantSnap.id,...restaurantSnap.data()};
+    bindNearbyShopDiscovery({currentProjectId:projectId});
 
     if(restaurant.isAcceptingOrders!==true){
       showClosed("المطعم موقف استقبال الطلبات مؤقتًا.");

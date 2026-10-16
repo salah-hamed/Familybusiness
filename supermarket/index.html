@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#16a34a">
   <title>مشروع توصيل السوبرماركت | Family Business</title>
   <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="../core/nearby/nearby.css">
 </head>
 <body>
   <main class="shell">
@@ -104,8 +105,26 @@
 
         <p id="linksHint" class="hint"></p>
       </section>
+
+      <section id="nearbyListingCard" class="card nearbyListingCard">
+        <h2>إظهار السوبرماركت في المحلات القريبة</h2>
+        <p class="nearbyListingHint">اختياري. الموقع الذي يظهر للعملاء تقريبي، ويمكنك إخفاء المحل في أي وقت.</p>
+        <div class="nearbyManagerGrid">
+          <label>المنطقة أو الحي
+            <input id="nearbyShopArea" type="text" maxlength="80" placeholder="مثال: مدينة نصر">
+          </label>
+          <div>
+            <button id="captureNearbyLocationBtn" class="copyBtn" type="button">📍 تحديد موقع تقريبي</button>
+            <p id="nearbyCoordinateStatus" class="nearbyListingHint">لم يتم حفظ موقع للمحل بعد.</p>
+          </div>
+        </div>
+        <label class="nearbyCheckRow"><input id="nearbyShopDelivery" type="checkbox"> المحل يوصل للمناطق الأبعد (حتى 5 كم)</label>
+        <label class="nearbyCheckRow"><input id="nearbyShopListed" type="checkbox"> أظهر المحل للعملاء في دليل المحلات القريبة</label>
+        <button id="saveNearbyListingBtn" class="primaryBtn" type="button">حفظ إعدادات الظهور</button>
+        <p id="nearbyListingMessage" class="message" role="status"></p>
+      </section>
     </section>
   </main>
-  <script type="module" src="./app.js?v=20261010-commission1"></script>
+  <script type="module" src="./app.js?v=20261017-nearby1"></script>
 </body>
 </html>

@@ -1,0 +1,179 @@
+.nearbyDiscoveryCard,
+.nearbyListingCard {
+  border: 1px solid rgba(15, 118, 110, .18);
+  border-radius: 18px;
+  background: #fff;
+  padding: 16px;
+  margin: 14px 0;
+}
+
+.nearbyDiscoveryCard h2,
+.nearbyListingCard h2 {
+  margin: 0 0 6px;
+  font-size: 18px;
+}
+
+.nearbyDiscoveryHint,
+.nearbyListingHint,
+.nearbyStatus {
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.nearbyActionRow,
+.nearbyRadiusActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.nearbyActionButton {
+  border: 0;
+  border-radius: 12px;
+  padding: 11px 14px;
+  background: #0f766e;
+  color: #fff;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.nearbyActionButton.secondary {
+  background: #ecfdf5;
+  color: #115e59;
+}
+
+.nearbyActionButton:disabled {
+  opacity: .55;
+  cursor: wait;
+}
+
+.nearbyManagerCard button,
+.nearbyDiscoveryCard button {
+  border: 0;
+  border-radius: 11px;
+  padding: 10px 13px;
+  background: #0f766e;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.nearbyManagerCard input:not([type="checkbox"]) {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d5ded9;
+  border-radius: 11px;
+  font: inherit;
+}
+
+.nearbyManagerCard label:not(.nearbyCheck) {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0;
+}
+
+.nearbyCheck {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 9px 0;
+}
+
+.nearbyDiscoveryPanel {
+  border-top: 1px solid #e7ecea;
+  margin-top: 12px;
+  padding-top: 10px;
+}
+
+.nearbyAreaSearch {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.nearbyAreaSearch input {
+  min-width: 0;
+  border: 1px solid #d5ded9;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font: inherit;
+}
+
+.nearbyCategory {
+  margin-top: 16px;
+}
+
+.nearbyCategory h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.nearbyShopList {
+  display: grid;
+  gap: 8px;
+}
+
+.nearbyShopCard {
+  display: grid;
+  gap: 3px;
+  border: 1px solid #e4ebe7;
+  border-radius: 13px;
+  padding: 12px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.nearbyShopCard span,
+.nearbyEmpty {
+  color: #667085;
+  font-size: 12px;
+}
+
+.nearbyManagerGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.nearbyManagerGrid label {
+  display: grid;
+  gap: 6px;
+  font-weight: 700;
+}
+
+.nearbyManagerGrid input[type="text"] {
+  min-width: 0;
+  padding: 11px;
+  border: 1px solid #d5ded9;
+  border-radius: 11px;
+  font: inherit;
+}
+
+.nearbyCheckRow {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 9px !important;
+  margin: 10px 0;
+}
+
+.nearbyCheckRow input {
+  width: 18px !important;
+  min-width: 18px;
+  height: 18px;
+  margin: 0;
+}
+
+@media (max-width: 560px) {
+  .nearbyManagerGrid,
+  .nearbyAreaSearch {
+    grid-template-columns: 1fr;
+  }
+}

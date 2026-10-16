@@ -1,4 +1,4 @@
-const CACHE_NAME = "family-business-pwa-v4";
+const CACHE_NAME = "family-business-pwa-v5";
 const ROOT = new URL("./", self.location.href).pathname;
 
 const PRECACHE = [

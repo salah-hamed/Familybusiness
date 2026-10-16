@@ -13,6 +13,7 @@
   <meta name="theme-color" content="#0ea5e9">
   <title>غسيل ومكواة الملابس</title>
   <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="../../core/nearby/nearby.css">
 </head>
 <body>
   <main class="app">
@@ -21,6 +22,16 @@
       <div class="heroCopy"><span class="eyebrow">استلام وتوصيل من المنزل</span><h1 id="businessTitle">غسيل ومكواة الملابس</h1><p>اختار القطع وحدد لكل قطعة: غسيل، مكواة، أو غسيل + مكواة، وبعدها حدد موعد الاستلام.</p></div>
       <button id="myOrdersBtn" class="ordersBtn" type="button">📦 طلباتي</button>
     </header>
+    <section class="nearbyDiscoveryCard">
+      <h2>محلات قريبة منك</h2><p>اختياري: ابحث حولك. لن نحفظ موقعك، والنتائج قائمة مختصرة. ويمكنك البحث باسم المنطقة.</p>
+      <div class="nearbyActionRow"><button id="nearbyDiscoverBtn" type="button">📍 استخدم موقعي</button></div>
+      <div id="nearbyDiscoveryPanel" class="nearbyDiscoveryPanel hidden">
+        <p id="nearbyDiscoveryStatus" class="nearbyStatus" role="status"></p>
+        <div class="nearbyRadiusActions"><button id="nearbyRadius2Btn" class="hidden" type="button">بحث ضمن 2 كم</button><button id="nearbyRadius5Btn" class="hidden" type="button">توسيع إلى 5 كم (للمحلات التي توصل)</button></div>
+        <div class="nearbyAreaSearch"><input id="nearbyAreaSearch" type="search" maxlength="80" placeholder="ابحث باسم المنطقة أو الحي"><button id="nearbyAreaSearchBtn" type="button">بحث بالمنطقة</button></div>
+        <div id="nearbyDiscoveryResults"></div>
+      </div>
+    </section>
 
     <section class="card" id="itemsSection">
       <div class="sectionTitle"><span>1</span><div><h2>اختار القطع والخدمة</h2><p>لكل نوع سعر غسيل وسعر مكواة منفصل. غسيل الكوتشي متاح كخدمة غسيل فقط.</p></div></div>

@@ -13,6 +13,7 @@
   <meta name="theme-color" content="#16a34a">
   <title>طلبات السوبرماركت</title>
   <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="../../core/nearby/nearby.css">
 </head>
 <body>
   <header class="storeHeader">
@@ -28,6 +29,16 @@
 
   <main class="shell">
     <section id="closedBanner" class="closed hidden"></section>
+    <section class="nearbyDiscoveryCard">
+      <h2>محلات قريبة منك</h2><p>اختياري: ابحث حولك. لن نحفظ موقعك، والنتائج قائمة مختصرة. ويمكنك البحث باسم المنطقة.</p>
+      <div class="nearbyActionRow"><button id="nearbyDiscoverBtn" type="button">📍 استخدم موقعي</button></div>
+      <div id="nearbyDiscoveryPanel" class="nearbyDiscoveryPanel hidden">
+        <p id="nearbyDiscoveryStatus" class="nearbyStatus" role="status"></p>
+        <div class="nearbyRadiusActions"><button id="nearbyRadius2Btn" class="hidden" type="button">بحث ضمن 2 كم</button><button id="nearbyRadius5Btn" class="hidden" type="button">توسيع إلى 5 كم (للمحلات التي توصل)</button></div>
+        <div class="nearbyAreaSearch"><input id="nearbyAreaSearch" type="search" maxlength="80" placeholder="ابحث باسم المنطقة أو الحي"><button id="nearbyAreaSearchBtn" type="button">بحث بالمنطقة</button></div>
+        <div id="nearbyDiscoveryResults"></div>
+      </div>
+    </section>
 
     <section class="searchBox">
       <input id="searchInput" type="search" placeholder="🔎 ابحث عن منتج...">

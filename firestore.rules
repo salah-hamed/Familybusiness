@@ -258,3482 +258,142 @@ service cloud.firestore {
    return signedIn()
     && ledger.sourceType == "project_order"
      && ledger.userId is string && ledger.userId.size()>0
-    && ledger.projectId is string
-    && ledger.orderId is string
-    && entryId == "project_order_" + ledger.orderId
-    && ledger.sourceId == ledger.orderId
-    && ledger.agreementId == ledger.projectId
-    && ledger.currency == "EGP"
-    && ledger.status == "earned"
-    && ledger.paidAt == null
-    && order.templateType == "laundry"
-    && order.trackingToken is string
-    && order.trackingToken.size() >= 40
-    && order.projectId == ledger.projectId
-    && order.status == "accepted"
-    && order.laundryStage == "out_for_delivery"
-    && order.commissionLocked == true
-    && order.commissionAmount == ledger.amount
-    && order.commissionAgreementVersion == ledger.agreementVersion
-    && ledger.userId == commissionBeneficiary(ledger.projectId)
-    && commissionCycleMatches(order,ledger)
-    && isProjectOperator(ledger.projectId);
-  }
-
-  function validTrackedLaundryDispatchUpdate(orderId){
-   let before = resource.data;
-   let after = request.resource.data;
-   let agreement = commissionAgreementData(before.projectId);
-   let ledger = getAfter(commissionLedgerPath("project_order_" + orderId)).data;
-   let tracking = getAfter(orderTrackingPath(before.trackingToken)).data;
-   return signedIn()
-    && before.templateType == "laundry"
-    && before.trackingToken is string
-    && before.trackingToken.size() >= 40
-    && isProjectOperator(before.projectId)
-    && before.status == "accepted"
-    && before.laundryStage == "ready_delivery"
-    && before.assignedWorkerId is string
-    && before.assignedWorkerId.size() > 0
-    && before.assignedWorkerRole == "delivery_agent"
-    && after.projectId == before.projectId
-    && after.providerId == before.providerId
-    && after.trackingToken == before.trackingToken
-    && after.status == "accepted"
-    && after.laundryStage == "out_for_delivery"
-    && after.statusUpdatedBy == request.auth.uid
-    && agreement.status == "accepted"
-    && agreement.currentAmount is number
-    && agreement.acceptedVersion is number
-    && after.commissionEligible == true
-    && after.commissionLocked == true
-    && after.commissionAmount == agreement.currentAmount
-    && after.commissionAgreementVersion == agreement.acceptedVersion
-    && after.commissionTrigger == "delivery_assignment"
-    && after.commissionEarnedAt == request.time
-    && after.diff(before).affectedKeys().hasOnly([
-      "status",
-      "laundryStage",
-      "statusUpdatedAt",
-      "statusUpdatedBy",
-      "commissionEligible",
-      "commissionLocked",
-      "commissionAmount",
-      "commissionAgreementVersion",
-      "commissionTrigger",
-      "commissionEarnedAt",
-       "commissionAssignmentCycle"
-    ])
-    && ledger.orderId == orderId
-    && ledger.projectId == before.projectId
-    && ledger.amount == after.commissionAmount
-    && ledger.agreementVersion == after.commissionAgreementVersion
-    && tracking.trackingToken == before.trackingToken
-    && tracking.orderId == orderId
-    && tracking.projectId == before.projectId
-    && tracking.templateType == "laundry"
-    && tracking.status == "out_for_delivery";
-  }
-
-  function validTrackedLaundryDeliveryUpdate(orderId){
-   let before = resource.data;
-   let after = request.resource.data;
-   let ledger = get(commissionLedgerPath("project_order_" + orderId)).data;
-   let tracking = getAfter(orderTrackingPath(before.trackingToken)).data;
-   return signedIn()
-    && before.templateType == "laundry"
-    && before.trackingToken is string
-    && before.trackingToken.size() >= 40
-    && isProjectOperator(before.projectId)
-    && before.status == "accepted"
-    && before.laundryStage == "out_for_delivery"
-    && before.commissionEligible == true
-    && before.commissionLocked == true
-    && before.commissionAmount is number
-    && before.commissionAgreementVersion is number
-    && after.projectId == before.projectId
-    && after.providerId == before.providerId
-    && after.trackingToken == before.trackingToken
-    && after.status == "done"
-    && after.laundryStage == "delivered"
-    && after.statusUpdatedBy == request.auth.uid
-    && after.commissionEligible == before.commissionEligible
-    && after.commissionLocked == before.commissionLocked
-    && after.commissionAmount == before.commissionAmount
-    && after.commissionAgreementVersion == before.commissionAgreementVersion
-    && after.diff(before).affectedKeys().hasOnly([
-      "status","laundryStage","statusUpdatedAt","statusUpdatedBy","deliveredAt"
-    ])
-    && ledger.orderId == orderId
-    && ledger.projectId == before.projectId
-    && ledger.amount == before.commissionAmount
-    && ledger.agreementVersion == before.commissionAgreementVersion
-    && tracking.trackingToken == before.trackingToken
-    && tracking.orderId == orderId
-    && tracking.projectId == before.projectId
-    && tracking.templateType == "laundry"
-    && tracking.status == "delivered";
-  }
-
-  function validDispatchCommissionUpdate(orderId){
-   let before = resource.data;
-   let after = request.resource.data;
-   return signedIn()
-    && (isAdmin() || isProjectOperator(before.projectId))
-    && after.projectId == before.projectId
-    && after.providerId == before.providerId
-    && after.statusUpdatedBy == request.auth.uid
-    && after.commissionEligible == true
-    && after.commissionLocked == true
-    && after.commissionAmount is number
-    && after.commissionAgreementVersion is number
-    && after.commissionTrigger == "delivery_assignment"
-    && after.commissionEarnedAt == request.time
-    && projectOrderLedgerAfterMatches(
-      orderId,
-      before.projectId,
-      after.commissionAmount,
-      after.commissionAgreementVersion
-    )
-    && (
-      (
-        before.templateType in ["supermarket","restaurant","bakery"]
-        && before.status == "ready"
-        && after.status == "assigned"
-        && before.pricingLocked == true
-        && after.assignedWorkerId is string
-        && after.assignedWorkerId.size() > 0
-        && after.assignedWorkerRole == "rider"
-        && workerExists(after.assignedWorkerId)
-        && workerData(after.assignedWorkerId).projectId == before.projectId
-        && workerData(after.assignedWorkerId).role == "rider"
-        && after.diff(before).affectedKeys().hasOnly([
-          "status",
-          "statusUpdatedAt",
-          "statusUpdatedBy",
-          "commissionEligible",
-          "commissionLocked",
-          "commissionAmount",
-          "commissionAgreementVersion",
-          "commissionTrigger",
-          "commissionEarnedAt",
-       "commissionAssignmentCycle"
-        ])
-      )
-      ||
-      (
-        before.templateType == "laundry"
-        && before.status == "accepted"
-        && before.laundryStage == "ready_delivery"
-        && after.status == "accepted"
-        && after.laundryStage == "out_for_delivery"
-        && after.assignedWorkerId is string
-        && after.assignedWorkerId.size() > 0
-        && after.assignedWorkerRole == "delivery_agent"
-        && workerExists(after.assignedWorkerId)
-        && workerData(after.assignedWorkerId).projectId == before.projectId
-        && workerData(after.assignedWorkerId).role == "delivery_agent"
-        && after.diff(before).affectedKeys().hasOnly([
-          "status",
-          "laundryStage",
-          "statusUpdatedAt",
-          "statusUpdatedBy",
-          "commissionEligible",
-          "commissionLocked",
-          "commissionAmount",
-          "commissionAgreementVersion",
-          "commissionTrigger",
-          "commissionEarnedAt",
-       "commissionAssignmentCycle"
-        ])
-      )
-    );
-  }
-  function validLockedCommissionDeliveryUpdate(orderId){
-   let before = resource.data;
-   let after = request.resource.data;
-   return signedIn()
-    && (isAdmin() || isProjectOperator(before.projectId))
-    && after.projectId == before.projectId
-    && after.providerId == before.providerId
-    && after.statusUpdatedBy == request.auth.uid
-    && before.commissionEligible == true
-    && before.commissionLocked == true
-    && before.commissionAmount is number
-    && before.commissionAgreementVersion is number
-    && after.commissionEligible == before.commissionEligible
-    && after.commissionLocked == before.commissionLocked
-    && after.commissionAmount == before.commissionAmount
-    && after.commissionAgreementVersion == before.commissionAgreementVersion
-    && projectOrderLedgerExistsMatches(
-      orderId,
-      before.projectId,
-      before.commissionAmount,
-      before.commissionAgreementVersion
-    )
-    && (
-      (
-        before.templateType in ["supermarket","restaurant","bakery"]
-        && before.status == "out_for_delivery"
-        && after.status == "delivered"
-        && before.pricingLocked == true
-        && before.assignedWorkerId is string
-        && before.assignedWorkerId.size() > 0
-        && after.diff(before).affectedKeys().hasOnly([
-          "status","statusUpdatedAt","statusUpdatedBy","deliveredAt"
-        ])
-      )
-      ||
-      (
-        before.templateType == "laundry"
-        && before.status == "accepted"
-        && before.laundryStage == "out_for_delivery"
-        && after.status == "done"
-        && after.laundryStage == "delivered"
-        && before.assignedWorkerId is string
-        && before.assignedWorkerId.size() > 0
-        && after.diff(before).affectedKeys().hasOnly([
-          "status","laundryStage","statusUpdatedAt","statusUpdatedBy","deliveredAt"
-        ])
-      )
-    );
-  }
-  function supermarketExists(projectId){ return exists(supermarketPath(projectId)); }
-  function supermarketData(projectId){ return get(supermarketPath(projectId)).data; }
-  function restaurantExists(projectId){ return exists(restaurantPath(projectId)); }
-  function restaurantData(projectId){ return get(restaurantPath(projectId)).data; }
-  function laundryExists(projectId){ return exists(laundryPath(projectId)); }
-  function laundryData(projectId){ return get(laundryPath(projectId)).data; }
-  function isLinkedProjectOperator(projectId){
-   return signedIn()
-    && projectExists(projectId)
-    && projectData(projectId).operatorId is string
-    && projectData(projectId).operatorId.size() > 0
-    && operatorExists(projectData(projectId).operatorId)
-    && operatorData(projectData(projectId).operatorId).authUid == request.auth.uid;
-  }
-  function linkedOperatorActive(operatorId){
-    let op=operatorData(operatorId);
-    return op.authUid==request.auth.uid
-     && op.status=="active" && op.agreementStatus=="accepted"
-     && op.isActive==true;
-  }
-  function isProjectOperator(projectId){
-    let p=projectData(projectId);
-    return signedIn()
-     && projectExists(projectId)
-     && p.operatingModel=="partner_operated"
-     && p.operatorId is string && p.operatorId.size()>0
-     && operatorExists(p.operatorId)
-     && linkedOperatorActive(p.operatorId);
-  }
-  function canOperateProject(projectId){
-   return isAdmin()
-    || (
-      signedIn()
-      && projectExists(projectId)
-      && projectData(projectId).operatingModel == "owner_operated"
-      && projectData(projectId).ownerId == request.auth.uid
-    )
-    || isProjectOperator(projectId);
-  }
-  function validWorkerRoleForProject(projectId, role){
-   return (
-      projectData(projectId).template == "supermarket"
-      && role == "rider"
-    )
-    || (
-      projectData(projectId).template == "laundry"
-      && role in ["pickup_agent","delivery_agent"]
-    )
-    || (
-      projectData(projectId).template in ["restaurant","bakery"]
-      && role == "rider"
-    );
-  }
-  function supermarketPartnerReady(projectId){
-   let project = projectData(projectId);
-   let operator = operatorData(project.operatorId);
-   let agreement = commissionAgreementData(projectId);
-   return projectAvailable(projectId)
-    && project.template == "supermarket"
-    && project.operatingModel == "partner_operated"
-    && project.operatorId is string
-    && project.operatorId.size() > 0
-    && operatorExists(project.operatorId)
-    && operator.status == "active"
-    && operator.agreementStatus == "accepted"
-    && operator.isActive == true
-    && commissionAgreementExists(projectId)
-    && agreement.status == "accepted"
-    && agreement.currentAmount is number
-    && agreement.currentAmount >= 0
-    && agreement.acceptedVersion is number
-    && agreement.acceptedVersion > 0;
-  }
-
-
-  function restaurantPartnerReady(projectId){
-   let project = projectData(projectId);
-   let operator = operatorData(project.operatorId);
-   let agreement = commissionAgreementData(projectId);
-   return projectAvailable(projectId)
-    && project.template in ["restaurant","bakery"]
-    && project.operatingModel == "partner_operated"
-    && project.operatorId is string
-    && project.operatorId.size() > 0
-    && operatorExists(project.operatorId)
-    && operator.status == "active"
-    && operator.agreementStatus == "accepted"
-    && operator.isActive == true
-    && commissionAgreementExists(projectId)
-    && agreement.status == "accepted"
-    && agreement.currentAmount is number
-    && agreement.currentAmount >= 0
-    && agreement.acceptedVersion is number
-    && agreement.acceptedVersion > 0;
-  }
-
-  function trackingTemplateReady(projectId, templateType){
-   return (
-      templateType == "supermarket"
-      && supermarketPartnerReady(projectId)
-    )
-    || (
-      templateType in ["restaurant","bakery"]
-      && restaurantPartnerReady(projectId)
-    )
-    || (
-      templateType == "laundry"
-      && laundryPartnerReady(projectId)
-    );
-  }
-
-  function laundryTrackingStatus(order){
-   return order.status == "new"
-    ? "new"
-    : order.status == "canceled"
-      ? "canceled"
-      : order.status == "done"
-        ? "delivered"
-        : order.laundryStage;
-  }
-
-  function validSupermarketTransition(fromStatus, toStatus){
-   return (fromStatus == "new" && toStatus in ["accepted","canceled"])
-    || (fromStatus == "accepted" && toStatus in ["preparing","canceled"])
-    || (fromStatus == "preparing" && toStatus in ["ready","canceled"])
-    || (fromStatus == "ready" && toStatus in ["assigned","canceled"])
-    || (fromStatus == "assigned" && toStatus in ["out_for_delivery","canceled"])
-    || (fromStatus == "out_for_delivery" && toStatus in ["delivered","canceled"]);
-  }
-
-
-  function laundryPartnerReady(projectId){
-   let project = projectData(projectId);
-   let operator = operatorData(project.operatorId);
-   let agreement = commissionAgreementData(projectId);
-   return projectAvailable(projectId)
-    && project.template == "laundry"
-    && project.operatingModel == "partner_operated"
-    && project.operatorId is string
-    && project.operatorId.size() > 0
-    && operatorExists(project.operatorId)
-    && operator.status == "active"
-    && operator.agreementStatus == "accepted"
-    && operator.isActive == true
-    && commissionAgreementExists(projectId)
-    && agreement.status == "accepted"
-    && agreement.currentAmount is number
-    && agreement.currentAmount >= 0
-    && agreement.acceptedVersion is number
-    && agreement.acceptedVersion > 0;
-  }
-  function laundryAcceptingOrders(projectId){
-   let laundry = laundryData(projectId);
-   return laundryPartnerReady(projectId)
-    && laundryExists(projectId)
-    && laundry.isAcceptingOrders == true;
-  }
-
-  function validLaundryTransition(fromStatus, fromStage, toStatus, toStage){
-   return (
-      fromStatus == "new"
-      && (
-        (toStatus == "accepted" && toStage == "accepted")
-        || toStatus == "canceled"
-      )
-    )
-    || (
-      fromStatus == "accepted"
-      && fromStage == "accepted"
-      && (
-        (toStatus == "accepted" && toStage == "pickup_assigned")
-        || toStatus == "canceled"
-      )
-    )
-    || (
-      fromStatus == "accepted"
-      && fromStage == "pickup_assigned"
-      && (
-        (toStatus == "accepted" && toStage == "picked_up")
-        || toStatus == "canceled"
-      )
-    )
-    || (
-      fromStatus == "accepted"
-      && fromStage == "picked_up"
-      && (
-        (toStatus == "accepted" && toStage == "processing")
-        || toStatus == "canceled"
-      )
-    )
-    || (
-      fromStatus == "accepted"
-      && fromStage == "processing"
-      && (
-        (toStatus == "accepted" && toStage == "ready_delivery")
-        || toStatus == "canceled"
-      )
-    )
-    || (
-      fromStatus == "accepted"
-      && fromStage == "ready_delivery"
-      && (
-        (toStatus == "accepted" && toStage == "out_for_delivery")
-        || toStatus == "canceled"
-      )
-    )
-    || (
-      fromStatus == "accepted"
-      && fromStage == "out_for_delivery"
-      && (
-        (toStatus == "done" && toStage == "delivered")
-        || toStatus == "canceled"
-      )
-    );
-  }
-
-
-  function validCustomerInput(){
-   return request.resource.data.customerName is string
-    && request.resource.data.customerName.size() > 0
-    && request.resource.data.customerName.size() <= 100
-    && request.resource.data.customerPhone is string
-    && request.resource.data.customerPhone.size() > 0
-    && request.resource.data.customerPhone.size() <= 30
-    && request.resource.data.customerAddress is string
-    && request.resource.data.customerAddress.size() > 0
-    && request.resource.data.customerAddress.size() <= 500
-    && request.resource.data.location is string
-    && request.resource.data.location.size() <= 500
-    && (!("notes" in request.resource.data)
-      || (request.resource.data.notes is string && request.resource.data.notes.size() <= 1000));
-  }
-
-  // Legacy creates remain valid; new merchant assignments are immutable on create.
-  function validInitialMerchantMetadata(){
-   let data = request.resource.data;
-   let fields = [
-    "merchantId","originalSubscriberId","assignedSubscriberId",
-    "assignmentStatus","platformManaged","linkedAt","assignmentUpdatedAt"
-   ];
-   return !data.keys().hasAny(fields)
-    || (
-     data.keys().hasAll(fields)
-     && data.merchantId is string
-     && data.merchantId.matches('^m_[0-9a-f]{32}$')
-     && data.originalSubscriberId == request.auth.uid
-     && data.assignedSubscriberId == request.auth.uid
-     && data.assignmentStatus == "assigned_to_subscriber"
-     && data.platformManaged == false
-     && data.linkedAt == null
-     && data.assignmentUpdatedAt == null
-    );
-  }
-
-  function validActiveProjectCreate(projectDocId){
-   let templateId = request.resource.data.projectId;
-   return templateId in ["supermarket","restaurant","bakery","laundry"]
-    && projectDocId == request.auth.uid + "_" + templateId
-    && request.resource.data.ownerId == request.auth.uid
-    && request.resource.data.template == templateId
-    && request.resource.data.operatingModel == "partner_operated"
-    && (
-      (templateId == "laundry" && request.resource.data.templateVersion == 3)
-      || (templateId in ["supermarket","restaurant","bakery"] && request.resource.data.templateVersion == 1)
-    )
-    && request.resource.data.operatorId == ""
-    && request.resource.data.partnerSetupStatus == "not_started"
-    && request.resource.data.businessName is string
-    && request.resource.data.businessName.size() > 0
-    && request.resource.data.businessName.size() <= 120
-    && request.resource.data.status == "active"
-    && request.resource.data.isActive == true
-    && request.resource.data.createdAt == request.time
-    && request.resource.data.whatsappNumber is string
-    && request.resource.data.whatsappNumber.size() <= 30
-    && request.resource.data.instapayLink is string
-    && request.resource.data.instapayLink.size() <= 500
-    && request.resource.data.logo is string
-    && request.resource.data.logo.size() <= 1000
-    && request.resource.data.coverImage is string
-    && request.resource.data.coverImage.size() <= 1000
-    && request.resource.data.primaryColor is string
-    && request.resource.data.primaryColor.size() <= 32
-    && request.resource.data.priceConfig is map
-    && request.resource.data.priceConfig.keys().hasOnly([])
-    && validInitialMerchantMetadata()
-    && request.resource.data.keys().hasOnly([
-      "ownerId","projectId","template","operatingModel","templateVersion",
-      "operatorId","partnerSetupStatus","businessName","status","isActive",
-      "createdAt","whatsappNumber","instapayLink","logo","coverImage",
-      "primaryColor","priceConfig",
-      "merchantId","originalSubscriberId","assignedSubscriberId",
-      "assignmentStatus","platformManaged","linkedAt","assignmentUpdatedAt"
-    ]);
-  }
-
-  function validOrderTemplate(projectId){
-   return request.resource.data.templateType is string
-    && projectData(projectId).template == request.resource.data.templateType;
-  }
-
-  function validOrderEnvelope(projectId){
-   return request.resource.data.projectId is string
-    && request.resource.data.providerId == request.resource.data.projectId
-    && request.resource.data.status == "new"
-    && request.resource.data.createdAt == request.time
-    && validOrderTemplate(projectId);
-  }
-
-  function validOrderByTemplate(projectId, templateType){
-   return templateType == "supermarket"
-    ? validSupermarketOrder(projectId)
-    : templateType == "restaurant"
-      ? validRestaurantOrder(projectId)
-      : templateType == "bakery"
-        ? validRestaurantOrder(projectId)
-        : templateType == "laundry"
-          ? (laundryAcceptingOrders(projectId) && validLaundryOrder(projectId))
-          : false;
-  }
-
-  function validLaundryItem(item, expectedKey, washPrice, ironPrice, washOnly){
-   return item.key == expectedKey
-    && item.quantity is number
-    && item.quantity >= 0
-    && item.quantity <= 100
-    && item.unitPrice is number
-    && item.subtotal is number
-    && (
-      (washOnly == true && item["service"] == "wash" && item.unitPrice == washPrice)
-      ||
-      (washOnly == false && (
-       (item["service"] == "wash" && item.unitPrice == washPrice)
-       || (item["service"] == "iron" && item.unitPrice == ironPrice)
-       || (item["service"] == "wash_iron" && item.unitPrice == washPrice + ironPrice)
-      ))
-    )
-    && item.subtotal == item.quantity * item.unitPrice;
-  }
-
-  function validLaundryOrder(projectId){
-   let config = projectData(projectId).priceConfig;
-   let items = request.resource.data.items;
-
-   return request.resource.data.templateType == "laundry"
-    && validCustomerInput()
-    && request.resource.data.serviceType == "laundry_per_piece"
-    && items is list
-    && items.size() == 7
-    && request.resource.data.totalPieces is number
-    && request.resource.data.totalPieces > 0
-    && request.resource.data.price is number
-    && request.resource.data.trackingToken is string
-    && request.resource.data.trackingToken.size() >= 40
-
-    && items[0].key == "shirt"
-    && (
-      (items[0].quantity == 0 && items[0].subtotal == 0)
-      || (items[0].quantity > 0 && validLaundryItem(items[0],"shirt",config.shirtWash,config.shirtIron,false))
-    )
-
-    && items[1].key == "trousers"
-    && (
-      (items[1].quantity == 0 && items[1].subtotal == 0)
-      || (items[1].quantity > 0 && validLaundryItem(items[1],"trousers",config.trousersWash,config.trousersIron,false))
-    )
-
-    && items[2].key == "tshirt"
-    && (
-      (items[2].quantity == 0 && items[2].subtotal == 0)
-      || (items[2].quantity > 0 && validLaundryItem(items[2],"tshirt",config.tshirtWash,config.tshirtIron,false))
-    )
-
-    && items[3].key == "dress"
-    && (
-      (items[3].quantity == 0 && items[3].subtotal == 0)
-      || (items[3].quantity > 0 && validLaundryItem(items[3],"dress",config.dressWash,config.dressIron,false))
-    )
-
-    && items[4].key == "galabeya"
-    && (
-      (items[4].quantity == 0 && items[4].subtotal == 0)
-      || (items[4].quantity > 0 && validLaundryItem(items[4],"galabeya",config.galabeyaWash,config.galabeyaIron,false))
-    )
-
-    && items[5].key == "suit"
-    && (
-      (items[5].quantity == 0 && items[5].subtotal == 0)
-      || (items[5].quantity > 0 && validLaundryItem(items[5],"suit",config.suitWash,config.suitIron,false))
-    )
-
-    && items[6].key == "shoes"
-    && (
-      (items[6].quantity == 0 && items[6].subtotal == 0)
-      || (items[6].quantity > 0 && validLaundryItem(items[6],"shoes",config.shoesWash,0,true))
-    )
-
-    && request.resource.data.totalPieces
-      == items[0].quantity
-       + items[1].quantity
-       + items[2].quantity
-       + items[3].quantity
-       + items[4].quantity
-       + items[5].quantity
-       + items[6].quantity
-
-    && request.resource.data.price
-      == items[0].subtotal
-       + items[1].subtotal
-       + items[2].subtotal
-       + items[3].subtotal
-       + items[4].subtotal
-       + items[5].subtotal
-       + items[6].subtotal;
-  }
-  function validSupermarketOrder(projectId){
-   return request.resource.data.templateType == "supermarket"
-    && validCustomerInput()
-    && request.resource.data.serviceType == "supermarket_delivery"
-    && supermarketPartnerReady(projectId)
-    && supermarketExists(projectId)
-    && supermarketData(projectId).isAcceptingOrders == true
-    && request.resource.data.customerName is string
-    && request.resource.data.customerName.size() > 0
-    && request.resource.data.customerPhone is string
-    && request.resource.data.customerPhone.size() > 0
-    && request.resource.data.customerAddress is string
-    && request.resource.data.customerAddress.size() > 0
-    && request.resource.data.location is string
-    && request.resource.data.notes is string
-    && request.resource.data.items is list
-    && request.resource.data.items.size() > 0
-    && request.resource.data.items.size() <= 50
-    && request.resource.data.subtotal is number
-    && request.resource.data.subtotal >= 0
-    && request.resource.data.deliveryFee is number
-    && request.resource.data.deliveryFee == supermarketData(projectId).deliveryFee
-    && request.resource.data.total is number
-    && request.resource.data.total == request.resource.data.subtotal + request.resource.data.deliveryFee
-    && request.resource.data.price == request.resource.data.total
-    && request.resource.data.pricingLocked == false
-    && request.resource.data.commissionEligible == false
-    && request.resource.data.commissionLocked == false
-    && request.resource.data.commissionAmount == 0
-    && request.resource.data.trackingToken is string
-    && request.resource.data.trackingToken.size() >= 40
-    && request.resource.data.keys().hasOnly([
-      "projectId",
-      "providerId",
-      "templateType",
-      "serviceType",
-      "status",
-      "customerName",
-      "customerPhone",
-      "customerAddress",
-      "location",
-      "notes",
-      "items",
-      "subtotal",
-      "deliveryFee",
-      "total",
-      "price",
-      "pricingLocked",
-      "commissionEligible",
-      "commissionLocked",
-      "commissionAmount",
-      "trackingToken",
-      "createdAt"
-    ]);
-  }
-
-
-  function validRestaurantOrder(projectId){
-   return request.resource.data.templateType in ["restaurant","bakery"]
-    && validCustomerInput()
-    && request.resource.data.templateType == projectData(projectId).template
-    && (
-      (
-        request.resource.data.templateType == "restaurant"
-        && request.resource.data.serviceType == "restaurant_delivery"
-      )
-      || (
-        request.resource.data.templateType == "bakery"
-        && request.resource.data.serviceType == "bakery_delivery"
-      )
-    )
-    && restaurantPartnerReady(projectId)
-    && restaurantExists(projectId)
-    && restaurantData(projectId).isAcceptingOrders == true
-    && request.resource.data.customerName is string
-    && request.resource.data.customerName.size() > 0
-    && request.resource.data.customerPhone is string
-    && request.resource.data.customerPhone.size() > 0
-    && request.resource.data.customerAddress is string
-    && request.resource.data.customerAddress.size() > 0
-    && request.resource.data.location is string
-    && request.resource.data.notes is string
-    && request.resource.data.items is list
-    && request.resource.data.items.size() > 0
-    && request.resource.data.items.size() <= 50
-    && request.resource.data.subtotal is number
-    && request.resource.data.subtotal >= 0
-    && request.resource.data.deliveryFee is number
-    && request.resource.data.deliveryFee == restaurantData(projectId).deliveryFee
-    && request.resource.data.total is number
-    && request.resource.data.total == request.resource.data.subtotal + request.resource.data.deliveryFee
-    && request.resource.data.price == request.resource.data.total
-    && request.resource.data.pricingLocked == false
-    && request.resource.data.commissionEligible == false
-    && request.resource.data.commissionLocked == false
-    && request.resource.data.commissionAmount == 0
-    && request.resource.data.trackingToken is string
-    && request.resource.data.trackingToken.size() >= 40
-    && request.resource.data.keys().hasOnly([
-      "projectId",
-      "providerId",
-      "templateType",
-      "serviceType",
-      "status",
-      "customerName",
-      "customerPhone",
-      "customerAddress",
-      "location",
-      "notes",
-      "items",
-      "subtotal",
-      "deliveryFee",
-      "total",
-      "price",
-      "pricingLocked",
-      "commissionEligible",
-      "commissionLocked",
-      "commissionAmount",
-      "trackingToken",
-      "createdAt"
-    ]);
-  }
-
-
-  match /users/{uid} {
-   allow create: if signedIn()
-    && request.auth.uid == uid
-    && request.resource.data.uid == uid
-    && request.resource.data.name is string
-    && request.resource.data.name.size() > 0
-    && request.resource.data.name.size() <= 100
-    && request.resource.data.email is string
-    && request.resource.data.email.size() > 0
-    && request.resource.data.email.size() <= 254
-    && request.resource.data.projectType == ""
-    && (
-      (
-        request.resource.data.isActive == false
-        && request.resource.data.subscriptionStatus == "pending"
-        && !request.resource.data.keys().hasAny(["accessModel","firstMerchantLinkedAt","firstMerchantProjectId"])
-      )
-      || (
-        request.resource.data.isActive == true
-        && trialRegistrationEnabled()
-        && request.resource.data.subscriptionStatus == "trial"
-        && request.resource.data.accessModel == "merchant_trial_v1"
-        && request.resource.data.firstMerchantLinkedAt == null
-        && !("firstMerchantProjectId" in request.resource.data)
-      )
-    )
-    && request.resource.data.initialActivationPaid == false
-    && request.resource.data.billingCycle == "initial"
-    && request.resource.data.referralQualified == false
-    && request.resource.data.referredByUserId is string
-    && request.resource.data.referredByUserId.size() <= 128
-    && request.resource.data.referredByUserId != request.auth.uid
-    && request.resource.data.createdAt == request.time
-    && !("role" in request.resource.data)
-    && request.resource.data.keys().hasOnly([
-      "uid","name","email","projectType","isActive","subscriptionStatus",
-      "initialActivationPaid","billingCycle","referredByUserId",
-      "referralQualified","createdAt","accessModel","firstMerchantLinkedAt"
-    ]);
-   allow get: if isAdmin() || (signedIn() && request.auth.uid == uid);
-   allow list: if isAdmin();
-   allow update: if (
-    isAdmin()
-    && (
-      (
-        request.resource.data.isActive == false
-        && request.resource.data.subscriptionStatus == "inactive"
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          "isActive","subscriptionStatus"
-        ])
-      )
-      ||
-      (
-        request.resource.data.isActive == true
-        && request.resource.data.subscriptionStatus == "active"
-        && request.resource.data.initialActivationPaid == true
-        && request.resource.data.billingCycle == "monthly"
-        && request.resource.data.lastSubscriptionPaymentId is string
-        && request.resource.data.lastSubscriptionPaymentId.size() > 0
-        && request.resource.data.lastPaymentType in ["initial","renewal"]
-        && request.resource.data.lastPaymentAmount is number
-        && request.resource.data.lastPaymentAt == request.time
-        && request.resource.data.subscriptionExpiresAt > request.time
-        && existsAfter(subscriptionPaymentPath(request.resource.data.lastSubscriptionPaymentId))
-        && getAfter(subscriptionPaymentPath(request.resource.data.lastSubscriptionPaymentId)).data.status == "approved"
-        && getAfter(subscriptionPaymentPath(request.resource.data.lastSubscriptionPaymentId)).data.userId == uid
-        && getAfter(subscriptionPaymentPath(request.resource.data.lastSubscriptionPaymentId)).data.paymentType == request.resource.data.lastPaymentType
-        && getAfter(subscriptionPaymentPath(request.resource.data.lastSubscriptionPaymentId)).data.amount == request.resource.data.lastPaymentAmount
-        && getAfter(subscriptionPaymentPath(request.resource.data.lastSubscriptionPaymentId)).data.reviewedBy == request.auth.uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          "isActive","subscriptionStatus","initialActivationPaid","billingCycle",
-          "subscriptionStartedAt","subscriptionExpiresAt","lastPaymentAmount",
-          "lastPaymentType","lastPaymentAt","lastSubscriptionPaymentId",
-          "lastRenewalAt","activatedAt","referralQualified"
-        ])
-      )
-      ||
-      (
-        request.resource.data.isActive == true
-        && request.resource.data.subscriptionStatus == "active"
-        && resource.data.initialActivationPaid == false
-        && request.resource.data.initialActivationPaid == false
-        && request.resource.data.billingCycle == "monthly"
-        && request.resource.data.lastActivationSource == "launch_promo"
-        && request.resource.data.lastSubscriptionGrantId == "launch50_" + uid
-        && request.resource.data.launchPromoCampaignId == "launch50"
-        && request.resource.data.subscriptionExpiresAt > request.time
-        && existsAfter(subscriptionGrantPath(request.resource.data.lastSubscriptionGrantId))
-        && getAfter(subscriptionGrantPath(request.resource.data.lastSubscriptionGrantId)).data.status == "granted"
-        && getAfter(subscriptionGrantPath(request.resource.data.lastSubscriptionGrantId)).data.userId == uid
-        && getAfter(subscriptionGrantPath(request.resource.data.lastSubscriptionGrantId)).data.campaignId == "launch50"
-        && getAfter(subscriptionGrantPath(request.resource.data.lastSubscriptionGrantId)).data.paymentRequired == false
-        && getAfter(subscriptionGrantPath(request.resource.data.lastSubscriptionGrantId)).data.grantedBy == request.auth.uid
-        && existsAfter(platformCounterPath("launch50"))
-        && getAfter(platformCounterPath("launch50")).data.count <= 50
-        && getAfter(platformCounterPath("launch50")).data.lastGrantedUserId == uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          "isActive","subscriptionStatus","initialActivationPaid","billingCycle",
-          "subscriptionStartedAt","subscriptionExpiresAt","activatedAt",
-          "lastActivationSource","lastSubscriptionGrantId","launchPromoCampaignId"
-        ])
-      )
-    )
-   ) || (
-    signedIn()
-    && resource.data.accessModel == "merchant_trial_v1"
-    && resource.data.isActive == true
-    && resource.data.subscriptionStatus == "trial"
-    && resource.data.firstMerchantLinkedAt == null
-    && request.resource.data.firstMerchantLinkedAt == request.time
-    && request.resource.data.firstMerchantProjectId is string
-    && request.resource.data.firstMerchantProjectId.size() > 0
-    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-      "firstMerchantLinkedAt","firstMerchantProjectId"
-    ])
-    && projectExists(request.resource.data.firstMerchantProjectId)
-    && projectData(request.resource.data.firstMerchantProjectId).ownerId == uid
-    && commissionAgreementExists(request.resource.data.firstMerchantProjectId)
-    && get(commissionAgreementPath(request.resource.data.firstMerchantProjectId)).data.status != "accepted"
-    && getAfter(commissionAgreementPath(request.resource.data.firstMerchantProjectId)).data.status == "accepted"
-    && getAfter(commissionAgreementPath(request.resource.data.firstMerchantProjectId)).data.acceptedAt == request.time
-    && getAfter(commissionAgreementPath(request.resource.data.firstMerchantProjectId)).data.acceptedBy == request.auth.uid
-    && getAfter(commissionAgreementPath(request.resource.data.firstMerchantProjectId)).data.acceptedVersion > 0
-    && operatorExists(request.resource.data.firstMerchantProjectId)
-    && operatorData(request.resource.data.firstMerchantProjectId).authUid == request.auth.uid
-   ) || (
-    signedIn()
-    && request.auth.uid == uid
-    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name"])
-    && request.resource.data.name is string
-    && request.resource.data.name.size() > 0
-    && request.resource.data.name.size() <= 100
-   );
-   allow delete: if isAdmin();
-  }
-
-  match /subscriptionBillingGuards/{uid} {
-   function matchingPendingPayment(paymentId){
-    let p=getAfter(subscriptionPaymentPath(paymentId)).data;
-    return p.userId==uid && p.status=="pending_review";
-   }
-   function reviewedPayment(paymentId){
-    let p=getAfter(subscriptionPaymentPath(paymentId)).data;
-    return p.userId==uid && p.status in ["approved","rejected"]
-      && p.reviewedBy==request.auth.uid;
-   }
-   allow get: if isAdmin() || (signedIn() && request.auth.uid==uid);
-   allow list: if isAdmin();
-   allow create: if request.resource.data.userId==uid
-    && request.resource.data.revision==1
-    && request.resource.data.lastReviewedPaymentId==""
-    && request.resource.data.updatedAt==request.time
-    && (
-     (signedIn() && request.auth.uid==uid
-      && request.resource.data.recoverySafe==false
-      && request.resource.data.pendingPaymentId is string
-      && request.resource.data.pendingPaymentId.size()>0
-      && request.resource.data.keys().hasOnly([
-       "userId","revision","lastReviewedPaymentId","updatedAt",
-       "recoverySafe","pendingPaymentId"])
-      && matchingPendingPayment(request.resource.data.pendingPaymentId))
-     || (isAdmin() && request.resource.data.pendingPaymentId==""
-      && request.resource.data.recoverySafe==true
-      && request.resource.data.reconciledAt==request.time
-      && request.resource.data.reconciledBy==request.auth.uid
-      && request.resource.data.keys().hasOnly([
-       "userId","revision","lastReviewedPaymentId","updatedAt",
-       "recoverySafe","pendingPaymentId","reconciledAt","reconciledBy"]))
-     || (isAdmin()
-      && request.resource.data.pendingPaymentId is string
-      && request.resource.data.pendingPaymentId.size()>0
-      && request.resource.data.recoverySafe==false
-      && request.resource.data.migratedAt==request.time
-      && request.resource.data.migratedBy==request.auth.uid
-      && get(subscriptionPaymentPath(request.resource.data.pendingPaymentId)).data.userId==uid
-      && get(subscriptionPaymentPath(request.resource.data.pendingPaymentId)).data.status=="pending_review"
-      && request.resource.data.keys().hasOnly([
-       "userId","revision","lastReviewedPaymentId","updatedAt",
-       "recoverySafe","pendingPaymentId","migratedAt","migratedBy"]))
-    );
-   allow update: if request.resource.data.userId==uid
-    && resource.data.userId==uid
-    && request.resource.data.revision==resource.data.revision+1
-    && request.resource.data.updatedAt==request.time
-    && (
-     (signedIn() && request.auth.uid==uid
-      && resource.data.pendingPaymentId==""
-      && request.resource.data.pendingPaymentId is string
-      && request.resource.data.pendingPaymentId.size()>0
-      && request.resource.data.lastReviewedPaymentId==resource.data.lastReviewedPaymentId
-      && request.resource.data.recoverySafe==resource.data.recoverySafe
-      && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-       "pendingPaymentId","revision","updatedAt"])
-      && matchingPendingPayment(request.resource.data.pendingPaymentId))
-     || (isAdmin() && resource.data.pendingPaymentId is string
-      && resource.data.pendingPaymentId.size()>0
-      && request.resource.data.pendingPaymentId==""
-      && request.resource.data.lastReviewedPaymentId==resource.data.pendingPaymentId
-      && request.resource.data.recoverySafe==resource.data.recoverySafe
-      && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-       "pendingPaymentId","lastReviewedPaymentId","revision","updatedAt"])
-      && reviewedPayment(resource.data.pendingPaymentId))
-     || (isAdmin() && resource.data.pendingPaymentId==""
-      && request.resource.data.pendingPaymentId==""
-      && resource.data.recoverySafe==false
-      && request.resource.data.recoverySafe==true
-      && request.resource.data.lastReviewedPaymentId==resource.data.lastReviewedPaymentId
-      && request.resource.data.reconciledAt==request.time
-      && request.resource.data.reconciledBy==request.auth.uid
-      && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-       "recoverySafe","reconciledAt","reconciledBy","revision","updatedAt"]))
-    );
-   allow delete: if false;
-  }
-
-  match /subscriptionPayments/{paymentId} {
-   allow create: if signedIn()
-    && request.resource.data.paymentId == paymentId
-    && getAfter(billingGuardPath(request.auth.uid)).data.userId==request.auth.uid
-    && getAfter(billingGuardPath(request.auth.uid)).data.pendingPaymentId==paymentId
-    && getAfter(billingGuardPath(request.auth.uid)).data.updatedAt==request.time
-    && request.resource.data.userId == request.auth.uid
-    && request.resource.data.userEmail is string
-    && request.resource.data.userEmail.size() <= 254
-    && request.resource.data.paymentType in ["initial","renewal"]
-    && request.resource.data.amount is number
-    && (
-      (
-        request.resource.data.paymentType == "initial"
-        && (
-          (userExists(request.auth.uid)
-            && ("accessModel" in userData(request.auth.uid))
-            && userData(request.auth.uid).accessModel == "merchant_trial_v1"
-            && request.resource.data.amount == 59)
-          || (
-            userExists(request.auth.uid)
-            && (!("accessModel" in userData(request.auth.uid)) || userData(request.auth.uid).accessModel != "merchant_trial_v1")
-            && request.resource.data.amount == 350
-          )
-        )
-      )
-      || (request.resource.data.paymentType == "renewal" && request.resource.data.amount == 59)
-    )
-    && request.resource.data.currency == "EGP"
-    && request.resource.data.paymentMethod == "instapay"
-    && request.resource.data.paymentReference is string
-    && request.resource.data.paymentReference.size() >= 4
-    && request.resource.data.paymentReference.size() <= 120
-    && request.resource.data.paymentCode is string
-    && request.resource.data.paymentCode.size() >= 8
-    && request.resource.data.paymentCode.size() <= 40
-    && request.resource.data.proofChannel == "whatsapp"
-    && request.resource.data.status == "pending_review"
-    && request.resource.data.submittedAt == request.time
-    && request.resource.data.whatsappPreparedAt == request.time
-    && request.resource.data.reviewedAt == null
-    && request.resource.data.reviewedBy == ""
-    && request.resource.data.rejectionReason == ""
-    && request.resource.data.keys().hasOnly([
-      "paymentId","paymentCode","userId","userEmail","paymentType","amount","currency",
-      "paymentMethod","paymentReference","proofChannel","status","submittedAt",
-      "whatsappPreparedAt","reviewedAt","reviewedBy","rejectionReason"
-    ]);
-   allow get, list: if isAdmin() || (signedIn() && resource.data.userId == request.auth.uid);
-   allow update: if isAdmin()
-    && getAfter(billingGuardPath(resource.data.userId)).data.pendingPaymentId==""
-    && getAfter(billingGuardPath(resource.data.userId)).data.lastReviewedPaymentId==paymentId
-    && getAfter(billingGuardPath(resource.data.userId)).data.updatedAt==request.time
-    && resource.data.status == "pending_review"
-    && request.resource.data.paymentId == resource.data.paymentId
-    && request.resource.data.userId == resource.data.userId
-    && request.resource.data.userEmail == resource.data.userEmail
-    && request.resource.data.paymentType == resource.data.paymentType
-    && request.resource.data.amount == resource.data.amount
-    && request.resource.data.currency == resource.data.currency
-    && request.resource.data.paymentMethod == resource.data.paymentMethod
-    && request.resource.data.paymentReference == resource.data.paymentReference
-    && request.resource.data.paymentCode == resource.data.paymentCode
-    && request.resource.data.proofChannel == resource.data.proofChannel
-    && request.resource.data.submittedAt == resource.data.submittedAt
-    && request.resource.data.whatsappPreparedAt == resource.data.whatsappPreparedAt
-    && request.resource.data.status in ["approved","rejected"]
-    && request.resource.data.reviewedAt == request.time
-    && request.resource.data.reviewedBy == request.auth.uid
-    && (
-      (
-        request.resource.data.status == "approved"
-        && request.resource.data.rejectionReason == ""
-        && existsAfter(userPath(resource.data.userId))
-        && getAfter(userPath(resource.data.userId)).data.isActive == true
-        && getAfter(userPath(resource.data.userId)).data.subscriptionStatus == "active"
-        && getAfter(userPath(resource.data.userId)).data.lastSubscriptionPaymentId == paymentId
-        && getAfter(userPath(resource.data.userId)).data.lastPaymentType == resource.data.paymentType
-        && getAfter(userPath(resource.data.userId)).data.lastPaymentAmount == resource.data.amount
-      )
-      || (
-        request.resource.data.status == "rejected"
-        && request.resource.data.rejectionReason is string
-        && request.resource.data.rejectionReason.size() >= 3
-        && request.resource.data.rejectionReason.size() <= 300
-      )
-    )
-    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-      "status","reviewedAt","reviewedBy","rejectionReason"
-    ]);
-   allow delete: if false;
-  }
-
-
-  match /subscriptionGrants/{grantId} {
-   allow get, list: if isAdmin()
-    || (signedIn() && resource.data.userId == request.auth.uid);
-
-   allow create: if isAdmin()
-    && request.resource.data.grantId == grantId
-    && request.resource.data.userId is string
-    && request.resource.data.userId.size() > 0
-    && grantId == "launch50_" + request.resource.data.userId
-    && request.resource.data.campaignId == "launch50"
-    && request.resource.data.status == "granted"
-    && request.resource.data.paymentRequired == false
-    && request.resource.data.value == 350
-    && request.resource.data.currency == "EGP"
-    && request.resource.data.subscriptionDays == 30
-    && request.resource.data.grantedAt == request.time
-    && request.resource.data.grantedBy == request.auth.uid
-    && request.resource.data.keys().hasOnly([
-      "grantId","userId","campaignId","status","paymentRequired","value",
-      "currency","subscriptionDays","grantedAt","grantedBy"
-    ])
-    && existsAfter(userPath(request.resource.data.userId))
-    && getAfter(userPath(request.resource.data.userId)).data.isActive == true
-    && getAfter(userPath(request.resource.data.userId)).data.subscriptionStatus == "active"
-    && getAfter(userPath(request.resource.data.userId)).data.lastActivationSource == "launch_promo"
-    && getAfter(userPath(request.resource.data.userId)).data.lastSubscriptionGrantId == grantId
-    && existsAfter(platformCounterPath("launch50"))
-    && getAfter(platformCounterPath("launch50")).data.count <= 50
-    && getAfter(platformCounterPath("launch50")).data.lastGrantedUserId == request.resource.data.userId;
-
-   allow update, delete: if false;
-  }
-
-  match /platformCounters/{counterId} {
-   allow get, list: if isAdmin();
-
-   allow create: if isAdmin()
-    && counterId == "launch50"
-    && request.resource.data.campaignId == "launch50"
-    && request.resource.data.count == 1
-    && request.resource.data.limit == 50
-    && request.resource.data.lastGrantedUserId is string
-    && request.resource.data.lastGrantedUserId.size() > 0
-    && request.resource.data.updatedAt == request.time
-    && request.resource.data.keys().hasOnly([
-      "campaignId","count","limit","lastGrantedUserId","updatedAt"
-    ])
-    && existsAfter(subscriptionGrantPath("launch50_" + request.resource.data.lastGrantedUserId))
-    && getAfter(subscriptionGrantPath("launch50_" + request.resource.data.lastGrantedUserId)).data.status == "granted";
-
-   allow update: if isAdmin()
-    && counterId == "launch50"
-    && resource.data.campaignId == "launch50"
-    && resource.data.limit == 50
-    && resource.data.count < 50
-    && request.resource.data.campaignId == resource.data.campaignId
-    && request.resource.data.limit == resource.data.limit
-    && request.resource.data.count == resource.data.count + 1
-    && request.resource.data.count <= 50
-    && request.resource.data.lastGrantedUserId is string
-    && request.resource.data.lastGrantedUserId.size() > 0
-    && request.resource.data.updatedAt == request.time
-    && request.resource.data.keys().hasOnly([
-      "campaignId","count","limit","lastGrantedUserId","updatedAt"
-    ])
-    && existsAfter(subscriptionGrantPath("launch50_" + request.resource.data.lastGrantedUserId))
-    && getAfter(subscriptionGrantPath("launch50_" + request.resource.data.lastGrantedUserId)).data.status == "granted";
-
-   allow delete: if false;
-  }
-
-
-  match /platformSettings/{settingId} {
-   allow get: if isAdmin();
-   allow list: if false;
-   allow create, update: if isAdmin()
-    && settingId=="trialRegistration"
-    && request.resource.data.enabled is bool
-    && request.resource.data.updatedBy==request.auth.uid
-    && request.resource.data.updatedAt==request.time
-    && request.resource.data.keys().hasOnly(["enabled","updatedAt","updatedBy"]);
-   allow delete: if false;
-  }
-
-  // Only cutover assignment fields can move; the prior project identity
-  // and operational merchant remain immutable. Cache two getAfter reads.
-  function validAtomicMerchantProjectCutover(projectId){
-    let before = resource.data;
-    let next = request.resource.data;
-    let witness = getAfter(merchantCutoverPath(projectId)).data;
-    return before.platformManaged == true
-     && before.assignmentStatus == "platform_managed"
-     && before.assignedSubscriberId == ""
-     && next.platformManaged == true
-     && next.assignmentStatus == "assigned_to_new_subscriber"
-     && next.assignedSubscriberId is string
-     && next.assignedSubscriberId.size() > 0
-     && next.assignedSubscriberId != before.originalSubscriberId
-     && next.assignmentUpdatedAt == request.time
-     && next.cutoverAuditId == projectId
-     && next.cutoverAt == request.time
-     && next.cutoverAdminUid == request.auth.uid
-     && next.diff(before).affectedKeys().hasOnly([
-       "assignmentStatus","assignedSubscriberId","assignmentUpdatedAt",
-       "cutoverAuditId","cutoverAt","cutoverAdminUid"
-     ])
-     && witness.status == "completed"
-     && witness.assignedSubscriberId == next.assignedSubscriberId
-     && witness.completedAt == request.time;
-  }
-
-
-
-
-  match /projects/{projectId} {
-   allow get: if isAdmin()
-    || (signedIn() && resource.data.ownerId == request.auth.uid)
-    || currentAssignedSubscriber(projectId)
-    || (signedIn() && ("platformManaged" in resource.data)
-      && resource.data.platformManaged == true
-      && resource.data.assignmentStatus == "assigned_to_new_subscriber"
-      && resource.data.assignedSubscriberId == request.auth.uid
-      && isVerifiedAssignedAfterCutover(projectId))
-    || isLinkedProjectOperator(projectId)
-    || (
-      resource.data.template == "laundry"
-      && resource.data.isActive == true
-      && resource.data.status == "active"
-      && projectAvailable(projectId)
-    );
-   allow list: if isAdmin()
-    || (signedIn() && resource.data.ownerId == request.auth.uid)
-    || (signedIn() && resource.data.platformManaged == true
-      && resource.data.assignmentStatus == "assigned_to_new_subscriber"
-      && resource.data.assignedSubscriberId == request.auth.uid);
-   allow create: if signedIn() && subscriptionActive(request.auth.uid) && validActiveProjectCreate(projectId);
-   allow update: if (
-    isAdmin()
-    && request.resource.data.ownerId == resource.data.ownerId
-    && request.resource.data.projectId == resource.data.projectId
-    && request.resource.data.template == resource.data.template
-    && (!("merchantId" in resource.data) || request.resource.data.merchantId == resource.data.merchantId)
-    && (!("originalSubscriberId" in resource.data) || request.resource.data.originalSubscriberId == resource.data.originalSubscriberId)
-    && (
-      !("platformManaged" in resource.data)
-      || resource.data.platformManaged != true
-      || request.resource.data.operatorId == resource.data.operatorId
-    )
-    && (
-      !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-        "platformManaged","assignmentStatus","assignedSubscriberId","assignmentCycle",
-        "assignmentUpdatedAt","recoveryAuditId","recoveryAt",
-        "recoveryAdminUid","recoveryReason","cutoverAuditId","cutoverAt","cutoverAdminUid"
-      ])
-      || (
-        ("platformManaged" in resource.data) && resource.data.platformManaged == false
-        && request.resource.data.platformManaged == true
-        && request.resource.data.assignmentStatus == "platform_managed"
-        && request.resource.data.assignedSubscriberId == ""
-        && request.resource.data.assignmentUpdatedAt == request.time
-        && request.resource.data.recoveryAuditId == projectId
-        && request.resource.data.recoveryAt == request.time
-        && request.resource.data.recoveryAdminUid == request.auth.uid
-        && request.resource.data.recoveryReason in ["overdue_renewal","unpaid_first_month","confirmed_violation"]
-        && request.resource.data.ownerId == resource.data.ownerId
-        && request.resource.data.projectId == resource.data.projectId
-        && request.resource.data.template == resource.data.template
-        && request.resource.data.operatorId == resource.data.operatorId
-        && request.resource.data.isActive == resource.data.isActive
-        && request.resource.data.status == resource.data.status
-        && request.resource.data.merchantId == resource.data.merchantId
-        && request.resource.data.originalSubscriberId == resource.data.originalSubscriberId
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          "platformManaged","assignmentStatus","assignedSubscriberId",
-          "assignmentUpdatedAt","recoveryAuditId","recoveryAt",
-          "recoveryAdminUid","recoveryReason"
-        ])
-        && existsAfter(merchantRecoveryPath(projectId))
-        && getAfter(merchantRecoveryPath(projectId)).data.status == "completed"
-        && getAfter(merchantRecoveryPath(projectId)).data.recoveredAt == request.time
-        && getAfter(merchantRecoveryPath(projectId)).data.adminUid == request.auth.uid
-        && getAfter(merchantRecoveryPath(projectId)).data.previousSubscriberId == resource.data.assignedSubscriberId
-        && getAfter(merchantRecoveryPath(projectId)).data.merchantId == resource.data.merchantId
-        && getAfter(merchantRecoveryPath(projectId)).data.reason == request.resource.data.recoveryReason
-      )
-    || validAtomicMerchantProjectCutover(projectId)
-    )
-   ) || (
-    signedIn()
-    && (!("platformManaged" in resource.data) || resource.data.platformManaged == false)
-    && resource.data.ownerId == request.auth.uid
-    && request.resource.data.ownerId == resource.data.ownerId
-    && request.resource.data.projectId == resource.data.projectId
-    && request.resource.data.template == resource.data.template
-    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["businessName","whatsappNumber","instapayLink","logo","coverImage","primaryColor","priceConfig","operatorId","partnerSetupStatus"])
-    && !(
-      resource.data.template == "laundry"
-      && ("operatingModel" in resource.data)
-      && resource.data.operatingModel == "partner_operated"
-      && request.resource.data.diff(resource.data).affectedKeys().hasAny(["priceConfig"])
-    )
-    && (
-      !request.resource.data.diff(resource.data).affectedKeys().hasAny(["operatorId","partnerSetupStatus"])
-      || (
-        ("operatingModel" in resource.data)
-        && resource.data.operatingModel == "partner_operated"
-        && request.resource.data.operatorId == projectId
-        && request.resource.data.partnerSetupStatus in ["partner_linked","active"]
-      )
-    )
-   )
-   || (
-    signedIn()
-    && (!("platformManaged" in resource.data) || resource.data.platformManaged == false)
-    && resource.data.ownerId == request.auth.uid
-    && resource.data.template == "laundry"
-    && (
-      !("operatingModel" in resource.data)
-      || resource.data.operatingModel == "owner_operated"
-    )
-    && request.resource.data.ownerId == resource.data.ownerId
-    && request.resource.data.projectId == resource.data.projectId
-    && request.resource.data.template == resource.data.template
-    && request.resource.data.operatingModel == "partner_operated"
-    && request.resource.data.templateVersion == 3
-    && request.resource.data.operatorId == ""
-    && request.resource.data.partnerSetupStatus == "not_started"
-    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-      "operatingModel",
-      "templateVersion",
-      "operatorId",
-      "partnerSetupStatus"
-    ])
-   )
-   || (
-    signedIn()
-    && resource.data.template == "laundry"
-    && resource.data.operatingModel == "partner_operated"
-    && isProjectOperator(projectId)
-    && request.resource.data.ownerId == resource.data.ownerId
-    && request.resource.data.projectId == resource.data.projectId
-    && request.resource.data.template == resource.data.template
-    && request.resource.data.operatingModel == resource.data.operatingModel
-    && request.resource.data.operatorId == resource.data.operatorId
-    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["priceConfig"])
-   );
-   allow delete: if isAdmin() && !isVerifiedPlatformManagedMerchant(projectId);
-  }
-
-  match /orders/{orderId} {
-   allow create: if validOrderEnvelope(request.resource.data.projectId)
-    && validOrderByTemplate(
-      request.resource.data.projectId,
-      request.resource.data.templateType
-    );
-
-   allow read: if isAdmin()
-    || (
-      resource.data.templateType in ["supermarket","laundry","restaurant","bakery"]
-      && isProjectOperator(resource.data.projectId)
-    )
-    || (
-      !(resource.data.templateType in ["supermarket","laundry","restaurant","bakery"])
-      && ownsProject(resource.data.projectId)
-    );
-
-   function validTrackedLaundryOperationalUpdate(){
-    let before = resource.data;
-    let after = request.resource.data;
-    let tracking = getAfter(orderTrackingPath(before.trackingToken)).data;
-    return before.templateType == "laundry"
-      && before.trackingToken is string
-      && before.trackingToken.size() >= 40
-      && signedIn()
-      && (isAdmin() || isProjectOperator(before.projectId))
-      && after.projectId == before.projectId
-      && after.providerId == before.providerId
-      && after.trackingToken == before.trackingToken
-      && after.statusUpdatedBy == request.auth.uid
-      && (
-        (
-          before.status == "new"
-          && (
-            (after.status == "accepted" && after.laundryStage == "accepted")
-            || after.status == "canceled"
-          )
-        )
-        ||
-        (
-          before.status == "accepted"
-          && before.laundryStage is string
-          && after.laundryStage is string
-          && validLaundryTransition(
-            before.status,
-            before.laundryStage,
-            after.status,
-            after.laundryStage
-          )
-        )
-      )
-      && after.status != "done"
-      && (
-        after.status == "canceled"
-        || after.laundryStage != "out_for_delivery"
-      )
-      && (
-        after.status == "canceled"
-        || after.laundryStage != "pickup_assigned"
-        || (
-          after.assignedWorkerId is string
-          && after.assignedWorkerId.size() > 0
-          && workerExists(after.assignedWorkerId)
-          && workerData(after.assignedWorkerId).projectId == before.projectId
-          && workerData(after.assignedWorkerId).role == "pickup_agent"
-        )
-      )
-      && after.diff(before).affectedKeys().hasOnly([
-        "status",
-        "laundryStage",
-        "statusUpdatedAt",
-        "statusUpdatedBy"
-      ])
-      && tracking.trackingToken == before.trackingToken
-      && tracking.orderId is string
-      && tracking.projectId == before.projectId
-      && tracking.templateType == "laundry"
-      && tracking.status == laundryTrackingStatus(after)
-      && tracking.items == after.items
-      && tracking.subtotal == after.price
-      && tracking.deliveryFee == 0
-      && tracking.total == after.price;
-   }
-
-   allow update: if resource.data.templateType == "laundry"
-    && ("trackingToken" in resource.data)
-    && request.resource.data.status != "done"
-    && (
-      request.resource.data.status == "canceled"
-      || request.resource.data.laundryStage != "out_for_delivery"
-    )
-    && validTrackedLaundryOperationalUpdate();
-
-   allow update: if resource.data.templateType == "laundry"
-    && ("trackingToken" in resource.data)
-    && resource.data.status == "accepted"
-    && resource.data.laundryStage == "ready_delivery"
-    && request.resource.data.status == "accepted"
-    && request.resource.data.laundryStage == "out_for_delivery"
-    && validTrackedLaundryDispatchUpdate(orderId);
-
-   allow update: if resource.data.templateType == "laundry"
-    && ("trackingToken" in resource.data)
-    && resource.data.status == "accepted"
-    && resource.data.laundryStage == "out_for_delivery"
-    && request.resource.data.status == "done"
-    && request.resource.data.laundryStage == "delivered"
-    && validTrackedLaundryDeliveryUpdate(orderId);
-
-   // Cheap state guards keep unrelated partner-order updates from evaluating
-   // the expensive commission rules and exhausting Firestore's expression budget.
-   allow update: if !(
-      resource.data.templateType == "laundry"
-      && ("trackingToken" in resource.data)
-    )
-    && resource.data.templateType in ["supermarket","restaurant","bakery","laundry"]
-    && (
-      (
-        resource.data.templateType in ["supermarket","restaurant","bakery"]
-        && resource.data.status == "ready"
-        && request.resource.data.status == "assigned"
-      )
-      ||
-      (
-        resource.data.templateType == "laundry"
-        && resource.data.status == "accepted"
-        && resource.data.laundryStage == "ready_delivery"
-        && request.resource.data.status == "accepted"
-        && request.resource.data.laundryStage == "out_for_delivery"
-      )
-    )
-    && validDispatchCommissionUpdate(orderId);
-
-   allow update: if !(
-      resource.data.templateType == "laundry"
-      && ("trackingToken" in resource.data)
-    )
-    && resource.data.templateType in ["supermarket","restaurant","bakery","laundry"]
-    && (
-      (
-        resource.data.templateType in ["supermarket","restaurant","bakery"]
-        && resource.data.status == "out_for_delivery"
-        && request.resource.data.status == "delivered"
-      )
-      ||
-      (
-        resource.data.templateType == "laundry"
-        && resource.data.status == "accepted"
-        && resource.data.laundryStage == "out_for_delivery"
-        && request.resource.data.status == "done"
-        && request.resource.data.laundryStage == "delivered"
-      )
-    )
-    && validLockedCommissionDeliveryUpdate(orderId);
-
-   // Current commission dispatch paths above exclusively own these
-   // transitions. Skip the legacy mega-rule BEFORE canOperateProject() and
-   // older settlement checks; evaluating both can exceed 1000 expressions.
-   // Strict dispatch rules still verify the paired immutable ledger write.
-   allow update: if !(
-      resource.data.templateType == "laundry"
-      && ("trackingToken" in resource.data)
-    )
-    && !(
-      resource.data.templateType in ["supermarket","restaurant","bakery"]
-      && resource.data.status == "ready"
-      && request.resource.data.status == "assigned"
-    )
-    && !(
-      resource.data.templateType == "laundry"
-      && resource.data.status == "accepted"
-      && resource.data.laundryStage == "ready_delivery"
-      && request.resource.data.laundryStage == "out_for_delivery"
-    )
-    && (
-    (
-      !(resource.data.templateType in ["supermarket","laundry","restaurant","bakery"])
-      && (isAdmin() || ownsProject(resource.data.projectId))
-      && request.resource.data.projectId == resource.data.projectId
-      && request.resource.data.providerId == resource.data.providerId
-      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status","laundryStage"])
-      && request.resource.data.status in ["new","accepted","done","canceled"]
-      && (
-        !("laundryStage" in request.resource.data)
-        || (
-          resource.data.templateType == "laundry"
-          && request.resource.data.laundryStage in ["accepted","picked_up","processing","ready_delivery","delivered"]
-        )
-      )
-    )
-    ||
-    (
-      (
-        canOperateProject(resource.data.projectId)
-      )
-      && request.resource.data.projectId == resource.data.projectId
-      && request.resource.data.providerId == resource.data.providerId
-      && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-        "assignedWorkerId",
-        "assignedWorkerName",
-        "assignedWorkerRole",
-        "assignedWorkerWhatsapp",
-        "assignedAt",
-        "assignmentUpdatedAt"
-      ])
-      && request.resource.data.assignedWorkerId is string
-      && request.resource.data.assignedWorkerName is string
-      && request.resource.data.assignedWorkerRole is string
-      && request.resource.data.assignedWorkerWhatsapp is string
-      && (
-        request.resource.data.assignedWorkerId == ""
-        || (
-          workerExists(request.resource.data.assignedWorkerId)
-          && workerData(request.resource.data.assignedWorkerId).projectId == resource.data.projectId
-          && workerData(request.resource.data.assignedWorkerId).isActive == true
-          && workerData(request.resource.data.assignedWorkerId).role
-            == request.resource.data.assignedWorkerRole
-          && workerData(request.resource.data.assignedWorkerId).name
-            == request.resource.data.assignedWorkerName
-          && workerData(request.resource.data.assignedWorkerId).whatsapp
-            == request.resource.data.assignedWorkerWhatsapp
-        )
-      )
-    )
-    ||
-    (
-      resource.data.templateType == "laundry"
-      && (isAdmin() || isProjectOperator(resource.data.projectId))
-      && request.resource.data.projectId == resource.data.projectId
-      && request.resource.data.providerId == resource.data.providerId
-      && request.resource.data.statusUpdatedBy == request.auth.uid
-      && (
-        (
-          resource.data.status == "new"
-          && (
-            (
-              request.resource.data.status == "accepted"
-              && request.resource.data.laundryStage == "accepted"
-            )
-            || request.resource.data.status == "canceled"
-          )
-        )
-        ||
-        (
-          resource.data.status == "accepted"
-          && resource.data.laundryStage is string
-          && request.resource.data.laundryStage is string
-          && validLaundryTransition(
-            resource.data.status,
-            resource.data.laundryStage,
-            request.resource.data.status,
-            request.resource.data.laundryStage
-          )
-        )
-      )
-      && (
-        request.resource.data.status == "canceled"
-        || (
-          request.resource.data.laundryStage in ["accepted","pickup_assigned","picked_up","processing","ready_delivery","out_for_delivery","delivered"]
-        )
-      )
-      && (
-        request.resource.data.status == "canceled"
-        || (
-          request.resource.data.laundryStage == "pickup_assigned"
-          && request.resource.data.assignedWorkerId is string
-          && request.resource.data.assignedWorkerId.size() > 0
-          && workerExists(request.resource.data.assignedWorkerId)
-          && workerData(request.resource.data.assignedWorkerId).projectId == resource.data.projectId
-          && workerData(request.resource.data.assignedWorkerId).role == "pickup_agent"
-        )
-        || (
-          request.resource.data.laundryStage in ["out_for_delivery","delivered"]
-          && request.resource.data.assignedWorkerId is string
-          && request.resource.data.assignedWorkerId.size() > 0
-          && workerExists(request.resource.data.assignedWorkerId)
-          && workerData(request.resource.data.assignedWorkerId).projectId == resource.data.projectId
-          && workerData(request.resource.data.assignedWorkerId).role == "delivery_agent"
-        )
-        || !(
-          request.resource.data.laundryStage in ["pickup_assigned","out_for_delivery","delivered"]
-        )
-      )
-      && (
-        (
-          request.resource.data.status != "done"
-          && (
-            request.resource.data.status == "canceled"
-            || request.resource.data.laundryStage != "out_for_delivery"
-          )
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            "status",
-            "laundryStage",
-            "statusUpdatedAt",
-            "statusUpdatedBy"
-          ])
-        )
-        ||
-        (
-          request.resource.data.status == "done"
-          && request.resource.data.laundryStage == "delivered"
-          && commissionAgreementExists(resource.data.projectId)
-          && commissionAgreementData(resource.data.projectId).status == "accepted"
-          && commissionAgreementData(resource.data.projectId).currentAmount is number
-          && request.resource.data.commissionEligible == true
-          && request.resource.data.commissionLocked == true
-          && request.resource.data.commissionAmount
-            == commissionAgreementData(resource.data.projectId).currentAmount
-          && request.resource.data.commissionAgreementVersion
-            == commissionAgreementData(resource.data.projectId).acceptedVersion
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            "status",
-            "laundryStage",
-            "statusUpdatedAt",
-            "statusUpdatedBy",
-            "deliveredAt",
-            "commissionEligible",
-            "commissionLocked",
-            "commissionAmount",
-            "commissionAgreementVersion"
-          ])
-          && getAfter(commissionLedgerPath("project_order_" + orderId)).data.orderId == orderId
-          && getAfter(commissionLedgerPath("project_order_" + orderId)).data.projectId
-            == resource.data.projectId
-          && getAfter(commissionLedgerPath("project_order_" + orderId)).data.amount
-            == request.resource.data.commissionAmount
-        )
-      )
-    )
-    ||
-    (
-      resource.data.templateType == "supermarket"
-      && (isAdmin() || isProjectOperator(resource.data.projectId))
-      && request.resource.data.projectId == resource.data.projectId
-      && request.resource.data.providerId == resource.data.providerId
-      && request.resource.data.statusUpdatedBy == request.auth.uid
-      && validSupermarketTransition(resource.data.status, request.resource.data.status)
-      && (
-        !(request.resource.data.status in ["assigned","out_for_delivery","delivered"])
-        || (
-          request.resource.data.assignedWorkerId is string
-          && request.resource.data.assignedWorkerId.size() > 0
-        )
-      )
-      && (
-        (
-          resource.data.status == "new"
-          && request.resource.data.status == "accepted"
-          && request.resource.data.items is list
-          && request.resource.data.items.size() > 0
-          && request.resource.data.items.size() <= 50
-          && request.resource.data.subtotal is number
-          && request.resource.data.subtotal >= 0
-          && request.resource.data.deliveryFee is number
-          && request.resource.data.deliveryFee == supermarketData(resource.data.projectId).deliveryFee
-          && request.resource.data.total is number
-          && request.resource.data.total
-            == request.resource.data.subtotal + request.resource.data.deliveryFee
-          && request.resource.data.price == request.resource.data.total
-          && request.resource.data.pricingLocked == true
-          && request.resource.data.pricingLockedBy == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            "items",
-            "subtotal",
-            "deliveryFee",
-            "total",
-            "price",
-            "pricingLocked",
-            "pricingLockedAt",
-            "pricingLockedBy",
-            "status",
-            "statusUpdatedAt",
-            "statusUpdatedBy"
-          ])
-        )
-        ||
-        (
-          request.resource.data.status != "accepted"
-          && request.resource.data.status != "assigned"
-          && request.resource.data.status != "delivered"
-          && (
-            request.resource.data.status == "canceled"
-            || resource.data.pricingLocked == true
-          )
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            "status",
-            "statusUpdatedAt",
-            "statusUpdatedBy"
-          ])
-        )
-        ||
-        (
-          request.resource.data.status == "delivered"
-          && resource.data.status == "out_for_delivery"
-          && resource.data.pricingLocked == true
-          && resource.data.assignedWorkerId is string
-          && resource.data.assignedWorkerId.size() > 0
-          && commissionAgreementExists(resource.data.projectId)
-          && commissionAgreementData(resource.data.projectId).status == "accepted"
-          && commissionAgreementData(resource.data.projectId).currentAmount is number
-          && request.resource.data.commissionEligible == true
-          && request.resource.data.commissionLocked == true
-          && request.resource.data.commissionAmount
-            == commissionAgreementData(resource.data.projectId).currentAmount
-          && request.resource.data.commissionAgreementVersion
-            == commissionAgreementData(resource.data.projectId).acceptedVersion
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            "status",
-            "statusUpdatedAt",
-            "statusUpdatedBy",
-            "deliveredAt",
-            "commissionEligible",
-            "commissionLocked",
-            "commissionAmount",
-            "commissionAgreementVersion"
-          ])
-          && getAfter(commissionLedgerPath("project_order_" + orderId)).data.orderId == orderId
-          && getAfter(commissionLedgerPath("project_order_" + orderId)).data.projectId
-            == resource.data.projectId
-          && getAfter(commissionLedgerPath("project_order_" + orderId)).data.amount
-            == request.resource.data.commissionAmount
-        )
-      )
-    )
-    ||
-    (
-      resource.data.templateType in ["restaurant","bakery"]
-      && (isAdmin() || isProjectOperator(resource.data.projectId))
-      && request.resource.data.projectId == resource.data.projectId
-      && request.resource.data.providerId == resource.data.providerId
-      && request.resource.data.statusUpdatedBy == request.auth.uid
-      && validSupermarketTransition(resource.data.status, request.resource.data.status)
-      && (
-        !(request.resource.data.status in ["assigned","out_for_delivery","delivered"])
-        || (
-          request.resource.data.assignedWorkerId is string
-          && request.resource.data.assignedWorkerId.size() > 0
-        )
-      )
-      && (
-        (
-          resource.data.status == "new"
-          && request.resource.data.status == "accepted"
-          && request.resource.data.items is list
-          && request.resource.data.items.size() > 0
-          && request.resource.data.items.size() <= 50
-          && request.resource.data.subtotal is number
-          && request.resource.data.subtotal >= 0
-          && request.resource.data.deliveryFee is number
-          && request.resource.data.deliveryFee == restaurantData(resource.data.projectId).deliveryFee
-          && request.resource.data.total is number
-          && request.resource.data.total
-            == request.resource.data.subtotal + request.resource.data.deliveryFee
-          && request.resource.data.price == request.resource.data.total
-          && request.resource.data.pricingLocked == true
-          && request.resource.data.pricingLockedBy == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            "items",
-            "subtotal",
-            "deliveryFee",
-            "total",
-            "price",
-            "pricingLocked",
-            "pricingLockedAt",
-            "pricingLockedBy",
-            "status",
-            "statusUpdatedAt",
-            "statusUpdatedBy"
-          ])
-        )
-        ||
-        (
-          request.resource.data.status != "accepted"
-          && request.resource.data.status != "assigned"
-          && request.resource.data.status != "delivered"
-          && (
-            request.resource.data.status == "canceled"
-            || resource.data.pricingLocked == true
-          )
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            "status",
-            "statusUpdatedAt",
-            "statusUpdatedBy"
-          ])
-        )
-        ||
-        (
-          request.resource.data.status == "delivered"
-          && resource.data.status == "out_for_delivery"
-          && resource.data.pricingLocked == true
-          && resource.data.assignedWorkerId is string
-          && resource.data.assignedWorkerId.size() > 0
-          && commissionAgreementExists(resource.data.projectId)
-          && commissionAgreementData(resource.data.projectId).status == "accepted"
-          && commissionAgreementData(resource.data.projectId).currentAmount is number
-          && request.resource.data.commissionEligible == true
-          && request.resource.data.commissionLocked == true
-          && request.resource.data.commissionAmount
-            == commissionAgreementData(resource.data.projectId).currentAmount
-          && request.resource.data.commissionAgreementVersion
-            == commissionAgreementData(resource.data.projectId).acceptedVersion
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            "status",
-            "statusUpdatedAt",
-            "statusUpdatedBy",
-            "deliveredAt",
-            "commissionEligible",
-            "commissionLocked",
-            "commissionAmount",
-            "commissionAgreementVersion"
-          ])
-          && getAfter(commissionLedgerPath("project_order_" + orderId)).data.orderId == orderId
-          && getAfter(commissionLedgerPath("project_order_" + orderId)).data.projectId
-            == resource.data.projectId
-          && getAfter(commissionLedgerPath("project_order_" + orderId)).data.amount
-            == request.resource.data.commissionAmount
-        )
-      )
-    )
-   );
-
-   allow delete: if isAdmin();
-  }
-
-  match /laundries/{laundryId} {
-   allow get: if isAdmin()
-    || ownsProject(laundryId)
-    || isLinkedProjectOperator(laundryId)
-    || (
-      laundryPartnerReady(laundryId)
-      && resource.data.isAcceptingOrders == true
-    );
-
-   allow list: if isAdmin()
-    || ownsProject(resource.data.projectId)
-    || isLinkedProjectOperator(resource.data.projectId);
-
-   allow create: if signedIn()
-    && request.resource.data.laundryId == laundryId
-    && request.resource.data.projectId == laundryId
-    && request.resource.data.ownerId == request.auth.uid
-    && request.resource.data.operatorId == laundryId
-    && request.resource.data.currency == "EGP"
-    && request.resource.data.isAcceptingOrders is bool
-    && projectExists(laundryId)
-    && projectData(laundryId).ownerId == request.auth.uid
-    && projectData(laundryId).template == "laundry"
-    && projectData(laundryId).operatingModel == "partner_operated"
-    && projectData(laundryId).operatorId == laundryId
-    && operatorExists(laundryId)
-    && operatorData(laundryId).ownerId == request.auth.uid
-    && request.resource.data.keys().hasOnly([
-      "laundryId",
-      "projectId",
-      "ownerId",
-      "operatorId",
-      "name",
-      "contactName",
-      "phone",
-      "whatsapp",
-      "email",
-      "address",
-      "location",
-      "instapayLink",
-      "currency",
-      "isAcceptingOrders",
-      "createdAt",
-      "updatedAt"
-    ]);
-
-   allow update: if (
-      isAdmin()
-      || isProjectOperator(resource.data.projectId)
-      || (
-        ownsProject(resource.data.projectId)
-        && operatorExists(resource.data.operatorId)
-        && operatorData(resource.data.operatorId).isActive == false
-      )
-    )
-    && request.resource.data.laundryId == resource.data.laundryId
-    && request.resource.data.projectId == resource.data.projectId
-    && request.resource.data.ownerId == resource.data.ownerId
-    && request.resource.data.operatorId == resource.data.operatorId
-    && request.resource.data.currency == resource.data.currency
-    && request.resource.data.isAcceptingOrders is bool
-    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-      "name",
-      "contactName",
-      "phone",
-      "whatsapp",
-      "email",
-      "address",
-      "location",
-      "instapayLink",
-      "isAcceptingOrders",
-      "updatedAt"
-    ]);
-
-   allow delete: if isAdmin();
-  }
-
-  match /supermarkets/{supermarketId} {
-   allow get: if isAdmin()
-    || ownsProject(supermarketId)
-    || isLinkedProjectOperator(supermarketId)
-    || (
-      supermarketPartnerReady(supermarketId)
-      && resource.data.isAcceptingOrders == true
-    );
-
-   allow list: if isAdmin()
-    || ownsProject(resource.data.projectId)
-    || isProjectOperator(resource.data.projectId);
-
-   allow create: if signedIn()
-    && request.resource.data.supermarketId == supermarketId
-    && request.resource.data.projectId == supermarketId
-    && request.resource.data.ownerId == request.auth.uid
-    && request.resource.data.operatorId == supermarketId
-    && request.resource.data.currency == "EGP"
-    && request.resource.data.deliveryFee is number
-    && request.resource.data.deliveryFee >= 0
-    && request.resource.data.isAcceptingOrders is bool
-    && projectExists(supermarketId)
-    && projectData(supermarketId).ownerId == request.auth.uid
-    && projectData(supermarketId).template == "supermarket"
-    && projectData(supermarketId).operatingModel == "partner_operated"
-    && projectData(supermarketId).operatorId == supermarketId
-    && operatorExists(supermarketId)
-    && operatorData(supermarketId).ownerId == request.auth.uid
-    && request.resource.data.keys().hasOnly([
-      "supermarketId",
-      "projectId",
-      "ownerId",
-      "operatorId",
-      "name",
-      "contactName",
-      "phone",
-      "whatsapp",
-      "email",
-      "address",
-      "location",
-      "deliveryFee",
-      "currency",
-      "isAcceptingOrders",
-      "createdAt",
-      "updatedAt"
-    ]);
-
-   allow update: if canOperateProject(resource.data.projectId)
-    && request.resource.data.supermarketId == resource.data.supermarketId
-    && request.resource.data.projectId == resource.data.projectId
-    && request.resource.data.ownerId == resource.data.ownerId
-    && request.resource.data.operatorId == resource.data.operatorId
-    && request.resource.data.currency == resource.data.currency
-    && request.resource.data.deliveryFee is number
-    && request.resource.data.deliveryFee >= 0
-    && request.resource.data.isAcceptingOrders is bool
-    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-      "name",
-      "contactName",
-      "phone",
-      "whatsapp",
-      "email",
-      "address",
-      "location",
-      "deliveryFee",
-      "isAcceptingOrders",
-      "catalogCategories",
-      "catalogProductCount",
-      "catalogUpdatedAt",
-      "updatedAt"
-    ])
-    && (
-      !request.resource.data.diff(resource.data).affectedKeys().hasAny(["catalogCategories"])
-      || request.resource.data.catalogCategories is list
-    )
-    && (
-      !request.resource.data.diff(resource.data).affectedKeys().hasAny(["catalogProductCount"])
-      || (
-        request.resource.data.catalogProductCount is number
-        && request.resource.data.catalogProductCount >= 0
-      )
-    );
-
-   allow delete: if isAdmin();
-
-   match /products/{productId} {
-    allow get, list: if isAdmin()
-     || ownsProject(supermarketId)
-     || isProjectOperator(supermarketId)
-     || (
-       supermarketPartnerReady(supermarketId)
-       && supermarketData(supermarketId).isAcceptingOrders == true
-     );
-
-    allow create: if (
-       isAdmin()
-       || isProjectOperator(supermarketId)
-      )
-      && request.resource.data.productId == productId
-      && request.resource.data.projectId == supermarketId
-      && request.resource.data.name is string
-      && request.resource.data.name.size() > 0
-      && request.resource.data.category is string
-      && request.resource.data.price is number
-      && request.resource.data.price >= 0
-      && request.resource.data.inStock is bool
-      && request.resource.data.isActive is bool
-      && request.resource.data.barcode is string
-      && request.resource.data.image is string
-      && request.resource.data.size is string
-      && request.resource.data.source is string
-      && request.resource.data.masterId is string
-      && request.resource.data.createdBy == request.auth.uid
-      && request.resource.data.updatedBy == request.auth.uid
-      && request.resource.data.keys().hasOnly([
-        "productId",
-        "projectId",
-        "name",
-        "category",
-        "size",
-        "barcode",
-        "image",
-        "price",
-        "inStock",
-        "isActive",
-        "source",
-        "masterId",
-        "createdBy",
-        "createdAt",
-        "updatedBy",
-        "updatedAt"
-      ]);
-
-    allow update: if (
-       isAdmin()
-       || isProjectOperator(supermarketId)
-      )
-      && request.resource.data.productId == resource.data.productId
-      && request.resource.data.projectId == resource.data.projectId
-      && request.resource.data.createdBy == resource.data.createdBy
-      && request.resource.data.createdAt == resource.data.createdAt
-      && request.resource.data.name is string
-      && request.resource.data.name.size() > 0
-      && request.resource.data.category is string
-      && request.resource.data.price is number
-      && request.resource.data.price >= 0
-      && request.resource.data.inStock is bool
-      && request.resource.data.isActive is bool
-      && request.resource.data.barcode is string
-      && request.resource.data.image is string
-      && request.resource.data.size is string
-      && request.resource.data.source is string
-      && request.resource.data.masterId is string
-      && request.resource.data.updatedBy == request.auth.uid
-      && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-        "name",
-        "category",
-        "size",
-        "barcode",
-        "image",
-        "price",
-        "inStock",
-        "isActive",
-        "updatedBy",
-        "updatedAt"
-      ]);
-
-    allow delete: if isAdmin()
-     || isProjectOperator(supermarketId);
-   }
-  }
-
-
-  match /restaurants/{restaurantId} {
-   allow get: if isAdmin()
-    || ownsProject(restaurantId)
-    || isLinkedProjectOperator(restaurantId)
-    || (
-      restaurantPartnerReady(restaurantId)
-      && resource.data.isAcceptingOrders == true
-    );
-
-   allow list: if isAdmin()
-    || ownsProject(resource.data.projectId)
-    || isProjectOperator(resource.data.projectId);
-
-   allow create: if signedIn()
-    && request.resource.data.restaurantId == restaurantId
-    && request.resource.data.projectId == restaurantId
-    && request.resource.data.ownerId == request.auth.uid
-    && request.resource.data.operatorId == restaurantId
-    && request.resource.data.currency == "EGP"
-    && request.resource.data.deliveryFee is number
-    && request.resource.data.deliveryFee >= 0
-    && request.resource.data.isAcceptingOrders is bool
-    && projectExists(restaurantId)
-    && projectData(restaurantId).ownerId == request.auth.uid
-    && projectData(restaurantId).template in ["restaurant","bakery"]
-    && projectData(restaurantId).operatingModel == "partner_operated"
-    && projectData(restaurantId).operatorId == restaurantId
-    && operatorExists(restaurantId)
-    && operatorData(restaurantId).ownerId == request.auth.uid
-    && request.resource.data.keys().hasOnly([
-      "restaurantId","projectId","ownerId","operatorId","name","contactName",
-      "phone","whatsapp","address","location","cuisine","slogan","logo",
-      "coverImage","primaryColor","deliveryFee","currency","isAcceptingOrders",
-      "createdAt","updatedAt"
-    ]);
-
-   allow update: if (
-      isAdmin()
-      || isProjectOperator(resource.data.projectId)
-      || (
-        ownsProject(resource.data.projectId)
-        && operatorExists(resource.data.operatorId)
-        && operatorData(resource.data.operatorId).isActive == false
-      )
-    )
-    && request.resource.data.restaurantId == resource.data.restaurantId
-    && request.resource.data.projectId == resource.data.projectId
-    && request.resource.data.ownerId == resource.data.ownerId
-    && request.resource.data.operatorId == resource.data.operatorId
-    && request.resource.data.currency == resource.data.currency
-    && request.resource.data.deliveryFee is number
-    && request.resource.data.deliveryFee >= 0
-    && request.resource.data.isAcceptingOrders is bool
-    && request.resource.data.primaryColor is string
-    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-      "name","contactName","phone","whatsapp","address","location","cuisine",
-      "slogan","logo","coverImage","primaryColor","deliveryFee",
-      "isAcceptingOrders","menuCategories","menuItemCount","menuUpdatedAt","updatedAt"
-    ])
-    && (
-      !request.resource.data.diff(resource.data).affectedKeys().hasAny(["menuCategories"])
-      || request.resource.data.menuCategories is list
-    )
-    && (
-      !request.resource.data.diff(resource.data).affectedKeys().hasAny(["menuItemCount"])
-      || (
-        request.resource.data.menuItemCount is number
-        && request.resource.data.menuItemCount >= 0
-      )
-    );
-
-   allow delete: if isAdmin();
-
-   match /menu/{itemId} {
-    allow get, list: if isAdmin()
-     || ownsProject(restaurantId)
-     || isProjectOperator(restaurantId)
-     || (
-       restaurantPartnerReady(restaurantId)
-       && restaurantData(restaurantId).isAcceptingOrders == true
-     );
-
-    allow create: if (isAdmin() || isProjectOperator(restaurantId))
-     && request.resource.data.itemId == itemId
-     && request.resource.data.projectId == restaurantId
-     && request.resource.data.name is string
-     && request.resource.data.name.size() > 0
-     && request.resource.data.category is string
-     && request.resource.data.description is string
-     && request.resource.data.unit is string
-     && request.resource.data.unit.size() > 0
-     && request.resource.data.price is number
-     && request.resource.data.price >= 0
-     && request.resource.data.image is string
-     && request.resource.data.isAvailable is bool
-     && request.resource.data.isActive is bool
-     && request.resource.data.createdBy == request.auth.uid
-     && request.resource.data.updatedBy == request.auth.uid
-     && request.resource.data.keys().hasOnly([
-       "itemId","projectId","name","category","description","unit","price","image",
-       "isAvailable","isActive","createdBy","createdAt","updatedBy","updatedAt"
-     ]);
-
-    allow update: if (isAdmin() || isProjectOperator(restaurantId))
-     && request.resource.data.itemId == resource.data.itemId
-     && request.resource.data.projectId == resource.data.projectId
-     && request.resource.data.createdBy == resource.data.createdBy
-     && request.resource.data.createdAt == resource.data.createdAt
-     && request.resource.data.name is string
-     && request.resource.data.name.size() > 0
-     && request.resource.data.category is string
-     && request.resource.data.description is string
-     && (
-       !("unit" in request.resource.data)
-       || (
-         request.resource.data.unit is string
-         && request.resource.data.unit.size() > 0
-       )
-     )
-     && request.resource.data.price is number
-     && request.resource.data.price >= 0
-     && request.resource.data.image is string
-     && request.resource.data.isAvailable is bool
-     && request.resource.data.isActive is bool
-     && request.resource.data.updatedBy == request.auth.uid
-     && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-       "name","category","description","unit","price","image","isAvailable",
-       "isActive","updatedBy","updatedAt"
-     ]);
-
-    allow delete: if isAdmin() || isProjectOperator(restaurantId);
-   }
-  }
-
-  match /workers/{workerId} {
-   allow get, list: if canOperateProject(resource.data.projectId);
-
-   allow create: if signedIn()
-    && request.resource.data.workerId == workerId
-    && request.resource.data.projectId is string
-    && request.resource.data.ownerId is string
-    && request.resource.data.templateId is string
-    && request.resource.data.name is string
-    && request.resource.data.role in ["rider","cleaner","pickup_agent","delivery_agent"]
-    && validWorkerRoleForProject(request.resource.data.projectId, request.resource.data.role)
-    && request.resource.data.phone is string
-    && request.resource.data.whatsapp is string
-    && request.resource.data.whatsapp.size() > 0
-    && request.resource.data.isActive == true
-    && request.resource.data.createdBy == request.auth.uid
-    && request.resource.data.keys().hasOnly([
-      "workerId",
-      "ownerId",
-      "projectId",
-      "templateId",
-      "name",
-      "role",
-      "phone",
-      "whatsapp",
-      "isActive",
-      "createdBy",
-      "createdAt",
-      "updatedAt"
-    ])
-    && projectExists(request.resource.data.projectId)
-    && request.resource.data.ownerId == projectData(request.resource.data.projectId).ownerId
-    && request.resource.data.templateId == projectData(request.resource.data.projectId).template
-    && canOperateProject(request.resource.data.projectId);
-
-   allow update: if canOperateProject(resource.data.projectId)
-    && request.resource.data.workerId == resource.data.workerId
-    && request.resource.data.ownerId == resource.data.ownerId
-    && request.resource.data.projectId == resource.data.projectId
-    && request.resource.data.templateId == resource.data.templateId
-    && request.resource.data.createdBy == resource.data.createdBy
-    && request.resource.data.createdAt == resource.data.createdAt
-    && request.resource.data.name is string
-    && request.resource.data.role in ["rider","cleaner","pickup_agent","delivery_agent"]
-    && validWorkerRoleForProject(resource.data.projectId, request.resource.data.role)
-    && request.resource.data.phone is string
-    && request.resource.data.whatsapp is string
-    && request.resource.data.whatsapp.size() > 0
-    && request.resource.data.isActive is bool
-    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-      "name",
-      "role",
-      "phone",
-      "whatsapp",
-      "isActive",
-      "updatedAt"
-    ]);
-
-   allow delete: if isAdmin();
-  }
-
-  match /workerAssignments/{assignmentId} {
-   allow get, list: if canOperateProject(resource.data.projectId);
-
-   allow create: if signedIn()
-    && request.resource.data.assignmentId == assignmentId
-    && request.resource.data.projectId is string
-    && request.resource.data.orderId is string
-    && request.resource.data.workerId is string
-    && request.resource.data.actorUid == request.auth.uid
-    && request.resource.data.actorType in ["owner","operator"]
-    && request.resource.data.eventType in ["assigned","unassigned"]
-    && request.resource.data.keys().hasOnly([
-      "assignmentId",
-      "projectId",
-      "orderId",
-      "workerId",
-      "workerName",
-      "workerRole",
-      "actorUid",
-      "actorType",
-      "eventType",
-      "createdAt"
-    ])
-    && orderExists(request.resource.data.orderId)
-    && orderData(request.resource.data.orderId).projectId == request.resource.data.projectId
-    && (
-      (
-        request.resource.data.actorType == "owner"
-        && ownsProject(request.resource.data.projectId)
-        && projectData(request.resource.data.projectId).operatingModel == "owner_operated"
-      )
-      ||
-      (
-        request.resource.data.actorType == "operator"
-        && isProjectOperator(request.resource.data.projectId)
-      )
-    )
-    && (
-      (
-        request.resource.data.eventType == "assigned"
-        && workerExists(request.resource.data.workerId)
-        && workerData(request.resource.data.workerId).projectId == request.resource.data.projectId
-        && workerData(request.resource.data.workerId).isActive == true
-        && request.resource.data.workerName is string
-        && request.resource.data.workerRole == workerData(request.resource.data.workerId).role
-      )
-      ||
-      (
-        request.resource.data.eventType == "unassigned"
-      )
-    );
-
-   allow update, delete: if false;
-  }
-
-  match /operators/{operatorId} {
-   allow get: if isAdmin()
-    || ownsProject(operatorId)
-    || (signedIn() && resource.data.ownerId == request.auth.uid && ownsProject(resource.data.projectId))
-    || (signedIn() && resource.data.authUid == request.auth.uid)
-    || (
-      signedIn()
-      && resource.data.authUid == ""
-      && (
-        (
-          resource.data.authLoginEmail is string
-          && resource.data.authLoginEmail.size() > 0
-          && request.auth.token.email == resource.data.authLoginEmail
-        )
-        ||
-        (
-          request.auth.token.email_verified == true
-          && request.auth.token.email == resource.data.email
-        )
-      )
-    );
-
-   allow list: if isAdmin()
-    || (signedIn() && resource.data.ownerId == request.auth.uid && ownsProject(resource.data.projectId))
-    || (signedIn() && resource.data.authUid == request.auth.uid);
-
-   allow create: if signedIn()
-    && request.resource.data.operatorId == operatorId
-    && request.resource.data.projectId == operatorId
-    && request.resource.data.ownerId == request.auth.uid
-    && request.resource.data.authUid == ""
-    && request.resource.data.authLoginEmail is string
-    && request.resource.data.authLoginEmail.size() > 0
-    && request.resource.data.status == "pending_invite"
-    && request.resource.data.agreementStatus == "not_proposed"
-    && request.resource.data.isActive == false
-    && projectExists(request.resource.data.projectId)
-    && projectData(request.resource.data.projectId).ownerId == request.auth.uid
-    && projectData(request.resource.data.projectId).operatingModel == "partner_operated"
-    && request.resource.data.templateId == projectData(request.resource.data.projectId).template;
-
-   allow update: if isAdmin()
-    || (
-      signedIn()
-      && resource.data.ownerId == request.auth.uid
-      && ownsProject(resource.data.projectId)
-      && request.resource.data.operatorId == resource.data.operatorId
-      && request.resource.data.projectId == resource.data.projectId
-      && request.resource.data.ownerId == resource.data.ownerId
-      && request.resource.data.templateId == resource.data.templateId
-      && request.resource.data.authUid == resource.data.authUid
-      && request.resource.data.status == resource.data.status
-      && request.resource.data.isActive == resource.data.isActive
-      && (
-        resource.data.authUid == ""
-        || request.resource.data.email == resource.data.email
-      )
-      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name","contactName","phone","whatsapp","email","authLoginEmail","agreementStatus","updatedAt"])
-      && (
-        !request.resource.data.diff(resource.data).affectedKeys().hasAny(["authLoginEmail"])
-        || (
-          resource.data.authUid == ""
-          && request.resource.data.authLoginEmail is string
-          && request.resource.data.authLoginEmail.size() > 0
-        )
-      )
-      && (
-        request.resource.data.agreementStatus == resource.data.agreementStatus
-        || (
-          resource.data.agreementStatus != "accepted"
-          && request.resource.data.agreementStatus == "pending"
-        )
-      )
-    )
-    || (
-      signedIn()
-      && ownsProject(resource.data.projectId)
-      && resource.data.ownerId == request.auth.uid
-      && request.resource.data.operatorId == resource.data.operatorId
-      && request.resource.data.projectId == resource.data.projectId
-      && request.resource.data.ownerId == resource.data.ownerId
-      && request.resource.data.templateId == resource.data.templateId
-      && request.resource.data.authUid == ""
-      && request.resource.data.authLoginEmail is string
-      && request.resource.data.authLoginEmail.size() > 0
-      && request.resource.data.authLoginEmail != resource.data.authLoginEmail
-      && request.resource.data.status == resource.data.status
-      && request.resource.data.agreementStatus == resource.data.agreementStatus
-      && request.resource.data.isActive == resource.data.isActive
-      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["authLoginEmail","authUid","updatedAt"])
-    )
-    || (
-      signedIn()
-      && resource.data.authUid == ""
-      && (
-        (
-          resource.data.authLoginEmail is string
-          && resource.data.authLoginEmail.size() > 0
-          && request.auth.token.email == resource.data.authLoginEmail
-        )
-        ||
-        (
-          request.auth.token.email_verified == true
-          && request.auth.token.email == resource.data.email
-        )
-      )
-      && request.resource.data.authUid == request.auth.uid
-      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["authUid","status","updatedAt"])
-      && (
-        (resource.data.agreementStatus == "accepted" && request.resource.data.status == "active")
-        || (resource.data.agreementStatus != "accepted" && request.resource.data.status == "pending_agreement")
-      )
-    )
-    || (
-      signedIn()
-      && resource.data.authUid == request.auth.uid
-      && request.resource.data.authUid == resource.data.authUid
-      && request.resource.data.ownerId == resource.data.ownerId
-      && request.resource.data.projectId == resource.data.projectId
-      && request.resource.data.templateId == resource.data.templateId
-      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["agreementStatus","status","isActive","updatedAt"])
-      && (
-        (
-          request.resource.data.agreementStatus == "accepted"
-          && request.resource.data.status == "active"
-          && request.resource.data.isActive == true
-          && commissionAgreementExists(resource.data.projectId)
-          && getAfter(commissionAgreementPath(resource.data.projectId)).data.status == "accepted"
-          && getAfter(commissionAgreementPath(resource.data.projectId)).data.pendingStatus == "none"
-          && getAfter(commissionAgreementPath(resource.data.projectId)).data.currentAmount is number
-          && getAfter(commissionAgreementPath(resource.data.projectId)).data.acceptedVersion > 0
-        )
-        || (
-          request.resource.data.agreementStatus == "rejected"
-          && request.resource.data.status == "pending_agreement"
-          && request.resource.data.isActive == false
-          && commissionAgreementExists(resource.data.projectId)
-          && getAfter(commissionAgreementPath(resource.data.projectId)).data.status == "rejected"
-          && getAfter(commissionAgreementPath(resource.data.projectId)).data.pendingStatus == "none"
-        )
-      )
-    );
-
-   allow delete: if isAdmin();
-  }
-
-  match /commissionAgreements/{agreementId} {
-   allow get: if isAdmin()
-    || ownsProject(agreementId)
-    || (signedIn() && resource.data.ownerId == request.auth.uid && ownsProject(resource.data.projectId))
-    || (
-      signedIn()
-      && operatorExists(resource.data.operatorId)
-      && operatorData(resource.data.operatorId).authUid == request.auth.uid
-    );
-
-   allow list: if isAdmin()
-    || (signedIn() && resource.data.ownerId == request.auth.uid && ownsProject(resource.data.projectId))
-    || (
-      signedIn()
-      && operatorExists(resource.data.operatorId)
-      && operatorData(resource.data.operatorId).authUid == request.auth.uid
-    );
-
-   allow create: if signedIn()
-    && agreementId == request.resource.data.projectId
-    && request.resource.data.agreementId == agreementId
-    && request.resource.data.ownerId == request.auth.uid
-    && request.resource.data.operatorId == agreementId
-    && request.resource.data.currency == "EGP"
-    && request.resource.data.unit == "per_completed_order"
-    && request.resource.data.currentAmount == null
-    && request.resource.data.acceptedVersion == 0
-    && request.resource.data.pendingAmount is number
-    && request.resource.data.pendingAmount >= 0
-    && request.resource.data.status == "pending"
-    && request.resource.data.pendingStatus == "pending"
-    && request.resource.data.proposedBy == request.auth.uid
-    && request.resource.data.version == 1
-    && projectExists(request.resource.data.projectId)
-    && projectData(request.resource.data.projectId).ownerId == request.auth.uid
-    && projectData(request.resource.data.projectId).operatingModel == "partner_operated"
-    && request.resource.data.templateId == projectData(request.resource.data.projectId).template
-    && operatorExists(request.resource.data.operatorId)
-    && operatorData(request.resource.data.operatorId).ownerId == request.auth.uid;
-
-   allow update: if isAdmin()
-    || (
-      signedIn()
-      && resource.data.ownerId == request.auth.uid
-      && ownsProject(resource.data.projectId)
-      && request.resource.data.agreementId == resource.data.agreementId
-      && request.resource.data.projectId == resource.data.projectId
-      && request.resource.data.ownerId == resource.data.ownerId
-      && request.resource.data.operatorId == resource.data.operatorId
-      && request.resource.data.templateId == resource.data.templateId
-      && request.resource.data.currency == resource.data.currency
-      && request.resource.data.unit == resource.data.unit
-      && request.resource.data.currentAmount == resource.data.currentAmount
-      && request.resource.data.acceptedVersion == resource.data.acceptedVersion
-      && request.resource.data.pendingAmount is number
-      && request.resource.data.pendingAmount >= 0
-      && request.resource.data.pendingStatus == "pending"
-      && (
-        (resource.data.currentAmount != null && request.resource.data.status == "accepted")
-        || (resource.data.currentAmount == null && request.resource.data.status == "pending")
-      )
-      && request.resource.data.proposedBy == request.auth.uid
-      && request.resource.data.version == resource.data.version + 1
-      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["pendingAmount","pendingStatus","status","proposedAt","proposedBy","rejectedAt","updatedAt","version"])
-    )
-    || (
-      signedIn()
-      && operatorExists(resource.data.operatorId)
-      && operatorData(resource.data.operatorId).authUid == request.auth.uid
-      && request.resource.data.agreementId == resource.data.agreementId
-      && request.resource.data.projectId == resource.data.projectId
-      && request.resource.data.ownerId == resource.data.ownerId
-      && request.resource.data.operatorId == resource.data.operatorId
-      && request.resource.data.templateId == resource.data.templateId
-      && request.resource.data.currency == resource.data.currency
-      && request.resource.data.unit == resource.data.unit
-      && resource.data.pendingStatus == "pending"
-      && request.resource.data.pendingAmount == null
-      && request.resource.data.pendingStatus == "none"
-      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["currentAmount","acceptedVersion","pendingAmount","status","pendingStatus","lastDecision","acceptedAt","acceptedBy","rejectedAt","updatedAt"])
-      && (
-        (
-          request.resource.data.lastDecision == "accepted"
-          && request.resource.data.status == "accepted"
-          && request.resource.data.currentAmount == resource.data.pendingAmount
-          && request.resource.data.acceptedVersion == resource.data.version
-          && request.resource.data.acceptedBy == request.auth.uid
-          && (
-            !userExists(resource.data.ownerId)
-            || !("accessModel" in userData(resource.data.ownerId))
-            || userData(resource.data.ownerId).accessModel != "merchant_trial_v1"
-            || userData(resource.data.ownerId).subscriptionStatus != "trial"
-            || userData(resource.data.ownerId).firstMerchantLinkedAt != null
-            || (
-              existsAfter(userPath(resource.data.ownerId))
-              && getAfter(userPath(resource.data.ownerId)).data.firstMerchantLinkedAt == request.time
-              && getAfter(userPath(resource.data.ownerId)).data.firstMerchantProjectId == resource.data.projectId
-            )
-          )
-        )
-        || (
-          request.resource.data.lastDecision == "rejected"
-          && request.resource.data.currentAmount == resource.data.currentAmount
-          && request.resource.data.acceptedVersion == resource.data.acceptedVersion
-          && (
-            (resource.data.currentAmount == null && request.resource.data.status == "rejected")
-            || (resource.data.currentAmount != null && request.resource.data.status == "accepted")
-          )
-        )
-      )
-    );
-
-   allow delete: if false;
-  }
-
-
-  match /orderTracking/{trackingToken} {
-   allow get: if resource.data.trackingToken == trackingToken
-    && resource.data.templateType in ["supermarket","restaurant","bakery","laundry"]
-    && trackingTemplateReady(resource.data.projectId, resource.data.templateType);
-
-   allow list: if false;
-
-   allow create: if request.resource.data.trackingToken == trackingToken
-    && trackingToken.size() >= 40
-    && request.resource.data.templateType in ["supermarket","restaurant","bakery","laundry"]
-    && request.resource.data.projectId is string
-    && request.resource.data.orderId is string
-    && request.resource.data.status == "new"
-    && request.resource.data.items is list
-    && request.resource.data.subtotal is number
-    && request.resource.data.deliveryFee is number
-    && request.resource.data.total is number
-    && request.resource.data.keys().hasOnly([
-      "trackingToken",
-      "orderId",
-      "projectId",
-      "templateType",
-      "status",
-      "items",
-      "subtotal",
-      "deliveryFee",
-      "total",
-      "createdAt",
-      "updatedAt"
-    ])
-    && trackingTemplateReady(
-      request.resource.data.projectId,
-      request.resource.data.templateType
-    )
-    && getAfter(orderPath(request.resource.data.orderId)).data.projectId
-      == request.resource.data.projectId
-    && getAfter(orderPath(request.resource.data.orderId)).data.templateType
-      == request.resource.data.templateType
-    && getAfter(orderPath(request.resource.data.orderId)).data.trackingToken
-      == trackingToken
-    && getAfter(orderPath(request.resource.data.orderId)).data.status
-      == request.resource.data.status
-    && getAfter(orderPath(request.resource.data.orderId)).data.items
-      == request.resource.data.items
-    && (
-      request.resource.data.templateType == "laundry"
-      ? (
-        request.resource.data.subtotal == getAfter(orderPath(request.resource.data.orderId)).data.price
-        && request.resource.data.deliveryFee == 0
-        && request.resource.data.total == getAfter(orderPath(request.resource.data.orderId)).data.price
-      )
-      : (
-        getAfter(orderPath(request.resource.data.orderId)).data.subtotal
-          == request.resource.data.subtotal
-        && getAfter(orderPath(request.resource.data.orderId)).data.deliveryFee
-          == request.resource.data.deliveryFee
-        && getAfter(orderPath(request.resource.data.orderId)).data.total
-          == request.resource.data.total
-      )
-    );
-
-   function validLaundryTrackingUpdate(){
-    let nextOrder = getAfter(orderPath(resource.data.orderId)).data;
-    return (
-      isAdmin()
-      || isProjectOperator(resource.data.projectId)
-    )
-    && request.resource.data.trackingToken == resource.data.trackingToken
-    && request.resource.data.orderId == resource.data.orderId
-    && request.resource.data.projectId == resource.data.projectId
-    && request.resource.data.templateType == "laundry"
-    && request.resource.data.createdAt == resource.data.createdAt
-    && nextOrder.projectId == resource.data.projectId
-    && nextOrder.templateType == "laundry"
-    && request.resource.data.status == laundryTrackingStatus(nextOrder)
-    && request.resource.data.items == nextOrder.items
-    && request.resource.data.subtotal == nextOrder.price
-    && request.resource.data.deliveryFee == 0
-    && request.resource.data.total == nextOrder.price
-    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-      "status",
-      "items",
-      "subtotal",
-      "deliveryFee",
-      "total",
-      "updatedAt",
-      "deliveredAt"
-    ])
-    && request.resource.data.keys().hasOnly([
-      "trackingToken",
-      "orderId",
-      "projectId",
-      "templateType",
-      "status",
-      "items",
-      "subtotal",
-      "deliveryFee",
-      "total",
-      "createdAt",
-      "updatedAt",
-      "deliveredAt"
-    ]);
-   }
-
-   allow update: if resource.data.templateType == "laundry"
-    && validLaundryTrackingUpdate();
-
-   allow update: if resource.data.templateType != "laundry"
-    && (
-      isAdmin()
-      || isProjectOperator(resource.data.projectId)
-    )
-    && request.resource.data.trackingToken == resource.data.trackingToken
-    && request.resource.data.orderId == resource.data.orderId
-    && request.resource.data.projectId == resource.data.projectId
-    && request.resource.data.templateType == resource.data.templateType
-    && request.resource.data.createdAt == resource.data.createdAt
-    && request.resource.data.status
-      == (
-        resource.data.templateType == "laundry"
-        ? laundryTrackingStatus(getAfter(orderPath(resource.data.orderId)).data)
-        : getAfter(orderPath(resource.data.orderId)).data.status
-      )
-    && request.resource.data.items
-      == getAfter(orderPath(resource.data.orderId)).data.items
-    && (
-      resource.data.templateType == "laundry"
-      ? (
-        request.resource.data.subtotal == getAfter(orderPath(resource.data.orderId)).data.price
-        && request.resource.data.deliveryFee == 0
-        && request.resource.data.total == getAfter(orderPath(resource.data.orderId)).data.price
-      )
-      : (
-        request.resource.data.subtotal == getAfter(orderPath(resource.data.orderId)).data.subtotal
-        && request.resource.data.deliveryFee == getAfter(orderPath(resource.data.orderId)).data.deliveryFee
-        && request.resource.data.total == getAfter(orderPath(resource.data.orderId)).data.total
-      )
-    )
-    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-      "status",
-      "items",
-      "subtotal",
-      "deliveryFee",
-      "total",
-      "updatedAt",
-      "deliveredAt"
-    ])
-    && request.resource.data.keys().hasOnly([
-      "trackingToken",
-      "orderId",
-      "projectId",
-      "templateType",
-      "status",
-      "items",
-      "subtotal",
-      "deliveryFee",
-      "total",
-      "createdAt",
-      "updatedAt",
-      "deliveredAt"
-    ]);
-   allow delete: if false;
-  }
-
-  match /referrals/{referralId} {
-   allow get, list: if isAdmin()
-    || (signedIn() && resource.data.referrerUserId == request.auth.uid);
-   allow create: if isAdmin();
-   allow update: if isAdmin()
-    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status","paidAt"]);
-   allow delete: if false;
-  }
-
-  match /commissionLedger/{entryId} {
-   allow get, list: if isAdmin()
-    || (signedIn() && resource.data.userId == request.auth.uid)
-    || (
-      signedIn()
-      && resource.data.sourceType == "project_order"
-      && resource.data.projectId is string
-      && isProjectOperator(resource.data.projectId)
-    );
-
-   allow create: if isAdmin()
-    || validTrackedLaundryProjectOrderLedgerCreate(entryId)
-    || validProjectOrderLedgerCreate(entryId);
-
-   allow update: if (
-    isAdmin()
-    && request.resource.data.userId == resource.data.userId
-    && request.resource.data.sourceType == resource.data.sourceType
-    && request.resource.data.sourceId == resource.data.sourceId
-    && request.resource.data.amount == resource.data.amount
-    && request.resource.data.currency == resource.data.currency
-    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-      "status",
-      "paidAt",
-      "settlementId",
-      "settlementStatus",
-      "settlementCreatedAt"
-    ])
-   )
-   ||
-   (
-    signedIn()
-    && resource.data.sourceType == "project_order"
-    && resource.data.userId == request.auth.uid
-    && resource.data.status == "earned"
-    && request.resource.data.status == "reversed"
-    && request.resource.data.userId == resource.data.userId
-    && request.resource.data.projectId == resource.data.projectId
-    && request.resource.data.orderId == resource.data.orderId
-    && request.resource.data.sourceType == resource.data.sourceType
-    && request.resource.data.sourceId == resource.data.sourceId
-    && request.resource.data.agreementId == resource.data.agreementId
-    && request.resource.data.agreementVersion == resource.data.agreementVersion
-    && request.resource.data.amount == resource.data.amount
-    && request.resource.data.currency == resource.data.currency
-    && request.resource.data.reversedAt == request.time
-    && request.resource.data.reversalId == "project_order_" + resource.data.orderId
-    && request.resource.data.reversalConfirmedBy == request.auth.uid
-    && exists(commissionReversalPath(request.resource.data.reversalId))
-    && getAfter(commissionReversalPath(request.resource.data.reversalId)).data.status == "confirmed"
-    && getAfter(commissionReversalPath(request.resource.data.reversalId)).data.ownerId == request.auth.uid
-    && getAfter(commissionReversalPath(request.resource.data.reversalId)).data.projectId == resource.data.projectId
-    && getAfter(commissionReversalPath(request.resource.data.reversalId)).data.orderId == resource.data.orderId
-    && getAfter(commissionReversalPath(request.resource.data.reversalId)).data.amount == resource.data.amount
-    && request.resource.data.reversalReason
-      == getAfter(commissionReversalPath(request.resource.data.reversalId)).data.reasonCode
-    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-      "status",
-      "reversedAt",
-      "reversalId",
-      "reversalReason",
-      "reversalConfirmedBy"
-    ])
-   );
-
-   allow delete: if false;
-  }
-
-  match /commissionReversals/{reversalId} {
-   allow get, list: if isAdmin()
-    || (
-      signedIn()
-      && resource.data.projectId is string
-      && (
-        ownsProject(resource.data.projectId)
-        || isProjectOperator(resource.data.projectId)
-      )
-    );
-
-   allow create: if signedIn()
-    && request.resource.data.reversalId == reversalId
-    && request.resource.data.orderId is string
-    && request.resource.data.projectId is string
-    && reversalId == "project_order_" + request.resource.data.orderId
-    && request.resource.data.ledgerEntryId == "project_order_" + request.resource.data.orderId
-    && isProjectOperator(request.resource.data.projectId)
-    && projectExists(request.resource.data.projectId)
-    && orderExists(request.resource.data.orderId)
-    && exists(commissionLedgerPath(request.resource.data.ledgerEntryId))
-    && request.resource.data.ownerId == projectData(request.resource.data.projectId).ownerId
-    && request.resource.data.operatorId == projectData(request.resource.data.projectId).operatorId
-    && request.resource.data.requestedBy == request.auth.uid
-    && request.resource.data.currency == "EGP"
-    && request.resource.data.amount is number
-    && request.resource.data.amount > 0
-    && request.resource.data.status == "pending_owner_confirmation"
-    && request.resource.data.reasonCode in [
-      "customer_canceled_after_dispatch",
-      "delivery_failed",
-      "duplicate_order",
-      "operator_error",
-      "other"
-    ]
-    && request.resource.data.createdAt == request.time
-    && request.resource.data.requestedAt == request.time
-    && request.resource.data.updatedAt == request.time
-    && request.resource.data.confirmedAt == null
-    && request.resource.data.confirmedBy == null
-    && request.resource.data.rejectedAt == null
-    && request.resource.data.rejectedBy == null
-    && orderData(request.resource.data.orderId).projectId == request.resource.data.projectId
-    && orderData(request.resource.data.orderId).status == "canceled"
-    && orderData(request.resource.data.orderId).commissionLocked == true
-    && orderData(request.resource.data.orderId).commissionAmount == request.resource.data.amount
-    && get(commissionLedgerPath(request.resource.data.ledgerEntryId)).data.projectId
-      == request.resource.data.projectId
-    && get(commissionLedgerPath(request.resource.data.ledgerEntryId)).data.orderId
-      == request.resource.data.orderId
-    && get(commissionLedgerPath(request.resource.data.ledgerEntryId)).data.amount
-      == request.resource.data.amount
-    && get(commissionLedgerPath(request.resource.data.ledgerEntryId)).data.status == "earned";
-
-   allow update: if signedIn()
-    && resource.data.projectId is string
-    && ownsProject(resource.data.projectId)
-    && resource.data.ownerId == request.auth.uid
-    && resource.data.status == "pending_owner_confirmation"
-    && request.resource.data.reversalId == resource.data.reversalId
-    && request.resource.data.projectId == resource.data.projectId
-    && request.resource.data.orderId == resource.data.orderId
-    && request.resource.data.ledgerEntryId == resource.data.ledgerEntryId
-    && request.resource.data.ownerId == resource.data.ownerId
-    && request.resource.data.operatorId == resource.data.operatorId
-    && request.resource.data.amount == resource.data.amount
-    && request.resource.data.currency == resource.data.currency
-    && request.resource.data.reasonCode == resource.data.reasonCode
-    && request.resource.data.note == resource.data.note
-    && request.resource.data.requestedAt == resource.data.requestedAt
-    && request.resource.data.requestedBy == resource.data.requestedBy
-    && request.resource.data.createdAt == resource.data.createdAt
-    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-      "status",
-      "confirmedAt",
-      "confirmedBy",
-      "rejectedAt",
-      "rejectedBy",
-      "updatedAt"
-    ])
-    && (
-      (
-        request.resource.data.status == "confirmed"
-        && request.resource.data.confirmedAt == request.time
-        && request.resource.data.confirmedBy == request.auth.uid
-        && request.resource.data.rejectedAt == null
-        && request.resource.data.rejectedBy == null
-      )
-      ||
-      (
-        request.resource.data.status == "rejected"
-        && request.resource.data.rejectedAt == request.time
-        && request.resource.data.rejectedBy == request.auth.uid
-        && request.resource.data.confirmedAt == null
-        && request.resource.data.confirmedBy == null
-      )
-    );
-
-   allow delete: if false;
-  }
-
-
-
-
-
-  match /commissionSettlements/{settlementId} {
-   allow get, list: if isAdmin()
-    || (signedIn() && resource.data.ownerId == request.auth.uid)
-    || (
-      signedIn()
-      && resource.data.projectId is string
-      && (
-        (ownsProject(resource.data.projectId) && resource.data.ownerId == request.auth.uid)
-        || (
-          historicProjectOwner(resource.data.projectId)
-          && resource.data.ownerId == request.auth.uid
-        )
-        || isProjectOperator(resource.data.projectId)
-      )
-    );
-
-   allow create: if signedIn()
-    && request.resource.data.settlementId == settlementId
-    && request.resource.data.projectId is string
-    && isProjectOperator(request.resource.data.projectId)
-    && projectExists(request.resource.data.projectId)
-    && (!("platformManaged" in projectData(request.resource.data.projectId))
-       || projectData(request.resource.data.projectId).platformManaged == false)
-    && request.resource.data.ownerId == projectData(request.resource.data.projectId).ownerId
-    && request.resource.data.operatorId == projectData(request.resource.data.projectId).operatorId
-    && request.resource.data.declaredBy == request.auth.uid
-    && request.resource.data.amount is number
-    && request.resource.data.amount > 0
-    && request.resource.data.currency == "EGP"
-    && request.resource.data.status == "pending_owner_confirmation"
-    && request.resource.data.createdAt == request.time
-    && request.resource.data.declaredAt == request.time
-    && request.resource.data.updatedAt == request.time
-    && request.resource.data.confirmedAt == null
-    && request.resource.data.confirmedBy == null
-    && request.resource.data.rejectedAt == null
-    && request.resource.data.rejectedBy == null;
-   allow update: if signedIn()
-    && resource.data.projectId is string
-    && historicProjectOwner(resource.data.projectId)
-    && resource.data.ownerId == request.auth.uid
-    && resource.data.status == "pending_owner_confirmation"
-    && request.resource.data.settlementId == resource.data.settlementId
-    && request.resource.data.projectId == resource.data.projectId
-    && request.resource.data.ownerId == resource.data.ownerId
-    && request.resource.data.operatorId == resource.data.operatorId
-    && request.resource.data.templateId == resource.data.templateId
-    && request.resource.data.businessName == resource.data.businessName
-    && request.resource.data.currency == resource.data.currency
-    && request.resource.data.amount == resource.data.amount
-    && request.resource.data.paymentMethod == resource.data.paymentMethod
-    && request.resource.data.paymentReference == resource.data.paymentReference
-    && request.resource.data.note == resource.data.note
-    && request.resource.data.declaredAt == resource.data.declaredAt
-    && request.resource.data.declaredBy == resource.data.declaredBy
-    && request.resource.data.createdAt == resource.data.createdAt
-    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-      "status",
-      "confirmedAt",
-      "confirmedBy",
-      "rejectedAt",
-      "rejectedBy",
-      "updatedAt"
-    ])
-    && (
-      (
-        request.resource.data.status == "confirmed"
-        && request.resource.data.confirmedAt == request.time
-        && request.resource.data.confirmedBy == request.auth.uid
-        && request.resource.data.rejectedAt == null
-        && request.resource.data.rejectedBy == null
-      )
-      ||
-      (
-        request.resource.data.status == "rejected"
-        && request.resource.data.rejectedAt == request.time
-        && request.resource.data.rejectedBy == request.auth.uid
-        && request.resource.data.confirmedAt == null
-        && request.resource.data.confirmedBy == null
-      )
-    );
-
-   allow delete: if false;
-  }
-
-
-  match /commissionPaymentStates/{projectId} {
-   allow get, list: if isAdmin()
-    || historicProjectOwner(projectId)
-    || isProjectOperator(projectId);
-
-   allow create: if signedIn()
-    && (
-      (ownsProject(projectId) && projectData(projectId).ownerId == request.auth.uid)
-      || isProjectOperator(projectId)
-      || (
-        historicProjectOwner(projectId)
-        && resource.data.pendingSettlementId is string
-        && resource.data.pendingSettlementId.size() > 0
-        && request.resource.data.pendingSettlementId == ""
-        && exists(commissionSettlementPath(resource.data.pendingSettlementId))
-        && get(commissionSettlementPath(resource.data.pendingSettlementId)).data.ownerId == request.auth.uid
-        && getAfter(commissionSettlementPath(resource.data.pendingSettlementId)).data.status in ["confirmed","rejected"]
-        && (
-          getAfter(commissionSettlementPath(resource.data.pendingSettlementId)).data.confirmedBy == request.auth.uid
-          || getAfter(commissionSettlementPath(resource.data.pendingSettlementId)).data.rejectedBy == request.auth.uid
-        )
-      )
-    )
-    && request.resource.data.projectId == projectId
-    && request.resource.data.ownerId == projectData(projectId).ownerId
-    && request.resource.data.operatorId == projectData(projectId).operatorId
-    && request.resource.data.pendingSettlementId is string
-    && request.resource.data.updatedAt == request.time
-    && request.resource.data.keys().hasOnly([
-      "projectId",
-      "ownerId",
-      "operatorId",
-      "pendingSettlementId",
-      "updatedAt"
-    ]);
-
-   allow update: if signedIn()
-    && ((ownsProject(projectId) && resource.data.ownerId == request.auth.uid) || isProjectOperator(projectId))
-    && request.resource.data.projectId == resource.data.projectId
-    && request.resource.data.ownerId == resource.data.ownerId
-    && request.resource.data.operatorId == resource.data.operatorId
-    && request.resource.data.pendingSettlementId is string
-    && request.resource.data.updatedAt == request.time
-    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-      "pendingSettlementId",
-      "updatedAt"
-    ]);
-
-   allow delete: if false;
-  }
-
-  // A documented admin decision is required; a raw subscriber complaint alone
-  // must never make an operator shop recoverable.
-  match /merchantViolations/{projectId} {
-   allow get, list: if isAdmin();
-   allow create: if isAdmin()
-    && projectExists(projectId)
-    && request.resource.data.projectDocId == projectId
-    && request.resource.data.status == "confirmed"
-    && request.resource.data.reasonCode is string
-    && request.resource.data.reasonCode.matches('^[a-z][a-z0-9_]{2,63}$')
-    && request.resource.data.evidenceReference is string
-    && request.resource.data.evidenceReference.size() >= 8
-    && request.resource.data.evidenceReference.size() <= 200
-    && request.resource.data.confirmedByAdminUid == request.auth.uid
-    && request.resource.data.confirmedAt == request.time
-    && request.resource.data.keys().hasOnly([
-      "projectDocId","status","reasonCode","evidenceReference",
-      "confirmedByAdminUid","confirmedAt"
-    ]);
-   allow update, delete: if false;
-  }
-
-  function validVerifiedRecoveryCause(projectId, reason, evidenceRef) {
-   let subscriber = userData(projectData(projectId).assignedSubscriberId);
-   return userExists(projectData(projectId).assignedSubscriberId)
-    && (
-     (
-       reason == "overdue_renewal"
-       && subscriber.initialActivationPaid == true
-       && subscriber.subscriptionExpiresAt is timestamp
-       && subscriber.subscriptionExpiresAt <= request.time
-     )
-     || (
-       reason == "unpaid_first_month"
-       && subscriber.accessModel == "merchant_trial_v1"
-       && subscriber.firstMerchantLinkedAt is timestamp
-       && subscriber.firstMerchantLinkedAt + duration.value(3, 'd') <= request.time
-       && subscriber.initialActivationPaid == false
-       && subscriber.subscriptionStatus == "trial"
-       && !("lastSubscriptionPaymentId" in subscriber)
-     )
-     || (
-       reason == "confirmed_violation"
-       && exists(merchantViolationPath(projectId))
-       && get(merchantViolationPath(projectId)).data.status == "confirmed"
-       && get(merchantViolationPath(projectId)).data.evidenceReference == evidenceRef
-     )
-    );
-  }
-
-  // Immutable recovery audit must be written atomically with platform handover.
-  match /merchantRecoveries/{projectId} {
-   allow get, list: if isAdmin();
-   allow create: if isAdmin()
-    && projectExists(projectId)
-    && exists(billingGuardPath(projectData(projectId).assignedSubscriberId))
-    && get(billingGuardPath(projectData(projectId).assignedSubscriberId)).data.userId==projectData(projectId).assignedSubscriberId
-    && get(billingGuardPath(projectData(projectId).assignedSubscriberId)).data.recoverySafe==true
-    && get(billingGuardPath(projectData(projectId).assignedSubscriberId)).data.pendingPaymentId==""
-    && request.resource.data.recoveryId == projectId
-    && request.resource.data.projectDocId == projectId
-    && request.resource.data.merchantId == projectData(projectId).merchantId
-    && request.resource.data.originalSubscriberId == projectData(projectId).originalSubscriberId
-    && request.resource.data.previousSubscriberId == projectData(projectId).assignedSubscriberId
-    && request.resource.data.reason in ["overdue_renewal","unpaid_first_month","confirmed_violation"]
-    && validVerifiedRecoveryCause(projectId,request.resource.data.reason,request.resource.data.evidenceReference)
-    && request.resource.data.evidenceReference is string
-    && request.resource.data.evidenceReference.size() >= 8
-    && request.resource.data.evidenceReference.size() <= 200
-    && request.resource.data.status == "completed"
-    && request.resource.data.adminUid == request.auth.uid
-    && request.resource.data.recoveredAt == request.time
-    && request.resource.data.keys().hasOnly([
-      "recoveryId","projectDocId","merchantId","originalSubscriberId",
-      "previousSubscriberId","reason","evidenceReference","status","adminUid","recoveredAt"
-    ])
-    && existsAfter(projectPath(projectId))
-    && getAfter(projectPath(projectId)).data.platformManaged == true
-    && getAfter(projectPath(projectId)).data.assignmentStatus == "platform_managed"
-    && getAfter(projectPath(projectId)).data.assignedSubscriberId == ""
-    && getAfter(projectPath(projectId)).data.recoveryAuditId == projectId
-    && getAfter(projectPath(projectId)).data.recoveryAt == request.time
-    && getAfter(projectPath(projectId)).data.recoveryReason == request.resource.data.reason;
-   allow update, delete: if false;
-  }
-
-  // Transfer-consent records are NOT an authorization transfer.
-  // A later independently reviewed cutover must protect historical ledgers
-  // and preserve the existing projectDocId/ownerId runtime identity.
-  // Use each referenced document once: Firestore enforces a 10-read
-  // access budget per single write. Repeating get()/exists() in a
-  // transferred shop's audit check can otherwise deny valid consent cases.
-  function validMerchantTransferCaseCreate(projectId){
-   let p = get(projectPath(projectId)).data;
-   let op = get(operatorPath(projectId)).data;
-   let agreement = get(commissionAgreementPath(projectId)).data;
-   let audit = get(merchantRecoveryPath(projectId)).data;
-   let d = request.resource.data;
-   return p.operatingModel == "partner_operated"
-    && p.template in ["supermarket","restaurant","bakery","laundry"]
-    && p.platformManaged == true
-    && p.assignmentStatus == "platform_managed"
-    && p.assignedSubscriberId == ""
-    && p.operatorId == projectId
-    && p.recoveryAuditId == projectId
-    && p.recoveryAt is timestamp
-    && p.merchantId.matches('^m_[0-9a-f]{32}$')
-    && audit.status == "completed"
-    && audit.recoveryId == projectId
-    && audit.projectDocId == projectId
-    && audit.merchantId == p.merchantId
-    && audit.originalSubscriberId == p.originalSubscriberId
-    && audit.previousSubscriberId == p.originalSubscriberId
-    && audit.adminUid == p.recoveryAdminUid
-    && audit.recoveredAt == p.recoveryAt
-    && op.authUid is string
-    && op.authUid.size() > 0
-    && op.agreementStatus == "accepted"
-    && op.isActive == true
-    && agreement.status == "accepted"
-    && agreement.acceptedVersion > 0
-    && d.projectDocId == projectId
-    && d.merchantId == p.merchantId
-    && d.originalSubscriberId == p.originalSubscriberId
-    && d.previousSubscriberId == ""
-    && d.proposedSubscriberId is string
-    && d.proposedSubscriberId.size() > 0
-    && d.proposedSubscriberId.size() <= 128
-    && d.proposedSubscriberId != d.originalSubscriberId
-    && subscriptionActive(d.proposedSubscriberId)
-    && d.status == "awaiting_consents"
-    && d.operatorConsent == "pending"
-    && d.recipientConsent == "pending"
-    && d.operatorConsentedAt == null
-    && d.recipientConsentedAt == null
-    && agreement.currentAmount is number
-    && agreement.currentAmount >= 0
-    && agreement.currency == "EGP"
-    && d.commissionAmount == agreement.currentAmount
-    && d.commissionVersion == agreement.acceptedVersion
-    && d.commissionCurrency == agreement.currency
-    && d.financeClearance == "pending"
-    && d.cutoverAt == null
-    && d.reason is string
-    && d.reason.size() >= 15
-    && d.reason.size() <= 300
-    && d.createdBy == request.auth.uid
-    && d.createdAt == request.time
-    && d.keys().hasOnly([
-      "projectDocId","merchantId","originalSubscriberId","previousSubscriberId",
-      "proposedSubscriberId","status","operatorConsent","recipientConsent",
-      "operatorConsentedAt","recipientConsentedAt","financeClearance","cutoverAt",
-      "commissionAmount","commissionVersion","commissionCurrency",
-      "reason","createdBy","createdAt"
-    ]);
-  }
-
-  match /merchantTransferCases/{projectId} {
-   allow get: if isAdmin() || (
-      signedIn()
-      && (
-        resource.data.proposedSubscriberId == request.auth.uid
-        || (operatorExists(projectId) && operatorData(projectId).authUid == request.auth.uid)
-      )
-   );
-   allow list: if isAdmin();
-
-   allow create: if isAdmin() && validMerchantTransferCaseCreate(projectId);
-
-   function validAtomicMerchantConsentFinalize(projectId){
-     let before=resource.data;
-     let next=request.resource.data;
-     let witness=getAfter(merchantCutoverPath(projectId)).data;
-     return isAdmin()
-      && before.status == "awaiting_consents"
-      && before.financeClearance == "reviewed"
-      && before.operatorConsent == "accepted"
-      && before.recipientConsent == "accepted"
-      && next.status == "cutover_completed"
-      && next.cutoverAt == request.time
-      && next.cutoverBy == request.auth.uid
-      && next.cutoverAuditId == projectId
-      && subscriptionActive(before.proposedSubscriberId)
-      && witness.status == "completed"
-      && witness.assignedSubscriberId == before.proposedSubscriberId
-      && witness.completedAt == request.time
-      && next.diff(before).affectedKeys().hasOnly([
-       "status","cutoverAt","cutoverBy","cutoverAuditId"
-      ]);
-   }
-   // Only the claimed physical merchant operator may record their own consent.
-   allow update: if (
-     signedIn()
-     && operatorExists(projectId)
-     && operatorData(projectId).authUid == request.auth.uid
-     && resource.data.status == "awaiting_consents"
-     && resource.data.operatorConsent == "pending"
-     && request.resource.data.operatorConsent in ["accepted","declined"]
-     && request.resource.data.operatorConsentedAt == request.time
-     && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-       "operatorConsent","operatorConsentedAt"
-     ])
-   ) || (
-     signedIn()
-     && resource.data.proposedSubscriberId == request.auth.uid
-     && resource.data.status == "awaiting_consents"
-     && resource.data.recipientConsent == "pending"
-     && request.resource.data.recipientConsent in ["accepted","declined"]
-     && request.resource.data.recipientConsentedAt == request.time
-     && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-       "recipientConsent","recipientConsentedAt"
-     ])
-   ) || (
-     // Admin reviews finance statements; NOT a payment confirmation.
-     isAdmin()
-     && resource.data.status == "awaiting_consents"
-     && resource.data.operatorConsent == "accepted"
-     && resource.data.recipientConsent == "accepted"
-     && resource.data.financeClearance == "pending"
-     && request.resource.data.financeClearance == "reviewed"
-     && request.resource.data.financeReviewedBy == request.auth.uid
-     && request.resource.data.financeReviewedAt == request.time
-     && existsAfter(merchantTransferFinanceReviewPath(projectId))
-     && getAfter(merchantTransferFinanceReviewPath(projectId)).data.adminUid == request.auth.uid
-     && getAfter(merchantTransferFinanceReviewPath(projectId)).data.reviewedAt == request.time
-     && getAfter(merchantTransferFinanceReviewPath(projectId)).data.projectDocId == projectId
-     && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-       "financeClearance","financeReviewedBy","financeReviewedAt"
-     ])
-   ) || (
-     validAtomicMerchantConsentFinalize(projectId)
-   ) || (
-     isAdmin()
-     && resource.data.status == "awaiting_consents"
-     && request.resource.data.status == "canceled"
-     && request.resource.data.canceledBy == request.auth.uid
-     && request.resource.data.canceledAt == request.time
-     && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-       "status","canceledBy","canceledAt"
-     ])
-   );
-   allow delete: if false;
-  }
-
-
-  // Financial snapshot is PRIVATE: consent case readers must never see a
-  // former subscriber's outstanding balances. Reviewed is not paid.
-   // C4B11: admin-private witness for the sole platform->subscriber cutover.
-   // No ledger row or historical settlement is ever rewritten.
-   match /merchantAssignmentCutovers/{projectId} {
-    // Cache every read in one evaluation rather than repeatedly dereferencing
-    // the same six documents. Firestore has a 1000-expression evaluation limit.
-    function validCutoverAuditCreate(projectId){
-     let p = get(projectPath(projectId)).data;
-     let c = get(merchantTransferCasePath(projectId)).data;
-     let review = get(merchantTransferFinanceReviewPath(projectId)).data;
-     let recovery = get(merchantRecoveryPath(projectId)).data;
-     let op = get(operatorPath(projectId)).data;
-     let agreement = get(commissionAgreementPath(projectId)).data;
-     let afterProject = getAfter(projectPath(projectId)).data;
-     let afterCase = getAfter(merchantTransferCasePath(projectId)).data;
-     let d = request.resource.data;
-     return p.platformManaged == true
-      && p.assignmentStatus == "platform_managed"
-      && p.assignedSubscriberId == ""
-      && p.operatorId == projectId
-      && p.recoveryAuditId == projectId
-      && recovery.status == "completed"
-      && recovery.projectDocId == projectId
-      && recovery.merchantId == p.merchantId
-      && op.authUid is string
-      && op.authUid.size() > 0
-      && op.isActive == true
-      && op.status == "active"
-      && op.agreementStatus == "accepted"
-      && agreement.status == "accepted"
-      && agreement.ownerId == p.ownerId
-      && agreement.currency == "EGP"
-      && agreement.currentAmount == c.commissionAmount
-      && agreement.acceptedVersion == c.commissionVersion
-      && c.status == "awaiting_consents"
-      && c.financeClearance == "reviewed"
-      && c.operatorConsent == "accepted"
-      && c.recipientConsent == "accepted"
-      && review.projectDocId == projectId
-      && review.formerSubscriberId == p.originalSubscriberId
-      && review.reviewedAt == c.financeReviewedAt
-      && subscriptionActive(c.proposedSubscriberId)
-      && d.projectDocId == projectId
-      && d.merchantId == p.merchantId
-      && d.originalSubscriberId == p.originalSubscriberId
-      && d.previousSubscriberId == ""
-      && d.assignedSubscriberId == c.proposedSubscriberId
-      && d.recoveryAuditId == projectId
-      && d.financeReviewId == projectId
-      && d.commissionAmount == c.commissionAmount
-      && d.commissionVersion == c.commissionVersion
-      && d.commissionCurrency == "EGP"
-      && d.status == "completed"
-      && d.completedBy == request.auth.uid
-      && d.completedAt == request.time
-      && d.keys().hasOnly([
-       "projectDocId","merchantId","originalSubscriberId","previousSubscriberId",
-       "assignedSubscriberId","recoveryAuditId","financeReviewId",
-       "commissionAmount","commissionVersion","commissionCurrency",
-       "status","completedBy","completedAt"
-      ])
-      && afterProject.assignmentStatus == "assigned_to_new_subscriber"
-      && afterProject.assignedSubscriberId == d.assignedSubscriberId
-      && afterProject.cutoverAt == request.time
-      && afterCase.status == "cutover_completed"
-      && afterCase.cutoverAt == request.time;
-    }
-    allow get, list: if isAdmin();
-    // Missing records make validCutoverAuditCreate fail closed via get().
-    // Duplicating exists()+get() for six records exhausts the batch's
-    // expression budget during a valid three-document transfer.
-    allow create: if isAdmin()
-     && validCutoverAuditCreate(projectId);
-    allow update, delete: if false;
-   }
-
-  match /merchantTransferFinanceReviews/{projectId} {
-   allow get, list: if isAdmin();
-   allow create: if isAdmin()
-    && projectExists(projectId)
-    && request.resource.data.projectDocId == projectId
-    && request.resource.data.adminUid == request.auth.uid
-    && request.resource.data.reviewedAt == request.time
-    && request.resource.data.currency == "EGP"
-    && request.resource.data.formerSubscriberId == projectData(projectId).originalSubscriberId
-    && request.resource.data.platformOutstandingAmount is number
-    && request.resource.data.platformOutstandingAmount >= 0
-    && request.resource.data.formerSubscriberOutstandingAmount is number
-    && request.resource.data.formerSubscriberOutstandingAmount >= 0
-    && request.resource.data.platformEarnedAmount is number
-    && request.resource.data.platformEarnedAmount >= 0
-    && request.resource.data.formerSubscriberEarnedAmount is number
-    && request.resource.data.formerSubscriberEarnedAmount >= 0
-    && request.resource.data.keys().hasOnly([
-      "projectDocId","adminUid","reviewedAt","currency","formerSubscriberId",
-      "platformOutstandingAmount","formerSubscriberOutstandingAmount",
-      "platformEarnedAmount","formerSubscriberEarnedAmount"
-    ])
-    && exists(merchantTransferCasePath(projectId))
-    && get(merchantTransferCasePath(projectId)).data.financeClearance == "pending"
-    && get(merchantTransferCasePath(projectId)).data.operatorConsent == "accepted"
-    && get(merchantTransferCasePath(projectId)).data.recipientConsent == "accepted"
-    && getAfter(merchantTransferCasePath(projectId)).data.financeClearance == "reviewed"
-    && getAfter(merchantTransferCasePath(projectId)).data.financeReviewedBy == request.auth.uid
-    && getAfter(merchantTransferCasePath(projectId)).data.financeReviewedAt == request.time;
-   allow update, delete: if false;
-  }
-
-  // C4B12 read access is already fenced; all state-changing writes stay
-  // DENIED until a trusted billing gate and atomic v2 Rules are implemented.
-
-
-
-
-
-
-
-
-
-
-
-
-  match /{document=**} { allow read, write: if false; }
- }
-}
-
+    && ledger.projectId is xçMy¶‰ËkºwµçY›Ü›WÛX[˜YÙY‚ˆ	‰ˆ˜\ÜÚYÛ™YİXœØÜšX™\’YOHˆ‚ˆ	‰ˆ›Ü\˜]Ü’YOH›Ú™XİYˆ	‰ˆœ™XÛİ™\P]Y]YOH›Ú™XİYˆ	‰ˆœ™XÛİ™\P]\È[Y\İ[\ˆ	‰ˆ›Y\˜Ú[Y›X]Ú\Ê	×›WÖÌNXKY—^ÌÌŸI	ÊBˆ	‰ˆ]Y]œİ]\ÈOH˜ÛÛ\]Y‚ˆ	‰ˆ]Y]œ™XÛİ™\RYOH›Ú™XİYˆ	‰ˆ]Y]œ›Ú™XİØÒYOH›Ú™XİYˆ	‰ˆ]Y]›Y\˜Ú[YOH›Y\˜Ú[Yˆ	‰ˆ]Y]›ÜšYÚ[˜[İXœØÜšX™\’YOH›ÜšYÚ[˜[İXœØÜšX™\’Yˆ	‰ˆ]Y]œ™]š[İ\ÔİXœØÜšX™\’YOH›ÜšYÚ[˜[İXœØÜšX™\’Yˆ	‰ˆ]Y]˜YZ[•ZYOHœ™XÛİ™\PYZ[•ZYˆ	‰ˆ]Y]œ™XÛİ™\™Y]OHœ™XÛİ™\P]ˆ	‰ˆÜ˜]]ZY\Èİš[™Âˆ	‰ˆÜ˜]]ZYœÚ^™J
+Hˆˆ	‰ˆÜ˜YÜ™Y[Y[İ]\ÈOH˜XØÙ\Y‚ˆ	‰ˆÜš\ĞXİ]™HOHYBˆ	‰ˆYÜ™Y[Y[œİ]\ÈOH˜XØÙ\Y‚ˆ	‰ˆYÜ™Y[Y[˜XØÙ\Y™\œÚ[Ûˆˆˆ	‰ˆœ›Ú™XİØÒYOH›Ú™XİYˆ	‰ˆ›Y\˜Ú[YOH›Y\˜Ú[Yˆ	‰ˆ›ÜšYÚ[˜[İXœØÜšX™\’YOH›ÜšYÚ[˜[İXœØÜšX™\’Yˆ	‰ˆœ™]š[İ\ÔİXœØÜšX™\’YOHˆ‚ˆ	‰ˆœ›ÜÜÙYİXœØÜšX™\’Y\Èİš[™Âˆ	‰ˆœ›ÜÜÙYİXœØÜšX™\’YœÚ^™J
+Hˆˆ	‰ˆœ›ÜÜÙYİXœØÜšX™\’YœÚ^™J
+HHLˆ	‰ˆœ›ÜÜÙYİXœØÜšX™\’YOH›ÜšYÚ[˜[İXœØÜšX™\’Yˆ	‰ˆİXœØÜš\[ÛXİ]™Jœ›ÜÜÙYİXœØÜšX™\’Y
+Bˆ	‰ˆœİ]\ÈOH˜]ØZ][™×ØÛÛœÙ[È‚ˆ	‰ˆ›Ü\˜]ÜÛÛœÙ[OHœ[™[™È‚ˆ	‰ˆœ™XÚ\Y[ÛÛœÙ[OHœ[™[™È‚ˆ	‰ˆ›Ü\˜]ÜÛÛœÙ[Y]OH[ˆ	‰ˆœ™XÚ\Y[ÛÛœÙ[Y]OH[ˆ	‰ˆYÜ™Y[Y[˜İ\œ™[[[İ[\È[X™\‚ˆ	‰ˆYÜ™Y[Y[˜İ\œ™[[[İ[Hˆ	‰ˆYÜ™Y[Y[˜İ\œ™[˜ŞHOH‘QÔ‚ˆ	‰ˆ˜ÛÛ[Z\ÜÚ[Û[[İ[OHYÜ™Y[Y[˜İ\œ™[[[İ[ˆ	‰ˆ˜ÛÛ[Z\ÜÚ[Û•™\œÚ[ÛˆOHYÜ™Y[Y[˜XØÙ\Y™\œÚ[Û‚ˆ	‰ˆ˜ÛÛ[Z\ÜÚ[Ûİ\œ™[˜ŞHOHYÜ™Y[Y[˜İ\œ™[˜ŞBˆ	‰ˆ™š[˜[˜ÙPÛX\˜[˜ÙHOHœ[™[™È‚ˆ	‰ˆ˜İ]İ™\]OH[ˆ	‰ˆœ™X\ÛÛˆ\Èİš[™Âˆ	‰ˆœ™X\ÛÛ‹œÚ^™J
+HHMBˆ	‰ˆœ™X\ÛÛ‹œÚ^™J
+HHÌˆ	‰ˆ˜Ü™X]YHOH™\]Y\İ˜]]ZYˆ	‰ˆ˜Ü™X]Y]OH™\]Y\İ[YBˆ	‰ˆšÙ^\Ê
+Kš\ÓÛ›JÂˆœ›Ú™XİØÒY‹›Y\˜Ú[Y‹›ÜšYÚ[˜[İXœØÜšX™\’Y‹œ™]š[İ\ÔİXœØÜšX™\’Y‹ˆœ›ÜÜÙYİXœØÜšX™\’Y‹œİ]\È‹›Ü\˜]ÜÛÛœÙ[‹œ™XÚ\Y[ÛÛœÙ[‹ˆ›Ü\˜]ÜÛÛœÙ[Y]‹œ™XÚ\Y[ÛÛœÙ[Y]‹™š[˜[˜ÙPÛX\˜[˜ÙH‹˜İ]İ™\]‹ˆ˜ÛÛ[Z\ÜÚ[Û[[İ[‹˜ÛÛ[Z\ÜÚ[Û•™\œÚ[Ûˆ‹˜ÛÛ[Z\ÜÚ[Ûİ\œ™[˜ŞH‹ˆœ™X\ÛÛˆ‹˜Ü™X]YH‹˜Ü™X]Y]‚ˆJNÂˆB‚ˆX]ÚÛY\˜Ú[˜[œÙ™\Ø\Ù\ËŞÜ›Ú™XİYHÂˆ[İÈÙ]ˆYˆ\ĞYZ[Š
+H
+ˆÚYÛ™Y[Š
+Bˆ	‰ˆ
+ˆ™\Ûİ\˜ÙK™]Kœ›ÜÜÙYİXœØÜšX™\’YOH™\]Y\İ˜]]ZYˆ
+Ü\˜]Ü‘^\İÊ›Ú™XİY
+H	‰ˆÜ\˜]Ü‘]J›Ú™XİY
+K˜]]ZYOH™\]Y\İ˜]]ZY
+Bˆ
+Bˆ
+NÂˆ[İÈ\İˆYˆ\ĞYZ[Š
+NÂ‚ˆ[İÈÜ™X]NˆYˆ\ĞYZ[Š
+H	‰ˆ˜[YY\˜Ú[˜[œÙ™\Ø\ÙPÜ™X]J›Ú™XİY
+NÂ‚ˆ[˜İ[Ûˆ˜[Y]ÛZXÓY\˜Ú[ÛÛœÙ[š[˜[^™J›Ú™XİY
+^Âˆ]™Y›Ü™O\™\Ûİ\˜ÙK™]NÂˆ]™^\™\]Y\İœ™\Ûİ\˜ÙK™]NÂˆ]Ú]™\ÜÏYÙ]Y\ŠY\˜Ú[İ]İ™\”]
+›Ú™XİY
+JK™]NÂˆ™]\›ˆ\ĞYZ[Š
+Bˆ	‰ˆ™Y›Ü™Kœİ]\ÈOH˜]ØZ][™×ØÛÛœÙ[È‚ˆ	‰ˆ™Y›Ü™K™š[˜[˜ÙPÛX\˜[˜ÙHOHœ™]šY]ÙY‚ˆ	‰ˆ™Y›Ü™K›Ü\˜]ÜÛÛœÙ[OH˜XØÙ\Y‚ˆ	‰ˆ™Y›Ü™Kœ™XÚ\Y[ÛÛœÙ[OH˜XØÙ\Y‚ˆ	‰ˆ™^œİ]\ÈOH˜İ]İ™\—ØÛÛ\]Y‚ˆ	‰ˆ™^˜İ]İ™\]OH™\]Y\İ[YBˆ	‰ˆ™^˜İ]İ™\HOH™\]Y\İ˜]]ZYˆ	‰ˆ™^˜İ]İ™\]Y]YOH›Ú™XİYˆ	‰ˆİXœØÜš\[ÛXİ]™J™Y›Ü™Kœ›ÜÜÙYİXœØÜšX™\’Y
+Bˆ	‰ˆÚ]™\ÜËœİ]\ÈOH˜ÛÛ\]Y‚ˆ	‰ˆÚ]™\ÜË˜\ÜÚYÛ™YİXœØÜšX™\’YOH™Y›Ü™Kœ›ÜÜÙYİXœØÜšX™\’Yˆ	‰ˆÚ]™\ÜË˜ÛÛ\]Y]OH™\]Y\İ[YBˆ	‰ˆ™^™Y™Š™Y›Ü™JK˜Y™™XİYÙ^\Ê
+Kš\ÓÛ›JÂˆœİ]\È‹˜İ]İ™\]‹˜İ]İ™\H‹˜İ]İ™\]Y]Y‚ˆJNÂˆBˆËÈÛ›HHÛZ[YY\ÚXØ[Y\˜Ú[Ü\˜]ÜˆX^H™XÛÜ™Z\ˆİÛˆÛÛœÙ[‚ˆ[İÈ\]NˆYˆ
+ˆÚYÛ™Y[Š
+Bˆ	‰ˆÜ\˜]Ü‘^\İÊ›Ú™XİY
+Bˆ	‰ˆÜ\˜]Ü‘]J›Ú™XİY
+K˜]]ZYOH™\]Y\İ˜]]ZYˆ	‰ˆ™\Ûİ\˜ÙK™]Kœİ]\ÈOH˜]ØZ][™×ØÛÛœÙ[È‚ˆ	‰ˆ™\Ûİ\˜ÙK™]K›Ü\˜]ÜÛÛœÙ[OHœ[™[™È‚ˆ	‰ˆ™\]Y\İœ™\Ûİ\˜ÙK™]K›Ü\˜]ÜÛÛœÙ[[ˆÈ˜XØÙ\Y‹™XÛ[™Y—Bˆ	‰ˆ™\]Y\İœ™\Ûİ\˜ÙK™]K›Ü\˜]ÜÛÛœÙ[Y]OH™\]Y\İ[YBˆ	‰ˆ™\]Y\İœ™\Ûİ\˜ÙK™]K™Y™Š™\Ûİ\˜ÙK™]JK˜Y™™XİYÙ^\Ê
+Kš\ÓÛ›JÂˆ›Ü\˜]ÜÛÛœÙ[‹›Ü\˜]ÜÛÛœÙ[Y]‚ˆJBˆ
+H
+ˆÚYÛ™Y[Š
+Bˆ	‰ˆ™\Ûİ\˜ÙK™]Kœ›ÜÜÙYİXœØÜšX™\’YOH™\]Y\İ˜]]ZYˆ	‰ˆ™\Ûİ\˜ÙK™]Kœİ]\ÈOH˜]ØZ][™×ØÛÛœÙ[È‚ˆ	‰ˆ™\Ûİ\˜ÙK™]Kœ™XÚ\Y[ÛÛœÙ[OHœ[™[™È‚ˆ	‰ˆ™\]Y\İœ™\Ûİ\˜ÙK™]Kœ™XÚ\Y[ÛÛœÙ[[ˆÈ˜XØÙ\Y‹™XÛ[™Y—Bˆ	‰ˆ™\]Y\İœ™\Ûİ\˜ÙK™]Kœ™XÚ\Y[ÛÛœÙ[Y]OH™\]Y\İ[YBˆ	‰ˆ™\]Y\İœ™\Ûİ\˜ÙK™]K™Y™Š™\Ûİ\˜ÙK™]JK˜Y™™XİYÙ^\Ê
+Kš\ÓÛ›JÂˆœ™XÚ\Y[ÛÛœÙ[‹œ™XÚ\Y[ÛÛœÙ[Y]‚ˆJBˆ
+H
+ˆËÈYZ[ˆ™]šY]ÜÈš[˜[˜ÙHİ][Y[ÎÈ“ÕH^[Y[ÛÛ™š\›X][Û‹‚ˆ\ĞYZ[Š
+Bˆ	‰ˆ™\Ûİ\˜ÙK™]Kœİ]\ÈOH˜]ØZ][™×ØÛÛœÙ[È‚ˆ	‰ˆ™\Ûİ\˜ÙK™]K›Ü\˜]ÜÛÛœÙ[OH˜XØÙ\Y‚ˆ	‰ˆ™\Ûİ\˜ÙK™]Kœ™XÚ\Y[ÛÛœÙ[OH˜XØÙ\Y‚ˆ	‰ˆ™\Ûİ\˜ÙK™]K™š[˜[˜ÙPÛX\˜[˜ÙHOHœ[™[™È‚ˆ	‰ˆ™\]Y\İœ™\Ûİ\˜ÙK™]K™š[˜[˜ÙPÛX\˜[˜ÙHOHœ™]šY]ÙY‚ˆ	‰ˆ™\]Y\İœ™\Ûİ\˜ÙK™]K™š[˜[˜ÙT™]šY]ÙYHOH™\]Y\İ˜]]ZYˆ	‰ˆ™\]Y\İœ™\Ûİ\˜ÙK™]K™š[˜[˜ÙT™]šY]ÙY]OH™\]Y\İ[YBˆ	‰ˆ^\İĞY\ŠY\˜Ú[˜[œÙ™\‘š[˜[˜ÙT™]šY]Ô]
+›Ú™XİY
+JBˆ	‰ˆÙ]Y\ŠY\˜Ú[˜[œÙ™\‘š[˜[˜ÙT™]šY]Ô]
+›Ú™XİY
+JK™]K˜YZ[•ZYOH™\]Y\İ˜]]ZYˆ	‰ˆÙ]Y\ŠY\˜Ú[˜[œÙ™\‘š[˜[˜ÙT™]šY]Ô]
+›Ú™XİY
+JK™]Kœ™]šY]ÙY]OH™\]Y\İ[YBˆ	‰ˆÙ]Y\ŠY\˜Ú[˜[œÙ™\‘š[˜[˜ÙT™]šY]Ô]
+›Ú™XİY
+JK™]Kœ›Ú™XİØÒYOH›Ú™XİYˆ	‰ˆ™\]Y\İœ™\Ûİ\˜ÙK™]K™Y™Š™\Ûİ\˜ÙK™]JK˜Y™™XİYÙ^\Ê
+Kš\ÓÛ›JÂˆ™š[˜[˜ÙPÛX\˜[˜ÙH‹™š[˜[˜ÙT™]šY]ÙYH‹™š[˜[˜ÙT™]šY]ÙY]‚ˆJBˆ
+H
+ˆ˜[Y]ÛZXÓY\˜Ú[ÛÛœÙ[š[˜[^™J›Ú™XİY
+Bˆ
+H
+ˆ\ĞYZ[Š
+Bˆ	‰ˆ™\Ûİ\˜ÙK™]Kœİ]\ÈOH˜]ØZ][™×ØÛÛœÙ[È‚ˆ	‰ˆ™\]Y\İœ™\Ûİ\˜ÙK™]Kœİ]\ÈOH˜Ø[˜Ù[Y‚ˆ	‰ˆ™\]Y\İœ™\Ûİ\˜ÙK™]K˜Ø[˜Ù[YHOH™\]Y\İ˜]]ZYˆ	‰ˆ™\]Y\İœ™\Ûİ\˜ÙK™]K˜Ø[˜Ù[Y]OH™\]Y\İ[YBˆ	‰ˆ™\]Y\İœ™\Ûİ\˜ÙK™]K™Y™Š™\Ûİ\˜ÙK™]JK˜Y™™XİYÙ^\Ê
+Kš\ÓÛ›JÂˆœİ]\È‹˜Ø[˜Ù[YH‹˜Ø[˜Ù[Y]‚ˆJBˆ
+NÂˆ[İÈ[]NˆYˆ˜[ÙNÂˆB‚‚ˆËÈš[˜[˜ÚX[Û˜\Úİ\È’UUNˆÛÛœÙ[Ø\ÙH™XY\œÈ]\İ™]™\ˆÙYHBˆËÈ›Ü›Y\ˆİXœØÜšX™\‰ÜÈİ]İ[™[™È˜[[˜Ù\Ëˆ™]šY]ÙY\È›İZY‚ˆËÈÍŒLNˆYZ[‹\š]˜]HÚ]™\ÜÈ›ÜˆHÛÛH]›Ü›KOœİXœØÜšX™\ˆİ]İ™\‹‚ˆËÈ›ÈYÙ\ˆ›İÈÜˆ\İÜšXØ[Ù][Y[\È]™\ˆ™]Üš][‹‚ˆX]ÚÛY\˜Ú[\ÜÚYÛ›Y[İ]İ™\œËŞÜ›Ú™XİYHÂˆËÈØXÚH]™\H™XY[ˆÛ™H]˜[X][Ûˆ˜]\ˆ[ˆ™\X]YH\™Y™\™[˜Ú[™ÂˆËÈHØ[YHÚ^Øİ[Y[Ëˆš\™\İÜ™H\ÈHLY^™\ÜÚ[Ûˆ]˜[X][Ûˆ[Z]‚ˆ[˜İ[Ûˆ˜[Yİ]İ™\]Y]Ü™X]J›Ú™XİY
+^Âˆ]HÙ]
+›Ú™Xİ]
+›Ú™XİY
+JK™]NÂˆ]ÈHÙ]
+Y\˜Ú[˜[œÙ™\Ø\ÙT]
+›Ú™XİY
+JK™]NÂˆ]™]šY]ÈHÙ]
+Y\˜Ú[˜[œÙ™\‘š[˜[˜ÙT™]šY]Ô]
+›Ú™XİY
+JK™]NÂˆ]™XÛİ™\HHÙ]
+Y\˜Ú[™XÛİ™\T]
+›Ú™XİY
+JK™]NÂˆ]ÜHÙ]
+Ü\˜]Ü”]
+›Ú™XİY
+JK™]NÂˆ]YÜ™Y[Y[HÙ]
+ÛÛ[Z\ÜÚ[ÛYÜ™Y[Y[]
+›Ú™XİY
+JK™]NÂˆ]Y\”›Ú™XİHÙ]Y\Š›Ú™Xİ]
+›Ú™XİY
+JK™]NÂˆ]Y\Ø\ÙHHÙ]Y\ŠY\˜Ú[˜[œÙ™\Ø\ÙT]
+›Ú™XİY
+JK™]NÂˆ]H™\]Y\İœ™\Ûİ\˜ÙK™]NÂˆ™]\›ˆœ]›Ü›SX[˜YÙYOHYBˆ	‰ˆ˜\ÜÚYÛ›Y[İ]\ÈOHœ]›Ü›WÛX[˜YÙY‚ˆ	‰ˆ˜\ÜÚYÛ™YİXœØÜšX™\’YOHˆ‚ˆ	‰ˆ›Ü\˜]Ü’YOH›Ú™XİYˆ	‰ˆœ™XÛİ™\P]Y]YOH›Ú™XİYˆ	‰ˆ™XÛİ™\Kœİ]\ÈOH˜ÛÛ\]Y‚ˆ	‰ˆ™XÛİ™\Kœ›Ú™XİØÒYOH›Ú™XİYˆ	‰ˆ™XÛİ™\K›Y\˜Ú[YOH›Y\˜Ú[Yˆ	‰ˆÜ˜]]ZY\Èİš[™Âˆ	‰ˆÜ˜]]ZYœÚ^™J
+Hˆˆ	‰ˆÜš\ĞXİ]™HOHYBˆ	‰ˆÜœİ]\ÈOH˜Xİ]™H‚ˆ	‰ˆÜ˜YÜ™Y[Y[İ]\ÈOH˜XØÙ\Y‚ˆ	‰ˆYÜ™Y[Y[œİ]\ÈOH˜XØÙ\Y‚ˆ	‰ˆYÜ™Y[Y[›İÛ™\’YOH›İÛ™\’Yˆ	‰ˆYÜ™Y[Y[˜İ\œ™[˜ŞHOH‘QÔ‚ˆ	‰ˆYÜ™Y[Y[˜İ\œ™[[[İ[OHË˜ÛÛ[Z\ÜÚ[Û[[İ[ˆ	‰ˆYÜ™Y[Y[˜XØÙ\Y™\œÚ[ÛˆOHË˜ÛÛ[Z\ÜÚ[Û•™\œÚ[Û‚ˆ	‰ˆËœİ]\ÈOH˜]ØZ][™×ØÛÛœÙ[È‚ˆ	‰ˆË™š[˜[˜ÙPÛX\˜[˜ÙHOHœ™]šY]ÙY‚ˆ	‰ˆË›Ü\˜]ÜÛÛœÙ[OH˜XØÙ\Y‚ˆ	‰ˆËœ™XÚ\Y[ÛÛœÙ[OH˜XØÙ\Y‚ˆ	‰ˆ™]šY]Ëœ›Ú™XİØÒYOH›Ú™XİYˆ	‰ˆ™]šY]Ë™›Ü›Y\”İXœØÜšX™\’YOH›ÜšYÚ[˜[İXœØÜšX™\’Yˆ	‰ˆ™]šY]Ëœ™]šY]ÙY]OHË™š[˜[˜ÙT™]šY]ÙY]ˆ	‰ˆİXœØÜš\[ÛXİ]™JËœ›ÜÜÙYİXœØÜšX™\’Y
+Bˆ	‰ˆœ›Ú™XİØÒYOH›Ú™XİYˆ	‰ˆ›Y\˜Ú[YOH›Y\˜Ú[Yˆ	‰ˆ›ÜšYÚ[˜[İXœØÜšX™\’YOH›ÜšYÚ[˜[İXœØÜšX™\’Yˆ	‰ˆœ™]š[İ\ÔİXœØÜšX™\’YOHˆ‚ˆ	‰ˆ˜\ÜÚYÛ™YİXœØÜšX™\’YOHËœ›ÜÜÙYİXœØÜšX™\’Yˆ	‰ˆœ™XÛİ™\P]Y]YOH›Ú™XİYˆ	‰ˆ™š[˜[˜ÙT™]šY]ÒYOH›Ú™XİYˆ	‰ˆ˜ÛÛ[Z\ÜÚ[Û[[İ[OHË˜ÛÛ[Z\ÜÚ[Û[[İ[ˆ	‰ˆ˜ÛÛ[Z\ÜÚ[Û•™\œÚ[ÛˆOHË˜ÛÛ[Z\ÜÚ[Û•™\œÚ[Û‚ˆ	‰ˆ˜ÛÛ[Z\ÜÚ[Ûİ\œ™[˜ŞHOH‘QÔ‚ˆ	‰ˆœİ]\ÈOH˜ÛÛ\]Y‚ˆ	‰ˆ˜ÛÛ\]YHOH™\]Y\İ˜]]ZYˆ	‰ˆ˜ÛÛ\]Y]OH™\]Y\İ[YBˆ	‰ˆšÙ^\Ê
+Kš\ÓÛ›JÂˆœ›Ú™XİØÒY‹›Y\˜Ú[Y‹›ÜšYÚ[˜[İXœØÜšX™\’Y‹œ™]š[İ\ÔİXœØÜšX™\’Y‹ˆ˜\ÜÚYÛ™YİXœØÜšX™\’Y‹œ™XÛİ™\P]Y]Y‹™š[˜[˜ÙT™]šY]ÒY‹ˆ˜ÛÛ[Z\ÜÚ[Û[[İ[‹˜ÛÛ[Z\ÜÚ[Û•™\œÚ[Ûˆ‹˜ÛÛ[Z\ÜÚ[Ûİ\œ™[˜ŞH‹ˆœİ]\È‹˜ÛÛ\]YH‹˜ÛÛ\]Y]‚ˆJBˆ	‰ˆY\”›Ú™Xİ˜\ÜÚYÛ›Y[İ]\ÈOH˜\ÜÚYÛ™Yİ×Û™]×ÜİXœØÜšX™\ˆ‚ˆ	‰ˆY\”›Ú™Xİ˜\ÜÚYÛ™YİXœØÜšX™\’YOH˜\ÜÚYÛ™YİXœØÜšX™\’Yˆ	‰ˆY\”›Ú™Xİ˜İ]İ™\]OH™\]Y\İ[YBˆ	‰ˆY\Ø\ÙKœİ]\ÈOH˜İ]İ™\—ØÛÛ\]Y‚ˆ	‰ˆY\Ø\ÙK˜İ]İ™\]OH™\]Y\İ[YNÂˆBˆ[İÈÙ]\İˆYˆ\ĞYZ[Š
+NÂˆËÈZ\ÜÚ[™È™XÛÜ™ÈXZÙH˜[Yİ]İ™\]Y]Ü™X]H˜Z[ÛÜÙYšXHÙ]
+
+K‚ˆËÈ\XØ][™È^\İÊ
+JÙÙ]
+
+H›ÜˆÚ^™XÛÜ™È^]\İÈH˜]Ú	ÜÂˆËÈ^™\ÜÚ[ÛˆYÙ]\š[™ÈH˜[Y™YKYØİ[Y[˜[œÙ™\‹‚ˆ[İÈÜ™X]NˆYˆ\ĞYZ[Š
+Bˆ	‰ˆ˜[Yİ]İ™\]Y]Ü™X]J›Ú™XİY
+NÂˆ[İÈ\]K[]NˆYˆ˜[ÙNÂˆB‚ˆX]ÚÛY\˜Ú[˜[œÙ™\‘š[˜[˜ÙT™]šY]ÜËŞÜ›Ú™XİYHÂˆ[İÈÙ]\İˆYˆ\ĞYZ[Š
+NÂˆ[İÈÜ™X]NˆYˆ\ĞYZ[Š
+Bˆ	‰ˆ›Ú™Xİ^\İÊ›Ú™XİY
+Bˆ	‰ˆ™\]Y\İœ™\Ûİ\˜ÙK™]Kœ›Ú™XİØÒYOH›Ú™XİYˆ	‰ˆ™\]Y\İœ™\Ûİ\˜ÙK™]K˜YZ[•ZYOH™\]Y\İ˜]]ZYˆ	‰ˆ™\]Y\İœ™\Ûİ\˜ÙK™]Kœ™]šY]ÙY]OH™\]Y\İ[YBˆ	‰ˆ™\]Y\İœ™\Ûİ\˜ÙK™]K˜İ\œ™[˜ŞHOH‘QÔ‚ˆ	‰ˆ™\]Y\İœ™\Ûİ\˜ÙK™]K™›Ü›Y\”İXœØÜšX™\’YOH›Ú™Xİ]J›Ú™XİY
+K›ÜšYÚ[˜[İXœØÜšX™\’Yˆ	‰ˆ™\]Y\İœ™\Ûİ\˜ÙK™]Kœ]›Ü›Sİ]İ[™[™Ğ[[İ[\È[X™\‚ˆ	‰ˆ™\]Y\İœ™\Ûİ\˜ÙK™]Kœ]›Ü›Sİ]İ[™[™Ğ[[İ[Hˆ	‰ˆ™\]Y\İœ™\Ûİ\˜ÙK™]K™›Ü›Y\”İXœØÜšX™\“İ]İ[™[™Ğ[[İ[\È[X™\‚ˆ	‰ˆ™\]Y\İœ™\Ûİ\˜ÙK™]K™›Ü›Y\”İXœØÜšX™\“İ]İ[™[™Ğ[[İ[Hˆ	‰ˆ™\]Y\İœ™\Ûİ\˜ÙK™]Kœ]›Ü›QX\›™Y[[İ[\È[X™\‚ˆ	‰ˆ™\]Y\İœ™\Ûİ\˜ÙK™]Kœ]›Ü›QX\›™Y[[İ[Hˆ	‰ˆ™\]Y\İœ™\Ûİ\˜ÙK™]K™›Ü›Y\”İXœØÜšX™\‘X\›™Y[[İ[\È[X™\‚ˆ	‰ˆ™\]Y\İœ™\Ûİ\˜ÙK™]K™›Ü›Y\”İXœØÜšX™\‘X\›™Y[[İ[Hˆ	‰ˆ™\]Y\İœ™\Ûİ\˜ÙK™]KšÙ^\Ê
+Kš\ÓÛ›JÂˆœ›Ú™XİØÒY‹˜YZ[•ZY‹œ™]šY]ÙY]‹˜İ\œ™[˜ŞH‹™›Ü›Y\”İXœØÜšX™\’Y‹ˆœ]›Ü›Sİ]İ[™[™Ğ[[İ[‹™›Ü›Y\”İXœØÜšX™\“İ]İ[™[™Ğ[[İ[‹ˆœ]›Ü›QX\›™Y[[İ[‹™›Ü›Y\”İXœØÜšX™\‘X\›™Y[[İ[‚ˆJBˆ	‰ˆ^\İÊY\˜Ú[˜[œÙ™\Ø\ÙT]
+›Ú™XİY
+JBˆ	‰ˆÙ]
+Y\˜Ú[˜[œÙ™\Ø\ÙT]
+›Ú™XİY
+JK™]K™š[˜[˜ÙPÛX\˜[˜ÙHOHœ[™[™È‚ˆ	‰ˆÙ]
+Y\˜Ú[˜[œÙ™\Ø\ÙT]
+›Ú™XİY
+JK™]K›Ü\˜]ÜÛÛœÙ[OH˜XØÙ\Y‚ˆ	‰ˆÙ]
+Y\˜Ú[˜[œÙ™\Ø\ÙT]
+›Ú™XİY
+JK™]Kœ™XÚ\Y[ÛÛœÙ[OH˜XØÙ\Y‚ˆ	‰ˆÙ]Y\ŠY\˜Ú[˜[œÙ™\Ø\ÙT]
+›Ú™XİY
+JK™]K™š[˜[˜ÙPÛX\˜[˜ÙHOHœ™]šY]ÙY‚ˆ	‰ˆÙ]Y\ŠY\˜Ú[˜[œÙ™\Ø\ÙT]
+›Ú™XİY
+JK™]K™š[˜[˜ÙT™]šY]ÙYHOH™\]Y\İ˜]]ZYˆ	‰ˆÙ]Y\ŠY\˜Ú[˜[œÙ™\Ø\ÙT]
+›Ú™XİY
+JK™]K™š[˜[˜ÙT™]šY]ÙY]OH™\]Y\İ[YNÂˆ[İÈ\]K[]NˆYˆ˜[ÙNÂˆB‚ˆX]ÚÛ™X\˜TÚÜËŞÜ›Ú™XİYHÂˆ[˜İ[Ûˆ˜[Y™X\˜T›Ú™Xİ[ÛŠ
+^Âˆ]\™\]Y\İœ™\Ûİ\˜ÙK™]NÂˆ]\Ó]]YHH›]]YHˆ[ˆÂˆ]\ÓÛ™Ú]YHH›Û™Ú]YHˆ[ˆÂˆ]\ÑÙ[Ú\ÚH™Ù[Ú\Úˆ[ˆÂˆ™]\›ˆšÙ^\Ê
+Kš\ÓÛ›JÂˆœ›Ú™XİY‹[\]H‹›˜[YH‹˜\™XH‹˜\™XRÙ^H‹›]]YH‹›Û™Ú]YH‹ˆ™Ù[Ú\Ú‹™[]™\P]˜Z[X›H‹š\Ó\İY‹\]Y]‚ˆJBˆ	‰ˆšÙ^\Ê
+Kš\Ğ[
+Âˆœ›Ú™XİY‹[\]H‹›˜[YH‹˜\™XH‹˜\™XRÙ^H‹™[]™\P]˜Z[X›H‹š\Ó\İY‹\]Y]‚ˆJBˆ	‰ˆœ›Ú™XİYOH›Ú™XİYˆ	‰ˆ[\]HOH›Ú™Xİ]J›Ú™XİY
+K[\]Bˆ	‰ˆ[\]H[ˆÈœİ\\›X\šÙ]‹œ™\İ]\˜[‹˜˜ZÙ\H‹›][™H—Bˆ	‰ˆ›˜[YH\Èİš[™È	‰ˆ›˜[YKœÚ^™J
+Hˆ	‰ˆ›˜[YKœÚ^™J
+HHLŒˆ	‰ˆ˜\™XH\Èİš[™È	‰ˆ˜\™XKœÚ^™J
+HHˆ	‰ˆ˜\™XRÙ^H\Èİš[™È	‰ˆ˜\™XRÙ^KœÚ^™J
+HHˆ	‰ˆ™[]™\P]˜Z[X›H\È›ÛÛˆ	‰ˆš\Ó\İY\È›ÛÛˆ	‰ˆ\]Y]OH™\]Y\İ[YBˆ	‰ˆ\Ó]]YHOH\ÓÛ™Ú]YBˆ	‰ˆ\Ó]]YHOH\ÑÙ[Ú\Úˆ	‰ˆ
+Z\Ó]]YH
+ˆ›]]YH\È[X™\ˆ	‰ˆ›]]YHHNL	‰ˆ›]]YHHLˆ	‰ˆ›Û™Ú]YH\È[X™\ˆ	‰ˆ›Û™Ú]YHHLN	‰ˆ›Û™Ú]YHHNˆ	‰ˆ™Ù[Ú\Ú\Èİš[™È	‰ˆ™Ù[Ú\ÚœÚ^™J
+HOHBˆ
+JBˆ	‰ˆ
+Yš\Ó\İY\Ó]]YH˜\™XRÙ^KœÚ^™J
+Hˆ
+NÂˆB‚ˆ[İÈÙ]ˆYˆ\ĞYZ[Š
+Bˆ
+ÚYÛ™Y[Š
+H	‰ˆİÛœÔ›Ú™Xİ
+›Ú™XİY
+JBˆ™\Ûİ\˜ÙK™]Kš\Ó\İYOHYNÂˆ[İÈ\İˆYˆ™\Ûİ\˜ÙK™]Kš\Ó\İYOHYNÂˆ[İÈÜ™X]K\]NˆYˆÚYÛ™Y[Š
+Bˆ	‰ˆ›Ú™Xİ^\İÊ›Ú™XİY
+Bˆ	‰ˆİÛœÔ›Ú™Xİ
+›Ú™XİY
+Bˆ	‰ˆ›Ú™Xİ]J›Ú™XİY
+K›Ü\˜][™Ó[Ù[OHœ\™\—ÛÜ\˜]Y‚ˆ	‰ˆ˜[Y™X\˜T›Ú™Xİ[ÛŠ
+NÂˆ[İÈ[]NˆYˆ˜[ÙNÂˆB‚ˆËÈÍŒLˆ™XYXØÙ\ÜÈ\È[™XYH™[˜ÙYÈ[İ]KXÚ[™Ú[™ÈÜš]\Èİ^BˆËÈS’QQ[[H\İYš[[™ÈØ]H[™]ÛZXÈŒˆ[\È\™H[\[Y[Y‚‚‚‚‚‚‚‚‚‚‚‚‚ˆX]ÚŞÙØİ[Y[JŠŸHÈ[İÈ™XYÜš]NˆYˆ˜[ÙNÈBˆBŸBƒB
