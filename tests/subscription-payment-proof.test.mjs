@@ -37,7 +37,8 @@ test("WhatsApp proof message includes reconciliation fields", () => {
   assert.match(message, /FB-ABC123-XYZ999/);
   assert.match(message, /350 EGP/);
   assert.match(message, /REF-12345/);
-  assert.match(message, /Screenshot/);
+  assert.match(message, /تأكيد استلام المبلغ/);
+  assert.doesNotMatch(message, /Screenshot|أرفق صورة/);
 });
 
 test("WhatsApp URL is generated only when payment number exists", () => {
@@ -49,11 +50,11 @@ test("WhatsApp URL is generated only when payment number exists", () => {
 test("payment review copy explains WhatsApp review states", () => {
   assert.match(
     paymentStatusCopy({status:"pending_review",paymentCode:"FB-TEST-123"}),
-    /واتساب/
+    /تأكيد المستلم/
   );
   assert.match(
-    paymentStatusCopy({status:"rejected",rejectionReason:"الصورة غير واضحة"}),
-    /الصورة غير واضحة/
+    paymentStatusCopy({status:"rejected",rejectionReason:"مرجع التحويل غير مطابق"}),
+    /مرجع التحويل غير مطابق/
   );
 });
 
@@ -63,7 +64,8 @@ test("workspace uses WhatsApp proof handoff and has no Storage upload input", ()
   const config=readFileSync("core/config/platform-config.js","utf8");
   const service=readFileSync("core/subscriptions/payment-service.js","utf8");
 
-  assert.match(html,/سجّل الدفعة وافتح واتساب/);
+  assert.match(html,/سجّل الدفعة وأرسل المرجع/);
+  assert.match(html,/لا تحتاج لإرفاق صورة أو ملف/);
   assert.doesNotMatch(html,/type="file"|paymentProofFile/);
   assert.match(html,/reopenPaymentWhatsappBtn/);
   assert.match(source,/prepareSubscriptionPaymentWhatsApp/);

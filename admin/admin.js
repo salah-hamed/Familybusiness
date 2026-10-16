@@ -571,7 +571,7 @@ function renderSubscriptionPayments() {
           <span>طريقة الدفع<br><b>InstaPay</b></span>
           <span>مرجع التحويل<br><b class="codeText">${escapeHTML(payment.paymentReference || "—")}</b></span>
           <span>كود الدفع<br><b class="codeText">${escapeHTML(payment.paymentCode || "—")}</b></span>
-          <span>الإثبات<br><b>${payment.proofChannel === "whatsapp" ? "WhatsApp" : escapeHTML(payment.proofChannel || "—")}</b></span>
+          <span>قناة التأكيد<br><b>${payment.proofChannel === "whatsapp" ? "WhatsApp" : escapeHTML(payment.proofChannel || "—")}</b></span>
           <span>تاريخ الإرسال<br><b>${formatDate(payment.submittedAt,true)}</b></span>
           <span>المراجع<br><b>${escapeHTML(payment.reviewedBy || "—")}</b></span>
           <span>سبب الرفض<br><b>${escapeHTML(payment.rejectionReason || "—")}</b></span>
@@ -580,9 +580,9 @@ function renderSubscriptionPayments() {
           <button class="secondaryBtn" data-action="copy-payment-code" data-code="${escapeHTML(payment.paymentCode || "")}">نسخ كود الدفع</button>
           <button class="secondaryBtn" data-action="reconcile-billing-uid" data-payment="${escapeHTML(payment.paymentId)}" data-uid="${escapeHTML(payment.userId||"")}">مطابقة حساب الاشتراك القديم</button>
           ${pending ? `
-            <button class="secondaryBtn" data-action="migrate-legacy-payment" data-payment="${escapeHTML(payment.paymentId)}">ترحيل إثبات قديم (عند الحاجة)</button>
+            <button class="secondaryBtn" data-action="migrate-legacy-payment" data-payment="${escapeHTML(payment.paymentId)}">ترحيل سجل دفعة قديم (عند الحاجة)</button>
             <button class="primaryBtn" data-action="approve-subscription-payment" data-payment="${escapeHTML(payment.paymentId)}">اعتماد وتفعيل</button>
-            <button class="dangerBtn" data-action="reject-subscription-payment" data-payment="${escapeHTML(payment.paymentId)}">رفض الإثبات</button>
+            <button class="dangerBtn" data-action="reject-subscription-payment" data-payment="${escapeHTML(payment.paymentId)}">رفض الدفعة</button>
           ` : ""}
         </div>
       </article>
@@ -1273,7 +1273,7 @@ $("subscriptionPaymentsContainer").addEventListener("click", async event => {
       await reconcileLegacyBillingAccount({uid:button.dataset.uid,adminUid:adminSession.user.uid});
       $("subscriptionPaymentsMessage").innerText="تم توثيق مطابقة الحساب المالي القديم.";
     } else if (button.dataset.action === "approve-subscription-payment") {
-      const confirmed = confirm("اعتماد هذه الدفعة سيُفعّل/يُجدد الاشتراك فورًا. هل طابقت كود الدفع ومرجع InstaPay مع Screenshot المرسل على واتساب؟");
+      const confirmed = confirm("اعتماد هذه الدفعة سيُفعّل/يُجدد الاشتراك فورًا. هل تحققت من استلام المبلغ بمطابقة مرجع InstaPay مع حساب الاستلام أو تأكيد المستلم؟");
       if (!confirmed) return;
       await approveSubscriptionPayment(paymentId);
       $("subscriptionPaymentsMessage").innerText = "تم اعتماد الدفعة وتحديث الاشتراك بنجاح ✅";
@@ -1281,7 +1281,7 @@ $("subscriptionPaymentsContainer").addEventListener("click", async event => {
       const reason = prompt("اكتب سبب الرفض ليظهر للمشترك:");
       if (reason === null) return;
       await rejectSubscriptionPayment(paymentId, reason);
-      $("subscriptionPaymentsMessage").innerText = "تم رفض الإثبات بدون تغيير حالة الاشتراك.";
+      $("subscriptionPaymentsMessage").innerText = "تم رفض الدفعة بدون تغيير حالة الاشتراك.";
     }
 
     await Promise.all([loadSubscriptionPayments(), loadUsers(), loadOverview()]);

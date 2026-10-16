@@ -144,7 +144,7 @@ document.addEventListener("visibilitychange",()=>{
 function paymentErrorMessage(error) {
   const message = String(error?.message || "");
   if (message === "PAYMENT_ALREADY_PENDING") {
-    return "عندك إثبات دفع بانتظار المراجعة بالفعل.";
+    return "عندك دفعة مسجلة بانتظار تأكيد الاستلام بالفعل.";
   }
   if (message === "INVALID_PAYMENT_REFERENCE") {
     return "راجع مرجع عملية InstaPay واكتبه كما يظهر في التحويل.";
@@ -201,12 +201,12 @@ async function renderSubscriptionPayment(user, userData, subscriptionActive) {
   paymentBadge.innerText = pending
     ? "قيد المراجعة"
     : latest?.status === "rejected"
-      ? "يحتاج إثبات جديد"
+      ? "يلزم تسجيل دفعة جديدة"
       : "بانتظار الدفع";
 
   paymentReviewStatus.innerText = paymentStatusCopy(latest)
     || (paymentConfigReady
-      ? "بعد التحويل اكتب مرجع العملية. سنجهز لك رسالة واتساب فيها كود الدفع، وأنت أرفق Screenshot التحويل ثم أرسلها."
+      ? "بعد التحويل اكتب مرجع العملية. سنجهز رسالة واتساب بكود الدفع والمرجع؛ أرسلها للمستلم ليؤكد الاستلام بعد مراجعة التحويل. لا يلزم إيصال أو صورة."
       : "يجب ضبط رابط InstaPay ورقم واتساب الدفع للمنصة قبل استقبال دفعات حقيقية.");
 
   function openWhatsappForPayment(payment) {
@@ -522,7 +522,7 @@ getDiscoverableProjects().forEach(project => {
           ? "أداتك جاهزة. اختار مشروع من تحت وابدأ ربط أول نشاط شغال حواليك."
           : data.accessModel === "merchant_trial_v1"
             ? "للاستمرار، ادفع 59 جنيه عن طريق InstaPay ثم أرسل الإثبات على واتساب للمراجعة."
-            : "حوّل عبر InstaPay ثم سجّل مرجع العملية وابعت Screenshot التحويل على واتساب. بعد المراجعة سيتفعل الحساب.";
+            : "حوّل عبر InstaPay ثم سجّل مرجع العملية. المستلم يؤكد الاستلام، وبعد المراجعة سيتفعل الحساب.";
     }
 
     await renderSubscriptionPayment(user, data, subscriptionActive);

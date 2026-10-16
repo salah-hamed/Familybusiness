@@ -36,14 +36,14 @@ export function buildWhatsAppProofMessage({
 } = {}) {
   const typeLabel = paymentType === "renewal" ? "تجديد اشتراك" : "أول تفعيل";
   return [
-    "إثبات اشتراك Family Business",
+    "طلب تأكيد استلام دفعة Family Business",
     `كود الدفع: ${clean(paymentCode)}`,
     `نوع الاشتراك: ${typeLabel}`,
     `المبلغ: ${Number(amount || 0)} ${currency}`,
     `مرجع InstaPay: ${clean(paymentReference)}`,
     userEmail ? `البريد: ${clean(userEmail)}` : "",
     "",
-    "سأرفق Screenshot التحويل في هذه المحادثة."
+    "أرجو مراجعة التحويل وتأكيد استلام المبلغ عبر الرد على هذه الرسالة. لا يوجد إيصال أو ملف مطلوب."
   ].filter(Boolean).join("\n");
 }
 
@@ -56,15 +56,15 @@ export function buildWhatsAppProofUrl(phone, message) {
 export function paymentStatusCopy(payment = null) {
   if (!payment) return "";
   if (payment.status === "pending_review") {
-    return `تم تسجيل الدفعة${payment.paymentCode ? ` بكود ${payment.paymentCode}` : ""}. أرسل Screenshot التحويل على واتساب ثم انتظر مراجعة الإدارة.`;
+    return `تم تسجيل الدفعة${payment.paymentCode ? ` بكود ${payment.paymentCode}` : ""}. انتظر تأكيد المستلم استلام المبلغ ومراجعة الإدارة.`;
   }
   if (payment.status === "approved") {
     return "تم اعتماد الدفعة وتفعيل الاشتراك.";
   }
   if (payment.status === "rejected") {
     return payment.rejectionReason
-      ? `تم رفض الإثبات: ${payment.rejectionReason}`
-      : "تعذر اعتماد الإثبات. راجع بيانات التحويل وتواصل معنا على واتساب.";
+      ? `تعذر تأكيد الدفعة: ${payment.rejectionReason}`
+      : "تعذر تأكيد الدفعة. راجع مرجع التحويل وتواصل معنا على واتساب.";
   }
   return "";
 }
