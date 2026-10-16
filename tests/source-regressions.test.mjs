@@ -794,13 +794,13 @@ test("Phase D removes admin reversal navigation, cards and queries but keeps fin
   const legacy = readFileSync("core/commissions/reversal-service.js", "utf8");
   assert.equal(rules.includes("match /commissionReversals/{reversalId}"), true);
   assert.equal(legacy.includes("listProjectCommissionReversals"), true);
-  assert.equal(source.includes('aggregateAmount("commissionLedger", [where("status", "==", "reversed")])'), true);
+  assert.equal(source.includes('aggregateAmount("commissionLedger", [where("sourceType", "==", "project_order"), where("status", "==", "reversed")])'), true);
 });
 
 test("FB-LAUNCH05B admin overview reports net commission after confirmed reversals", () => {
   const source = readFileSync("admin/admin.js", "utf8");
 
-  assert.equal(source.includes('aggregateAmount("commissionLedger", [where("status", "==", "reversed")])'), true);
+  assert.equal(source.includes('aggregateAmount("commissionLedger", [where("sourceType", "==", "project_order"), where("status", "==", "reversed")])'), true);
   assert.equal(source.includes("const netCommission = Math.max(0, totalCommission.totalAmount - reversedCommission.totalAmount)"), true);
   assert.equal(source.includes('$("metricEarned").innerText = money(netCommission)'), true);
 });
