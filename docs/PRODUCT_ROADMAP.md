@@ -58,4 +58,3 @@ This roadmap tracks the approved operating model against the current application
 ## Release status rule
 
 Mark a feature “live” only after the exact code SHA is on `main`, required CI is green, any required Firestore Rules/indexes are published to Firebase project `business-2a2e0`, and the user-visible flow has been checked. A merged PR or a green workflow alone is not a production launch.
-

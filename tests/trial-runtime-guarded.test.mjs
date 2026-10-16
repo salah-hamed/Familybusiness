@@ -66,4 +66,3 @@ test("trial onboarding does not incorrectly claim a subscription payment", () =>
   const expiry=buildWorkspaceGuide({userData:trial({createdAt:at(-20)}),subscriptionActive:false,projects:[]});
   assert.match(expiry.intro,/59 جنيه/);
 });
-

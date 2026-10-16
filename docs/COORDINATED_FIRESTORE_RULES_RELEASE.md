@@ -84,4 +84,3 @@ Record the reviewed SHA, whether the Firestore setting is enabled, test evidence
 Stop before deployment if the SHA differs from the reviewed SHA; production Rules cannot be saved for rollback; pending proofs remain technically unhandled; Firebase targets the wrong project; required CI is missing or red; phone/PWA flows are untested; or the paired rollback is unavailable.
 
 A green CI run or code in a Draft PR does not mean the production release is complete.
-

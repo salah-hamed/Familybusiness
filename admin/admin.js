@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 21753)
-Total output lines: 1755
-
 import db from "../core/firebase/firebase-db.js";
 import { buildReviewedBillingGuard } from "../core/subscriptions/subscription-billing-guard.js";
 import { migrateLegacyPendingProof, reconcileLegacyBillingAccount } from "../core/subscriptions/billing-guard-reconciliation-service.js";
@@ -461,7 +458,932 @@ async function approveSubscriptionPayment(paymentId) {
         paidAt: null
       });
 
-      transaction.update(userRef, { referralQualified: true });…11753 tokens truncated…   state.subscriptionPayments.cursor = null;
+      transaction.update(userRef, { referralQualified: true });
+    }
+  });
+}
+
+async function rejectSubscriptionPayment(paymentId, reason) {
+  if (!adminSession?.user?.uid) throw new Error("ADMIN_SESSION_REQUIRED");
+  const cleanReason = clean(reason);
+  if (cleanReason.length < 3 || cleanReason.length > 300) {
+    throw new Error("REJECTION_REASON_REQUIRED");
+  }
+  await runTransaction(db,async tx=>{
+    const paymentRef=doc(db,"subscriptionPayments",paymentId);
+    const paymentSnap=await tx.get(paymentRef);
+    if(!paymentSnap.exists()||paymentSnap.data().status!=="pending_review")
+      throw new Error("PAYMENT_ALREADY_REVIEWED");
+    const uid=paymentSnap.data().userId;
+    const guardRef=doc(db,"subscriptionBillingGuards",uid);
+    const guardSnap=await tx.get(guardRef);
+    if(!guardSnap.exists())throw new Error("PAYMENT_BILLING_GUARD_MISSING");
+    tx.set(guardRef,buildReviewedBillingGuard(
+      guardSnap.data(),uid,paymentId,serverTimestamp()
+    ));
+    tx.update(paymentRef,{
+      status: "rejected",
+      reviewedAt:serverTimestamp(),
+      reviewedBy:adminSession.user.uid,
+      rejectionReason:cleanReason
+    });
+  });
+}
+
+async function searchSubscriptionPayments(term) {
+  const q = clean(term);
+  if (!q) return [];
+
+  const jobs = [
+    getDoc(doc(db, "subscriptionPayments", q))
+      .then(snap => snap.exists() ? [{ paymentId: snap.id, ...snap.data() }] : []),
+    getDocs(query(collection(db, "subscriptionPayments"), where("userId", "==", q), limit(SEARCH_LIMIT)))
+      .then(snap => snap.docs.map(item => ({ paymentId: item.id, ...item.data() }))),
+    getDocs(query(collection(db, "subscriptionPayments"), where("paymentReference", "==", q), limit(SEARCH_LIMIT)))
+      .then(snap => snap.docs.map(item => ({ paymentId: item.id, ...item.data() })))
+  ];
+
+  return uniqueRows((await Promise.all(jobs)).flat(), "paymentId");
+}
+
+async function loadSubscriptionPayments({ append = false } = {}) {
+  const s = state.subscriptionPayments;
+  if (s.loading) return;
+  s.loading = true;
+  $("loadMoreSubscriptionPaymentsBtn").disabled = true;
+  $("subscriptionPaymentsMessage").innerText = s.search
+    ? "جاري البحث المباشر..."
+    : "جاري تحميل دفعات الاشتراك...";
+
+  try {
+    if (s.search) {
+      let rows = await searchSubscriptionPayments(s.search);
+      if (s.status !== "all") rows = rows.filter(row => row.status === s.status);
+      s.rows = rows;
+      s.cursor = null;
+      s.hasMore = false;
+    } else {
+      const constraints = [];
+      if (s.status !== "all") constraints.push(where("status", "==", s.status));
+      constraints.push(orderBy("submittedAt", s.status === "all" ? "desc" : "asc"));
+      if (append && s.cursor) constraints.push(startAfter(s.cursor));
+      constraints.push(limit(PAGE_SIZE));
+
+      const snap = await getDocs(query(collection(db, "subscriptionPayments"), ...constraints));
+      const rows = snap.docs.map(item => ({ paymentId: item.id, ...item.data() }));
+      s.rows = append ? mergeRows(s.rows, rows, "paymentId") : rows;
+      s.cursor = snap.docs.length ? snap.docs[snap.docs.length - 1] : null;
+      s.hasMore = snap.docs.length === PAGE_SIZE;
+    }
+
+    renderSubscriptionPayments();
+    $("subscriptionPaymentsMessage").innerText = s.search
+      ? `نتائج البحث المباشر: ${s.rows.length}`
+      : `المعروض الآن: ${s.rows.length} دفعة`;
+    $("loadMoreSubscriptionPaymentsBtn").classList.toggle("hidden", !s.hasMore || Boolean(s.search));
+    sectionLoaded.subscriptionPaymentsSection = true;
+  } catch (error) {
+    console.error(error);
+    $("subscriptionPaymentsMessage").innerText = String(error?.code || "").includes("failed-precondition")
+      ? "قائمة مراجعة الاشتراكات تحتاج نشر Firestore Index النهائي قبل استخدامها Live."
+      : "تعذر تحميل دفعات الاشتراك.";
+  } finally {
+    s.loading = false;
+    $("loadMoreSubscriptionPaymentsBtn").disabled = false;
+  }
+}
+
+function renderSubscriptionPayments() {
+  const rows = state.subscriptionPayments.rows;
+  $("subscriptionPaymentsContainer").innerHTML = rows.length ? rows.map(payment => {
+    const pending = payment.status === "pending_review";
+    return `
+      <article class="adminCard">
+        <div class="cardHead">
+          <div>
+            <h3>${escapeHTML(payment.userEmail || payment.userId || "مستخدم")}</h3>
+            <p class="codeText">${escapeHTML(payment.paymentId)}</p>
+          </div>
+          ${statusPill(payment.status || "pending_review")}
+        </div>
+        <div class="metaGrid">
+          <span>User UID<br><b class="codeText">${escapeHTML(payment.userId || "—")}</b></span>
+          <span>النوع<br><b>${payment.paymentType === "renewal" ? "تجديد" : "أول تفعيل"}</b></span>
+          <span>المبلغ<br><b>${money(payment.amount)}</b></span>
+          <span>طريقة الدفع<br><b>InstaPay</b></span>
+          <span>مرجع التحويل<br><b class="codeText">${escapeHTML(payment.paymentReference || "—")}</b></span>
+          <span>كود الدفع<br><b class="codeText">${escapeHTML(payment.paymentCode || "—")}</b></span>
+          <span>قناة التأكيد<br><b>${payment.proofChannel === "whatsapp" ? "WhatsApp" : escapeHTML(payment.proofChannel || "—")}</b></span>
+          <span>تاريخ الإرسال<br><b>${formatDate(payment.submittedAt,true)}</b></span>
+          <span>المراجع<br><b>${escapeHTML(payment.reviewedBy || "—")}</b></span>
+          <span>سبب الرفض<br><b>${escapeHTML(payment.rejectionReason || "—")}</b></span>
+        </div>
+        <div class="actions">
+          <button class="secondaryBtn" data-action="copy-payment-code" data-code="${escapeHTML(payment.paymentCode || "")}">نسخ كود الدفع</button>
+          <button class="secondaryBtn" data-action="reconcile-billing-uid" data-payment="${escapeHTML(payment.paymentId)}" data-uid="${escapeHTML(payment.userId||"")}">مطابقة حساب الاشتراك القديم</button>
+          ${pending ? `
+            <button class="secondaryBtn" data-action="migrate-legacy-payment" data-payment="${escapeHTML(payment.paymentId)}">ترحيل سجل دفعة قديم (عند الحاجة)</button>
+            <button class="primaryBtn" data-action="approve-subscription-payment" data-payment="${escapeHTML(payment.paymentId)}">اعتماد وتفعيل</button>
+            <button class="dangerBtn" data-action="reject-subscription-payment" data-payment="${escapeHTML(payment.paymentId)}">رفض الدفعة</button>
+          ` : ""}
+        </div>
+      </article>
+    `;
+  }).join("") : '<div class="emptyState">لا توجد دفعات مطابقة.</div>';
+}
+
+async function searchProjects(term) {
+  const q = clean(term);
+  if (!q) return [];
+
+  const jobs = [
+    getDoc(doc(db, "projects", q)).then(snap => snap.exists() ? [{ projectDocId: snap.id, ...snap.data() }] : []),
+    getDocs(query(collection(db, "projects"), where("ownerId", "==", q), limit(SEARCH_LIMIT)))
+      .then(snap => snap.docs.map(item => ({ projectDocId: item.id, ...item.data() }))),
+    getDocs(query(collection(db, "projects"), where("businessName", "==", q), limit(SEARCH_LIMIT)))
+      .then(snap => snap.docs.map(item => ({ projectDocId: item.id, ...item.data() })))
+  ];
+
+  return uniqueRows((await Promise.all(jobs)).flat(), "projectDocId");
+}
+
+async function loadProjects({ append = false } = {}) {
+  const s = state.projects;
+  if (s.loading) return;
+  s.loading = true;
+  $("loadMoreProjectsBtn").disabled = true;
+  $("projectsMessage").innerText = s.search ? "جاري البحث المباشر..." : "جاري تحميل المشاريع...";
+
+  try {
+    if (s.search) {
+      let rows = await searchProjects(s.search);
+      if (s.template !== "all") rows = rows.filter(row => row.template === s.template);
+      s.rows = rows;
+      s.cursor = null;
+      s.hasMore = false;
+    } else {
+      const constraints = [];
+      if (s.template !== "all") constraints.push(where("template", "==", s.template));
+      constraints.push(orderBy(documentId()));
+      if (append && s.cursor) constraints.push(startAfter(s.cursor));
+      constraints.push(limit(PAGE_SIZE));
+
+      const snap = await getDocs(query(collection(db, "projects"), ...constraints));
+      const rows = snap.docs.map(item => ({ projectDocId: item.id, ...item.data() }));
+      s.rows = append ? mergeRows(s.rows, rows, "projectDocId") : rows;
+      s.cursor = snap.docs.length ? snap.docs[snap.docs.length - 1] : null;
+      s.hasMore = snap.docs.length === PAGE_SIZE;
+    }
+
+    renderProjects();
+    $("projectsMessage").innerText = s.search
+      ? `نتائج البحث: ${s.rows.length}`
+      : `المعروض الآن: ${s.rows.length} مشروع. القوائم تُحمّل على دفعات حتى لا تتوه مع نمو المنصة.`;
+    $("loadMoreProjectsBtn").classList.toggle("hidden", !s.hasMore || Boolean(s.search));
+    sectionLoaded.projectsSection = true;
+  } catch (error) {
+    console.error(error);
+    $("projectsMessage").innerText = `تعذر تحميل المشاريع: ${error.message}`;
+  } finally {
+    s.loading = false;
+    $("loadMoreProjectsBtn").disabled = false;
+  }
+}
+
+function renderProjects() {
+  const rows = state.projects.rows;
+  $("projectsContainer").innerHTML = rows.length ? rows.map(project => {
+    const active = project.isActive === true && project.status === "active";
+    const merchant = projectMerchantOverview(project, project.projectDocId);
+
+    return `
+      <article class="adminCard">
+        <div class="cardHead">
+          <div><h3>${escapeHTML(project.businessName || project.template || "مشروع")}</h3>
+          <p class="codeText">${escapeHTML(project.projectDocId)}</p></div>
+          ${statusPill(active ? "active" : "inactive")}
+        </div>
+        <div class="metaGrid">
+          <span>النوع<br><b>${escapeHTML(project.template || "—")}</b></span>
+          <span>المالك التشغيلي التاريخي<br><b class="codeText">${escapeHTML(project.ownerId || "—")}</b></span>
+          <span>معرّف النشاط المركزي<br><b class="codeText">${escapeHTML(merchant.merchantId || "—")}</b></span>
+          <span>المشترك الأصلي<br><b class="codeText">${escapeHTML(merchant.originalSubscriberId || "—")}</b></span>
+          <span>المشترك المخصص<br><b class="codeText">${escapeHTML(merchant.assignedSubscriberId || "—")}</b></span>
+          <span>التخصيص<br><b>${escapeHTML(merchant.displayState)}${merchant.legacy ? " (سجل قديم)" : ""}</b></span>
+          <span>تاريخ ربط النشاط<br><b>${formatDate(merchant.linkedAt)}</b></span>
+          <span>نموذج التشغيل<br><b>${escapeHTML(project.operatingModel || "—")}</b></span>
+          <span>المشغّل<br><b class="codeText">${escapeHTML(project.operatorId || "—")}</b></span>
+          <span>حالة الربط<br><b>${escapeHTML(project.partnerSetupStatus || "—")}</b></span>
+          <span>الإصدار<br><b>${escapeHTML(String(project.templateVersion || "—"))}</b></span>
+        </div>
+        <div class="actions">
+          <button class="${active ? "secondaryBtn" : "primaryBtn"}"
+            data-action="toggle-project"
+            data-project="${escapeHTML(project.projectDocId)}"
+            data-active="${active}">
+            ${active ? "إيقاف المشروع" : "إعادة تفعيل المشروع"}
+          </button>
+          <button class="secondaryBtn" data-action="view-project-payments" data-project="${escapeHTML(project.projectDocId)}">
+            عرض حساب المشروع
+          </button>
+          ${merchant.platformManaged ? `<button class="secondaryBtn"
+            data-action="show-platform-recovery-dues"
+            data-project="${escapeHTML(project.projectDocId)}" type="button">
+            مستحقات المنصة والمشترك السابق
+          </button>` : ""}
+          ${merchant.assignmentStatus === "platform_managed" ? `<button class="secondaryBtn"
+            data-action="check-final-cutover"
+            data-project="${escapeHTML(project.projectDocId)}" type="button">
+            مراجعة جاهزية تسليم المحل (بدون تنفيذ)
+          </button>` : ""}
+          <label class="transferPreflightInput">فحص نقل النشاط للمشترك الجديد
+            <input class="candidateSubscriberUid" type="text" maxlength="128" placeholder="UID المشترك الجديد" autocomplete="off">
+          </label>
+          ${PLATFORM_MERCHANT_RECOVERY_ENABLED && !merchant.platformManaged && !merchant.legacy ? `
+            <label class="transferPreflightInput">سبب استرداد الإدارة
+              <select class="merchantRecoveryReason">
+                <option value="overdue_renewal">تأخر تجديد الاشتراك</option>
+                <option value="unpaid_first_month">لم يسدد أول اشتراك بعد المهلة</option>
+                <option value="confirmed_violation">مخالفة موثقة ومؤكدة</option>
+              </select>
+            </label>
+            <button class="dangerBtn" data-action="recover-platform-merchant" data-project="${escapeHTML(project.projectDocId)}" type="button">
+              استرداد إدارة المحل للمنصة
+            </button>` : ""}
+          ${MERCHANT_REPEAT_RECOVERY_ENABLED
+            && merchant.platformManaged && merchant.assignmentStatus==="assigned_to_new_subscriber"
+            && (project.assignmentCycle??1)>=1 ? `
+            <label class="transferPreflightInput">سبب استرداد المحل بعد انتهاء تخصيصه
+              <select class="merchantRepeatReason">
+                <option value="overdue_renewal">تأخر التجديد</option>
+                <option value="unpaid_first_month">أول اشتراك غير مسدد</option>
+                <option value="confirmed_violation">مخالفة موثقة</option>
+              </select>
+            </label>
+            <button class="dangerBtn" type="button" data-action="repeat-recover-merchant"
+              data-project="${escapeHTML(project.projectDocId)}">استرداد جديد مع حفظ المستحقات</button>`:""}
+          ${MERCHANT_REPEAT_ASSIGNMENT_ENABLED && merchant.platformManaged
+            && merchant.assignmentStatus==="platform_managed"
+            && Number.isSafeInteger(project.assignmentCycle)
+            && project.assignmentCycle>=2 ? `
+            <label class="transferPreflightInput">سبب التخصيص المتكرر
+              <input class="repeatTransferReason" minlength="15" maxlength="300"
+                placeholder="اكتب سببًا واضحًا لا يقل عن 15 حرفًا">
+            </label>
+            <button class="secondaryBtn" type="button" data-action="repeat-open-transfer"
+              data-project="${escapeHTML(project.projectDocId)}">طلب موافقات جديدة</button>
+            <button class="secondaryBtn" type="button" data-action="repeat-review-finance"
+              data-project="${escapeHTML(project.projectDocId)}">توثيق الحسابات دون سداد</button>
+            <button class="dangerBtn" type="button" data-action="repeat-execute-transfer"
+              data-project="${escapeHTML(project.projectDocId)}">نقل المحل بعد مراجعة الموافقات</button>
+          `:""}
+          <button class="secondaryBtn" data-action="preflight-merchant-transfer" data-project="${escapeHTML(project.projectDocId)}" type="button">
+            فحص أهلية النقل (قراءة فقط)
+          </button>
+          ${MERCHANT_TRANSFER_CASES_ENABLED && merchant.assignmentStatus === "platform_managed" && !merchant.legacy ? `
+            <label class="transferPreflightInput">سبب التخصيص الجديد
+              <input class="transferCaseReason" type="text" minlength="15" maxlength="300"
+                placeholder="سبب مفصل لا يقل عن 15 حرفًا">
+            </label>
+            <button class="secondaryBtn" type="button" data-action="open-merchant-transfer-case"
+              data-project="${escapeHTML(project.projectDocId)}">إنشاء اتفاق تخصيص جديد</button>
+            <button class="secondaryBtn" type="button" data-action="review-merchant-transfer-finance"
+              data-project="${escapeHTML(project.projectDocId)}">توثيق مراجعة الحسابات (بدون سداد)</button>
+            ${MERCHANT_CUTOVER_ENABLED ? `<button class="dangerBtn" type="button" data-action="execute-merchant-cutover"
+              data-project="${escapeHTML(project.projectDocId)}">تنفيذ النقل الفعلي بعد المراجعة</button>` : ""}
+          ` : ""}
+
+        </div>
+        <p class="transferPreflightResult" role="status" aria-live="polite"></p>
+      </article>
+    `;
+  }).join("") : '<div class="emptyState">لا توجد مشاريع مطابقة.</div>';
+}
+
+async function searchOperators(term) {
+  const q = clean(term);
+  if (!q) return [];
+
+  const jobs = [
+    getDoc(doc(db, "operators", q)).then(snap => snap.exists() ? [{ operatorId: snap.id, ...snap.data() }] : []),
+    getDocs(query(collection(db, "operators"), where("phone", "==", q), limit(SEARCH_LIMIT)))
+      .then(snap => snap.docs.map(item => ({ operatorId: item.id, ...item.data() }))),
+    getDocs(query(collection(db, "operators"), where("whatsapp", "==", q), limit(SEARCH_LIMIT)))
+      .then(snap => snap.docs.map(item => ({ operatorId: item.id, ...item.data() }))),
+    getDocs(query(collection(db, "operators"), where("authLoginEmail", "==", q), limit(SEARCH_LIMIT)))
+      .then(snap => snap.docs.map(item => ({ operatorId: item.id, ...item.data() })))
+  ];
+
+  return uniqueRows((await Promise.all(jobs)).flat(), "operatorId");
+}
+
+async function loadOperators({ append = false } = {}) {
+  const s = state.operators;
+  if (s.loading) return;
+  s.loading = true;
+  $("loadMoreOperatorsBtn").disabled = true;
+  $("operatorsMessage").innerText = s.search ? "جاري البحث المباشر..." : "جاري تحميل المشغّلين...";
+
+  try {
+    if (s.search) {
+      s.rows = await searchOperators(s.search);
+      s.cursor = null;
+      s.hasMore = false;
+    } else {
+      const constraints = [orderBy(documentId())];
+      if (append && s.cursor) constraints.push(startAfter(s.cursor));
+      constraints.push(limit(PAGE_SIZE));
+
+      const snap = await getDocs(query(collection(db, "operators"), ...constraints));
+      const rows = snap.docs.map(item => ({ operatorId: item.id, ...item.data() }));
+      s.rows = append ? mergeRows(s.rows, rows, "operatorId") : rows;
+      s.cursor = snap.docs.length ? snap.docs[snap.docs.length - 1] : null;
+      s.hasMore = snap.docs.length === PAGE_SIZE;
+    }
+
+    renderOperators();
+    $("operatorsMessage").innerText = s.search
+      ? `نتائج البحث: ${s.rows.length}`
+      : `المعروض الآن: ${s.rows.length} مشغّل.`;
+    $("loadMoreOperatorsBtn").classList.toggle("hidden", !s.hasMore || Boolean(s.search));
+    sectionLoaded.operatorsSection = true;
+  } catch (error) {
+    console.error(error);
+    $("operatorsMessage").innerText = `تعذر تحميل المشغّلين: ${error.message}`;
+  } finally {
+    s.loading = false;
+    $("loadMoreOperatorsBtn").disabled = false;
+  }
+}
+
+function renderOperators() {
+  const rows = state.operators.rows;
+  $("operatorsContainer").innerHTML = rows.length ? rows.map(operator => {
+    const active = operator.isActive === true && operator.status === "active";
+    const canReactivate = Boolean(operator.authUid) && operator.agreementStatus === "accepted";
+
+    return `
+      <article class="adminCard">
+        <div class="cardHead">
+          <div><h3>${escapeHTML(operator.name || operator.contactName || "مشغّل")}</h3>
+          <p class="codeText">${escapeHTML(operator.projectId || operator.operatorId)}</p></div>
+          ${statusPill(active ? "active" : operator.status || "inactive")}
+        </div>
+        <div class="metaGrid">
+          <span>القالب<br><b>${escapeHTML(operator.templateId || "—")}</b></span>
+          <span>الهاتف<br><b>${escapeHTML(operator.phone || "—")}</b></span>
+          <span>واتساب<br><b>${escapeHTML(operator.whatsapp || "—")}</b></span>
+          <span>الاتفاق<br><b>${escapeHTML(operator.agreementStatus || "—")}</b></span>
+          <span>Auth UID<br><b class="codeText">${escapeHTML(operator.authUid || "غير مفعّل")}</b></span>
+          <span>بريد الدعوة<br><b>${escapeHTML(operator.authLoginEmail || "—")}</b></span>
+        </div>
+        <div class="actions">
+          ${active
+            ? `<button class="secondaryBtn" data-action="toggle-operator" data-operator="${escapeHTML(operator.operatorId)}" data-active="true">إيقاف التشغيل</button>`
+            : canReactivate
+              ? `<button class="primaryBtn" data-action="toggle-operator" data-operator="${escapeHTML(operator.operatorId)}" data-active="false">إعادة التفعيل</button>`
+              : '<span class="smallMuted">إعادة التفعيل متاحة بعد تفعيل الدعوة وقبول الاتفاق.</span>'}
+        </div>
+      </article>
+    `;
+  }).join("") : '<div class="emptyState">لا توجد نتائج مطابقة.</div>';
+}
+
+async function loadAdminOrders({ append = false } = {}) {
+  const s = state.orders;
+  if (s.loading) return;
+  s.loading = true;
+  $("loadMoreOrdersBtn").disabled = true;
+  $("ordersAdminMessage").innerText = s.search ? "جاري البحث المباشر..." : "جاري تحميل الطلبات...";
+
+  try {
+    if (s.search) {
+      const exact = await getDoc(doc(db, "orders", s.search));
+      const byProject = await getDocs(query(
+        collection(db, "orders"),
+        where("projectId", "==", s.search),
+        orderBy("createdAt", "desc"),
+        limit(SEARCH_LIMIT)
+      ));
+
+      let rows = [
+        ...(exact.exists() ? [{ orderId: exact.id, ...exact.data() }] : []),
+        ...byProject.docs.map(item => ({ orderId: item.id, ...item.data() }))
+      ];
+      rows = uniqueRows(rows, "orderId");
+      if (s.status !== "all") {
+        rows = rows.filter(row => row.status === s.status || row.laundryStage === s.status);
+      }
+
+      s.rows = rows;
+      s.cursor = null;
+      s.hasMore = false;
+    } else {
+      const constraints = [];
+      if (s.status !== "all") constraints.push(where("status", "==", s.status));
+      constraints.push(orderBy("createdAt", "desc"));
+      if (append && s.cursor) constraints.push(startAfter(s.cursor));
+      constraints.push(limit(PAGE_SIZE));
+
+      const snap = await getDocs(query(collection(db, "orders"), ...constraints));
+      const rows = snap.docs.map(item => ({ orderId: item.id, ...item.data() }));
+      s.rows = append ? mergeRows(s.rows, rows, "orderId") : rows;
+      s.cursor = snap.docs.length ? snap.docs[snap.docs.length - 1] : null;
+      s.hasMore = snap.docs.length === PAGE_SIZE;
+    }
+
+    renderAdminOrders();
+    $("ordersAdminMessage").innerText = s.search
+      ? `نتائج البحث: ${s.rows.length}`
+      : `المعروض الآن: ${s.rows.length} طلب.`;
+    $("loadMoreOrdersBtn").classList.toggle("hidden", !s.hasMore || Boolean(s.search));
+    sectionLoaded.ordersSection = true;
+  } catch (error) {
+    console.error(error);
+    $("ordersAdminMessage").innerText = `تعذر تحميل الطلبات: ${error.message}`;
+  } finally {
+    s.loading = false;
+    $("loadMoreOrdersBtn").disabled = false;
+  }
+}
+
+function renderAdminOrders() {
+  const rows = state.orders.rows;
+  $("ordersTableBody").innerHTML = rows.length ? rows.map(order => `
+    <tr>
+      <td><b>#${escapeHTML(order.orderId.slice(0,8))}</b><br><small>${formatDate(order.createdAt,true)}</small></td>
+      <td>${escapeHTML(order.templateType || "—")}<br><small class="codeText">${escapeHTML(order.projectId || "—")}</small></td>
+      <td>${escapeHTML(order.customerName || "—")}<br><small>${escapeHTML(order.customerPhone || "")}</small></td>
+      <td>${statusPill(order.status || order.laundryStage || "—")}<br><small>${escapeHTML(order.laundryStage || "")}</small></td>
+      <td><b>${money(order.total ?? order.price ?? 0)}</b></td>
+      <td>${order.commissionLocked
+        ? `<b>${money(order.commissionAmount)}</b><br><small>${escapeHTML(order.commissionTrigger || "legacy")}</small>`
+        : "—"}</td>
+    </tr>
+  `).join("") : '<tr><td colspan="6">لا توجد طلبات مطابقة.</td></tr>';
+}
+
+
+function visibleOperationalExceptions() {
+  const s = state.exceptions;
+  return [...s.rows]
+    .filter(row => s.template === "all" || row.templateType === s.template)
+    .filter(row => s.level === "all" || row.operationalAlert?.level === s.level)
+    .sort((a, b) => {
+      const levelDelta = (b.operationalAlert?.level === "critical" ? 1 : 0)
+        - (a.operationalAlert?.level === "critical" ? 1 : 0);
+      if (levelDelta) return levelDelta;
+      return Number(b.operationalAlert?.ageMinutes || 0) - Number(a.operationalAlert?.ageMinutes || 0);
+    });
+}
+
+function updateOperationalExceptionsMessage() {
+  const visible = visibleOperationalExceptions().length;
+  const loaded = state.exceptions.rows.length;
+  $("exceptionsMessage").innerText = loaded
+    ? `المعروض ${visible} تنبيه من ${loaded} طلب متأخر محمّل. القائمة مرتبة حسب شدة التأخير.`
+    : "لا توجد طلبات متأخرة في الدفعة المحمّلة.";
+}
+
+async function loadOperationalExceptions({ append = false } = {}) {
+  const s = state.exceptions;
+  if (s.loading) return;
+  s.loading = true;
+  $("loadMoreExceptionsBtn").disabled = true;
+  $("exceptionsMessage").innerText = "جاري فحص أقدم الطلبات المفتوحة...";
+
+  try {
+    const cutoff = Timestamp.fromMillis(Date.now() - 15 * 60 * 1000);
+    const constraints = [
+      where("status", "in", ACTIVE_EXCEPTION_STATUSES),
+      where("createdAt", "<=", cutoff),
+      orderBy("createdAt", "asc")
+    ];
+
+    if (append && s.cursor) constraints.push(startAfter(s.cursor));
+    constraints.push(limit(PAGE_SIZE));
+
+    const snap = await getDocs(query(collection(db, "orders"), ...constraints));
+    const rows = snap.docs
+      .map(item => ({ orderId: item.id, ...item.data() }))
+      .map(order => {
+        const operationalAlert = getOrderOperationalAlert(order);
+        return operationalAlert ? { ...order, operationalAlert } : null;
+      })
+      .filter(Boolean);
+
+    s.rows = append ? mergeRows(s.rows, rows, "orderId") : rows;
+    s.cursor = snap.docs.length ? snap.docs[snap.docs.length - 1] : null;
+    s.hasMore = snap.docs.length === PAGE_SIZE;
+
+    renderOperationalExceptions();
+    updateOperationalExceptionsMessage();
+    $("loadMoreExceptionsBtn").classList.toggle("hidden", !s.hasMore);
+    sectionLoaded.exceptionsSection = true;
+  } catch (error) {
+    console.error(error);
+    const code = String(error?.code || "").toLowerCase();
+    $("exceptionsMessage").innerText = code.includes("failed-precondition") && String(error?.message || "").toLowerCase().includes("index")
+      ? "تنبيهات التشغيل تحتاج نشر Firestore Index النهائي قبل استخدامها Live. باقي لوحة الإدارة تعمل بشكل طبيعي."
+      : `تعذر تحميل تنبيهات التشغيل: ${error.message}`;
+  } finally {
+    s.loading = false;
+    $("loadMoreExceptionsBtn").disabled = false;
+  }
+}
+
+function renderOperationalExceptions() {
+  const rows = visibleOperationalExceptions();
+  $("exceptionsTableBody").innerHTML = rows.length ? rows.map(order => {
+    const alert = order.operationalAlert;
+    const severity = alert.level === "critical" ? "متأخر جدًا" : "متأخر";
+    const severityClass = alert.level === "critical" ? "exceptionCritical" : "exceptionWarning";
+
+    return `
+      <tr>
+        <td><span class="pill ${severityClass}">${severity}</span><br><small>${escapeHTML(alert.message)}</small></td>
+        <td><b>#${escapeHTML(order.orderId.slice(0,8))}</b><br><small>${formatDate(order.createdAt,true)}</small></td>
+        <td>${escapeHTML(order.templateType || "—")}<br><small class="codeText">${escapeHTML(order.projectId || "—")}</small></td>
+        <td>${escapeHTML(order.customerName || "—")}<br><small>${escapeHTML(order.customerPhone || "")}</small></td>
+        <td>${statusPill(order.status || "—")}<br><small>${escapeHTML(order.laundryStage || "")}</small></td>
+        <td>
+          <small>آخر تحديث: ${formatDate(order.statusUpdatedAt || order.createdAt,true)}</small><br>
+          <button class="secondaryBtn" type="button" data-action="open-exception-order" data-order="${escapeHTML(order.orderId)}">فتح الطلب</button>
+        </td>
+      </tr>
+    `;
+  }).join("") : '<tr><td colspan="6">لا توجد تنبيهات مطابقة للفلاتر الحالية.</td></tr>';
+}
+
+async function loadCommissions({ append = false } = {}) {
+  const s = state.commissions;
+  if (s.loading) return;
+  s.loading = true;
+  $("loadMoreCommissionsBtn").disabled = true;
+  $("commissionsMessage").innerText = s.search ? "جاري البحث المباشر..." : "جاري تحميل دفتر العمولات...";
+
+  try {
+    if (s.search) {
+      const exact = await getDoc(doc(db, "commissionLedger", s.search));
+      const [byProject, byUser] = await Promise.all([
+        getDocs(query(
+          collection(db, "commissionLedger"),
+          where("projectId", "==", s.search),
+          orderBy("createdAt", "desc"),
+          limit(SEARCH_LIMIT)
+        )),
+        getDocs(query(
+          collection(db, "commissionLedger"),
+          where("userId", "==", s.search),
+          orderBy("createdAt", "desc"),
+          limit(SEARCH_LIMIT)
+        ))
+      ]);
+
+      let rows = [
+        ...(exact.exists() ? [{ entryId: exact.id, ...exact.data() }] : []),
+        ...byProject.docs.map(item => ({ entryId: item.id, ...item.data() })),
+        ...byUser.docs.map(item => ({ entryId: item.id, ...item.data() }))
+      ];
+
+      rows = uniqueRows(rows, "entryId");
+      if (s.status !== "all") rows = rows.filter(row => row.status === s.status);
+      s.rows = rows;
+      s.cursor = null;
+      s.hasMore = false;
+    } else {
+      const constraints = [];
+      if (s.status !== "all") constraints.push(where("status", "==", s.status));
+      constraints.push(orderBy("createdAt", "desc"));
+      if (append && s.cursor) constraints.push(startAfter(s.cursor));
+      constraints.push(limit(PAGE_SIZE));
+
+      const snap = await getDocs(query(collection(db, "commissionLedger"), ...constraints));
+      const rows = snap.docs.map(item => ({ entryId: item.id, ...item.data() }));
+      s.rows = append ? mergeRows(s.rows, rows, "entryId") : rows;
+      s.cursor = snap.docs.length ? snap.docs[snap.docs.length - 1] : null;
+      s.hasMore = snap.docs.length === PAGE_SIZE;
+    }
+
+    renderCommissions();
+    $("commissionsMessage").innerText = s.search
+      ? `نتائج البحث: ${s.rows.length}`
+      : `المعروض الآن: ${s.rows.length} قيد.`;
+    $("loadMoreCommissionsBtn").classList.toggle("hidden", !s.hasMore || Boolean(s.search));
+    sectionLoaded.commissionsSection = true;
+  } catch (error) {
+    console.error(error);
+    $("commissionsMessage").innerText = `تعذر تحميل العمولات: ${error.message}`;
+  } finally {
+    s.loading = false;
+    $("loadMoreCommissionsBtn").disabled = false;
+  }
+}
+
+function renderCommissions() {
+  const rows = state.commissions.rows;
+  $("commissionsTableBody").innerHTML = rows.length ? rows.map(entry => `
+    <tr>
+      <td><b class="codeText">${escapeHTML(entry.entryId)}</b><br><small>${formatDate(entry.createdAt || entry.earnedAt,true)}</small></td>
+      <td>${escapeHTML(entry.sourceType || "—")}<br><small class="codeText">${escapeHTML(entry.projectId || entry.sourceId || "—")}</small></td>
+      <td><span class="codeText">${escapeHTML(entry.userId || "—")}</span></td>
+      <td><b>${money(entry.amount)}</b></td>
+      <td>${statusPill(entry.status || "earned")}</td>
+      <td>${entry.settlementId ? escapeHTML(entry.settlementId) : "الدفع يُسجل منفصلًا"}</td>
+    </tr>
+  `).join("") : '<tr><td colspan="6">لا توجد قيود عمولة.</td></tr>';
+}
+
+async function loadSettlements() {
+  const s = state.settlements;
+  if (s.loading) return;
+  s.loading = true;
+  $("loadMoreSettlementsBtn").disabled = true;
+  $("settlementsMessage").innerText = s.search ? "جاري البحث المباشر..." : "جاري تحميل عمليات الدفع...";
+
+  try {
+    if (s.search) {
+      const snap = await getDocs(query(
+        collection(db, "commissionSettlements"),
+        where("projectId", "==", s.search),
+        orderBy("createdAt", "desc"),
+        limit(SEARCH_LIMIT)
+      ));
+
+      let rows = snap.docs.map(item => ({ settlementId: item.id, ...item.data() }));
+      if (s.status !== "all") rows = rows.filter(row => row.status === s.status);
+      s.rows = rows;
+      s.cursor = null;
+      s.hasMore = false;
+    } else {
+      s.rows = await listRecentCommissionSettlements({
+        status: s.status,
+        pageSize: PAGE_SIZE
+      });
+      s.cursor = null;
+      s.hasMore = false;
+    }
+
+    renderSettlements();
+    $("settlementsMessage").innerText = s.search
+      ? `نتائج البحث: ${s.rows.length}`
+      : `آخر ${s.rows.length} عملية دفع — للمتابعة فقط.`;
+    $("loadMoreSettlementsBtn").classList.add("hidden");
+    sectionLoaded.settlementsSection = true;
+  } catch (error) {
+    console.error(error);
+    const code = String(error?.code || "").toLowerCase();
+    $("settlementsMessage").innerText = code.includes("permission-denied")
+      ? "عمليات الدفع الجديدة تحتاج نشر Firestore Rules النهائية. باقي لوحة الإدارة تعمل بشكل طبيعي."
+      : `تعذر تحميل عمليات الدفع: ${error.message}`;
+  } finally {
+    s.loading = false;
+    $("loadMoreSettlementsBtn").disabled = false;
+  }
+}
+
+function renderSettlements() {
+  const rows = state.settlements.rows;
+  $("settlementsContainer").innerHTML = rows.length ? rows.map(item => `
+    <article class="adminCard settlementCard ${escapeHTML(item.status || "")}">
+      <div class="cardHead">
+        <div>
+          <h3>${escapeHTML(item.businessName || item.templateId || "عملية دفع")}</h3>
+          <p class="codeText">${escapeHTML(item.settlementId)}</p>
+        </div>
+        ${statusPill(item.status)}
+      </div>
+      <div class="metaGrid">
+        <span>المشروع<br><b class="codeText">${escapeHTML(item.projectId || "—")}</b></span>
+        <span>المبلغ<br><b>${money(item.amount)}</b></span>
+        <span>طريقة الدفع<br><b>${escapeHTML(item.paymentMethod || "—")}</b></span>
+        <span>مرجع الدفع<br><b>${escapeHTML(item.paymentReference || "—")}</b></span>
+        <span>سجلها المشغّل<br><b>${formatDate(item.declaredAt || item.createdAt,true)}</b></span>
+        <span>تأكيد المشترك<br><b>${formatDate(item.confirmedAt,true)}</b></span>
+        <span>المشغّل UID<br><b class="codeText">${escapeHTML(item.declaredBy || "—")}</b></span>
+        <span>المشترك UID<br><b class="codeText">${escapeHTML(item.ownerId || "—")}</b></span>
+      </div>
+      <p class="smallMuted">لو العملية معلقة، الإجراء المطلوب بين المشغّل والمشترك فقط. الإدارة تراقب ولا تؤكد نيابة عن أي طرف.</p>
+    </article>
+  `).join("") : '<div class="emptyState">لا توجد عمليات دفع مطابقة.</div>';
+}
+
+
+async function ensureSectionLoaded(sectionId) {
+  if (sectionLoaded[sectionId]) return;
+  if (sectionId === "usersSection") await loadUsers();
+  if (sectionId === "subscriptionPaymentsSection") await loadSubscriptionPayments();
+  if (sectionId === "projectsSection") await loadProjects();
+  if (sectionId === "operatorsSection") await loadOperators();
+  if (sectionId === "ordersSection") await loadAdminOrders();
+  if (sectionId === "exceptionsSection") await loadOperationalExceptions();
+  if (sectionId === "commissionsSection") await loadCommissions();
+  if (sectionId === "settlementsSection") await loadSettlements();
+}
+
+function switchSection(sectionId) {
+  document.querySelectorAll(".adminSection").forEach(section =>
+    section.classList.toggle("activeSection", section.id === sectionId)
+  );
+  document.querySelectorAll(".tabBtn").forEach(button =>
+    button.classList.toggle("active", button.dataset.section === sectionId)
+  );
+  ensureSectionLoaded(sectionId);
+}
+
+async function refreshLoadedSections() {
+  await loadOverview();
+  const jobs = [];
+  if (sectionLoaded.usersSection) jobs.push(loadUsers());
+  if (sectionLoaded.subscriptionPaymentsSection) jobs.push(loadSubscriptionPayments());
+  if (sectionLoaded.projectsSection) jobs.push(loadProjects());
+  if (sectionLoaded.operatorsSection) jobs.push(loadOperators());
+  if (sectionLoaded.ordersSection) jobs.push(loadAdminOrders());
+  if (sectionLoaded.exceptionsSection) jobs.push(loadOperationalExceptions());
+  if (sectionLoaded.commissionsSection) jobs.push(loadCommissions());
+  if (sectionLoaded.settlementsSection) jobs.push(loadSettlements());
+  await Promise.all(jobs);
+}
+
+function debounceSearch(fn) {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(fn, 350);
+}
+
+document.querySelectorAll(".tabBtn").forEach(button => {
+  button.addEventListener("click", () => switchSection(button.dataset.section));
+});
+
+$("refreshAllBtn").addEventListener("click", refreshLoadedSections);
+$("refreshSubscriptionPaymentsBtn").addEventListener("click", () => loadSubscriptionPayments());
+$("refreshProjectsBtn").addEventListener("click", () => loadProjects());
+$("refreshOperatorsBtn").addEventListener("click", () => loadOperators());
+$("refreshOrdersAdminBtn").addEventListener("click", () => loadAdminOrders());
+$("refreshExceptionsBtn").addEventListener("click", () => loadOperationalExceptions());
+$("refreshCommissionsBtn").addEventListener("click", () => loadCommissions());
+$("refreshSettlementsBtn").addEventListener("click", () => loadSettlements());
+
+$("usersSearch").addEventListener("input", event => {
+  state.users.search = clean(event.target.value);
+  state.users.cursor = null;
+  debounceSearch(() => loadUsers());
+});
+$("usersStatusFilter").addEventListener("change", event => {
+  state.users.status = event.target.value;
+  state.users.cursor = null;
+  loadUsers();
+});
+$("loadMoreUsersBtn").addEventListener("click", () => loadUsers({ append: true }));
+
+$("subscriptionPaymentsSearch").addEventListener("input", event => {
+  state.subscriptionPayments.search = clean(event.target.value);
+  state.subscriptionPayments.cursor = null;
+  debounceSearch(() => loadSubscriptionPayments());
+});
+$("subscriptionPaymentsStatusFilter").addEventListener("change", event => {
+  state.subscriptionPayments.status = event.target.value;
+  state.subscriptionPayments.cursor = null;
+  loadSubscriptionPayments();
+});
+$("loadMoreSubscriptionPaymentsBtn").addEventListener("click", () => loadSubscriptionPayments({ append: true }));
+
+$("subscriptionPaymentsContainer").addEventListener("click", async event => {
+  const button = event.target.closest("[data-action]");
+  if (!button) return;
+
+  if (button.dataset.action === "copy-payment-code") {
+    try {
+      await navigator.clipboard.writeText(button.dataset.code || "");
+      $("subscriptionPaymentsMessage").innerText = "تم نسخ كود الدفع. ابحث به في محادثات واتساب للمراجعة.";
+    } catch {
+      $("subscriptionPaymentsMessage").innerText = "تعذر نسخ الكود تلقائيًا. انسخه من البطاقة.";
+    }
+    return;
+  }
+
+  const paymentId = button.dataset.payment;
+  if (!paymentId) return;
+  button.disabled = true;
+
+  try {
+    if (button.dataset.action === "migrate-legacy-payment") {
+      if (!confirm("هل هذه دفعة قديمة من قبل تحديث قواعد Firebase؟ سيتم ربطها بسجل المراجعة الآمن، بدون تفعيل الاشتراك.")) return;
+      await migrateLegacyPendingProof({paymentId,adminUid:adminSession.user.uid});
+      $("subscriptionPaymentsMessage").innerText="تم ترحيل الإثبات القديم لمراجعته بأمان.";
+    } else if (button.dataset.action === "reconcile-billing-uid") {
+      if(!confirm("تأكد أولًا أن كل إثباتات InstaPay وواتساب القديمة لهذا الحساب تمت مراجعتها، وأنه لا توجد دفعة معلقة. هذه الخطوة تسمح بفحص الاسترداد لاحقًا.")) return;
+      await reconcileLegacyBillingAccount({uid:button.dataset.uid,adminUid:adminSession.user.uid});
+      $("subscriptionPaymentsMessage").innerText="تم توثيق مطابقة الحساب المالي القديم.";
+    } else if (button.dataset.action === "approve-subscription-payment") {
+      const confirmed = confirm("اعتماد هذه الدفعة سيُفعّل/يُجدد الاشتراك فورًا. هل تحققت من استلام المبلغ بمطابقة مرجع InstaPay مع حساب الاستلام أو تأكيد المستلم؟");
+      if (!confirmed) return;
+      await approveSubscriptionPayment(paymentId);
+      $("subscriptionPaymentsMessage").innerText = "تم اعتماد الدفعة وتحديث الاشتراك بنجاح ✅";
+    } else if (button.dataset.action === "reject-subscription-payment") {
+      const reason = prompt("اكتب سبب الرفض ليظهر للمشترك:");
+      if (reason === null) return;
+      await rejectSubscriptionPayment(paymentId, reason);
+      $("subscriptionPaymentsMessage").innerText = "تم رفض الدفعة بدون تغيير حالة الاشتراك.";
+    }
+
+    await Promise.all([loadSubscriptionPayments(), loadUsers(), loadOverview()]);
+  } catch (error) {
+    console.error(error);
+    const message = String(error?.message || "");
+    $("subscriptionPaymentsMessage").innerText =
+      message === "REJECTION_REASON_REQUIRED"
+        ? "سبب الرفض يجب أن يكون واضحًا من 3 إلى 300 حرف."
+        : message === "PAYMENT_DOES_NOT_MATCH_ACCOUNT_STATE"
+          ? "الدفعة لا تطابق حالة الاشتراك الحالية. راجع نوع الدفعة والمبلغ."
+          : message === "PAYMENT_ALREADY_REVIEWED"
+            ? "تمت مراجعة هذه الدفعة بالفعل. حدّث القائمة."
+            : "تعذر تنفيذ مراجعة الدفعة. حدّث البيانات وحاول مرة أخرى.";
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$("projectsSearch").addEventListener("input", event => {
+  state.projects.search = clean(event.target.value);
+  state.projects.cursor = null;
+  debounceSearch(() => loadProjects());
+});
+$("projectsTemplateFilter").addEventListener("change", event => {
+  state.projects.template = event.target.value;
+  state.projects.cursor = null;
+  loadProjects();
+});
+$("loadMoreProjectsBtn").addEventListener("click", () => loadProjects({ append: true }));
+
+$("operatorsSearch").addEventListener("input", event => {
+  state.operators.search = clean(event.target.value);
+  state.operators.cursor = null;
+  debounceSearch(() => loadOperators());
+});
+$("loadMoreOperatorsBtn").addEventListener("click", () => loadOperators({ append: true }));
+
+$("ordersSearch").addEventListener("input", event => {
+  state.orders.search = clean(event.target.value);
+  state.orders.cursor = null;
+  debounceSearch(() => loadAdminOrders());
+});
+$("ordersStatusFilter").addEventListener("change", event => {
+  state.orders.status = event.target.value;
+  state.orders.cursor = null;
+  loadAdminOrders();
+});
+$("loadMoreOrdersBtn").addEventListener("click", () => loadAdminOrders({ append: true }));
+
+$("exceptionsTemplateFilter").addEventListener("change", event => {
+  state.exceptions.template = event.target.value;
+  renderOperationalExceptions();
+  updateOperationalExceptionsMessage();
+});
+$("exceptionsLevelFilter").addEventListener("change", event => {
+  state.exceptions.level = event.target.value;
+  renderOperationalExceptions();
+  updateOperationalExceptionsMessage();
+});
+$("loadMoreExceptionsBtn").addEventListener("click", () => loadOperationalExceptions({ append: true }));
+$("exceptionsTableBody").addEventListener("click", async event => {
+  const button = event.target.closest("[data-action=\"open-exception-order\"][data-order]");
+  if (!button) return;
+  state.orders.search = button.dataset.order;
+  state.orders.cursor = null;
+  $("ordersSearch").value = button.dataset.order;
+  switchSection("ordersSection");
+  await loadAdminOrders();
+});
+
+$("commissionsSearch").addEventListener("input", event => {
+  state.commissions.search = clean(event.target.value);
+  state.commissions.cursor = null;
+  debounceSearch(() => loadCommissions());
+});
+$("commissionsStatusFilter").addEventListener("change", event => {
+  state.commissions.status = event.target.value;
+  state.commissions.cursor = null;
+  loadCommissions();
+});
+$("loadMoreCommissionsBtn").addEventListener("click", () => loadCommissions({ append: true }));
+
+$("settlementsSearch").addEventListener("input", event => {
+  state.settlements.search = clean(event.target.value);
+  debounceSearch(() => loadSettlements());
+});
+$("settlementsStatusFilter").addEventListener("change", event => {
+  state.settlements.status = event.target.value;
+  loadSettlements();
+});
+
+$("usersContainer").addEventListener("click", async event => {
+  const button = event.target.closest("[data-action][data-uid]");
+  if (!button) return;
+
+  if (button.dataset.action === "view-user-payments") {
+    state.subscriptionPayments.search = button.dataset.uid;
+    state.subscriptionPayments.status = "all";
+    state.subscriptionPayments.cursor = null;
     $("subscriptionPaymentsSearch").value = button.dataset.uid;
     $("subscriptionPaymentsStatusFilter").value = "all";
     switchSection("subscriptionPaymentsSection");
@@ -830,4 +1752,3 @@ protectAdmin(async session => {
 
   await Promise.all([loadOverview(), loadUsers()]);
 });
-
