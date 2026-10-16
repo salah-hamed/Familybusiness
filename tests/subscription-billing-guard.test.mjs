@@ -49,17 +49,17 @@ test("paid proof and admin review now atomically update the same subscription gu
  assert.match(rules,/match \/subscriptionBillingGuards\/\{uid\}/);
  assert.match(rules,/getAfter\(billingGuardPath/);
 });
-test("cycle settlements are operator declared, subscriber confirmed and original ledger is immutable",()=>{
+test("repeat-cycle settlements remain disabled in core launch rules",()=>{
  const src=readFileSync("core/commissions/merchant-cycle-settlement-service.js","utf8");
- const app=readFileSync("merchant-statement/app.js","utf8");
+ const rollout=readFileSync("core/merchants/merchant-cycle-rollout.js","utf8");
  const rules=readFileSync("firestore.rules","utf8");
- assert.match(src,/declareMerchantCyclePayment/);
- assert.match(src,/decideMerchantCyclePayment/);
- assert.match(src,/getProjectPaymentSummary/);
- assert.match(src,/merchantCyclePaymentStates/);
- assert.match(app,/subscriberUid:user.uid/);
- assert.match(rules,/validMerchantCycleSettlementCreate/);
- assert.match(rules,/validMerchantCycleSettlementDecision/);
- assert.match(rules,/validClearPendingState/);
+ assert.match(rollout,/MERCHANT_REPEAT_ASSIGNMENT_ENABLED = false/);
+ assert.match(src,/if\(!MERCHANT_REPEAT_ASSIGNMENT_ENABLED\)/);
+ assert.doesNotMatch(rules,/validMerchantCycleSettlementCreate/);
+ assert.doesNotMatch(rules,/validMerchantCycleSettlementDecision/);
+ assert.doesNotMatch(rules,/match \/merchantCyclePaymentStates/);
+ assert.doesNotMatch(rules,/match \/merchantRecoveryCycles/);
+ assert.doesNotMatch(rules,/match \/merchantTransferCycles/);
+ assert.doesNotMatch(rules,/match \/merchantAssignmentCycles/);
  assert.doesNotMatch(src,/transaction\.delete|tx\.delete/);
 });
