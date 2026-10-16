@@ -4,7 +4,6 @@ service cloud.firestore {
   function signedIn(){ return request.auth != null; }
   function userPath(uid){ return /databases/$(database)/documents/users/$(uid); }
   function projectPath(projectId){ return /databases/$(database)/documents/projects/$(projectId); }
-  function carwashSubscriptionPath(subscriptionId){ return /databases/$(database)/documents/carwashSubscriptions/$(subscriptionId); }
   function operatorPath(operatorId){ return /databases/$(database)/documents/operators/$(operatorId); }
   function commissionAgreementPath(agreementId){ return /databases/$(database)/documents/commissionAgreements/$(agreementId); }
   function workerPath(workerId){ return /databases/$(database)/documents/workers/$(workerId); }
@@ -165,8 +164,6 @@ service cloud.firestore {
         || ((!('platformManaged' in project) || project.platformManaged == false)
             && subscriptionActive(project.ownerId)));
   }
-  function carwashSubscriptionExists(subscriptionId){ return exists(carwashSubscriptionPath(subscriptionId)); }
-  function carwashSubscriptionData(subscriptionId){ return get(carwashSubscriptionPath(subscriptionId)).data; }
   function operatorExists(operatorId){ return exists(operatorPath(operatorId)); }
   function operatorData(operatorId){ return get(operatorPath(operatorId)).data; }
   function isOperator(operatorId){ return signedIn() && operatorExists(operatorId) && operatorData(operatorId).authUid == request.auth.uid; }
@@ -546,10 +543,6 @@ service cloud.firestore {
       && role == "rider"
     )
     || (
-      projectData(projectId).template == "cleaning"
-      && role == "cleaner"
-    )
-    || (
       projectData(projectId).template == "laundry"
       && role in ["pickup_agent","delivery_agent"]
     )
@@ -823,85 +816,7 @@ service cloud.firestore {
         ? validRestaurantOrder(projectId)
         : templateType == "laundry"
           ? (laundryAcceptingOrders(projectId) && validLaundryOrder(projectId))
-          : templateType == "cleaning"
-            ? validCleaningOrder(projectId)
-            : templateType == "carwash"
-              ? validCarwashOrder(projectId)
-              : false;
-  }
-
-  function validCleaningOrder(projectId){
-   let config = projectData(projectId).priceConfig;
-   return request.resource.data.templateType == "cleaning"
-    && projectAvailable(projectId)
-    && validCustomerInput()
-    && request.resource.data.rooms is number
-    && request.resource.data.rooms >= 0
-    && request.resource.data.bathrooms is number
-    && request.resource.data.bathrooms >= 0
-    && request.resource.data.kitchen in ["yes","no"]
-    && request.resource.data.stairs in ["yes","no"]
-    && request.resource.data.price is number
-    && (
-      (
-       request.resource.data.kitchen == "no"
-       && request.resource.data.stairs == "no"
-       && request.resource.data.price
-        == config.base
-         + request.resource.data.rooms * config.room
-         + request.resource.data.bathrooms * config.bathroom
-      )
-      ||
-      (
-       request.resource.data.kitchen == "yes"
-       && request.resource.data.stairs == "no"
-       && request.resource.data.price
-        == config.base
-         + request.resource.data.rooms * config.room
-         + request.resource.data.bathrooms * config.bathroom
-         + config.kitchen
-      )
-      ||
-      (
-       request.resource.data.kitchen == "no"
-       && request.resource.data.stairs == "yes"
-       && request.resource.data.price
-        == config.base
-         + request.resource.data.rooms * config.room
-         + request.resource.data.bathrooms * config.bathroom
-         + config.stairs
-      )
-      ||
-      (
-       request.resource.data.kitchen == "yes"
-       && request.resource.data.stairs == "yes"
-       && request.resource.data.price
-        == config.base
-         + request.resource.data.rooms * config.room
-         + request.resource.data.bathrooms * config.bathroom
-         + config.kitchen
-         + config.stairs
-      )
-    );
-  }
-
-  function validCarwashOrder(projectId){
-   let config = projectData(projectId).priceConfig;
-   return request.resource.data.templateType == "carwash"
-    && projectAvailable(projectId)
-    && validCustomerInput()
-    && request.resource.data.serviceType == "external_car_wash"
-    && request.resource.data.planType == "monthly_new"
-    && request.resource.data.subscriptionKey is string
-    && request.resource.data.renewal is bool
-    && request.resource.data.packageWashes is number
-    && request.resource.data.price is number
-    && ("monthly" in config)
-    && ("monthlyWashes" in config)
-    && config.monthly >= 0
-    && config.monthlyWashes > 0
-    && request.resource.data.price == config.monthly
-    && request.resource.data.packageWashes == config.monthlyWashes;
+          : false;
   }
 
   function validLaundryItem(item, expectedKey, washPrice, ironPrice, washOnly){
@@ -1556,7 +1471,7 @@ service cloud.firestore {
       && isVerifiedAssignedAfterCutover(projectId))
     || isLinkedProjectOperator(projectId)
     || (
-      resource.data.template in ["laundry","cleaning","carwash"]
+      resource.data.template == "laundry"
       && resource.data.isActive == true
       && resource.data.status == "active"
       && projectAvailable(projectId)
@@ -2201,40 +2116,7 @@ service cloud.firestore {
     )
    );
 
-   allow delete: if isAdmin()
-    || (
-      !(resource.data.templateType in ["supermarket","laundry","restaurant","bakery"])
-      && ownsProject(resource.data.projectId)
-    );
-  }
-
-  match /carwashSubscriptions/{subscriptionId} {
-   allow get: if !exists(/databases/$(database)/documents/carwashSubscriptions/$(subscriptionId)) || isAdmin() || ownsProject(resource.data.projectId) || (resource.data.projectId is string && projectAvailable(resource.data.projectId));
-   allow list: if isAdmin() || ownsProject(resource.data.projectId);
-   allow create: if isAdmin() || (signedIn() && request.resource.data.projectId is string && ownsProject(request.resource.data.projectId) && request.resource.data.status == "active" && request.resource.data.totalWashes is number && request.resource.data.remainingWashes is number && request.resource.data.totalWashes > 0 && request.resource.data.remainingWashes == request.resource.data.totalWashes);
-   allow update: if isAdmin() || (ownsProject(resource.data.projectId) && request.resource.data.projectId == resource.data.projectId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status","totalWashes","remainingWashes","startsAt","expiresAt","nextWashDate","preferredTime","intervalDays","cycleNumber","lastWashAt","updatedAt"]) && request.resource.data.remainingWashes is number && request.resource.data.remainingWashes >= 0 && request.resource.data.totalWashes is number && request.resource.data.totalWashes > 0 && request.resource.data.remainingWashes <= request.resource.data.totalWashes);
-   allow delete: if isAdmin() || ownsProject(resource.data.projectId);
-   match /washes/{washId} {
-    allow get, list: if isAdmin() || (carwashSubscriptionExists(subscriptionId) && ownsProject(carwashSubscriptionData(subscriptionId).projectId)) || (carwashSubscriptionExists(subscriptionId) && projectAvailable(carwashSubscriptionData(subscriptionId).projectId));
-    allow create: if isAdmin() || (carwashSubscriptionExists(subscriptionId) && ownsProject(carwashSubscriptionData(subscriptionId).projectId) && request.resource.data.projectId == carwashSubscriptionData(subscriptionId).projectId && request.resource.data.sequence is number && request.resource.data.sequence > 0);
-    allow update, delete: if isAdmin() || (carwashSubscriptionExists(subscriptionId) && ownsProject(carwashSubscriptionData(subscriptionId).projectId));
-   }
-  }
-
-  match /carwashCustomers/{subscriptionId} {
-   allow get: if isAdmin() || (carwashSubscriptionExists(subscriptionId) && ownsProject(carwashSubscriptionData(subscriptionId).projectId));
-   allow list: if isAdmin() || ownsProject(resource.data.projectId);
-   allow create: if isAdmin() || (signedIn() && request.resource.data.projectId is string && ownsProject(request.resource.data.projectId));
-   allow update: if isAdmin() || (ownsProject(resource.data.projectId) && request.resource.data.projectId == resource.data.projectId);
-   allow delete: if isAdmin() || ownsProject(resource.data.projectId);
-  }
-
-  match /carwashSubscriptionRequests/{subscriptionId} {
-   allow get: if !exists(/databases/$(database)/documents/carwashSubscriptionRequests/$(subscriptionId)) || isAdmin() || ownsProject(resource.data.projectId) || (resource.data.projectId is string && projectAvailable(resource.data.projectId));
-   allow list: if isAdmin() || ownsProject(resource.data.projectId);
-   allow create: if isAdmin() || (signedIn() && request.resource.data.projectId is string && ownsProject(request.resource.data.projectId)) || (request.resource.data.projectId is string && request.resource.data.status == "pending" && request.resource.data.orderId is string && request.resource.data.requestType in ["new","renewal"] && request.resource.data.keys().hasOnly(["projectId","status","orderId","requestType","updatedAt","createdAt"]) && projectAvailable(request.resource.data.projectId));
-   allow update: if isAdmin() || (ownsProject(resource.data.projectId) && request.resource.data.projectId == resource.data.projectId) || (request.resource.data.projectId == resource.data.projectId && request.resource.data.status == "pending" && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status","orderId","requestType","updatedAt"]) && request.resource.data.orderId is string && request.resource.data.requestType in ["new","renewal"] && resource.data.status in ["canceled","renewable","active"] && projectAvailable(resource.data.projectId) && (resource.data.status != "active" || (carwashSubscriptionExists(subscriptionId) && (carwashSubscriptionData(subscriptionId).status != "active" || carwashSubscriptionData(subscriptionId).remainingWashes <= 0 || carwashSubscriptionData(subscriptionId).expiresAt <= request.time))));
-   allow delete: if isAdmin() || ownsProject(resource.data.projectId);
+   allow delete: if isAdmin();
   }
 
   match /laundries/{laundryId} {
