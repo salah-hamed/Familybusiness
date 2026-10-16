@@ -11,7 +11,7 @@ function currentId(journey) {
   return journey.steps.find(step => step.status === "current")?.id;
 }
 
-test("newly registered account is guided to payment", () => {
+test("newly registered account stays on legacy payment flow while trial rollout is off", () => {
   const journey = buildAuthGuide({ mode: "registered" });
   assert.equal(currentId(journey), "payment");
 });

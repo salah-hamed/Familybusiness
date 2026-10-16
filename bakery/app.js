@@ -182,7 +182,7 @@ protectPage(async user=>{
   if(!projectSnap.exists()){$("statusBanner").innerText="المشروع غير موجود.";return;}
 
   currentProject={projectDocId:projectSnap.id,...projectSnap.data()};
-  if(currentProject.ownerId!==user.uid||currentProject.template!=="bakery"){
+  if(currentProject.platformManaged===true||currentProject.ownerId!==user.uid||currentProject.template!=="bakery"){
     $("statusBanner").innerText="غير مسموح لك بإدارة هذا المشروع.";
     return;
   }

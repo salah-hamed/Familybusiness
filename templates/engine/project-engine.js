@@ -5,6 +5,8 @@ import {
 import { canCreateTemplate } from "../projects.js";
 import { isSubscriptionActive } from "../../core/subscriptions/subscription-service.js";
 import { buildInitialMerchantIdentity } from "../../core/merchants/merchant-identity.js";
+import { MERCHANT_CUTOVER_ENABLED } from "../../core/merchants/merchant-cutover-rollout.js";
+import { MERCHANT_REPEAT_RECOVERY_ENABLED } from "../../core/merchants/merchant-cycle-rollout.js";
 
 import {
   doc,
@@ -103,22 +105,52 @@ isActive: true,
 
 }
 export async function loadUserProjects(ownerId) {
-
-  const q = query(
-    collection(db, "projects"),
-    where("ownerId", "==", ownerId)
-  );
-
-  const snap = await getDocs(q);
-
-  const list = [];
-
-  snap.forEach(projectDoc => {
-    list.push({
-      projectDocId: projectDoc.id,
-      ...projectDoc.data()
+  // The historical ownerId is immutable, so searching by ownerId alone
+  // misses legitimately reassigned shops and advertises reclaimed ones
+  // to former subscribers. Keep both scopes separate.
+  const col = collection(db, "projects");
+  // Only the full assignment predicate is authorized for listing.
+  // A single-field assignee query can include unverified/legacy records
+  // and is correctly denied by Firestore Rules. Requires a staged index.
+  const [historic,assigned,historicGrants] = await Promise.all([
+    getDocs(query(col,where("ownerId","==",ownerId))),
+    MERCHANT_CUTOVER_ENABLED
+      ? getDocs(query(col,
+          where("assignedSubscriberId","==",ownerId),
+          where("assignmentStatus","==","assigned_to_new_subscriber"),
+          where("platformManaged","==",true)))
+      : Promise.resolve(null),
+    MERCHANT_REPEAT_RECOVERY_ENABLED
+      ? getDocs(query(collection(db,"merchantHistoricalAccess"),where("subscriberUid","==",ownerId)))
+      : Promise.resolve(null)
+  ]);
+  const byId = new Map();
+  for (const snap of [historic,assigned].filter(Boolean)) {
+    snap.forEach(projectDoc => {
+      const project = projectDoc.data();
+      if (project.platformManaged === true &&
+          !(project.assignmentStatus === "assigned_to_new_subscriber" &&
+            project.assignedSubscriberId === ownerId) &&
+          project.ownerId !== ownerId) return;
+      // Former subscribers receive a historical financial statement only,
+      // never a reopened operational project.
+      byId.set(projectDoc.id,{projectDocId:projectDoc.id,...project});
     });
-  });
-
-  return list;
+  }
+  // Additional recovered recipients no longer have ownerId on projects.
+  // A self-owned historical grant is the only way to discover their statement.
+  if (historicGrants) {
+    const claimedIds=new Set();
+    historicGrants.forEach(grant=>{
+      const d=grant.data();
+      if(d.status==="historic_only" && d.subscriberUid===ownerId &&
+         typeof d.projectDocId==="string") claimedIds.add(d.projectDocId);
+    });
+    const missing=[...claimedIds].filter(id=>!byId.has(id));
+    const snapshots=await Promise.all(missing.map(id=>getDoc(doc(db,"projects",id))));
+    for(const snap of snapshots) if(snap.exists()) {
+      byId.set(snap.id,{projectDocId:snap.id,...snap.data(),historicalGrant:true});
+    }
+  }
+  return [...byId.values()];
 }

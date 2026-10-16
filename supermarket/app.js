@@ -190,7 +190,7 @@ protectPage(async user=>{
 
   currentProject={projectDocId:projectSnap.id,...projectSnap.data()};
 
-  if(currentProject.ownerId!==user.uid || currentProject.template!=="supermarket"){
+  if(currentProject.platformManaged===true || currentProject.ownerId!==user.uid || currentProject.template!=="supermarket"){
     $("statusBanner").innerText="غير مسموح لك بإدارة هذا المشروع.";
     return;
   }

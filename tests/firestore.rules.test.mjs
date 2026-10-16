@@ -1603,6 +1603,20 @@ function subscriptionPaymentRecord(uid, paymentId, extra = {}) {
   };
 }
 
+function atomicSubscriptionProof(db,uid,paymentId,extra={}){
+ const batch=writeBatch(db);
+ batch.set(doc(db,"subscriptionBillingGuards",uid),{
+  userId:uid,pendingPaymentId:paymentId,lastReviewedPaymentId:"",
+  revision:1,recoverySafe:false,updatedAt:serverTimestamp()
+ });
+ batch.set(doc(db,"subscriptionPayments",paymentId),subscriptionPaymentRecord(uid,paymentId,extra));
+ return batch.commit();
+}
+function resolveBillingProofInBatch(batch,db,uid,paymentId){
+ batch.update(doc(db,"subscriptionBillingGuards",uid),{
+  pendingPaymentId:"",lastReviewedPaymentId:paymentId,revision:2,updatedAt:serverTimestamp()
+ });
+}
 test("subscriber can create a valid initial subscription payment proof record", async () => {
   const uid = "payment_owner";
   const paymentId = `${uid}_1`;
@@ -1613,14 +1627,32 @@ test("subscriber can create a valid initial subscription payment proof record", 
   });
   const db = testEnv.authenticatedContext(uid).firestore();
 
-  await assertSucceeds(
-    setDoc(
-      doc(db, "subscriptionPayments", paymentId),
-      subscriptionPaymentRecord(uid, paymentId)
-    )
-  );
+  await assertSucceeds(atomicSubscriptionProof(db,uid,paymentId));
 });
 
+test("C4B12 billing lock rejects orphan proof, forged unlocking and parallel pending proofs",async()=>{
+ const uid="billing_guard_atomic", first=uid+"_first",second=uid+"_second";
+ await seedUser(uid,{isActive:false,subscriptionStatus:"pending",initialActivationPaid:false});
+ const db=testEnv.authenticatedContext(uid).firestore();
+ await assertFails(setDoc(doc(db,"subscriptionPayments",first),subscriptionPaymentRecord(uid,first)));
+ await assertFails(setDoc(doc(db,"subscriptionBillingGuards",uid),{
+  userId:uid,pendingPaymentId:"fake",lastReviewedPaymentId:"",
+  revision:1,recoverySafe:false,updatedAt:serverTimestamp()
+ }));
+ await assertSucceeds(atomicSubscriptionProof(db,uid,first));
+ const secondBatch=writeBatch(db);
+ secondBatch.set(doc(db,"subscriptionPayments",second),subscriptionPaymentRecord(uid,second));
+ secondBatch.update(doc(db,"subscriptionBillingGuards",uid),{
+  pendingPaymentId:second,revision:2,updatedAt:serverTimestamp()
+ });
+ await assertFails(secondBatch.commit());
+ await assertFails(updateDoc(doc(db,"subscriptionBillingGuards",uid),{
+  pendingPaymentId:"",recoverySafe:true
+ }));
+ const guard=(await getDoc(doc(db,"subscriptionBillingGuards",uid))).data();
+ assert.equal(guard.pendingPaymentId,first);
+ assert.equal(guard.recoverySafe,false);
+});
 test("subscriber cannot forge subscription payment amount or owner", async () => {
   const uid = "payment_guard_owner";
   await seedUser(uid, {
@@ -1704,6 +1736,10 @@ async function seedPendingSubscriptionReviewFixture(suffix = "review") {
         submittedAt: new Date("2026-10-01T10:00:00Z")
       })
     );
+    await setDoc(doc(db,"subscriptionBillingGuards",uid),{
+      userId:uid,pendingPaymentId:paymentId,lastReviewedPaymentId:"",
+      revision:1,recoverySafe:false,updatedAt:new Date("2026-10-01T10:00:00Z")
+    });
   });
 
   return { uid, adminId, paymentId };
@@ -1761,6 +1797,7 @@ test("admin can atomically approve payment and activate subscriber with matching
     rejectionReason: ""
   });
   batch.update(doc(adminDb, "users", uid), initialActivationUpdate(paymentId));
+  resolveBillingProofInBatch(batch,adminDb,uid,paymentId);
 
   await assertSucceeds(batch.commit());
 
@@ -1804,14 +1841,13 @@ test("admin can reject pending proof without activating subscriber and subscribe
     })
   );
 
-  await assertSucceeds(
-    updateDoc(doc(adminDb, "subscriptionPayments", paymentId), {
-      status: "rejected",
-      reviewedAt: serverTimestamp(),
-      reviewedBy: adminId,
-      rejectionReason: "صورة التحويل غير واضحة"
-    })
-  );
+  const rejectBatch=writeBatch(adminDb);
+  rejectBatch.update(doc(adminDb,"subscriptionPayments",paymentId),{
+    status:"rejected",reviewedAt:serverTimestamp(),reviewedBy:adminId,
+    rejectionReason:"صورة التحويل غير واضحة"
+  });
+  resolveBillingProofInBatch(rejectBatch,adminDb,uid,paymentId);
+  await assertSucceeds(rejectBatch.commit());
 
   const userSnap = await getDoc(doc(adminDb, "users", uid));
   assert.equal(userSnap.data().subscriptionStatus, "pending");
@@ -2084,6 +2120,14 @@ function trialAccount(uid, extra={}) {
   };
 }
 
+async function enableTrialRegistration(adminId) {
+  await seedUser(adminId,{role:"admin"});
+  const adminDb=testEnv.authenticatedContext(adminId).firestore();
+  await assertSucceeds(setDoc(doc(adminDb,"platformSettings","trialRegistration"),{
+    enabled:true,updatedBy:adminId,updatedAt:serverTimestamp()
+  }));
+}
+
 function trialProject(uid, type="supermarket") {
   return {
     ownerId:uid, projectId:type, template:type, operatingModel:"partner_operated",
@@ -2095,9 +2139,9 @@ function trialProject(uid, type="supermarket") {
   };
 }
 
-test("Phase B2 permits trusted server-anchored signup while preserving legacy registration", async () => {
+test("Phase B2 keeps trial signup disabled by default and preserves legacy registration", async () => {
   const uid="trial_reg1", db=testEnv.authenticatedContext(uid).firestore();
-  await assertSucceeds(setDoc(doc(db,"users",uid),trialAccount(uid)));
+  await assertFails(setDoc(doc(db,"users",uid),trialAccount(uid)));
   const legacyUid="legacy_reg1", legacy=testEnv.authenticatedContext(legacyUid).firestore();
   const legacyData=trialAccount(legacyUid,{isActive:false,subscriptionStatus:"pending"});
   delete legacyData.accessModel;
@@ -2105,7 +2149,19 @@ test("Phase B2 permits trusted server-anchored signup while preserving legacy re
   await assertSucceeds(setDoc(doc(legacy,"users",legacyUid),legacyData));
 });
 
+test("Phase B2 only an admin can enable trial signup at the Rules layer", async () => {
+  const userDb=testEnv.authenticatedContext("trial_flag_user").firestore();
+  await assertFails(setDoc(doc(userDb,"platformSettings","trialRegistration"),{
+    enabled:true,updatedBy:"trial_flag_user",updatedAt:serverTimestamp()
+  }));
+  await assertFails(setDoc(doc(userDb,"users","trial_flag_user"),trialAccount("trial_flag_user")));
+  await enableTrialRegistration("trial_flag_admin");
+  const newUserDb=testEnv.authenticatedContext("trial_flag_enabled").firestore();
+  await assertSucceeds(setDoc(doc(newUserDb,"users","trial_flag_enabled"),trialAccount("trial_flag_enabled")));
+});
+
 test("Phase B2 forbids forged signup merchant timestamps, subscriptions and authorization", async () => {
+  await enableTrialRegistration("trial_bad_admin");
   const uid="trial_bad", db=testEnv.authenticatedContext(uid).firestore();
   await assertFails(setDoc(doc(db,"users",uid),trialAccount(uid,{firstMerchantLinkedAt:new Date()})));
   await assertFails(setDoc(doc(db,"users",uid),trialAccount(uid,{role:"admin"})));
@@ -2114,6 +2170,7 @@ test("Phase B2 forbids forged signup merchant timestamps, subscriptions and auth
 });
 
 test("Phase B2 trial can create project during setup week but not after signup window expires", async () => {
+  await enableTrialRegistration("trial_project_admin");
   const fresh="trial_project_fresh";
   const db=testEnv.authenticatedContext(fresh).firestore();
   await assertSucceeds(setDoc(doc(db,"users",fresh),trialAccount(fresh)));
@@ -2153,14 +2210,15 @@ test("Phase B2 validates linked merchant grace using immutable server timestamp"
 });
 
 test("Phase B2 first payment is 59 for opted-in trial and old 350 for legacy users", async () => {
+  await enableTrialRegistration("trial_payment_admin");
   const uid="trial_payment_59", db=testEnv.authenticatedContext(uid).firestore();
   await assertSucceeds(setDoc(doc(db,"users",uid),trialAccount(uid)));
-  await assertSucceeds(setDoc(doc(db,"subscriptionPayments",uid+"_59"),subscriptionPaymentRecord(uid,uid+"_59",{amount:59})));
+  await assertSucceeds(atomicSubscriptionProof(db,uid,uid+"_59",{amount:59}));
   await assertFails(setDoc(doc(db,"subscriptionPayments",uid+"_350"),subscriptionPaymentRecord(uid,uid+"_350",{amount:350})));
   const oldUid="old_payment_350";
   await seedUser(oldUid,{isActive:false,subscriptionStatus:"pending"});
   const oldDb=testEnv.authenticatedContext(oldUid).firestore();
-  await assertSucceeds(setDoc(doc(oldDb,"subscriptionPayments",oldUid+"_350"),subscriptionPaymentRecord(oldUid,oldUid+"_350")));
+  await assertSucceeds(atomicSubscriptionProof(oldDb,oldUid,oldUid+"_350"));
   await assertFails(setDoc(doc(oldDb,"subscriptionPayments",oldUid+"_59"),subscriptionPaymentRecord(oldUid,oldUid+"_59",{amount:59})));
 });
 
@@ -2449,6 +2507,529 @@ test("admin finance review is atomic and sensitive balances are hidden from inco
   await assertFails(updateDoc(reviewRef(adminDb),{platformOutstandingAmount:0}));
 });
 
+async function seedReviewedCutoverScenario(suffix = "ready") {
+  const ids=await seedTransferCaseScenario("cutover_"+suffix);
+  const adminDb=testEnv.authenticatedContext(ids.admin).firestore();
+  const operatorDb=testEnv.authenticatedContext(ids.operatorUid).firestore();
+  const recipientDb=testEnv.authenticatedContext(ids.target).firestore();
+  const casePath=doc(adminDb,"merchantTransferCases",ids.projectId);
+  await assertSucceeds(setDoc(casePath,sampleTransferCase(ids)));
+  await assertSucceeds(updateDoc(doc(operatorDb,"merchantTransferCases",ids.projectId),{
+    operatorConsent:"accepted",operatorConsentedAt:serverTimestamp()
+  }));
+  await assertSucceeds(updateDoc(doc(recipientDb,"merchantTransferCases",ids.projectId),{
+    recipientConsent:"accepted",recipientConsentedAt:serverTimestamp()
+  }));
+  const finance=writeBatch(adminDb);
+  finance.update(casePath,{
+    financeClearance:"reviewed",financeReviewedBy:ids.admin,financeReviewedAt:serverTimestamp()
+  });
+  finance.set(doc(adminDb,"merchantTransferFinanceReviews",ids.projectId),{
+    projectDocId:ids.projectId,adminUid:ids.admin,reviewedAt:serverTimestamp(),
+    currency:"EGP",formerSubscriberId:ids.owner,
+    platformOutstandingAmount:100,platformEarnedAmount:125,
+    formerSubscriberOutstandingAmount:50,formerSubscriberEarnedAmount:250
+  });
+  await assertSucceeds(finance.commit());
+  const caseDoc=(await getDoc(casePath)).data();
+  return {ids,adminDb,operatorDb,recipientDb,caseDoc};
+}
+
+function cutoverBatch(db,ids,options={}) {
+  const batch=writeBatch(db);
+  const timestamp=()=>serverTimestamp();
+  batch.update(doc(db,"projects",ids.projectId),{
+    assignmentStatus:"assigned_to_new_subscriber",
+    assignedSubscriberId:ids.target,
+    assignmentUpdatedAt:timestamp(),
+    cutoverAuditId:ids.projectId,cutoverAt:timestamp(),
+    cutoverAdminUid:ids.admin
+  });
+  batch.update(doc(db,"merchantTransferCases",ids.projectId),{
+    status:"cutover_completed",cutoverAt:timestamp(),
+    cutoverBy:ids.admin,cutoverAuditId:ids.projectId
+  });
+  if(!options.omitAudit){
+    batch.set(doc(db,"merchantAssignmentCutovers",ids.projectId),{
+      projectDocId:ids.projectId,merchantId:ids.merchantId,
+      originalSubscriberId:ids.owner,previousSubscriberId:"",
+      assignedSubscriberId:ids.target,
+      recoveryAuditId:ids.projectId,financeReviewId:ids.projectId,
+      commissionAmount:6,commissionVersion:1,commissionCurrency:"EGP",
+      status:"completed",completedBy:ids.admin,completedAt:timestamp(),
+      ...(options.forgedAudit || {})
+    });
+  }
+  return batch.commit();
+}
+
+test("C4B11 rejects partial cutover and forged immutable audit while preserving merchant operation",async()=>{
+  const {ids,adminDb,recipientDb,operatorDb}=await seedReviewedCutoverScenario("invalid");
+  await assertFails(cutoverBatch(adminDb,ids,{omitAudit:true}));
+  await assertFails(cutoverBatch(adminDb,ids,{forgedAudit:{assignedSubscriberId:"attacker"}}));
+  await assertFails(cutoverBatch(recipientDb,ids));
+  await assertFails(cutoverBatch(operatorDb,ids));
+  // Terms may have changed AFTER consent and finance review. A forged
+  // client must not bypass the pure JS preflight by skipping its checks.
+  await testEnv.withSecurityRulesDisabled(async ctx=>{
+    await updateDoc(doc(ctx.firestore(),"commissionAgreements",ids.projectId),{
+      currentAmount:18,acceptedVersion:2
+    });
+  });
+  await assertFails(cutoverBatch(adminDb,ids));
+  const project=await getDoc(doc(adminDb,"projects",ids.projectId));
+  assert.equal(project.data().assignmentStatus,"platform_managed");
+  assert.equal(project.data().assignedSubscriberId,"");
+  const merchant=await getDoc(doc(operatorDb,"projects",ids.projectId));
+  assert.equal(merchant.data().status,"active");
+  await assertFails(getDoc(doc(recipientDb,"merchantTransferFinanceReviews",ids.projectId)));
+});
+
+test("C4B11 verified batch cuts over once, protects old rights, and grants recipient operational access",async()=>{
+  const {ids,adminDb,recipientDb,operatorDb}=await seedReviewedCutoverScenario("valid");
+  const formerDb=testEnv.authenticatedContext(ids.owner).firestore();
+  await assertSucceeds(cutoverBatch(adminDb,ids));
+  const project=(await getDoc(doc(adminDb,"projects",ids.projectId))).data();
+  assert.equal(project.ownerId,ids.owner);
+  assert.equal(project.merchantId,ids.merchantId);
+  assert.equal(project.assignedSubscriberId,ids.target);
+  assert.equal(project.platformManaged,true);
+  assert.equal(project.assignmentStatus,"assigned_to_new_subscriber");
+  await assertSucceeds(getDoc(doc(recipientDb,"projects",ids.projectId)));
+  await assertFails(updateDoc(doc(formerDb,"operators",ids.projectId),{phone:"01000000000"}));
+  await assertFails(updateDoc(doc(formerDb,"commissionAgreements",ids.projectId),{pendingAmount:20}));
+  await assertFails(getDoc(doc(recipientDb,"merchantAssignmentCutovers",ids.projectId)));
+  await assertFails(getDoc(doc(operatorDb,"merchantAssignmentCutovers",ids.projectId)));
+  const audit=await getDoc(doc(adminDb,"merchantAssignmentCutovers",ids.projectId));
+  assert.equal(audit.data().assignedSubscriberId,ids.target);
+  await assertFails(updateDoc(doc(adminDb,"merchantAssignmentCutovers",ids.projectId),{commissionAmount:99}));
+  await assertFails(cutoverBatch(adminDb,ids));
+  const oldProject=await getDoc(doc(formerDb,"projects",ids.projectId));
+  assert.equal(oldProject.data().ownerId,ids.owner);
+});
+
+
+test("C4B11 incoming workspace query is Rules-compatible; broad assignee queries are rejected",async()=>{
+  const {ids,adminDb,recipientDb}=await seedReviewedCutoverScenario("workspace_query");
+  await assertSucceeds(cutoverBatch(adminDb,ids));
+  const projects=collection(recipientDb,"projects");
+  const result=await assertSucceeds(getDocs(query(projects,
+    where("assignedSubscriberId","==",ids.target),
+    where("assignmentStatus","==","assigned_to_new_subscriber"),
+    where("platformManaged","==",true)
+  )));
+  assert.equal(result.docs.some(d=>d.id===ids.projectId),true);
+  await assertFails(getDocs(query(projects,where("assignedSubscriberId","==",ids.target))));
+});
+
+test("C4B11 open orders earn at rider assignment: old epochs are immutable and future credit goes to recipient",async()=>{
+  const {ids,adminDb,operatorDb,recipientDb}=await seedReviewedCutoverScenario("inflight");
+  const oldOrder="order_before_cutover_platform";
+  const pendingOrder="order_before_cutover_after";
+  const workerId="rider_after_cutover";
+  await testEnv.withSecurityRulesDisabled(async ctx=>{
+    const db=ctx.firestore();
+    await setDoc(doc(db,"workers",workerId),{projectId:ids.projectId,role:"rider"});
+    for(const orderId of [oldOrder,pendingOrder]){
+      await setDoc(doc(db,"orders",orderId),{
+        projectId:ids.projectId,providerId:ids.projectId,templateType:"supermarket",
+        status:"ready",pricingLocked:true,assignedWorkerId:workerId,assignedWorkerRole:"rider",
+        items:[{name:"Bread",quantity:1}],subtotal:20,deliveryFee:10,total:30,price:30,
+        createdAt:Timestamp.fromDate(new Date("2026-10-12T00:00:00Z"))
+      });
+    }
+  });
+  const dispatch=(orderId,beneficiary)=>{
+    const b=writeBatch(operatorDb);
+    b.update(doc(operatorDb,"orders",orderId),{
+      status:"assigned",statusUpdatedAt:serverTimestamp(),statusUpdatedBy:ids.operatorUid,
+      commissionEligible:true,commissionLocked:true,commissionAmount:6,
+      commissionAgreementVersion:1,commissionTrigger:"delivery_assignment",
+      commissionEarnedAt:serverTimestamp()
+    });
+    b.set(doc(operatorDb,"commissionLedger","project_order_"+orderId),{
+      userId:beneficiary,projectId:ids.projectId,orderId,
+      sourceType:"project_order",sourceId:orderId,agreementId:ids.projectId,
+      agreementVersion:1,amount:6,currency:"EGP",status:"earned",
+      trigger:"delivery_assignment",createdAt:serverTimestamp(),
+      earnedAt:serverTimestamp(),paidAt:null
+    });
+    return b.commit();
+  };
+  await assertSucceeds(dispatch(oldOrder,"__fb_platform_commissions__"));
+  await assertSucceeds(cutoverBatch(adminDb,ids));
+  await assertFails(dispatch(pendingOrder,ids.owner));
+  await assertFails(dispatch(pendingOrder,"__fb_platform_commissions__"));
+  await assertSucceeds(dispatch(pendingOrder,ids.target));
+  await assertFails(dispatch(pendingOrder,ids.target));
+  const oldLedger=(await getDoc(doc(adminDb,"commissionLedger","project_order_"+oldOrder))).data();
+  const newLedger=(await getDoc(doc(adminDb,"commissionLedger","project_order_"+pendingOrder))).data();
+  assert.equal(oldLedger.userId,"__fb_platform_commissions__");
+  assert.equal(newLedger.userId,ids.target);
+  assert.equal(oldLedger.amount,6);
+  assert.equal(newLedger.amount,6);
+  await assertFails(getDoc(doc(recipientDb,"merchantTransferFinanceReviews",ids.projectId)));
+});
+
+test("C4B11 expired incoming subscription blocks management but not physical merchant operation",async()=>{
+  const {ids,adminDb,operatorDb,recipientDb}=await seedReviewedCutoverScenario("expired_continuity");
+  await assertSucceeds(cutoverBatch(adminDb,ids));
+  await testEnv.withSecurityRulesDisabled(async ctx=>{
+    const db=ctx.firestore();
+    await updateDoc(doc(db,"users",ids.target),{
+      isActive:false,subscriptionStatus:"inactive",
+      subscriptionExpiresAt:Timestamp.fromDate(new Date("2026-10-01T00:00:00Z"))
+    });
+    await setDoc(doc(db,"supermarkets",ids.projectId),{
+      isAcceptingOrders:true,deliveryFee:10
+    });
+  });
+  await assertSucceeds(getDoc(doc(operatorDb,"projects",ids.projectId)));
+  const publicDb=testEnv.unauthenticatedContext().firestore();
+  await assertSucceeds(getDoc(doc(publicDb,"supermarkets",ids.projectId)));
+  await assertFails(getDocs(query(collection(recipientDb,"orders"),where("projectId","==",ids.projectId))));
+  await assertFails(updateDoc(doc(recipientDb,"projects",ids.projectId),{businessName:"Unauthorised"}));
+});
+
+test("C4B11 former and expired incoming subscriber retain only their own financial statements",async()=>{
+  const {ids,adminDb,recipientDb}=await seedReviewedCutoverScenario("statements");
+  const formerDb=testEnv.authenticatedContext(ids.owner).firestore();
+  await assertSucceeds(cutoverBatch(adminDb,ids));
+  await testEnv.withSecurityRulesDisabled(async ctx=>{
+    const db=ctx.firestore();
+    await updateDoc(doc(db,"users",ids.owner),{isActive:false,subscriptionStatus:"inactive"});
+    await updateDoc(doc(db,"users",ids.target),{isActive:false,subscriptionStatus:"inactive"});
+    for (const [name,uid] of [["former",ids.owner],["incoming",ids.target]]) {
+      await setDoc(doc(db,"commissionSettlements","historic_receipt_"+name),{
+        projectId:ids.projectId,ownerId:uid,operatorId:ids.projectId,
+        status:"confirmed",amount:15,createdAt:Timestamp.now(),currency:"EGP"
+      });
+    }
+  });
+  await assertSucceeds(getDoc(doc(formerDb,"projects",ids.projectId)));
+  await assertSucceeds(getDoc(doc(recipientDb,"projects",ids.projectId)));
+  await assertSucceeds(getDoc(doc(formerDb,"commissionSettlements","historic_receipt_former")));
+  await assertSucceeds(getDoc(doc(recipientDb,"commissionSettlements","historic_receipt_incoming")));
+  await assertFails(getDoc(doc(formerDb,"commissionSettlements","historic_receipt_incoming")));
+  await assertFails(getDoc(doc(recipientDb,"commissionSettlements","historic_receipt_former")));
+  const formerRead=await assertSucceeds(getDocs(query(
+    collection(formerDb,"commissionSettlements"),
+    where("projectId","==",ids.projectId),where("ownerId","==",ids.owner))));
+  assert.equal(formerRead.size,1);
+  const incomingRead=await assertSucceeds(getDocs(query(
+    collection(recipientDb,"commissionSettlements"),
+    where("projectId","==",ids.projectId),where("ownerId","==",ids.target))));
+  assert.equal(incomingRead.size,1);
+  await assertFails(updateDoc(doc(formerDb,"projects",ids.projectId),{businessName:"hijack"}));
+  await assertFails(updateDoc(doc(recipientDb,"projects",ids.projectId),{businessName:"expired"}));
+});
+
+test("C4B12 atomic repeat recovery requires reconciled billing and no pending receipt",async()=>{
+ const {ids,adminDb}=await seedReviewedCutoverScenario("repeat_atomic");
+ await assertSucceeds(cutoverBatch(adminDb,ids));
+ const uid=ids.target,cycleId=ids.projectId+"_2";
+ const makeBatch=()=>{
+  const batch=writeBatch(adminDb),at=serverTimestamp();
+  batch.update(doc(adminDb,"projects",ids.projectId),{
+   assignmentCycle:2,platformManaged:true,assignmentStatus:"platform_managed",
+   assignedSubscriberId:"",assignmentUpdatedAt:at,
+   recoveryAuditId:cycleId,recoveryAt:at,recoveryAdminUid:ids.admin,
+   recoveryReason:"overdue_renewal"
+  });
+  batch.set(doc(adminDb,"merchantRecoveryCycles",cycleId),{
+   cycle:2,cycleId,projectDocId:ids.projectId,
+   merchantId:ids.merchantId,originalSubscriberId:ids.owner,
+   previousSubscriberId:uid,previousAssignmentAuditId:ids.projectId,
+   reason:"overdue_renewal",evidenceReference:"overdue_renewal_"+uid+"_123",
+   status:"completed",adminUid:ids.admin,recoveredAt:at
+  });
+  batch.set(doc(adminDb,"merchantHistoricalAccess",ids.projectId+"_"+uid),{
+   projectDocId:ids.projectId,merchantId:ids.merchantId,
+   subscriberUid:uid,originalSubscriberId:ids.owner,
+   firstRecoveredCycle:2,sourceRecoveryAuditId:cycleId,
+   status:"historic_only",grantedAt:at
+  });
+  return batch.commit();
+ };
+ await testEnv.withSecurityRulesDisabled(async ctx=>{
+  const db=ctx.firestore();
+  await updateDoc(doc(db,"users",uid),{
+   initialActivationPaid:true,subscriptionStatus:"inactive",
+   subscriptionExpiresAt:Timestamp.fromDate(new Date("2026-09-01T00:00:00Z"))
+  });
+  await setDoc(doc(db,"subscriptionBillingGuards",uid),{
+   userId:uid,pendingPaymentId:"",lastReviewedPaymentId:"",
+   revision:1,recoverySafe:false,updatedAt:Timestamp.now()
+  });
+ });
+ await assertFails(makeBatch());
+ await testEnv.withSecurityRulesDisabled(async ctx=>{
+  await updateDoc(doc(ctx.firestore(),"subscriptionBillingGuards",uid),{
+   recoverySafe:true,pendingPaymentId:"old_pending_receipt",revision:2
+  });
+ });
+ await assertFails(makeBatch());
+ await testEnv.withSecurityRulesDisabled(async ctx=>{
+  await updateDoc(doc(ctx.firestore(),"subscriptionBillingGuards",uid),{
+   recoverySafe:true,pendingPaymentId:"",revision:3
+  });
+ });
+ await assertSucceeds(makeBatch());
+ const p=(await getDoc(doc(adminDb,"projects",ids.projectId))).data();
+ const formerDb=testEnv.authenticatedContext(uid).firestore();
+ assert.equal(p.ownerId,ids.owner);
+ assert.equal(p.merchantId,ids.merchantId);
+ assert.equal(p.assignmentCycle,2);
+ assert.equal(p.assignmentStatus,"platform_managed");
+ await assertSucceeds(getDoc(doc(formerDb,"projects",ids.projectId)));
+ await assertFails(updateDoc(doc(formerDb,"projects",ids.projectId),{businessName:"hijack"}));
+ await assertFails(makeBatch());
+});
+test("C4B12 new operator and subscriber consent, private review and reassignment must be atomic",async()=>{
+ const {ids,adminDb,operatorDb}=await seedReviewedCutoverScenario("second_consent");
+ await assertSucceeds(cutoverBatch(adminDb,ids));
+ const cycleId=ids.projectId+"_2",candidate="recipient_second_consent",timestamp=Timestamp.now();
+ await seedUser(candidate,{isActive:true,subscriptionStatus:"active",role:"subscriber"});
+ await testEnv.withSecurityRulesDisabled(async ctx=>{
+  const db=ctx.firestore();
+  await updateDoc(doc(db,"projects",ids.projectId),{
+   assignmentCycle:2,platformManaged:true,assignmentStatus:"platform_managed",
+   assignedSubscriberId:"",recoveryAuditId:cycleId,recoveryAt:timestamp,
+   recoveryAdminUid:ids.admin,recoveryReason:"overdue_renewal",
+   assignmentUpdatedAt:timestamp
+  });
+  await setDoc(doc(db,"merchantRecoveryCycles",cycleId),{
+   cycle:2,cycleId,projectDocId:ids.projectId,
+   merchantId:ids.merchantId,originalSubscriberId:ids.owner,
+   previousSubscriberId:ids.target,previousAssignmentAuditId:ids.projectId,
+   reason:"overdue_renewal",evidenceReference:"overdue_renewal_prior",
+   status:"completed",adminUid:ids.admin,recoveredAt:timestamp
+  });
+  await setDoc(doc(db,"merchantHistoricalAccess",ids.projectId+"_"+ids.target),{
+   projectDocId:ids.projectId,merchantId:ids.merchantId,
+   subscriberUid:ids.target,originalSubscriberId:ids.owner,
+   firstRecoveredCycle:2,sourceRecoveryAuditId:cycleId,
+   status:"historic_only",grantedAt:timestamp
+  });
+ });
+ const caseRef=doc(adminDb,"merchantTransferCycles",cycleId);
+ await assertSucceeds(setDoc(caseRef,{
+  cycle:2,cycleId,projectDocId:ids.projectId,
+  merchantId:ids.merchantId,originalSubscriberId:ids.owner,
+  previousSubscriberId:"",proposedSubscriberId:candidate,
+  status:"awaiting_consents",operatorConsent:"pending",recipientConsent:"pending",
+  operatorConsentedAt:null,recipientConsentedAt:null,
+  commissionAmount:6,commissionVersion:1,commissionCurrency:"EGP",
+  financeClearance:"pending",cutoverAt:null,
+  reason:"After the second platform recovery",
+  createdBy:ids.admin,createdAt:serverTimestamp()
+ }));
+ await assertFails(updateDoc(doc(operatorDb,"merchantTransferCycles",cycleId),{
+  recipientConsent:"accepted",recipientConsentedAt:serverTimestamp()
+ }));
+ await assertSucceeds(updateDoc(doc(operatorDb,"merchantTransferCycles",cycleId),{
+  operatorConsent:"accepted",operatorConsentedAt:serverTimestamp()
+ }));
+ const recipientDb=testEnv.authenticatedContext(candidate).firestore();
+ await assertSucceeds(updateDoc(doc(recipientDb,"merchantTransferCycles",cycleId),{
+  recipientConsent:"accepted",recipientConsentedAt:serverTimestamp()
+ }));
+ await assertFails(getDoc(doc(recipientDb,"merchantTransferCycleFinanceReviews",cycleId)));
+ const financeBatch=writeBatch(adminDb);
+ financeBatch.update(caseRef,{
+  financeClearance:"reviewed",financeReviewedAt:serverTimestamp(),
+  financeReviewedBy:ids.admin
+ });
+ financeBatch.set(doc(adminDb,"merchantTransferCycleFinanceReviews",cycleId),{
+  cycleId,projectDocId:ids.projectId,adminUid:ids.admin,
+  reviewedAt:serverTimestamp(),currency:"EGP",formerSubscriberId:ids.target,
+  formerSubscriberEarnedAmount:30,formerSubscriberOutstandingAmount:15,
+  platformEarnedAmount:24,platformOutstandingAmount:12
+ });
+ await assertSucceeds(financeBatch.commit());
+ const projectRef=doc(adminDb,"projects",ids.projectId);
+ const caseComplete=writeBatch(adminDb);
+ caseComplete.update(projectRef,{
+  assignmentStatus:"assigned_to_new_subscriber",
+  assignedSubscriberId:candidate,
+  assignmentUpdatedAt:serverTimestamp(),cutoverAuditId:cycleId,
+  cutoverAt:serverTimestamp(),cutoverAdminUid:ids.admin
+ });
+ caseComplete.update(caseRef,{
+  status:"cutover_completed",cutoverAt:serverTimestamp(),
+  cutoverBy:ids.admin,cutoverAuditId:cycleId
+ });
+ caseComplete.set(doc(adminDb,"merchantAssignmentCycles",cycleId),{
+  cycle:2,cycleId,projectDocId:ids.projectId,merchantId:ids.merchantId,
+  originalSubscriberId:ids.owner,previousSubscriberId:ids.target,
+  assignedSubscriberId:candidate,recoveryAuditId:cycleId,
+  financeReviewId:cycleId,commissionAmount:6,commissionVersion:1,
+  commissionCurrency:"EGP",status:"completed",completedBy:ids.admin,
+  completedAt:serverTimestamp()
+ });
+ await assertSucceeds(caseComplete.commit());
+ const p=(await getDoc(projectRef)).data();
+ assert.equal(p.ownerId,ids.owner);
+ assert.equal(p.assignmentCycle,2);
+ assert.equal(p.assignedSubscriberId,candidate);
+ await assertSucceeds(getDoc(doc(recipientDb,"projects",ids.projectId)));
+ await assertFails(updateDoc(doc(recipientDb,"merchantAssignmentCycles",cycleId),{assignedSubscriberId:"attacker"}));
+ await assertFails(getDoc(doc(recipientDb,"merchantAssignmentCycles",cycleId)));
+ await assertFails(getDoc(doc(recipientDb,"merchantTransferCycleFinanceReviews",cycleId)));
+ const paymentId="cycle_paid_"+ids.projectId;
+ const stateRef=doc(adminDb,"merchantCyclePaymentStates",cycleId);
+ await testEnv.withSecurityRulesDisabled(async ctx=>{
+  await setDoc(doc(ctx.firestore(),"commissionLedger","project_order_cycle_valid"),{
+   userId:candidate,projectId:ids.projectId,orderId:"cycle_valid",sourceType:"project_order",
+   sourceId:"cycle_valid",agreementId:ids.projectId,agreementVersion:1,
+   assignmentCycle:2,amount:6,currency:"EGP",status:"earned",createdAt:Timestamp.now()
+  });
+ });
+ const payBatch=writeBatch(operatorDb);
+ payBatch.set(doc(operatorDb,"commissionSettlements",paymentId),{
+  settlementId:paymentId,projectId:ids.projectId,ownerId:candidate,
+  operatorId:ids.projectId,assignmentCycle:2,templateId:"supermarket",
+  businessName:"Shop",currency:"EGP",amount:6,status:"pending_owner_confirmation",
+  paymentMethod:"instapay",paymentReference:"PAY-CYCLE2",note:"",
+  declaredAt:serverTimestamp(),declaredBy:ids.operatorUid,
+  createdAt:serverTimestamp(),updatedAt:serverTimestamp(),
+  confirmedAt:null,confirmedBy:null,rejectedAt:null,rejectedBy:null
+ });
+ payBatch.set(doc(operatorDb,"merchantCyclePaymentStates",cycleId),{
+  projectId:ids.projectId,assignmentCycle:2,beneficiaryId:candidate,
+  operatorId:ids.projectId,pendingSettlementId:paymentId,
+  updatedAt:serverTimestamp()
+ });
+ await assertSucceeds(payBatch.commit());
+ await assertFails(updateDoc(doc(operatorDb,"commissionSettlements",paymentId),{
+  status:"confirmed",confirmedBy:ids.operatorUid,confirmedAt:serverTimestamp()
+ }));
+ const confirm=writeBatch(recipientDb);
+ confirm.update(doc(recipientDb,"commissionSettlements",paymentId),{
+  status:"confirmed",confirmedBy:candidate,confirmedAt:serverTimestamp(),
+  updatedAt:serverTimestamp()
+ });
+ confirm.update(doc(recipientDb,"merchantCyclePaymentStates",cycleId),{
+  pendingSettlementId:"",updatedAt:serverTimestamp()
+ });
+ await assertSucceeds(confirm.commit());
+ assert.equal((await getDoc(doc(adminDb,"commissionSettlements",paymentId))).data().status,"confirmed");
+ await assertFails(updateDoc(doc(adminDb,"merchantCyclePaymentStates",cycleId),{
+  pendingSettlementId:"forged"
+ }));
+});
+
+test("C4B12 second recovery retains historical access and credits platform only in earning cycle 2",async()=>{
+ const {ids,adminDb,recipientDb,operatorDb}=await seedReviewedCutoverScenario("repeat_cycle2");
+ await assertSucceeds(cutoverBatch(adminDb,ids));
+ const cycleId=ids.projectId+"_2";
+ const at=Timestamp.now();
+ const previouslyOpen="order_open_before_repeat_recovery";
+ const afterRepeat="order_after_second_allocation";
+ const rider="cycle_two_rider";
+ await testEnv.withSecurityRulesDisabled(async ctx=>{
+  const db=ctx.firestore();
+  await updateDoc(doc(db,"projects",ids.projectId),{
+   platformManaged:true,assignmentStatus:"platform_managed",
+   assignedSubscriberId:"",assignmentCycle:2,
+   recoveryAuditId:cycleId,recoveryAt:at,recoveryAdminUid:ids.admin,
+   assignmentUpdatedAt:at,recoveryReason:"overdue_renewal"
+  });
+  await setDoc(doc(db,"merchantRecoveryCycles",cycleId),{
+   cycle:2,cycleId,projectDocId:ids.projectId,merchantId:ids.merchantId,
+   originalSubscriberId:ids.owner,previousSubscriberId:ids.target,
+   status:"completed",adminUid:ids.admin,recoveredAt:at
+  });
+  await setDoc(doc(db,"merchantHistoricalAccess",ids.projectId+"_"+ids.target),{
+   projectDocId:ids.projectId,subscriberUid:ids.target,
+   merchantId:ids.merchantId,originalSubscriberId:ids.owner,
+   firstRecoveredCycle:2,status:"historic_only",grantedAt:at
+  });
+  await setDoc(doc(db,"workers",rider),{projectId:ids.projectId,role:"rider"});
+  for(const orderId of [previouslyOpen,afterRepeat]){
+   await setDoc(doc(db,"orders",orderId),{
+    projectId:ids.projectId,providerId:ids.projectId,
+    templateType:"supermarket",status:"ready",pricingLocked:true,
+    assignedWorkerId:rider,assignedWorkerRole:"rider",
+    items:[{name:"Bread",quantity:1}],subtotal:20,deliveryFee:10,total:30,price:30,
+    createdAt:Timestamp.fromDate(new Date("2026-10-12T00:00:00Z"))
+   });
+  }
+ });
+ const platformSnapshot=(await getDoc(doc(adminDb,"projects",ids.projectId))).data();
+ assert.equal(platformSnapshot.ownerId,ids.owner);
+ assert.equal(platformSnapshot.merchantId,ids.merchantId);
+ assert.equal(platformSnapshot.operatorId,ids.projectId);
+ await assertSucceeds(getDoc(doc(recipientDb,"projects",ids.projectId)));
+ await assertSucceeds(getDoc(doc(recipientDb,"merchantHistoricalAccess",ids.projectId+"_"+ids.target)));
+ await assertFails(updateDoc(doc(recipientDb,"projects",ids.projectId),{businessName:"hijacked"}));
+ await assertFails(updateDoc(doc(adminDb,"projects",ids.projectId),{assignedSubscriberId:ids.target}));
+ const outsider=testEnv.authenticatedContext(ids.operatorUid).firestore();
+ await assertFails(getDoc(doc(outsider,"merchantHistoricalAccess",ids.projectId+"_"+ids.target)));
+ const dispatch=(orderId,beneficiary,cycle)=>{
+  const batch=writeBatch(operatorDb);
+  batch.update(doc(operatorDb,"orders",orderId),{
+   status:"assigned",statusUpdatedAt:serverTimestamp(),statusUpdatedBy:ids.operatorUid,
+   commissionEligible:true,commissionLocked:true,commissionAmount:6,
+   commissionAgreementVersion:1,commissionAssignmentCycle:cycle,
+   commissionTrigger:"delivery_assignment",commissionEarnedAt:serverTimestamp()
+  });
+  batch.set(doc(operatorDb,"commissionLedger","project_order_"+orderId),{
+   userId:beneficiary,projectId:ids.projectId,orderId,
+   sourceType:"project_order",sourceId:orderId,agreementId:ids.projectId,
+   agreementVersion:1,assignmentCycle:cycle,
+   amount:6,currency:"EGP",status:"earned",trigger:"delivery_assignment",
+   createdAt:serverTimestamp(),earnedAt:serverTimestamp(),paidAt:null
+  });
+  return batch.commit();
+ };
+ await assertFails(dispatch(previouslyOpen,ids.target,2));
+ await assertFails(dispatch(previouslyOpen,"__fb_platform_commissions__",3));
+ await assertSucceeds(dispatch(previouslyOpen,"__fb_platform_commissions__",2));
+ const oldWitness=await getDoc(doc(adminDb,"merchantAssignmentCutovers",ids.projectId));
+ assert.equal(oldWitness.data().assignedSubscriberId,ids.target);
+ const nextRecipient="second_cycle_new_recipient";
+ await seedUser(nextRecipient,{role:"subscriber",isActive:true,subscriptionStatus:"active"});
+ const cutoverAt=Timestamp.now();
+ await testEnv.withSecurityRulesDisabled(async ctx=>{
+  const db=ctx.firestore();
+  await updateDoc(doc(db,"projects",ids.projectId),{
+   assignmentStatus:"assigned_to_new_subscriber",assignedSubscriberId:nextRecipient,
+   cutoverAuditId:cycleId,cutoverAt,cutoverAdminUid:ids.admin,
+   assignmentUpdatedAt:cutoverAt
+  });
+  await setDoc(doc(db,"merchantTransferCycles",cycleId),{
+   cycle:2,cycleId,projectDocId:ids.projectId,merchantId:ids.merchantId,
+   originalSubscriberId:ids.owner,previousSubscriberId:"",
+   proposedSubscriberId:nextRecipient,
+   status:"cutover_completed",operatorConsent:"accepted",recipientConsent:"accepted",
+   financeClearance:"reviewed",cutoverAt,cutoverBy:ids.admin
+  });
+  await setDoc(doc(db,"merchantAssignmentCycles",cycleId),{
+   cycle:2,cycleId,projectDocId:ids.projectId,merchantId:ids.merchantId,
+   originalSubscriberId:ids.owner,assignedSubscriberId:nextRecipient,
+   recoveryAuditId:cycleId,status:"completed",completedBy:ids.admin,
+   completedAt:cutoverAt
+  });
+ });
+ const nextDb=testEnv.authenticatedContext(nextRecipient).firestore();
+ await assertSucceeds(getDoc(doc(nextDb,"projects",ids.projectId)));
+ await assertSucceeds(getDoc(doc(recipientDb,"projects",ids.projectId)));
+ await assertFails(getDoc(doc(nextDb,"merchantHistoricalAccess",ids.projectId+"_"+ids.target)));
+ await assertFails(updateDoc(doc(recipientDb,"operators",ids.projectId),{phone:"unauthorized"}));
+ await assertFails(dispatch(afterRepeat,ids.target,2));
+ await assertFails(dispatch(afterRepeat,"__fb_platform_commissions__",2));
+ await assertSucceeds(dispatch(afterRepeat,nextRecipient,2));
+ const oldLedger=(await getDoc(doc(adminDb,"commissionLedger","project_order_"+previouslyOpen))).data();
+ const newLedger=(await getDoc(doc(adminDb,"commissionLedger","project_order_"+afterRepeat))).data();
+ assert.equal(oldLedger.userId,"__fb_platform_commissions__");
+ assert.equal(newLedger.userId,nextRecipient);
+ assert.equal(oldLedger.assignmentCycle,2);
+ assert.equal(newLedger.assignmentCycle,2);
+ await assertFails(updateDoc(doc(adminDb,"merchantAssignmentCutovers",ids.projectId),{status:"forged"}));
+ await assertFails(updateDoc(doc(adminDb,"merchantAssignmentCycles",cycleId),{status:"forged"}));
+});
+
 async function seedRecoverableLaundry(name = "basic") {
   const ctx=await seedPartnerRuntime("laundry","recovery_"+name);
   const merchantId="m_"+"b".repeat(32);
@@ -2458,6 +3039,11 @@ async function seedRecoverableLaundry(name = "basic") {
       subscriptionStatus:"inactive",isActive:false,
       initialActivationPaid:true,
       subscriptionExpiresAt:new Date(Date.now()-86400000)
+    });
+    await setDoc(doc(db,"subscriptionBillingGuards",ctx.ownerId),{
+      userId:ctx.ownerId,pendingPaymentId:"",lastReviewedPaymentId:"",
+      revision:1,recoverySafe:true,updatedAt:Timestamp.now(),
+      reconciledAt:Timestamp.now(),reconciledBy:"admin_recover"
     });
     await updateDoc(doc(db,"projects",ctx.projectId),{
       merchantId, originalSubscriberId:ctx.ownerId,
@@ -2550,6 +3136,11 @@ test("C4 dispatch credits ONLY the platform after recovery, not the old subscrib
   });
   await testEnv.withSecurityRulesDisabled(async context=>{
     const db=context.firestore();
+    await setDoc(doc(db,"subscriptionBillingGuards",ownerUid),{
+      userId:ownerUid,pendingPaymentId:"",lastReviewedPaymentId:"",
+      revision:1,recoverySafe:true,updatedAt:Timestamp.now(),
+      reconciledAt:Timestamp.now(),reconciledBy:"admin_recover"
+    });
     await setDoc(doc(db,"projects",projectId),{
       ownerId:ownerUid,originalSubscriberId:ownerUid,assignedSubscriberId:ownerUid,
       assignmentStatus:"assigned_to_subscriber",platformManaged:false,

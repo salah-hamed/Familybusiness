@@ -6,6 +6,7 @@ import {
   confirmOwnerPayment,
   rejectOwnerPayment
 } from "./settlement-service.js";
+import { declareMerchantCyclePayment } from "./merchant-cycle-settlement-service.js";
 import {
   listProjectCommissionReversals,
   confirmCommissionReversal,
@@ -312,9 +313,10 @@ export async function renderOperatorFinancePanel({
     const [summary, payments, reversals] = await Promise.all([
       getProjectPaymentSummary(projectId),
       listProjectPaymentRequests(projectId, {
-        pageSize: 20, ownerId: period.beneficiaryId
+        pageSize: 20, ownerId: period.beneficiaryId,
+        assignmentCycle:period.assignmentCycle ?? null
       }),
-      period.platformPeriod
+      (period.platformPeriod || !period.canDeclarePayment)
         ? Promise.resolve([])
         : listProjectCommissionReversals(projectId, { pageSize: 20 })
     ]);
@@ -329,7 +331,7 @@ export async function renderOperatorFinancePanel({
         <div>
           <span>${period.platformPeriod ? "حساب المنصة بعد الاسترداد" : "حساب العمولة مع صاحب المشروع"}</span>
           <h2>المستحق والسداد</h2>
-          <p>${period.platformPeriod ? "مستحقات المنصة بعد الاسترداد منفصلة عن مستحقات المشترك القديم. تسجيل السداد مؤجل لحين تفعيل وسيلة إثبات وتحقق آمنة، ولا يُعد أي مبلغ مسددًا تلقائيًا." : "لو حولت مبلغ لصاحب المشروع سجله هنا. الرصيد لا يتغير إلا بعد ما يؤكد استلامه."}</p>
+          <p>${period.platformPeriod ? "مستحقات المنصة بعد الاسترداد منفصلة عن مستحقات المشترك القديم. تسجيل السداد مؤجل لحين تفعيل وسيلة إثبات وتحقق آمنة، ولا يُعد أي مبلغ مسددًا تلقائيًا." : !period.canDeclarePayment ? "عمولات المشترك الجديد مفصولة عن المستحقات القديمة. تأكيد السداد مقفول لحين مراجعة مسار الدفع الآمن." : "لو حولت مبلغ لصاحب المشروع سجله هنا. الرصيد لا يتغير إلا بعد ما يؤكد استلامه."}</p>
         </div>
       </div>
       <div class="fbFinanceGrid">
@@ -341,6 +343,11 @@ export async function renderOperatorFinancePanel({
         <div class="fbPendingBox">
           <b>المبلغ المستحق للمنصة فقط</b>
           <p>لا تحول عمولات الفترة الجديدة للمشترك السابق. سيتم إتاحة قناة دفع رسمية مع تحقق مالي مستقل؛ لا يوجد زر تأكيد دفع في هذه الفترة حاليًا.</p>
+        </div>
+      ` : !period.canDeclarePayment ? `
+        <div class="fbPendingBox">
+          <b>مستحقات المشترك الجديد</b>
+          <p>التسوية لم تُفعّل بعد، ولا يجوز خصم هذا الرصيد من حقوق المشترك القديم أو المنصة.</p>
         </div>
       ` : pending ? `
         <div class="fbPendingBox">
@@ -383,13 +390,15 @@ export async function renderOperatorFinancePanel({
 
           message.textContent = "جاري تسجيل عملية الدفع...";
 
-          await declareOperatorPayment({
-            projectId,
-            operatorUid,
-            amount,
-            paymentMethod,
-            paymentReference
-          });
+          if (period.assignmentPeriod) {
+            await declareMerchantCyclePayment({
+              projectId,operatorUid,amount,paymentMethod,paymentReference
+            });
+          } else {
+            await declareOperatorPayment({
+              projectId,operatorUid,amount,paymentMethod,paymentReference
+            });
+          }
 
           message.textContent = "تم تسجيل الدفع. في انتظار تأكيد صاحب المشروع.";
           await renderOperatorFinancePanel({

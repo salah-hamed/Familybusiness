@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#16a34a">
+  <meta name="fb-pwa-surface" content="workspace">
+  <link rel="manifest" href="../pwa/manifests/workspace.webmanifest">
+  <link rel="apple-touch-icon" href="../pwa/icons/icon-192.png">
+  <title>حساب المحل | Family Business</title>
+  <link rel="stylesheet" href="../core/ui/theme.css">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<main class="statement">
+  <header><a href="../workspace/" class="back">← مساحة العمل</a><span class="mark">Family Business</span></header>
+  <section class="hero"><span class="eyebrow">السجل المالي الموثق</span>
+    <h1 id="merchantTitle">جاري تحميل المحل...</h1>
+    <p id="merchantStatus">يتم التحقق من صلاحيات الاطلاع على حسابك</p>
+  </section>
+  <section id="errorPanel" role="alert" hidden></section>
+  <section id="financeSection" hidden>
+    <div class="totals">
+      <article><span>إجمالي عمولتك المحتسبة</span><strong id="earned">—</strong></article>
+      <article><span>تم تأكيد سداده</span><strong id="paid">—</strong></article>
+      <article class="due"><span>مستحقاتك الباقية</span><strong id="outstanding">—</strong></article>
+      <article><span>عدد الطلبات المحتسبة لك</span><strong id="count">—</strong></article>
+    </div>
+    <section class="notice"><b>حساب مستقل — بدون خلط بين المشتركين</b>
+      <p id="scopeMessage"></p>
+      <p>دي شاشة متابعة فقط، ولا يوجد هنا زر سداد أو تصفير للعمولات. أي دفعة قديمة تفضل بإثباتها وسجلها الأصلي.</p>
+    </section>
+    <h2>آخر عمليات التسوية الخاصة بحسابك</h2>
+    <div id="settlementHistory" class="history">جاري تحميل السجل...</div>
+  </section>
+</main>
+<script type="module" src="./app.js"></script>
+</body>
+</html>

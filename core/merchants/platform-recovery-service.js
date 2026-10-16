@@ -1,6 +1,7 @@
 import db from "../firebase/firebase-db.js";
 import { assessPlatformMerchantRecovery, MERCHANT_RECOVERY_REASON } from "./merchant-recovery-policy.js";
 import { PLATFORM_MERCHANT_RECOVERY_ENABLED } from "./platform-recovery-rollout.js";
+import { assertTrustedRecoveryBillingGuard } from "../subscriptions/subscription-billing-guard.js";
 
 import {
   collection, doc, getDoc, getDocs, query, where, limit,
@@ -73,25 +74,31 @@ export async function executePlatformMerchantRecovery({projectDocId,adminUid,rea
   if (!pending.empty) throw new Error("RECOVERY_PAYMENT_REVIEW_REQUIRED");
 
   const ownerRef=doc(db,"users",allocatedUid);
+  const billingRef=doc(db,"subscriptionBillingGuards",allocatedUid);
   const operatorRef=doc(db,"operators",projectDocId);
   const agreementRef=doc(db,"commissionAgreements",projectDocId);
   const auditRef=doc(db,"merchantRecoveries",projectDocId);
   const violationRef=doc(db,"merchantViolations",projectDocId);
 
   await runTransaction(db,async transaction=>{
-    const [existing,projectSnap,ownerSnap,operatorSnap,agreementSnap,violationSnap]=await Promise.all([
+    const [existing,projectSnap,ownerSnap,billingSnap,operatorSnap,agreementSnap,violationSnap]=await Promise.all([
       transaction.get(auditRef),
       transaction.get(projectRef),
       transaction.get(ownerRef),
+      transaction.get(billingRef),
       transaction.get(operatorRef),
       transaction.get(agreementRef),
       ...(reason === MERCHANT_RECOVERY_REASON.CONFIRMED_VIOLATION
         ? [transaction.get(violationRef)] : [Promise.resolve(null)])
     ]);
     if (existing.exists()) throw new Error("RECOVERY_ALREADY_COMPLETED");
-    if (!projectSnap.exists()||!ownerSnap.exists()||!operatorSnap.exists()||!agreementSnap.exists()) {
+    if (!projectSnap.exists()||!ownerSnap.exists()||!billingSnap.exists()
+      ||!operatorSnap.exists()||!agreementSnap.exists()) {
       throw new Error("RECOVERY_REQUIRED_DATA_MISSING");
     }
+    // Previous non-transaction pending-payment search is only a UX preflight.
+    // This same-document transaction gate is the authorization boundary.
+    assertTrustedRecoveryBillingGuard(billingSnap.data(),allocatedUid);
     const project=projectSnap.data();
     // Firebase users/{uid} need not store an explicit uid property.
     const subscriber={...ownerSnap.data(),uid:allocatedUid};

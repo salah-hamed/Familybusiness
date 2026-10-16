@@ -62,13 +62,12 @@ export async function getProjectPaymentSummary(
   // centrally recovered shop, the operator sees only the platform's new
   // commission period; old subscriber payments cannot offset it.
   const projectSnap = oid ? null : await getDoc(doc(db,"projects",pid));
-  if (projectSnap?.exists?.() && projectSnap.data().platformManaged === true
-    && !isVerifiedPlatformManagedMerchant(projectSnap.data())) {
-    throw new Error("MERCHANT_RECOVERY_AUDIT_REQUIRED");
-  }
-  const recovered = projectSnap?.exists?.()
-    && isVerifiedPlatformManagedMerchant(projectSnap.data());
-  const beneficiaryId = oid || (recovered ? PLATFORM_COMMISSION_BENEFICIARY : "");
+  // Always scope post-recovery and post-cutover statements by the CURRENT
+  // beneficiary. Never mix ledger epochs or charge new dues against old paid.
+  const beneficiaryId = oid || (projectSnap?.exists?.()
+    ? (projectSnap.data().platformManaged === true
+      ? resolveMerchantFinancePeriod(projectSnap.data()).beneficiaryId : "")
+    : "");
   const ledger = collection(db, "commissionLedger");
   const payments = collection(db, "commissionSettlements");
   const ledgerScope = [
@@ -80,6 +79,15 @@ export async function getProjectPaymentSummary(
   if (beneficiaryId) {
     ledgerScope.push(where("userId", "==", beneficiaryId));
     paymentScope.push(where("ownerId", "==", beneficiaryId));
+  }
+  // Each *new* platform or assigned-subscriber earning epoch is independent.
+  // Never subtract an older cycle's settlements from the current cycle.
+  // Historic former subscribers use ownerId explicitly; repeat assignment to
+  // that same UID is forbidden by an immutable merchantHistoricalAccess grant.
+  const currentCycle = projectSnap?.exists?.() ? projectSnap.data().assignmentCycle : null;
+  if (Number.isSafeInteger(currentCycle) && currentCycle >= 2) {
+    ledgerScope.push(where("assignmentCycle", "==", currentCycle));
+    paymentScope.push(where("assignmentCycle", "==", currentCycle));
   }
 
   const [earned, reversed, confirmed, legacyPaid, pending] = await Promise.all([
@@ -125,7 +133,7 @@ export async function getProjectPaymentSummary(
 
 export async function listProjectPaymentRequests(
   projectId,
-  { pageSize = 20, ownerId = "" } = {}
+  { pageSize = 20, ownerId = "", assignmentCycle = null } = {}
 ) {
   const pid = clean(projectId);
   if (!pid) throw new Error("PROJECT_ID_REQUIRED");
@@ -136,6 +144,8 @@ export async function listProjectPaymentRequests(
       collection(db, "commissionSettlements"),
       where("projectId", "==", pid),
       ...(ownerId ? [where("ownerId", "==", clean(ownerId))] : []),
+      ...(Number.isSafeInteger(assignmentCycle) && assignmentCycle >= 2
+        ? [where("assignmentCycle", "==", assignmentCycle)] : []),
       orderBy("createdAt", "desc"),
       limit(size)
     )
@@ -182,7 +192,7 @@ export async function declareOperatorPayment({
     if (!projectSnap.exists()) throw new Error("PROJECT_NOT_FOUND");
     const project = projectSnap.data();
     const period = resolveMerchantFinancePeriod(project);
-    if (period.platformPeriod) {
+    if (!period.canDeclarePayment) {
       // Historical payments still confirm with their original subscriber.
       // New platform dues require an independently approved accounting flow.
       throw new Error("PLATFORM_SETTLEMENT_FLOW_NOT_CONFIGURED");

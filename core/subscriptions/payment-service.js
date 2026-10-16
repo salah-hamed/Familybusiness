@@ -7,7 +7,7 @@ import {
   orderBy,
   query,
   serverTimestamp,
-  setDoc,
+  runTransaction,
   where
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
@@ -17,6 +17,8 @@ import {
   paymentStatusCopy,
   requiredSubscriptionPayment
 } from "./payment-policy.js";
+
+import { buildNewBillingGuard, buildSubmittedBillingGuard } from "./subscription-billing-guard.js";
 
 export {
   buildPaymentCode,
@@ -60,7 +62,17 @@ export async function prepareSubscriptionPaymentWhatsApp({
   const paymentId = `${user.uid}_${timestamp}`;
   const paymentCode = buildPaymentCode(user.uid, timestamp);
 
-  await setDoc(doc(db, "subscriptionPayments", paymentId), {
+  const paymentRef=doc(db,"subscriptionPayments",paymentId);
+  const guardRef=doc(db,"subscriptionBillingGuards",user.uid);
+  await runTransaction(db,async tx=>{
+    const [guardSnap,paymentSnap]=await Promise.all([tx.get(guardRef),tx.get(paymentRef)]);
+    if(paymentSnap.exists())throw new Error("PAYMENT_ALREADY_EXISTS");
+    const at=serverTimestamp();
+    const nextGuard=guardSnap.exists()
+      ? buildSubmittedBillingGuard(guardSnap.data(),user.uid,paymentId,at)
+      : buildNewBillingGuard(user.uid,paymentId,at);
+    tx.set(guardRef,nextGuard);
+    tx.set(paymentRef,{
     paymentId,
     paymentCode,
     userId: user.uid,
@@ -72,11 +84,12 @@ export async function prepareSubscriptionPaymentWhatsApp({
     paymentReference: reference,
     proofChannel: "whatsapp",
     status: "pending_review",
-    submittedAt: serverTimestamp(),
-    whatsappPreparedAt: serverTimestamp(),
+    submittedAt: at,
+    whatsappPreparedAt: at,
     reviewedAt: null,
     reviewedBy: "",
     rejectionReason: ""
+    });
   });
 
   return {

@@ -1,0 +1,21 @@
+:root{font-family:system-ui,"Segoe UI",sans-serif;color-scheme:light;background:#f3f7f5;color:#102820}
+*{box-sizing:border-box}body{margin:0}.statement{max-width:990px;margin:auto;padding:26px 18px 64px}
+header{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:26px}
+a.back{color:#176747;text-decoration:none;font-weight:700}.mark{font-weight:800;color:#227957;letter-spacing:.03em}
+.hero{padding:30px 24px;border-radius:22px;background:linear-gradient(125deg,#124a37,#18855e);color:#fff}
+.eyebrow{font-size:13px;opacity:.87}.hero h1{margin:9px 0 8px;font-size:clamp(23px,4vw,33px)}.hero p{margin:0;line-height:1.8}
+.totals{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:12px;margin:23px 0}
+.totals article{border:1px solid #dde8e1;border-radius:16px;background:#fff;padding:19px;display:flex;flex-direction:column;gap:12px}
+.totals article span{font-size:13px;color:#486153}.totals article strong{font-size:25px;line-height:1.4}
+.totals article.due{border-color:#80b59a}.notice{padding:17px 21px;background:#fff;border:1px solid #d4e5d9;border-radius:16px;line-height:1.85}
+.notice p{margin:7px 0 0;color:#456051}h2{font-size:19px;margin:27px 0 13px}
+.history{background:white;border:1px solid #d4e5d9;border-radius:16px;padding:18px}
+.history article{padding:13px 0;border-bottom:1px solid #e2eee6;display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.history article:last-child{border:0}.history small{display:block;color:#456051;margin-top:6px}
+#errorPanel{margin-top:18px;padding:16px;background:#fff4f0;color:#873d29;border:1px solid #efc3b8;border-radius:14px}
+@media(max-width:500px){.statement{padding:17px 13px 45px}.hero{padding:24px 18px}}
+
+.statement-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.statement-actions button{border:0;border-radius:10px;padding:9px 12px;background:#167b50;color:#fff;font:inherit;font-weight:700;cursor:pointer}
+.statement-actions button[data-decision="reject"]{background:#7a4545}
+.statement-actions button:disabled{opacity:.6;cursor:progress}

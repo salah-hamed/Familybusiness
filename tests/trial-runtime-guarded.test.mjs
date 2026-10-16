@@ -14,7 +14,7 @@ const trial = extra => ({
   initialActivationPaid:false,...extra
 });
 
-test("Phase B2b rollout remains off until manual Firebase rules deployment", () => {
+test("trial registration remains disabled until coordinated Rules release", () => {
   assert.equal(TRIAL_REGISTRATION_ENABLED,false);
   const source=readFileSync("core/auth/auth.js","utf8");
   assert.match(source,/TRIAL_REGISTRATION_ENABLED/);
