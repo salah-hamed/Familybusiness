@@ -1,71 +1,84 @@
-# Family Business — One coordinated Firebase Rules cutover
+# Family Business — coordinated production release
 
-**Status:** Not yet approved for production activation. Follow this after all remaining code, Rules and Firestore Emulator tests are complete.
+**Status:** Not approved for production. This guide applies to the integrated release candidate PR #148. Keep #148 and #149 in Draft until each applicable release gate is closed.
 
-## Safety contract
+## Current release decision
 
-1. `main` contains backward-compatible trial Rules and merchant transfer consent-case Rules, but GitHub Pages does **not** deploy Firestore Rules. Firebase Rules must be manually deployed once from the final approved `main`.
-2. Live registration remains the legacy model because `core/subscriptions/trial-rollout.js` sets `TRIAL_REGISTRATION_ENABLED=false`. Draft PR #129 contains the new 7+3 day marketing/signup activation and must remain **unmerged** until the Rules deploy succeeds and the older flows have been smoke-tested.
-3. `core/merchants/transfer-case-rollout.js` is **false**; transfer-consent case creation remains unavailable until operator and incoming-subscriber UI, legal consent and historical finance closeout are reviewed. Even consent cases do not reassign order routing or commissions.
-4. `core/images/image-upload-config.js` has `provider:"disabled"`. Local photo upload must not be enabled without a configured restricted provider, upload quota/abuse protection and cost review.
-5. Preserve all existing `ownerId`, `projectDocId`, operator links, existing ledger/settlement records, QR/URLs and the 2,000 original product image URLs and `masterId` values. Removal of visible Carrefour branding does not grant rights to third-party images.
+- PR #148 is the integrated candidate. Its current branch keeps `TRIAL_REGISTRATION_ENABLED=false` and the merchant recovery, transfer, cutover, repeat-cycle and settlement rollout flags OFF.
+- PR #149 is a separate activation candidate based on an older #148 commit. It switches several rollout flags ON and changes cycle settlements to operator declaration plus beneficiary confirmation without external verification. Do not merge it with the initial cutover; rebase and rerun CI only after the settlement evidence policy is approved.
+- GitHub Pages publishes the web application. It does not publish Firestore Rules or indexes. Firebase publication is a separate authenticated action.
+- Current candidate CI is evidence for the checked SHA only. Any new commit requires a fresh green workflow.
 
-## Final release sequence
+## Release gates
 
-### A. Code freeze and regression proof
+### 1. Freeze the compatible code and Rules
 
-- Review final `main` SHA and merged PRs; archive/close superseded stale drafts.
-- Confirm `TRIAL_REGISTRATION_ENABLED=false`, `MERCHANT_TRANSFER_CASES_ENABLED=false`, image provider `disabled`.
-- Verify latest GitHub CI **Security and Regression Tests** and **Pages** workflows are green. CI runs the Firestore Emulator. Do not bypass failing tests.
-- Verify the new trial rules respect existing subscriptions and operator agreements and the new transfer consent records cannot cut over `ownerId`.
-- Recheck the catalog image+masterId checksum regression and check product image rendering on one live supermarket before enabling anything.
+- Refresh the PR heads immediately before release and choose one immutable SHA for the web app, Rules and indexes.
+- Keep all rollout flags OFF for the core cutover, including trial signup.
+- Confirm the Security and Regression Tests workflow, including Firestore Emulator, passes on the exact chosen SHA.
+- The new payment client writes `subscriptionBillingGuards/{uid}` atomically with each new subscription proof. The new Rules require this guard, while the old client writes only `subscriptionPayments`. Neither side is safe to switch alone while users can submit payment proofs.
+- Pause subscription-proof submission and admin payment review during the cutover window. Ask users to reload the app/PWA after the web app and Rules are updated.
+- Do not enable image upload. Keep the image provider disabled until a restricted provider, quotas and cost controls are approved.
 
-### B. Publish the Rules ONE time (Windows VS Code PowerShell)
+### 2. Reconcile old proofs and prepare rollback
 
-In the repository directory, with no uncommitted changes that could be lost:
+- Review every pre-release pending proof against the approved payment record.
+- Record each proof as reviewed, rejected, migrated or still pending, with its account UID and decision.
+- Never set `recoverySafe` automatically. An unresolved payment proof blocks recovery for that account.
+- Save the currently deployed Rules, record the current web SHA and capture the approved pre-release finance readings.
+- Prepare a paired rollback: prior web SHA **and** prior Rules/indexes. Rolling back just one side may break payment submissions.
 
-```powershell
-git status
+### 3. Cut over in one maintenance window
+
+Keep subscription payment submission, payment review and merchant recovery/transfer actions paused for the entire window.
+
+1. Publish the reviewed #148 web code with all rollout flags OFF. Wait for the GitHub Pages update to finish.
+2. From the same reviewed checkout, verify the exact SHA and publish Firestore Rules and indexes to `business-2a2e0` once.
+3. Verify the Firebase CLI selected the intended project and reported `Deploy complete!`.
+4. Have users reload the app/PWA. Do not allow an old open session to submit a payment proof against the new Rules.
+5. Run the compatibility checks below before unpausing payment operations.
+
+Commands from the repository root in VS Code PowerShell:
+
+~~~powershell
+git status --short --branch
 git switch main
 git pull --ff-only origin main
+git rev-parse HEAD
 firebase.cmd login:list
-firebase.cmd deploy --only firestore:rules --project business-2a2e0
-```
+firebase.cmd deploy --only firestore:rules,firestore:indexes --project business-2a2e0
+~~~
 
-If Firebase credentials expired, run `firebase.cmd login --reauth` first. Check the **exact Firebase project** and the terminal's `Deploy complete!` result. This command only deploys `firestore.rules`; it does not delete user/project data or automatically deploy indexes.
+Run the deploy command only after the reviewed code is on `main`, the SHA is confirmed, old payment proofs are reconciled, the Rules backup exists and the maintenance window is active. Firebase credentials are not available in the current Codex session.
 
-If indexes were changed in later PRs, separately review and publish them once as part of the same final release; do not guess that indexes were deployed.
+### 4. Compatibility checks with every rollout flag OFF
 
-### C. Compatibility smoke checks BEFORE switching signup
+- Existing paid subscribers can sign in, open workspaces and use their projects.
+- Existing operator login, commission agreement and order handling still work.
+- A customer can place an order; the operator/rider can receive, dispatch and complete it.
+- Admin can submit, approve and reject a new subscription proof using the billing guard.
+- A pending proof blocks recovery in the same transaction.
+- Existing settlement history and account balances remain unchanged.
+- Product rendering, existing product/image URLs and `masterId` inventory remain intact.
+- The PWA updates to the reviewed cache version on a real phone.
+- Test every activity approved for launch: cleaning, laundry, supermarket, restaurant and bakery if included. Keep car wash hidden/paused unless separately approved.
 
-With the **old registration still enabled**, test:
+Stop the release if a permission, payment, order-routing, balance or cache check fails. Use the paired rollback plan.
 
-- Legacy active subscriber login; existing project and operator pages load.
-- Operator can accept an ordinary commission agreement without reading the subscriber's private user document.
-- Customer creates an order, operator receives it, dispatch and settlement history remain intact.
-- The first 2,000 catalog image URLs and products still render where their external CDN allows it.
-- Subscription payment/renewal review works, and Admin overview/transfer preflight do not perform unintended writes.
+## Separate activation after the core cutover
 
-### D. Enable trial AFTER successful Rules publication
+Do not use PR #149 as a bundle for the initial launch.
 
-- Review the fresh activation Draft PR #129 against the latest `main`, reconcile new merges and rerun CI.
-- Only then merge the activation PR, deploying the PWA/cache updates.
-- Test a clean new-user signup with the 7-day server-anchored setup window, then first physical operator claimed + accepted commission agreement in an **atomic** write starting the 3-day grace window.
-- Verify first monthly charge is 59 EGP for trial accounts, whereas legacy subscription contracts remain unchanged. Check approved payment and first referral eligibility, expired access, and hostile client permission tests.
-- No new-user activation claim should appear until a real approval is recorded.
+1. **Trial signup:** prepare a separate small change that enables only `TRIAL_REGISTRATION_ENABLED`. Verify the 7-day setup window, 3-day grace after first accepted agreement, 59 EGP new-model payment, old pricing and expiry behavior.
+2. **First merchant recovery:** enable only after old proofs are reconciled and an audited overdue/confirmed-violation case passes the operator-continuity and historical-ledger checks.
+3. **First assignment:** enable transfer cases and cutover only after operator and recipient consent, accepted commission terms and private finance review pass.
+4. **Repeat cycles:** enable after two consecutive reassignment tests and historical privacy checks pass.
+5. **Cycle settlements:** leave OFF until the product/finance owner approves whether operator declaration plus beneficiary confirmation is sufficient payment evidence. If independent evidence is required, implement and test that workflow first.
 
-### E. Unilateral recovery comes before optional merchant reassignment
+Record the reviewed SHA, active flags, test evidence, approver and monitoring window for each activation.
 
-- A paid subscriber who fails to renew or commits a verified policy violation **cannot veto recovery**. The physical operator must stay online while central platform administration takes responsibility. See docs/MERCHANT_PLATFORM_RECOVERY_POLICY.md.
-- No browser-side reassignment, ownership metadata-only change or timed logout can substitute for tested Rules, atomic audit, historical commission protection and future beneficiary routing.
-- Do not enable reassignment merely because a preflight or consent case exists.
-- Transfer consent UI now exists at `merchant-transfer/` and is still **off** via MERCHANT_TRANSFER_CASES_ENABLED=false. Only the physical operator and incoming subscriber can get new consent cases; the departing subscriber cannot view, accept, reject or veto them. Do not enable until accepted-epoch cutover and accounting tests pass.
-- Complete historical unsettled balance closeout, future incoming beneficiary routing, and actual transaction/permissions cutover; consent alone never changes project assignment.
-- Design and regression-test future-order beneficiary/routing cutover without changing historical `ownerId`, ledgers or prior settlements. Test consent withdrawal, double assignment and stale/broken old subscribers.
-- Until that is complete, keep the case rollout and cutover disabled.
+## Stop conditions
 
-## Emergency recovery
+Stop before deployment if the SHA differs from the reviewed SHA; production Rules cannot be saved for rollback; pending proofs remain unreconciled; Firebase targets the wrong project; required CI is missing or red; phone/PWA flows are untested; or the paired rollback is unavailable.
 
-If the new signup causes trouble, turn the signup rollout switch off in a reviewed hotfix and redeploy the web app. The additive Rules alone should not switch old users to trial mode. Keep the prior stable release SHA available. Never delete/recreate projects or products as a rollback shortcut.
-
-The final manual Rules deployment should be triggered **once only** after the team and administrator have verified the full release gate.
+A green CI run or code in a Draft PR does not mean the production release is complete.
