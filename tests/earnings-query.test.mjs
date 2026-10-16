@@ -74,6 +74,7 @@ test("ledger owner can page through 101 entries without gaps or duplicates", asy
   const first = await assertSucceeds(getDocs(query(
     collection(db, "commissionLedger"),
     where("userId", "==", userId),
+    where("sourceType", "==", "project_order"),
     orderBy("createdAt", "desc"),
     limit(50)
   )));
@@ -82,6 +83,7 @@ test("ledger owner can page through 101 entries without gaps or duplicates", asy
   const second = await assertSucceeds(getDocs(query(
     collection(db, "commissionLedger"),
     where("userId", "==", userId),
+    where("sourceType", "==", "project_order"),
     orderBy("createdAt", "desc"),
     startAfter(first.docs[first.docs.length - 1]),
     limit(50)
@@ -91,6 +93,7 @@ test("ledger owner can page through 101 entries without gaps or duplicates", asy
   const third = await assertSucceeds(getDocs(query(
     collection(db, "commissionLedger"),
     where("userId", "==", userId),
+    where("sourceType", "==", "project_order"),
     orderBy("createdAt", "desc"),
     startAfter(second.docs[second.docs.length - 1]),
     limit(50)
