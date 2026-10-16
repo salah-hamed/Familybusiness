@@ -8,7 +8,7 @@ This roadmap tracks the approved operating model against the current application
 - The merchant pays the marketer directly for earned order commissions, in cash or by transfer. The platform records the parties’ payment confirmation and does not collect or hold this money.
 - New marketer accounts get a free 7-day setup period. Linking the first merchant starts a 3-day grace period; the monthly platform subscription is EGP 59. This replaces the EGP 350 initial payment for new accounts only. Existing accounts keep their current billing behavior.
 - Merchant recovery, suspension, and reassignment remain under platform-admin control. Do not promise uninterrupted operation after a marketer expires until the recovery path is safely enabled.
-- Nearby discovery is opt-in. The proposed initial search is a 2 km approximate radius, with an optional expansion up to 5 km for shops that deliver farther. Do not request location or run nearby queries until the customer opens the discovery feature.
+- Nearby discovery is opt-in. The approved initial search radius is approximately 2 km, with an optional expansion up to 5 km for shops that deliver farther. Do not request location or run nearby queries until the customer opens the discovery feature.
 
 ## Current progress
 
@@ -17,23 +17,23 @@ This roadmap tracks the approved operating model against the current application
 | Four launch project types | Implemented in the project templates. Cleaning and car wash are retired from the launch set. | Confirm the one-project-per-type limit through the customer-visible account flow before broad launch. |
 | PWA installation | Installable PWA manifests and installability coverage exist for the app surfaces. | Run the four project types on real phones and verify update/cache behavior. |
 | Commission earning | Commission ledger entries are tied to order dispatch and the agreed commission terms. | Keep customer-facing wording aligned with “earned when sent for delivery.” |
-| Direct commission settlement | Operator declaration and project-owner receipt confirmation are implemented; platform admin monitors the records. | Confirm the deployed Firestore Rules match the current client before enabling this flow to new production users. |
-| Free registration | Client trial policy, signup fields, and Firestore admin gate are implemented. This change opens the client gate for new signups. | A platform admin must enable `platformSettings/trialRegistration` before the updated public signup flow is exposed. Then verify 7 days, first-merchant grace, EGP 59, and legacy-account behavior. |
+| Direct commission settlement | Operator declaration and project-owner receipt confirmation are implemented; platform admin monitors the records. | Complete the operational flow check on the deployed client and Rules before broad launch. |
+| Free registration | Client code is on main and Pages; `platformSettings/trialRegistration.enabled=true` was enabled in Firestore on 2026-10-17. New signups do not pay EGP 350 upfront. | Verify one fresh account gets the 7-day setup period, 3-day first-merchant grace, and EGP 59 monthly amount; confirm legacy behavior remains unchanged. |
 | Merchant pause/recovery | Admin controls and staged recovery/cutover code exist, but critical recovery and cutover rollout flags remain OFF. | Complete and validate continuity, consent, financial isolation, and Rules checks before enabling recovery or reassignment. |
-| Nearby shop discovery | Not implemented. Current merchant records have text addresses/locations, but no normalized coordinates, geospatial index, or customer discovery flow. | Add merchant coordinate capture, a consent-driven customer location request, bounded geohash lookup, category grouping, distance display, and Rules/privacy tests. |
-| Production release | GitHub Pages and Firestore Rules/indexes are separate release operations. | Publish only the reviewed SHA; check CI and Pages; verify production Rules/indexes; perform mobile smoke checks and prepare rollback. |
+| Nearby shop discovery | Not implemented. Current merchant records have text addresses/locations, but no normalized coordinates, geospatial index, or customer discovery flow. | Add optional coordinates, on-demand customer location, bounded geohash lookup, category grouping, approximate distance, and privacy/read-cost checks. |
+| Production release | GitHub Pages and Firestore Rules/indexes are separate release operations. | Complete operating-flow smoke checks on real phones and prepare paired rollback materials for future Rules/client changes. |
 
 ## Execution sequence
 
-### Phase 1 — Free registration activation
+### Phase 1 — Free registration enablement and validation
 
-1. Review and merge the client change only after required CI is green.
-2. Confirm GitHub Pages publishes that exact commit.
-3. Before exposing the new signup flow, an authenticated platform admin enables `platformSettings/trialRegistration` using the Firestore Rules-approved fields: `enabled`, `updatedBy` (admin UID), and server time `updatedAt`.
-4. Verify a new test account registers with no EGP 350 charge, gets the 7-day setup trial, receives 3 days after accepting its first merchant, and sees EGP 59 as the monthly amount. Verify an existing account still uses its prior policy.
-5. Record the released commit and setting state. Keep recovery, transfer, repeat-cycle, and cycle-settlement flags OFF.
+1. Review and merge the client change only after required CI is green. **Complete:** PRs #154 and #155 are merged.
+2. Confirm GitHub Pages publishes that exact commit. **Complete:** the registration page is live.
+3. Enable `platformSettings/trialRegistration` with `enabled=true`, the existing Admin UID, and a server timestamp. **Complete:** Firestore read-back confirmed the setting.
+4. Verify a fresh test account registers without the EGP 350 initial payment, gets the 7-day setup period, receives 3 days after accepting its first merchant, and sees EGP 59 as the monthly amount. Verify an existing account still uses its prior policy. **Pending live account verification.**
+5. Keep recovery, transfer, repeat-cycle, and cycle-settlement flags OFF. **Confirmed unchanged.**
 
-### Phase 2 — Launch operating-flow verification
+### Phase 2 — Launch operating-flow verification — next
 
 1. Walk through registration, project creation, operator invite/claim, commission agreement, customer order, dispatch, commission earning, direct payment declaration, and receipt confirmation.
 2. Repeat for supermarket, restaurant, bakery, and laundry.
@@ -45,7 +45,7 @@ This roadmap tracks the approved operating model against the current application
 1. Add optional latitude/longitude capture to each merchant profile; retain the text address as a fallback.
 2. Add one customer action that asks for location only when tapped. If permission is declined, let the customer search by area/address.
 3. Use geohash range queries with client-side distance filtering. Query only on demand; show category headings and a short nearby list rather than loading every merchant at app start.
-4. Start with a 2 km radius and offer expansion to 5 km where delivery is available. Label distances approximate; do not promise a walking-time estimate.
+4. Start with an approximate 2 km radius and offer expansion to 5 km where delivery is available. Label distances approximate; do not promise a walking-time estimate.
 5. Add indexes, Rules/privacy coverage, read-count checks, and mobile tests before release.
 
 ### Phase 4 — Merchant recovery and reassignment
