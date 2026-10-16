@@ -4,7 +4,7 @@
 
 ## Current release decision
 
-- PR #148 is the integrated candidate. Its current branch keeps `TRIAL_REGISTRATION_ENABLED=false` and the merchant recovery, transfer, cutover, repeat-cycle and settlement rollout flags OFF.
+- PR #148 is the integrated candidate. The web constant `TRIAL_REGISTRATION_ENABLED=false` is only a UI gate. Firestore signup must also be OFF by default: `platformSettings/trialRegistration` missing/false denies trial user creation; only an admin can create or update this setting. Keep the setting document absent for the core launch. Merchant recovery, transfer, cutover, repeat-cycle and settlement flags remain OFF.
 - PR #149 is a separate activation candidate based on an older #148 commit. It switches several rollout flags ON and changes cycle settlements to operator declaration plus beneficiary confirmation without external verification. Do not merge it with the initial cutover; rebase and rerun CI only after the settlement evidence policy is approved.
 - GitHub Pages publishes the web application. It does not publish Firestore Rules or indexes. Firebase publication is a separate authenticated action.
 - Current candidate CI is evidence for the checked SHA only. Any new commit requires a fresh green workflow.
@@ -22,10 +22,10 @@
 
 ### 2. Reconcile old proofs and prepare rollback
 
-- Review every pre-release pending proof against the approved payment record.
-- Record each proof as reviewed, rejected, migrated or still pending, with its account UID and decision.
-- Never set `recoverySafe` automatically. An unresolved payment proof blocks recovery for that account.
-- Save the currently deployed Rules, record the current web SHA and capture the approved pre-release finance readings.
+- No historical balance reconciliation is required for existing accounts and settlements; the owner confirmed they are test data. Do not delete or rewrite them as part of this release.
+- Check only whether any pending subscription proof needs a `subscriptionBillingGuards/{uid}` migration for the new Rules. Migrate only through the guarded admin path, or keep payment review paused for that proof; no financial reconciliation is needed for test records.
+- Never set `recoverySafe` automatically. A pending proof must remain blocked from recovery until its technical guard state is handled.
+- Save the currently deployed Rules and indexes, record the current web SHA, and keep the paired rollback materials together.
 - Prepare a paired rollback: prior web SHA **and** prior Rules/indexes. Rolling back just one side may break payment submissions.
 
 ### 3. Cut over in one maintenance window
@@ -61,7 +61,7 @@ Run the deploy command only after the reviewed code is on `main`, the SHA is con
 - Existing settlement history and account balances remain unchanged.
 - Product rendering, existing product/image URLs and `masterId` inventory remain intact.
 - The PWA updates to the reviewed cache version on a real phone.
-- Test every activity approved for launch: cleaning, laundry, supermarket, restaurant and bakery if included. Keep car wash hidden/paused unless separately approved.
+- Test the four active launch activities: supermarket, restaurant, bakery and laundry. Cleaning and car wash remain hidden/paused; other draft templates stay unavailable.
 
 Stop the release if a permission, payment, order-routing, balance or cache check fails. Use the paired rollback plan.
 
@@ -69,7 +69,7 @@ Stop the release if a permission, payment, order-routing, balance or cache check
 
 Do not use PR #149 as a bundle for the initial launch.
 
-1. **Trial signup:** prepare a separate small change that enables only `TRIAL_REGISTRATION_ENABLED`. Verify the 7-day setup window, 3-day grace after first accepted agreement, 59 EGP new-model payment, old pricing and expiry behavior.
+1. **Trial signup:** after the core cutover, enable the client `TRIAL_REGISTRATION_ENABLED` and have an admin create `platformSettings/trialRegistration` with `enabled=true`. Verify the 7-day setup window, 3-day grace after first accepted agreement, 59 EGP new-model payment, old pricing and expiry behavior.
 2. **First merchant recovery:** enable only after old proofs are reconciled and an audited overdue/confirmed-violation case passes the operator-continuity and historical-ledger checks.
 3. **First assignment:** enable transfer cases and cutover only after operator and recipient consent, accepted commission terms and private finance review pass.
 4. **Repeat cycles:** enable after two consecutive reassignment tests and historical privacy checks pass.
@@ -79,6 +79,6 @@ Record the reviewed SHA, active flags, test evidence, approver and monitoring wi
 
 ## Stop conditions
 
-Stop before deployment if the SHA differs from the reviewed SHA; production Rules cannot be saved for rollback; pending proofs remain unreconciled; Firebase targets the wrong project; required CI is missing or red; phone/PWA flows are untested; or the paired rollback is unavailable.
+Stop before deployment if the SHA differs from the reviewed SHA; production Rules cannot be saved for rollback; pending proofs remain technically unhandled; Firebase targets the wrong project; required CI is missing or red; phone/PWA flows are untested; or the paired rollback is unavailable.
 
 A green CI run or code in a Draft PR does not mean the production release is complete.
