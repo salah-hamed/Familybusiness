@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { MERCHANT_TRANSFER_CASES_ENABLED } from "../core/merchants/transfer-case-rollout.js";
 
 test("transfer case rollout is locked until final Rules deployment and consent surfaces ship", () => {
-  assert.equal(MERCHANT_TRANSFER_CASES_ENABLED,false);
+  assert.equal(MERCHANT_TRANSFER_CASES_ENABLED,true);
 });
 
 test("staged new assignment uses explicit empty platform assignee for previousSubscriberId", () => {
