@@ -8,11 +8,6 @@ export const PLATFORM_BILLING = Object.freeze({
   supportWhatsapp: "201508830993"
 });
 
-export const REFERRAL_CONFIG = Object.freeze({
-  qualifiedReferralReward: 50,
-  currency: "EGP"
-});
-
 export function formatEgp(amount) {
   return `${Number(amount || 0).toLocaleString("ar-EG")} جنيه`;
 }

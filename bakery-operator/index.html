@@ -101,7 +101,7 @@
         <label>رقم الهاتف<input id="settingsPhone"></label>
         <label>واتساب<input id="settingsWhatsapp"></label>
         <label>العنوان<input id="settingsAddress"></label>
-        <label>رابط اللوكيشن<input id="settingsLocation"></label>
+        <div class="locationSetting"><span>موقع المخبز</span><input id="settingsLocation" type="hidden"><button id="captureSettingsLocationBtn" class="secondary" type="button">📍 تحديد الموقع الحالي وحفظه</button><a id="settingsLocationPreview" class="muted hidden" target="_blank" rel="noopener">فتح الموقع المحفوظ على الخريطة</a><small id="settingsLocationStatus" role="status">لم يتم تحديد الموقع بعد.</small></div>
         <label>مصاريف التوصيل<input id="settingsDeliveryFee" type="number" min="0" step="0.5"></label>
         <label>رابط اللوجو<input id="settingsLogo" placeholder="https://..."></label>
         <label>رابط صورة الغلاف<input id="settingsCover" placeholder="https://..."></label>
@@ -133,6 +133,6 @@
     </section>
   </section>
 </main>
-<script type="module" src="./app.js?v=20261014-final-mobile1"></script>
+<script type="module" src="./app.js?v=20261017-location2"></script>
 </body>
 </html>

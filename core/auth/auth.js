@@ -19,7 +19,7 @@ import {
 
 
 // Register
-export async function registerUser(name, email, password, referredByUserId = "") {
+export async function registerUser(name, email, password) {
 
   try {
 
@@ -42,10 +42,6 @@ export async function registerUser(name, email, password, referredByUserId = "")
       );
 
     const user = userCredential.user;
-    const normalizedReferralId = /^[A-Za-z0-9_-]{1,128}$/.test(String(referredByUserId || ""))
-      ? String(referredByUserId)
-      : "";
-
     // Save user in Firestore
     await setDoc(doc(db, "users", user.uid), {
 
@@ -61,8 +57,6 @@ export async function registerUser(name, email, password, referredByUserId = "")
         accessModel: "merchant_trial_v1",
         firstMerchantLinkedAt: null
       } : {}),
-      referredByUserId: normalizedReferralId && normalizedReferralId !== user.uid ? normalizedReferralId : "",
-      referralQualified: false,
       createdAt: serverTimestamp()
 
     });

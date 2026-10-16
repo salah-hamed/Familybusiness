@@ -5,6 +5,7 @@ import { claimOperatorAccess, getOperator, operatorCanOperate, buildOperatorAuth
 import { acceptPendingCommission, rejectPendingCommission, getCommissionAgreement } from "../core/commissions/commission-service.js?v=20261014-final-mobile1";
 import { renderOperatorFinancePanel } from "../core/commissions/finance-panel.js?v=20261013-financeperiod1";
 import { getSupermarket, updateSupermarketSettings } from "../core/supermarket/supermarket-service.js";
+import { bindOperatorLocationCapture } from "../core/nearby/operator-location.js";
 import { WORKER_ROLES, createWorker, listProjectWorkers, setWorkerActive } from "../core/workers/worker-service.js";
 import { assignWorkerAndPrepareWhatsApp, rollbackPreparedAssignment } from "../core/workers/worker-dispatch-service.js";
 import { buildWorkerWhatsAppUrl, openWhatsAppPlaceholder, navigatePreparedWhatsAppWindow } from "../core/whatsapp/dispatch-service.js";
@@ -181,6 +182,7 @@ async function loadOperations(){
     $("settingsWhatsapp").value=currentStore.whatsapp||"";
     $("settingsAddress").value=currentStore.address||"";
     $("settingsLocation").value=currentStore.location||"";
+    bindOperatorLocationCapture({inputId:"settingsLocation",buttonId:"captureSettingsLocationBtn",previewId:"settingsLocationPreview",statusId:"settingsLocationStatus",onSave:location=>updateSupermarketSettings(projectId,{location})});
     $("settingsDeliveryFee").value=currentStore.deliveryFee??0;
     $("acceptingOrders").checked=currentStore.isAcceptingOrders===true;
     const customerUrl=new URL("../templates/supermarket/",location.href);

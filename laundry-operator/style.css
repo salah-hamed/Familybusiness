@@ -4,3 +4,5 @@
 .operatorRecoveryHelp{margin-top:12px;border-top:1px dashed var(--line);padding-top:10px}
 .operatorRecoveryHelp summary{cursor:pointer;font-weight:900;color:var(--deep)}
 .operatorRecoveryHelp p{margin:8px 0 0}
+
+.locationSetting{display:grid;gap:8px;align-content:start;padding:12px;border:1px solid #dce6e0;border-radius:14px;background:#f8fbf9}.locationSetting>span{font-weight:800}.locationSetting>a{font-size:13px;font-weight:700}.locationSetting>small{color:#64746a;line-height:1.5}

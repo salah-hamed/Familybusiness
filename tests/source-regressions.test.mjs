@@ -297,8 +297,8 @@ test("FINAL02 marketing page leads with the existing-business commission story",
   const html = readFileSync("home/index.html", "utf8");
   assert.equal(html.includes("بدوسة زرار… يبقى عندك"), true);
   assert.equal(html.includes("المحل موجود. الزباين موجودين. التشغيل موجود."), true);
-  assert.equal(html.includes("5 مصادر فلوس"), true);
-  assert.equal(html.includes("كل شخص تعرفه ممكن يبقى عمولة إحالة جديدة."), true);
+  assert.equal(html.includes("4 مصادر دخل"), true);
+  assert.equal(html.includes("الإحالة"), false);
   assert.equal(html.includes('href="/register/"'), false);
   assert.equal(html.includes('href="/login/"'), false);
 });
@@ -306,7 +306,7 @@ test("FINAL02 marketing page leads with the existing-business commission story",
 test("FINAL02 marketing page uses live platform prices and exactly the four launch projects", () => {
   const source = readFileSync("home/app.js", "utf8");
   assert.equal(source.includes("PLATFORM_BILLING"), true);
-  assert.equal(source.includes("REFERRAL_CONFIG"), true);
+  assert.equal(source.includes("REFERRAL_CONFIG"), false);
   for (const id of ["supermarket", "restaurant", "bakery", "laundry"]) {
     assert.equal(source.includes(`"${id}"`), true, id);
   }
@@ -794,13 +794,13 @@ test("Phase D removes admin reversal navigation, cards and queries but keeps fin
   const legacy = readFileSync("core/commissions/reversal-service.js", "utf8");
   assert.equal(rules.includes("match /commissionReversals/{reversalId}"), true);
   assert.equal(legacy.includes("listProjectCommissionReversals"), true);
-  assert.equal(source.includes('aggregateAmount("commissionLedger", [where("status", "==", "reversed")])'), true);
+  assert.equal(source.includes('aggregateAmount("commissionLedger", [where("sourceType", "==", "project_order"), where("status", "==", "reversed")])'), true);
 });
 
 test("FB-LAUNCH05B admin overview reports net commission after confirmed reversals", () => {
   const source = readFileSync("admin/admin.js", "utf8");
 
-  assert.equal(source.includes('aggregateAmount("commissionLedger", [where("status", "==", "reversed")])'), true);
+  assert.equal(source.includes('aggregateAmount("commissionLedger", [where("sourceType", "==", "project_order"), where("status", "==", "reversed")])'), true);
   assert.equal(source.includes("const netCommission = Math.max(0, totalCommission.totalAmount - reversedCommission.totalAmount)"), true);
   assert.equal(source.includes('$("metricEarned").innerText = money(netCommission)'), true);
 });

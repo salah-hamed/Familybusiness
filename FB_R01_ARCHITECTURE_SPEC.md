@@ -30,7 +30,6 @@ The platform is not a simple template gallery. It is a business operating system
 - worker assignment
 - partner agreements
 - commissions
-- referrals
 - subscription management
 - training/guidance
 
@@ -129,7 +128,6 @@ Can manage:
 - project/template visibility
 - project activation
 - commissions/reconciliation
-- referrals
 - platform configuration
 
 ### Subscriber
@@ -141,7 +139,6 @@ Can:
 - manage their earnings
 - invite / configure an operating partner for partner-operated templates
 - maintain workers linked to owner-operated projects
-- view referral earnings
 
 ### Operating Partner
 A business such as:
@@ -244,70 +241,16 @@ Initial activation and monthly renewal are separate business events.
 
 ---
 
-## 7. Referral Engine
-
-Every active subscriber receives a referral code/link.
-
-Example:
-
-```text
-/register?ref=ABC123
-```
-
-Referral reward:
-
-```text
-50 EGP
-```
-
-The reward is created once only after the referred account:
-1. registers through the valid referral
-2. completes required first payment
-3. becomes activated
-
-Do not award the commission on registration alone.
-
-Suggested referral record:
-
-```text
-referrals/{referralId}
-  referrerUserId
-  referredUserId
-  referralCode
-  status
-  commissionAmount = 50
-  qualifiedAt
-  paidAt
-```
-
-Possible status values:
-
-```text
-registered
-qualified
-paid
-canceled
-```
-
-Referral commission must remain separate from project commission.
-
----
-
 ## 8. Earnings Model
 
 Subscriber dashboard must separate:
 
 ```text
 Project commissions
-Referral commissions
 Total earnings
 Paid
 Outstanding
 ```
-
-Never combine referral and project earnings into one unexplained balance.
-
----
 
 ## 9. Partner Commission Agreement Engine
 
@@ -963,7 +906,6 @@ workers
 operators
 supermarkets
 catalogProducts
-referrals
 commissionAgreements
 commissionLedger
 platformConfig
@@ -1000,7 +942,6 @@ Source types:
 
 ```text
 project_order
-referral
 ```
 
 This creates an auditable financial history.
@@ -1015,7 +956,6 @@ Suggested:
 
 ```text
 platformConfig/billing
-platformConfig/referrals
 platformConfig/features
 ```
 
@@ -1026,8 +966,6 @@ billing:
 initialActivationFee = 220
 monthlyRenewalFee = 59
 
-referrals:
-qualifiedReferralReward = 50
 ```
 
 Do not scatter these values across JavaScript files.
@@ -1056,12 +994,10 @@ This allows Car Wash and unfinished projects to stay in code without appearing i
 - hide paused/draft projects
 - preserve existing routes
 
-### M2 — Subscription + Referral Core
+### M2 — Subscription Core
 - 220 initial
 - 59 renewal
-- 50 qualified referral
 - platform configuration
-- referral tracking
 
 ### M3 — Commission + Partner Core
 - operator entity
@@ -1121,7 +1057,6 @@ This allows Car Wash and unfinished projects to stay in code without appearing i
 ### M11 — Admin / Finance Center
 - template visibility
 - subscriptions
-- referrals
 - commission ledger
 - partner/project oversight
 

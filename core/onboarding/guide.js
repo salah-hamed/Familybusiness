@@ -41,7 +41,7 @@ function targetAnchor(target) {
 
   if (target.matches("button, input, select, textarea, a")) {
     return target.closest(
-      ".linkBox, .projectCard, .subscriptionCard, .referralCard, .auth-card, label, section, .card"
+      ".linkBox, .projectCard, .subscriptionCard, .auth-card, label, section, .card"
     ) || target.parentElement || target;
   }
 

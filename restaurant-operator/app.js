@@ -5,6 +5,7 @@ import { claimOperatorAccess, getOperator, operatorCanOperate, buildOperatorAuth
 import { acceptPendingCommission, rejectPendingCommission, getCommissionAgreement } from "../core/commissions/commission-service.js?v=20261014-final-mobile1";
 import { renderOperatorFinancePanel } from "../core/commissions/finance-panel.js?v=20261013-financeperiod1";
 import { getRestaurant, updateRestaurantSettings } from "../core/restaurant/restaurant-service.js";
+import { bindOperatorLocationCapture } from "../core/nearby/operator-location.js";
 import { WORKER_ROLES, createWorker, listProjectWorkers, setWorkerActive } from "../core/workers/worker-service.js";
 import { assignWorkerAndPrepareWhatsApp, rollbackPreparedAssignment } from "../core/workers/worker-dispatch-service.js";
 import { buildWorkerWhatsAppUrl, openWhatsAppPlaceholder, navigatePreparedWhatsAppWindow } from "../core/whatsapp/dispatch-service.js";
@@ -184,6 +185,7 @@ function renderRestaurantSettings(){
   $("settingsWhatsapp").value=currentRestaurant.whatsapp||"";
   $("settingsAddress").value=currentRestaurant.address||"";
   $("settingsLocation").value=currentRestaurant.location||"";
+  bindOperatorLocationCapture({inputId:"settingsLocation",buttonId:"captureSettingsLocationBtn",previewId:"settingsLocationPreview",statusId:"settingsLocationStatus",onSave:location=>updateRestaurantSettings(projectId,{location})});
   $("settingsDeliveryFee").value=currentRestaurant.deliveryFee??0;
   $("settingsLogo").value=currentRestaurant.logo||"";
   $("settingsCover").value=currentRestaurant.coverImage||"";

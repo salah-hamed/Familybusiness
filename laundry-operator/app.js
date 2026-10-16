@@ -5,6 +5,7 @@ import { claimOperatorAccess,getOperator,operatorCanOperate,buildOperatorAuthEma
 import { acceptPendingCommission,rejectPendingCommission,getCommissionAgreement } from "../core/commissions/commission-service.js?v=20261014-final-mobile1";
 import { renderOperatorFinancePanel } from "../core/commissions/finance-panel.js?v=20261013-financeperiod1";
 import { getLaundry,updateLaundrySettings } from "../core/laundry/laundry-service.js";
+import { bindOperatorLocationCapture } from "../core/nearby/operator-location.js";
 import { WORKER_ROLES,createWorker,listProjectWorkers,setWorkerActive } from "../core/workers/worker-service.js";
 import { assignWorkerAndPrepareWhatsApp, rollbackPreparedAssignment } from "../core/workers/worker-dispatch-service.js";
 import { buildWorkerWhatsAppUrl, openWhatsAppPlaceholder, navigatePreparedWhatsAppWindow } from "../core/whatsapp/dispatch-service.js";
@@ -122,7 +123,8 @@ $("rejectAgreementBtn").onclick=async()=>{try{await rejectPendingCommission({pro
 async function loadOperations(){
   laundry=await getLaundry(projectId);agreement=await getCommissionAgreement(projectId);
   $("laundryTitle").innerText=laundry?.name||operator?.name||"المغسلة";$("statCommission").innerText=money(agreement?.currentAmount||0);
-  $("settingsName").value=laundry?.name||"";$("settingsPhone").value=laundry?.phone||"";$("settingsWhatsapp").value=laundry?.whatsapp||"";$("settingsAddress").value=laundry?.address||"";$("settingsLocation").value=laundry?.location||"";$("settingsInstapay").value=laundry?.instapayLink||"";$("acceptingOrders").checked=laundry?.isAcceptingOrders===true;
+  $("settingsName").value=laundry?.name||"";$("settingsPhone").value=laundry?.phone||"";$("settingsWhatsapp").value=laundry?.whatsapp||"";$("settingsAddress").value=laundry?.address||"";$("settingsLocation").value=laundry?.location||"";
+bindOperatorLocationCapture({inputId:"settingsLocation",buttonId:"captureSettingsLocationBtn",previewId:"settingsLocationPreview",statusId:"settingsLocationStatus",onSave:location=>updateLaundrySettings(projectId,{location})});$("settingsInstapay").value=laundry?.instapayLink||"";$("acceptingOrders").checked=laundry?.isAcceptingOrders===true;
   const url=new URL("../templates/laundry/",location.href);url.searchParams.set("project",projectId);$("customerOrderLink").value=url.toString();renderCustomerQr({inputId:"customerOrderLink",mountId:"operatorCustomerQrMount",projectName:laundry?.name||operator?.name||"المغسلة"});
   const projectSnap=await getDoc(doc(db,"projects",projectId));currentPriceConfig=projectSnap.data()?.priceConfig||{};renderPricing(currentPriceConfig);
   await Promise.all([loadWorkers(),loadOrders()]);

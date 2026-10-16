@@ -3,7 +3,7 @@ import { isQualifyingMerchantLink, resolveMerchantIdentity } from "./merchant-id
 const ACTIVE_TEMPLATES = new Set(["supermarket","restaurant","bakery","laundry"]);
 
 // This preflight is intentionally READ ONLY. Ownership in historical orders,
-// referral payouts, ledger entries and settlement records never changes merely
+// historical ledger entries and settlement records never change merely
 // because a merchant is being evaluated for a new subscriber.
 export function assessMerchantTransfer({
   projectDocId = "",

@@ -172,7 +172,7 @@ body{
 .subscriptionCard small{display:block;color:var(--ws-muted);margin-top:5px}
 .subscriptionIcon{font-size:34px}
 
-.projectsSection,.referralCard{margin-bottom:30px}
+.projectsSection{margin-bottom:30px}
 .sectionHeading{display:flex;justify-content:space-between;gap:18px;align-items:end;margin-bottom:16px}
 .sectionHeading h2{margin:4px 0;font-size:26px}
 .sectionHeading p{margin:0;color:var(--ws-muted);line-height:1.7}
@@ -289,57 +289,6 @@ body{
   cursor:not-allowed;
 }
 
-.referralCard{
-  padding:22px;
-  border-radius:24px;
-  background:linear-gradient(135deg,#faf5ff,#f5f3ff);
-  border:1px solid #e8ddf9;
-}
-
-.referralIntro{
-  display:flex;
-  gap:13px;
-  align-items:flex-start;
-}
-
-.referralIcon{
-  width:44px;
-  height:44px;
-  flex:0 0 44px;
-  display:grid;
-  place-items:center;
-  border-radius:14px;
-  background:#ede9fe;
-  font-size:22px;
-}
-
-.referralCard h2{margin:3px 0 5px}
-.referralCard p{margin:0;color:var(--ws-muted);line-height:1.7}
-
-.referralLinkRow{
-  display:grid;
-  grid-template-columns:1fr auto auto;
-  gap:8px;
-  margin-top:16px;
-}
-
-.referralLinkRow input{
-  min-width:0;
-  padding:12px;
-  border:1px solid #ddd6fe;
-  border-radius:13px;
-  direction:ltr;
-}
-
-.referralLinkRow button{
-  width:auto;
-  padding:0 16px;
-  border-radius:13px;
-  background:linear-gradient(135deg,#7c3aed,#6d28d9);
-}
-
-.referralStatus{margin-top:9px!important;font-weight:800;color:#6d28d9!important}
-
 @media(max-width:720px){
   .workspaceHero{grid-template-columns:1fr}
   .quickJourney{grid-template-columns:1fr}
@@ -437,11 +386,6 @@ body{
   font-weight:900;
 }
 
-@media(max-width:560px){
-  .referralLinkRow{grid-template-columns:1fr 1fr}
-  .referralLinkRow input{grid-column:1 / -1}
-  .referralLinkRow button{padding:11px 10px}
-}
 
 .instapayActionBox{display:grid;gap:7px}
 .instapayActionBox em{font-style:normal;color:var(--ws-muted);font-size:10px;line-height:1.5}

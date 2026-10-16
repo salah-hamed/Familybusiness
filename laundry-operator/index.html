@@ -47,7 +47,7 @@
       <div class="formGrid">
         <label>الاسم<input id="settingsName"></label><label>الهاتف<input id="settingsPhone"></label>
         <label>واتساب<input id="settingsWhatsapp"></label><label>العنوان<input id="settingsAddress"></label>
-        <label>اللوكيشن<input id="settingsLocation"></label><label>رابط InstaPay<input id="settingsInstapay" placeholder="https://..."></label>
+        <div class="locationSetting"><span>موقع المغسلة</span><input id="settingsLocation" type="hidden"><button id="captureSettingsLocationBtn" class="secondary" type="button">📍 تحديد الموقع الحالي وحفظه</button><a id="settingsLocationPreview" class="muted hidden" target="_blank" rel="noopener">فتح الموقع المحفوظ على الخريطة</a><small id="settingsLocationStatus" role="status">لم يتم تحديد الموقع بعد.</small></div><label>رابط InstaPay<input id="settingsInstapay" placeholder="https://..."></label>
       </div>
       <button id="saveSettingsBtn" class="primary">حفظ الإعدادات</button>
       <div class="linkRow"><input id="customerOrderLink" readonly><button id="copyCustomerLinkBtn" class="secondary">نسخ رابط العملاء</button></div>
@@ -82,6 +82,6 @@
     </section>
   </section>
 </main>
-<script type="module" src="./app.js?v=20261014-final-mobile1"></script>
+<script type="module" src="./app.js?v=20261017-location2"></script>
 </body>
 </html>

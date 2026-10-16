@@ -177,3 +177,16 @@
     grid-template-columns: 1fr;
   }
 }
+
+.nearbyDiscoveryFooter {
+  margin-top: 32px;
+  padding: 14px 16px;
+  border-color: #e2e8e5;
+  background: #f9fbfa;
+}
+
+.nearbyDiscoveryFooter > p {
+  margin: 4px 0 8px;
+  color: #66736c;
+  font-size: 13px;
+}

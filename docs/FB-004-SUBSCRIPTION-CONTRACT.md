@@ -43,6 +43,5 @@ The application reads these values from `core/config/platform-config.js`.
 
 - Initial account activation + first subscription period: **350 EGP**
 - Monthly renewal: **59 EGP**
-- Qualified referral reward after the referred user's first paid activation: **50 EGP**
 
-The initial activation and referral reward are recorded only on the first qualified activation. Renewal does not create a second referral reward.
+The initial activation is recorded only on the first approved activation. Renewal updates the subscription period without creating project commissions.

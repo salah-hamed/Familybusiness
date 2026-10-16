@@ -67,7 +67,6 @@ Out of scope:
 - order lifecycle changes
 - commission calculation changes
 - Cleaning
-- subscriptions/referrals
 - Firebase Hosting
 - WhatsApp Business API
 - SMS/Phone OTP

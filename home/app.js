@@ -1,5 +1,5 @@
 import { getDiscoverableProjects } from "../templates/projects.js";
-import { PLATFORM_BILLING, REFERRAL_CONFIG, formatEgp } from "../core/config/platform-config.js";
+import { PLATFORM_BILLING, formatEgp } from "../core/config/platform-config.js";
 import { TRIAL_REGISTRATION_ENABLED } from "../core/subscriptions/trial-rollout.js";
 
 const projectCopy = {
@@ -27,28 +27,10 @@ if (container) {
 
 const initialPrice = document.getElementById("initialActivationPrice");
 const renewalPrice = document.getElementById("monthlyRenewalPrice");
-const referralAmount = document.getElementById("referralAmount");
-const faqReferralAmount = document.getElementById("faqReferralAmount");
-const referralFocusAmount = document.getElementById("referralFocusAmount");
-const referralLandingBanner = document.getElementById("referralLandingBanner");
 const supportWhatsAppLink = document.getElementById("supportWhatsAppLink");
 
 if (initialPrice) initialPrice.textContent = TRIAL_REGISTRATION_ENABLED ? "مجانًا" : formatEgp(PLATFORM_BILLING.initialActivationFee);
 if (renewalPrice) renewalPrice.textContent = formatEgp(PLATFORM_BILLING.monthlyRenewalFee);
-if (referralAmount) referralAmount.textContent = `+ ${formatEgp(REFERRAL_CONFIG.qualifiedReferralReward)}`;
-if (faqReferralAmount) faqReferralAmount.textContent = formatEgp(REFERRAL_CONFIG.qualifiedReferralReward);
-if (referralFocusAmount) referralFocusAmount.textContent = formatEgp(REFERRAL_CONFIG.qualifiedReferralReward) + " عمولة إحالة";
-
-const referralUserId = new URLSearchParams(window.location.search).get("ref") || "";
-
-if (referralUserId) {
-  referralLandingBanner?.classList.remove("hidden");
-  document.querySelectorAll('a[href="../"]').forEach(link => {
-    const authUrl = new URL("../", window.location.href);
-    authUrl.searchParams.set("ref", referralUserId);
-    link.href = authUrl.toString();
-  });
-}
 
 if (supportWhatsAppLink) {
   const supportNumber = String(PLATFORM_BILLING.supportWhatsapp || "").replace(/[^0-9]/g, "");

@@ -1,12 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { PLATFORM_BILLING, REFERRAL_CONFIG } from "../core/config/platform-config.js";
+import { PLATFORM_BILLING } from "../core/config/platform-config.js";
 
-test("commercial values are 350 initial, 59 monthly, and 50 referral", () => {
+test("commercial values are 350 initial and 59 monthly", () => {
   assert.equal(PLATFORM_BILLING.initialActivationFee, 350);
   assert.equal(PLATFORM_BILLING.monthlyRenewalFee, 59);
-  assert.equal(REFERRAL_CONFIG.qualifiedReferralReward, 50);
 });
 
 test("home pricing copy no longer exposes the old 220 EGP value", () => {
@@ -15,7 +14,6 @@ test("home pricing copy no longer exposes the old 220 EGP value", () => {
   assert.equal(html.includes("220 جنيه"), false);
   assert.equal(source.includes("PLATFORM_BILLING.initialActivationFee"), true);
   assert.equal(source.includes("PLATFORM_BILLING.monthlyRenewalFee"), true);
-  assert.equal(source.includes("REFERRAL_CONFIG.qualifiedReferralReward"), true);
 });
 
 test("onboarding and admin use the central billing config", () => {
@@ -26,7 +24,6 @@ test("onboarding and admin use the central billing config", () => {
   assert.equal(onboarding.includes("PLATFORM_BILLING.monthlyRenewalFee"), true);
   assert.equal(admin.includes("PLATFORM_BILLING.initialActivationFee"), true);
   assert.equal(admin.includes("PLATFORM_BILLING.monthlyRenewalFee"), true);
-  assert.equal(admin.includes("REFERRAL_CONFIG.qualifiedReferralReward"), true);
 });
 
 test("commission service requires an accepted version for an effective snapshot", () => {

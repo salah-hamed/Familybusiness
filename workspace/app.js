@@ -15,7 +15,7 @@ import {
 import {
   getProjectDocId
 } from "../core/projects/project-service.js";
-import { PLATFORM_BILLING, REFERRAL_CONFIG, formatEgp } from "../core/config/platform-config.js";
+import { PLATFORM_BILLING, formatEgp } from "../core/config/platform-config.js";
 import { isSubscriptionActive, subscriptionExpiryDate } from "../core/subscriptions/subscription-service.js";
 import { resolveSubscriptionAccess } from "../core/subscriptions/trial-policy.js";
 import {
@@ -36,10 +36,6 @@ const subscriptionStatus =
 document.getElementById("subscriptionStatus");
 const templatesContainer =
 document.getElementById("templatesContainer");
-const referralLink = document.getElementById("referralLink");
-const copyReferralBtn = document.getElementById("copyReferralBtn");
-const shareReferralWhatsappBtn = document.getElementById("shareReferralWhatsappBtn");
-const referralStatus = document.getElementById("referralStatus");
 const logoutBtn = document.getElementById("logoutBtn");
 const projectCount = document.getElementById("projectCount");
 const workspaceAccountState = document.getElementById("workspaceAccountState");
@@ -337,39 +333,6 @@ protectPage(async (user) => {
       buildWorkspaceGuide({ userData: data, projects: myProjects, subscriptionActive }),
       { autoOpen: true }
     );
-
-    if (referralLink) {
-      const referralUrl = new URL("../home/", window.location.href);
-      referralUrl.search = "";
-      referralUrl.hash = "";
-      referralUrl.searchParams.set("ref", user.uid);
-      referralLink.value = referralUrl.toString();
-    }
-
-    if (copyReferralBtn) {
-      copyReferralBtn.onclick = async () => {
-        try {
-          await navigator.clipboard.writeText(referralLink.value);
-          referralStatus.innerText = `تم نسخ الرابط — كل تفعيل مدفوع مؤهل من لينكك يضيف ${formatEgp(REFERRAL_CONFIG.qualifiedReferralReward)} عمولة إحالة`;
-        } catch {
-          referralLink.select();
-          document.execCommand("copy");
-          referralStatus.innerText = "تم نسخ رابط الإحالة";
-        }
-      };
-    }
-    if (shareReferralWhatsappBtn) {
-      shareReferralWhatsappBtn.onclick = () => {
-        const message = [
-          "شوفت Family Business؟",
-          "منصة بتخليك تربط نفسك بسوبرماركت ومطعم ومخبز ومغسلة شغالين بالفعل، وتتابع عمولتك على الطلبات من موبايلك.",
-          "",
-          "ادخل شوف الفكرة بالتفصيل من هنا:",
-          referralLink.value
-        ].join("\n");
-        window.location.href = `https://wa.me/?text=${encodeURIComponent(message)}`;
-      };
-    }
 
 const myProjectIds = myProjects.map(project => project.projectId);
 templatesContainer.innerHTML = "";
