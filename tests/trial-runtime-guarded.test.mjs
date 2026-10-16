@@ -14,8 +14,8 @@ const trial = extra => ({
   initialActivationPaid:false,...extra
 });
 
-test("trial registration remains disabled until coordinated Rules release", () => {
-  assert.equal(TRIAL_REGISTRATION_ENABLED,false);
+test("new registrations use the free setup trial after coordinated Rules release", () => {
+  assert.equal(TRIAL_REGISTRATION_ENABLED,true);
   const source=readFileSync("core/auth/auth.js","utf8");
   assert.match(source,/TRIAL_REGISTRATION_ENABLED/);
   assert.match(source,/accessModel: "merchant_trial_v1"/);
@@ -66,3 +66,4 @@ test("trial onboarding does not incorrectly claim a subscription payment", () =>
   const expiry=buildWorkspaceGuide({userData:trial({createdAt:at(-20)}),subscriptionActive:false,projects:[]});
   assert.match(expiry.intro,/59 جنيه/);
 });
+

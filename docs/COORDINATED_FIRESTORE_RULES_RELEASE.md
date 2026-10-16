@@ -1,11 +1,12 @@
 # Family Business — coordinated production release
 
-**Status:** Not approved for production. This guide applies to the integrated release candidate PR #148. Keep #148 and #149 in Draft until each applicable release gate is closed.
+**Status:** The core Firestore Rules/index release was deployed previously. This guide now tracks the separate free-registration trial activation. Trial access stays protected by both a client rollout switch and an admin-controlled Firestore setting. Merchant recovery, transfer, cutover, repeat-cycle and cycle-settlement flags remain OFF.
 
 ## Current release decision
 
-- PR #148 is the integrated candidate. The web constant `TRIAL_REGISTRATION_ENABLED=false` is only a UI gate. Firestore signup must also be OFF by default: `platformSettings/trialRegistration` missing/false denies trial user creation; only an admin can create or update this setting. Keep the setting document absent for the core launch. Merchant recovery, transfer, cutover, repeat-cycle and settlement flags remain OFF.
-- PR #149 is a separate activation candidate based on an older #148 commit. It switches several rollout flags ON and changes cycle settlements to operator declaration plus beneficiary confirmation without external verification. Do not merge it with the initial cutover; rebase and rerun CI only after the settlement evidence policy is approved.
+- `TRIAL_REGISTRATION_ENABLED` enables the new-account client flow. Firestore independently requires `platformSettings/trialRegistration` with `enabled=true`; only an admin can create or update this setting. Do not enable the Firestore setting until the matching web version has passed CI and GitHub Pages deployment.
+- New accounts receive a free 7-day setup window, then a 3-day grace window after the first accepted merchant agreement, followed by a 59 EGP monthly subscription. Existing accounts without `accessModel: merchant_trial_v1` keep their legacy billing behavior; no account or payment records are migrated by this activation.
+- The former PR #149 activation bundle is not part of this change. Merchant recovery, transfer, cutover, repeat-cycle and cycle-settlement flags remain OFF.
 - GitHub Pages publishes the web application. It does not publish Firestore Rules or indexes. Firebase publication is a separate authenticated action.
 - Current candidate CI is evidence for the checked SHA only. Any new commit requires a fresh green workflow.
 
@@ -65,20 +66,22 @@ Run the deploy command only after the reviewed code is on `main`, the SHA is con
 
 Stop the release if a permission, payment, order-routing, balance or cache check fails. Use the paired rollback plan.
 
-## Separate activation after the core cutover
+## Trial activation procedure
 
 Do not use PR #149 as a bundle for the initial launch.
 
-1. **Trial signup:** after the core cutover, enable the client `TRIAL_REGISTRATION_ENABLED` and have an admin create `platformSettings/trialRegistration` with `enabled=true`. Verify the 7-day setup window, 3-day grace after first accepted agreement, 59 EGP new-model payment, old pricing and expiry behavior.
-2. **First merchant recovery:** enable only after old proofs are reconciled and an audited overdue/confirmed-violation case passes the operator-continuity and historical-ledger checks.
-3. **First assignment:** enable transfer cases and cutover only after operator and recipient consent, accepted commission terms and private finance review pass.
-4. **Repeat cycles:** enable after two consecutive reassignment tests and historical privacy checks pass.
-5. **Cycle settlements:** leave OFF until the product/finance owner approves whether operator declaration plus beneficiary confirmation is sufficient payment evidence. If independent evidence is required, implement and test that workflow first.
+1. Publish the reviewed client version with `TRIAL_REGISTRATION_ENABLED=true`; wait for green CI and successful GitHub Pages deployment.
+2. Using an authenticated platform admin, create `platformSettings/trialRegistration` with `enabled=true`, `updatedBy` set to that admin UID, and `updatedAt` set to server time. The setting must be enabled before the public free-registration flow is exposed.
+3. Verify a fresh test account can register without the 350 EGP initial activation payment and has `accessModel: merchant_trial_v1`, `subscriptionStatus: trial`, and a server-created signup time.
+4. Verify project creation and the 7-day setup window, then accept a first merchant agreement and verify that Firestore records the first merchant time and the 3-day grace window.
+5. Verify the first invoice for that new account is 59 EGP, payment approval extends the subscription, and a legacy account without the new access model retains its prior policy.
+6. Verify expired trial access is denied by Rules as well as by the UI. Do not change merchant recovery, transfer, cutover, repeat-cycle or settlement flags in this activation.
 
-Record the reviewed SHA, active flags, test evidence, approver and monitoring window for each activation.
+Record the reviewed SHA, whether the Firestore setting is enabled, test evidence, approver and monitoring window for the activation.
 
 ## Stop conditions
 
 Stop before deployment if the SHA differs from the reviewed SHA; production Rules cannot be saved for rollback; pending proofs remain technically unhandled; Firebase targets the wrong project; required CI is missing or red; phone/PWA flows are untested; or the paired rollback is unavailable.
 
 A green CI run or code in a Draft PR does not mean the production release is complete.
+
