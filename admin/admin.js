@@ -24,7 +24,6 @@ import { getProjectPaymentSummary } from "../core/commissions/settlement-service
 import { protectAdmin } from "../core/auth/admin-guard.js";
 import {
   PLATFORM_BILLING,
-  REFERRAL_CONFIG,
   formatEgp
 } from "../core/config/platform-config.js";
 import { escapeHTML } from "../core/utils/helpers.js";
@@ -196,8 +195,8 @@ async function loadOverview() {
       countDocs("operators"),
       countDocs("operators", [where("isActive", "==", true)]),
       countDocs("orders"),
-      aggregateAmount("commissionLedger"),
-      aggregateAmount("commissionLedger", [where("status", "==", "reversed")]).catch(() => ({ totalAmount: 0, entryCount: 0 })),
+      aggregateAmount("commissionLedger", [where("sourceType", "==", "project_order")]),
+      aggregateAmount("commissionLedger", [where("sourceType", "==", "project_order"), where("status", "==", "reversed")]).catch(() => ({ totalAmount: 0, entryCount: 0 })),
       aggregateAmount("commissionSettlements", [where("status", "==", "confirmed")]).catch(() => ({ totalAmount: 0, entryCount: 0 })),
       aggregateAmount("commissionSettlements", [where("status", "==", "paid")]).catch(() => ({ totalAmount: 0, entryCount: 0 })),
       countDocs("commissionSettlements", [where("status", "==", "pending_owner_confirmation")]).catch(() => null),
@@ -234,8 +233,8 @@ async function loadOverview() {
 
     $("billingSummary").innerText =
       TRIAL_REGISTRATION_ENABLED
-        ? `التسجيل مجاني · الاشتراك الجديد ${formatEgp(PLATFORM_BILLING.monthlyRenewalFee)} شهري بعد المهلة · الحسابات القديمة تحتفظ بباقة التفعيل السابقة · إحالة ${formatEgp(REFERRAL_CONFIG.qualifiedReferralReward)}`
-        : `${formatEgp(PLATFORM_BILLING.initialActivationFee)} أول مرة · ${formatEgp(PLATFORM_BILLING.monthlyRenewalFee)} شهري · إحالة ${formatEgp(REFERRAL_CONFIG.qualifiedReferralReward)}`;
+        ? `التسجيل مجاني · الاشتراك الجديد ${formatEgp(PLATFORM_BILLING.monthlyRenewalFee)} شهري بعد المهلة · الحسابات القديمة تحتفظ بباقة التفعيل السابقة`
+        : `${formatEgp(PLATFORM_BILLING.initialActivationFee)} أول مرة · ${formatEgp(PLATFORM_BILLING.monthlyRenewalFee)} شهري`;
 
     $("overviewStatus").innerText =
       `آخر تحديث: ${new Intl.DateTimeFormat("ar-EG",{timeStyle:"short"}).format(new Date())}`;
@@ -326,7 +325,6 @@ function renderUsers() {
           <span>أول اشتراك<br><b>${initialAlreadyPaid ? "تم" : "لم يتم"}</b></span>
           <span>انتهاء الاشتراك<br><b>${formatDate(user.subscriptionExpiresAt)}</b></span>
           <span>المطلوب الآن<br><b>${formatEgp(nextAmount)}</b></span>
-          <span>إحالة<br><b>${escapeHTML(user.referredByUserId || "لا يوجد")}</b></span>
           <span>آخر دفعة اشتراك<br><b>${money(user.lastPaymentAmount || 0)}</b></span>
         </div>
         <div class="actions">
@@ -372,21 +370,6 @@ async function approveSubscriptionPayment(paymentId) {
     }
 
     const now = new Date();
-    const referrerId = /^[A-Za-z0-9_-]{1,128}$/.test(clean(data.referredByUserId))
-      ? clean(data.referredByUserId)
-      : "";
-
-    let referrerRef = null;
-    let referrerSnap = null;
-    let referralRef = null;
-    let referralSnap = null;
-
-    if (!initialAlreadyPaid && referrerId && referrerId !== uid) {
-      referrerRef = doc(db, "users", referrerId);
-      referralRef = doc(db, "referrals", `${referrerId}_${uid}`);
-      referrerSnap = await transaction.get(referrerRef);
-      referralSnap = await transaction.get(referralRef);
-    }
 
     let periodStart = now;
     if (initialAlreadyPaid && data.subscriptionExpiresAt) {
@@ -426,40 +409,6 @@ async function approveSubscriptionPayment(paymentId) {
       activatedAt: data.activatedAt || serverTimestamp()
     });
 
-    if (
-      !initialAlreadyPaid &&
-      referrerRef &&
-      referrerSnap?.exists() &&
-      referralRef &&
-      !referralSnap?.exists()
-    ) {
-      const referralId = `${referrerId}_${uid}`;
-      const ledgerRef = doc(db, "commissionLedger", `referral_${referralId}`);
-
-      transaction.set(referralRef, {
-        referrerUserId: referrerId,
-        referredUserId: uid,
-        status: "qualified",
-        commissionAmount: REFERRAL_CONFIG.qualifiedReferralReward,
-        currency: REFERRAL_CONFIG.currency,
-        qualifiedAt: serverTimestamp(),
-        paidAt: null
-      });
-
-      transaction.set(ledgerRef, {
-        userId: referrerId,
-        sourceType: "referral",
-        sourceId: referralId,
-        referredUserId: uid,
-        amount: REFERRAL_CONFIG.qualifiedReferralReward,
-        currency: REFERRAL_CONFIG.currency,
-        status: "earned",
-        createdAt: serverTimestamp(),
-        paidAt: null
-      });
-
-      transaction.update(userRef, { referralQualified: true });
-    }
   });
 }
 
@@ -1041,12 +990,12 @@ async function loadCommissions({ append = false } = {}) {
       ]);
 
       let rows = [
-        ...(exact.exists() ? [{ entryId: exact.id, ...exact.data() }] : []),
+        ...(exact.exists() && exact.data().sourceType === "project_order" ? [{ entryId: exact.id, ...exact.data() }] : []),
         ...byProject.docs.map(item => ({ entryId: item.id, ...item.data() })),
         ...byUser.docs.map(item => ({ entryId: item.id, ...item.data() }))
       ];
 
-      rows = uniqueRows(rows, "entryId");
+      rows = uniqueRows(rows, "entryId").filter(row => row.sourceType === "project_order");
       if (s.status !== "all") rows = rows.filter(row => row.status === s.status);
       s.rows = rows;
       s.cursor = null;
@@ -1059,7 +1008,8 @@ async function loadCommissions({ append = false } = {}) {
       constraints.push(limit(PAGE_SIZE));
 
       const snap = await getDocs(query(collection(db, "commissionLedger"), ...constraints));
-      const rows = snap.docs.map(item => ({ entryId: item.id, ...item.data() }));
+      const rows = snap.docs.map(item => ({ entryId: item.id, ...item.data() }))
+        .filter(row => row.sourceType === "project_order");
       s.rows = append ? mergeRows(s.rows, rows, "entryId") : rows;
       s.cursor = snap.docs.length ? snap.docs[snap.docs.length - 1] : null;
       s.hasMore = snap.docs.length === PAGE_SIZE;

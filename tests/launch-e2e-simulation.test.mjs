@@ -37,7 +37,7 @@ after(async () => {
   await testEnv.cleanup();
 });
 
-function registrationProfile(uid, referredByUserId = "") {
+function registrationProfile(uid) {
   return {
     uid,
     name: "Launch Test User",
@@ -47,8 +47,6 @@ function registrationProfile(uid, referredByUserId = "") {
     subscriptionStatus: "pending",
     initialActivationPaid: false,
     billingCycle: "initial",
-    referredByUserId,
-    referralQualified: false,
     createdAt: serverTimestamp()
   };
 }
@@ -87,21 +85,6 @@ async function seedAdmin(adminId) {
   });
 }
 
-async function seedActiveReferrer(uid) {
-  await testEnv.withSecurityRulesDisabled(async context => {
-    await setDoc(doc(context.firestore(), "users", uid), {
-      uid,
-      name: "Referrer",
-      email: `${uid}@example.com`,
-      isActive: true,
-      subscriptionStatus: "active",
-      initialActivationPaid: true,
-      billingCycle: "monthly",
-      subscriptionExpiresAt: Timestamp.fromDate(new Date("2099-01-01T00:00:00Z"))
-    });
-  });
-}
-
 function activeSupermarketProject(uid) {
   return {
     ownerId: uid,
@@ -123,95 +106,6 @@ function activeSupermarketProject(uid) {
     priceConfig: {}
   };
 }
-
-test("paid referral path: register -> WhatsApp proof record -> admin approval -> referral reward", async () => {
-  const uid = "paid_referred_user";
-  const referrerId = "referrer_user";
-  const adminId = "admin_paid_e2e";
-  const paymentId = `${uid}_payment_1`;
-
-  await seedAdmin(adminId);
-  await seedActiveReferrer(referrerId);
-
-  const userDb = testEnv.authenticatedContext(uid).firestore();
-  await assertSucceeds(
-    setDoc(doc(userDb, "users", uid), registrationProfile(uid, referrerId))
-  );
-  const proofBatch=writeBatch(userDb);
-  proofBatch.set(doc(userDb,"subscriptionBillingGuards",uid),{
-    userId:uid,pendingPaymentId:paymentId,lastReviewedPaymentId:"",
-    revision:1,recoverySafe:false,updatedAt:serverTimestamp()
-  });
-  proofBatch.set(doc(userDb,"subscriptionPayments",paymentId),initialPayment(uid,paymentId));
-  await assertSucceeds(proofBatch.commit());
-
-  const adminDb = testEnv.authenticatedContext(adminId).firestore();
-  const batch = writeBatch(adminDb);
-
-  batch.update(doc(adminDb,"subscriptionBillingGuards",uid),{
-    pendingPaymentId:"",lastReviewedPaymentId:paymentId,
-    revision:2,updatedAt:serverTimestamp()
-  });
-  batch.update(doc(adminDb, "subscriptionPayments", paymentId), {
-    status: "approved",
-    reviewedAt: serverTimestamp(),
-    reviewedBy: adminId,
-    rejectionReason: ""
-  });
-
-  batch.update(doc(adminDb, "users", uid), {
-    isActive: true,
-    subscriptionStatus: "active",
-    initialActivationPaid: true,
-    billingCycle: "monthly",
-    subscriptionStartedAt: serverTimestamp(),
-    subscriptionExpiresAt: Timestamp.fromDate(new Date("2099-01-01T00:00:00Z")),
-    lastPaymentAmount: 350,
-    lastPaymentType: "initial",
-    lastPaymentAt: serverTimestamp(),
-    lastSubscriptionPaymentId: paymentId,
-    lastRenewalAt: null,
-    activatedAt: serverTimestamp(),
-    referralQualified: true
-  });
-
-  const referralId = `${referrerId}_${uid}`;
-  batch.set(doc(adminDb, "referrals", referralId), {
-    referrerUserId: referrerId,
-    referredUserId: uid,
-    status: "qualified",
-    commissionAmount: 50,
-    currency: "EGP",
-    qualifiedAt: serverTimestamp(),
-    paidAt: null
-  });
-
-  batch.set(doc(adminDb, "commissionLedger", `referral_${referralId}`), {
-    userId: referrerId,
-    sourceType: "referral",
-    sourceId: referralId,
-    referredUserId: uid,
-    amount: 50,
-    currency: "EGP",
-    status: "earned",
-    createdAt: serverTimestamp(),
-    paidAt: null
-  });
-
-  await assertSucceeds(batch.commit());
-
-  const userSnap = await getDoc(doc(adminDb, "users", uid));
-  const paymentSnap = await getDoc(doc(adminDb, "subscriptionPayments", paymentId));
-  const referralSnap = await getDoc(doc(adminDb, "referrals", referralId));
-  const rewardSnap = await getDoc(doc(adminDb, "commissionLedger", `referral_${referralId}`));
-
-  assert.equal(userSnap.data().subscriptionStatus, "active");
-  assert.equal(userSnap.data().referralQualified, true);
-  assert.equal(paymentSnap.data().status, "approved");
-  assert.equal(referralSnap.data().commissionAmount, 50);
-  assert.equal(rewardSnap.data().amount, 50);
-  assert.equal(rewardSnap.data().status, "earned");
-});
 
 test("Launch 50 path: register -> admin-selected free grant -> active subscriber -> create project", async () => {
   const uid = "launch50_selected_user";

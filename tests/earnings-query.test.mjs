@@ -54,7 +54,7 @@ async function seedLedger(userId, count = 101) {
     for (let i = 1; i <= count; i += 1) {
       await setDoc(doc(db, "commissionLedger", "entry_" + String(i).padStart(3, "0")), {
         userId,
-        sourceType: i % 2 ? "project_order" : "referral",
+        sourceType: "project_order",
         sourceId: "source_" + i,
         amount: i,
         currency: "EGP",
@@ -104,33 +104,19 @@ test("ledger owner can page through 101 entries without gaps or duplicates", asy
   assert.equal(new Set(ids).size, 101);
 });
 
-test("ledger aggregates return exact all/project/referral totals without loading history pages", async () => {
+test("ledger aggregates return project commission totals without loading history pages", async () => {
   const userId = "ledger_totals";
   await seedLedger(userId, 4);
   const db = testEnv.authenticatedContext(userId).firestore();
   const base = collection(db, "commissionLedger");
 
-  const [all, projectOrders, referrals] = await Promise.all([
-    assertSucceeds(getAggregateFromServer(
-      query(base, where("userId", "==", userId)),
-      { totalAmount: sum("amount"), entryCount: count() }
-    )),
-    assertSucceeds(getAggregateFromServer(
-      query(base, where("userId", "==", userId), where("sourceType", "==", "project_order")),
-      { totalAmount: sum("amount"), entryCount: count() }
-    )),
-    assertSucceeds(getAggregateFromServer(
-      query(base, where("userId", "==", userId), where("sourceType", "==", "referral")),
-      { totalAmount: sum("amount"), entryCount: count() }
-    ))
-  ]);
+  const projectOrders = await assertSucceeds(getAggregateFromServer(
+    query(base, where("userId", "==", userId), where("sourceType", "==", "project_order")),
+    { totalAmount: sum("amount"), entryCount: count() }
+  ));
 
-  assert.equal(all.data().totalAmount, 10);
-  assert.equal(all.data().entryCount, 4);
-  assert.equal(projectOrders.data().totalAmount, 4);
-  assert.equal(projectOrders.data().entryCount, 2);
-  assert.equal(referrals.data().totalAmount, 6);
-  assert.equal(referrals.data().entryCount, 2);
+  assert.equal(projectOrders.data().totalAmount, 10);
+  assert.equal(projectOrders.data().entryCount, 4);
 });
 
 test("another user cannot list someone else's commission ledger", async () => {
@@ -167,7 +153,6 @@ test("project earnings aggregates stay project-scoped and preserve paid status/p
       ["p1_paid_timestamp", projectId, "project_order", 30, "earned", Timestamp.fromMillis(5000)],
       ["p1_paid_both", projectId, "project_order", 40, "paid", Timestamp.fromMillis(6000)],
       ["p2_paid", otherProjectId, "project_order", 100, "paid", Timestamp.fromMillis(7000)],
-      ["referral", null, "referral", 50, "earned", null]
     ];
 
     for (const [id, pid, sourceType, amount, status, paidAt] of entries) {

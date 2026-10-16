@@ -592,8 +592,6 @@ test("new user profile accepts bounded registration fields", async () => {
       subscriptionStatus: "pending",
       initialActivationPaid: false,
       billingCycle: "initial",
-      referredByUserId: "",
-      referralQualified: false,
       createdAt: serverTimestamp()
     })
   );
@@ -1756,8 +1754,6 @@ async function seedPendingSubscriptionReviewFixture(suffix = "review") {
       subscriptionStatus: "pending",
       initialActivationPaid: false,
       billingCycle: "initial",
-      referredByUserId: "",
-      referralQualified: false
     });
     await setDoc(doc(db, "users", adminId), {
       uid: adminId,
@@ -2032,8 +2028,6 @@ async function seedPromoFixture(suffix = "promo", counterCount = null) {
       subscriptionStatus: "pending",
       initialActivationPaid: false,
       billingCycle: "initial",
-      referredByUserId: "",
-      referralQualified: false
     });
     await setDoc(doc(db, "users", adminId), {
       uid: adminId,
@@ -2151,7 +2145,7 @@ function trialAccount(uid, extra={}) {
   return {
     uid, name:"New Trial", email:`${uid}@example.com`, projectType:"",
     isActive:true, subscriptionStatus:"trial", initialActivationPaid:false,
-    billingCycle:"initial", referredByUserId:"", referralQualified:false,
+    billingCycle:"initial",
     accessModel:"merchant_trial_v1", firstMerchantLinkedAt:null,
     createdAt:serverTimestamp(), ...extra
   };

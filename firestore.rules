@@ -1065,16 +1065,11 @@ service cloud.firestore {
     )
     && request.resource.data.initialActivationPaid == false
     && request.resource.data.billingCycle == "initial"
-    && request.resource.data.referralQualified == false
-    && request.resource.data.referredByUserId is string
-    && request.resource.data.referredByUserId.size() <= 128
-    && request.resource.data.referredByUserId != request.auth.uid
     && request.resource.data.createdAt == request.time
     && !("role" in request.resource.data)
     && request.resource.data.keys().hasOnly([
       "uid","name","email","projectType","isActive","subscriptionStatus",
-      "initialActivationPaid","billingCycle","referredByUserId",
-      "referralQualified","createdAt","accessModel","firstMerchantLinkedAt"
+      "initialActivationPaid","billingCycle","createdAt","accessModel","firstMerchantLinkedAt"
     ]);
    allow get: if isAdmin() || (signedIn() && request.auth.uid == uid);
    allow list: if isAdmin();
@@ -1110,7 +1105,7 @@ service cloud.firestore {
           "isActive","subscriptionStatus","initialActivationPaid","billingCycle",
           "subscriptionStartedAt","subscriptionExpiresAt","lastPaymentAmount",
           "lastPaymentType","lastPaymentAt","lastSubscriptionPaymentId",
-          "lastRenewalAt","activatedAt","referralQualified"
+          "lastRenewalAt","activatedAt"
         ])
       )
       ||
@@ -3046,18 +3041,13 @@ service cloud.firestore {
    allow delete: if false;
   }
 
-  match /referrals/{referralId} {
-   allow get, list: if isAdmin()
-    || (signedIn() && resource.data.referrerUserId == request.auth.uid);
-   allow create: if isAdmin();
-   allow update: if isAdmin()
-    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status","paidAt"]);
-   allow delete: if false;
-  }
-
   match /commissionLedger/{entryId} {
    allow get, list: if isAdmin()
-    || (signedIn() && resource.data.userId == request.auth.uid)
+    || (
+      signedIn()
+      && resource.data.userId == request.auth.uid
+      && resource.data.sourceType == "project_order"
+    )
     || (
       signedIn()
       && resource.data.sourceType == "project_order"
@@ -3065,12 +3055,12 @@ service cloud.firestore {
       && isProjectOperator(resource.data.projectId)
     );
 
-   allow create: if isAdmin()
-    || validTrackedLaundryProjectOrderLedgerCreate(entryId)
+   allow create: if validTrackedLaundryProjectOrderLedgerCreate(entryId)
     || validProjectOrderLedgerCreate(entryId);
 
    allow update: if (
     isAdmin()
+    && resource.data.sourceType == "project_order"
     && request.resource.data.userId == resource.data.userId
     && request.resource.data.sourceType == resource.data.sourceType
     && request.resource.data.sourceId == resource.data.sourceId

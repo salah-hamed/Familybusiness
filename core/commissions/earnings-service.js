@@ -27,6 +27,7 @@ export function subscribeLatestUserCommission(userId, onChange, onError = null) 
   const latestQuery = query(
     collection(db, "commissionLedger"),
     where("userId", "==", uid),
+    where("sourceType", "==", "project_order"),
     orderBy("createdAt", "desc"),
     limit(1)
   );
@@ -66,6 +67,7 @@ export async function listUserCommissionLedgerPage(
   const size = normalizePageSize(pageSize, 50);
   const constraints = [
     where("userId", "==", uid),
+    where("sourceType", "==", "project_order"),
     orderBy("createdAt", "desc")
   ];
 
@@ -101,17 +103,11 @@ export async function getUserEarningsSummary(userId) {
 
   const base = collection(db, "commissionLedger");
 
-  const [all, projectOrders, referrals, reversedProjectOrders] = await Promise.all([
-    aggregateLedger(query(base, where("userId", "==", uid))),
+  const [projectOrders, reversedProjectOrders] = await Promise.all([
     aggregateLedger(query(
       base,
       where("userId", "==", uid),
       where("sourceType", "==", "project_order")
-    )),
-    aggregateLedger(query(
-      base,
-      where("userId", "==", uid),
-      where("sourceType", "==", "referral")
     )),
     aggregateLedger(query(
       base,
@@ -131,12 +127,10 @@ export async function getUserEarningsSummary(userId) {
   );
 
   return {
-    totalAmount: Math.max(0, all.totalAmount - reversedProjectOrders.totalAmount),
-    entryCount: Math.max(0, all.entryCount - reversedProjectOrders.entryCount),
+    totalAmount: netProjectOrderAmount,
+    entryCount: netProjectOrderCount,
     projectOrderAmount: netProjectOrderAmount,
-    projectOrderCount: netProjectOrderCount,
-    referralAmount: referrals.totalAmount,
-    referralCount: referrals.entryCount
+    projectOrderCount: netProjectOrderCount
   };
 }
 

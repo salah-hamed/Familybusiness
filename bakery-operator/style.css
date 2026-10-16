@@ -19,3 +19,5 @@
 @media(max-width:700px){.mediaPreviewCard{grid-template-columns:1fr}.logoPreviewWrap{justify-items:start}.menuItemWithImage{grid-template-columns:70px 1fr}.menuItemThumb{width:70px;height:70px}.menuItemWithImage>.pill{grid-column:2}}
 
 .menuDraftPreview{display:flex;align-items:center;gap:12px;margin:12px 0;padding:12px;border:1px dashed var(--line);border-radius:14px;background:#fffbeb}
+
+.locationSetting{display:grid;gap:8px;align-content:start;padding:12px;border:1px solid #dce6e0;border-radius:14px;background:#f8fbf9}.locationSetting>span{font-weight:800}.locationSetting>a{font-size:13px;font-weight:700}.locationSetting>small{color:#64746a;line-height:1.5}

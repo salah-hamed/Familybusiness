@@ -42,11 +42,41 @@ function bindControls(panel, { projectId, templateId, ownerId, getShopName }) {
 
     captureButton.disabled = true;
     coordinateStatus.textContent = "جارٍ تحديد موقع تقريبي للمحل...";
-    navigator.geolocation.getCurrentPosition(position => {
+    navigator.geolocation.getCurrentPosition(async position => {
       state.latitude = roundNearbyCoordinate(position.coords.latitude);
       state.longitude = roundNearbyCoordinate(position.coords.longitude);
-      coordinateStatus.textContent = "تم تحديد موقع تقريبي (بدقة عرض نحو 100 متر). احفظه ليظهر المحل للعملاء.";
-      captureButton.disabled = false;
+      const area = areaInput.value.trim().slice(0, 80);
+      const currentName = typeof getShopName === "function" ? getShopName() : getShopName;
+      const name = String(currentName || "").trim().slice(0, 120);
+      if (!name) {
+        coordinateStatus.textContent = "احفظ بيانات المحل أولًا ثم حدد موقعه.";
+        captureButton.disabled = false;
+        return;
+      }
+
+      coordinateStatus.textContent = "تم تحديد الموقع. جارٍ حفظه...";
+      try {
+        await setDoc(doc(db, "nearbyShops", projectId), {
+          projectId,
+          template: templateId,
+          name,
+          area,
+          areaKey: normalizeNearbyArea(area),
+          deliveryAvailable: deliveryInput.checked,
+          isListed: listedInput.checked,
+          latitude: state.latitude,
+          longitude: state.longitude,
+          geohash: geohashForLocation(state.latitude, state.longitude, 5),
+          updatedAt: serverTimestamp()
+        });
+        state.loaded = true;
+        coordinateStatus.textContent = "تم حفظ الموقع التقريبي ✅ فعّل ظهور المحل للعملاء عند الاستعداد.";
+      } catch (error) {
+        console.error("Nearby shop location save failed", error);
+        coordinateStatus.textContent = "تعذر حفظ الموقع. حاول مرة أخرى أو احفظ اسم المنطقة.";
+      } finally {
+        captureButton.disabled = false;
+      }
     }, () => {
       coordinateStatus.textContent = "تعذر تحديد الموقع. يمكنك إدخال اسم المنطقة والبحث بها.";
       captureButton.disabled = false;

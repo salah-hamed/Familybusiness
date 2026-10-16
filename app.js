@@ -44,7 +44,6 @@ const switchPrompt =
   document.getElementById("switchPrompt");
 const forgotPasswordBtn =
   document.getElementById("forgotPasswordBtn");
-const referralUserId = new URLSearchParams(window.location.search).get("ref") || "";
 const platformSupportWhatsapp = document.getElementById("platformSupportWhatsapp");
 if (platformSupportWhatsapp) {
   const supportNumber = String(PLATFORM_BILLING.supportWhatsapp || "").replace(/[^0-9]/g, "");
@@ -110,8 +109,7 @@ registerBtn.addEventListener("click", async () => {
 
       nameInput.value,
       emailInput.value,
-      passwordInput.value,
-      referralUserId
+      passwordInput.value
 
     );
 
@@ -119,9 +117,7 @@ registerBtn.addEventListener("click", async () => {
 
       status.innerText = TRIAL_REGISTRATION_ENABLED
         ? "✅ حسابك جاهز! افتح مساحة العمل وابدأ تجهيز مشروعك مجانًا لمدة 7 أيام."
-        : referralUserId
-          ? "✅ تم إنشاء الحساب وربط الإحالة بنجاح. في انتظار تفعيل الاشتراك."
-          : "✅ تم إنشاء الحساب بنجاح. في انتظار تفعيل الاشتراك.";
+        : "✅ تم إنشاء الحساب بنجاح. في انتظار تفعيل الاشتراك.";
 
       guideController.update(buildAuthGuide({ mode: "registered" }), { autoOpen: true });
       guideController.open();
