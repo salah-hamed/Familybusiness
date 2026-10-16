@@ -23,7 +23,7 @@ test("workspace shows live commission totals for each created project", () => {
   assert.match(source, /startWorkspaceFinanceLive/);
   assert.match(source, /subscribeLatestUserCommission/);
   assert.match(source, /subscribeProjectPaymentState/);
-  assert.match(html, /app\.js\?v=20261014-final-mobile1/);
+  assert.match(html, /app\.js\?v=20261016-payment-confirmation1/);
 });
 
 test("all owner project dashboards refresh finance when a new commission arrives", () => {

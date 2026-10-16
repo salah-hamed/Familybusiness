@@ -60,7 +60,7 @@
       <div class="paymentCardHead">
         <div>
           <span class="cardEyebrow">تفعيل الاشتراك</span>
-          <h2 id="paymentCardTitle">حوّل على InstaPay وابعت الإثبات على واتساب</h2>
+          <h2 id="paymentCardTitle">حوّل على InstaPay وسجّل مرجع العملية</h2>
           <p id="paymentRequiredText">جاري تحديد قيمة الاشتراك...</p>
         </div>
         <span id="paymentBadge" class="paymentBadge">بانتظار الدفع</span>
@@ -88,12 +88,12 @@
         </label>
         <div class="paymentWhatsappHint">
           <b>الخطوة الأخيرة على واتساب</b>
-          <small>بعد الضغط هنجهز لك رسالة فيها كود الدفع ومرجع InstaPay. افتح واتساب وأرفق Screenshot التحويل بنفسك ثم أرسل الرسالة.</small>
+          <small>بعد الضغط هنجهز رسالة فيها كود الدفع ومرجع InstaPay. أرسلها للمستلم؛ هو يؤكد استلام التحويل بعد مراجعته. لا تحتاج لإرفاق صورة أو ملف.</small>
         </div>
-        <button id="submitPaymentProofBtn" type="button">سجّل الدفعة وافتح واتساب</button>
+        <button id="submitPaymentProofBtn" type="button">سجّل الدفعة وأرسل المرجع</button>
       </div>
 
-      <button id="reopenPaymentWhatsappBtn" class="secondaryPaymentBtn hidden" type="button">افتح واتساب مرة تانية</button>
+      <button id="reopenPaymentWhatsappBtn" class="secondaryPaymentBtn hidden" type="button">أرسل المرجع عبر واتساب مرة أخرى</button>
       <p id="paymentReviewStatus" class="paymentReviewStatus"></p>
     </section>
 
@@ -130,6 +130,6 @@
   </main>
 
   <script type="module" src="../pwa/install.js"></script>
-  <script type="module" src="./app.js?v=20261014-final-mobile1"></script>
+  <script type="module" src="./app.js?v=20261016-payment-confirmation1"></script>
 </body>
 </html>
