@@ -1,6 +1,6 @@
 import { PLATFORM_BILLING, formatEgp } from "../config/platform-config.js";
 import { resolveSubscriptionAccess } from "../subscriptions/trial-policy.js";
-import { TRIAL_REGISTRATION_ENABLED } from "../subscriptions/trial-rollout.js";
+import { TRIAL_REGISTRATION_ENABLED } from "../subscriptions/trial-rollout.js?v=20261016-free-trial1";
 
 function step(id, title, description, status, options = {}) {
   return {

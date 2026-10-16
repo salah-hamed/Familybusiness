@@ -8,7 +8,7 @@
 import { createGuide } from './core/onboarding/guide.js';
 import { PLATFORM_BILLING } from './core/config/platform-config.js';
 import { buildAuthGuide } from './core/onboarding/guide-state.js';
-import { TRIAL_REGISTRATION_ENABLED } from './core/subscriptions/trial-rollout.js';
+import { TRIAL_REGISTRATION_ENABLED } from './core/subscriptions/trial-rollout.js?v=20261016-free-trial1';
 
     const nameInput =
       document.getElementById("name");

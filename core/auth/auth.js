@@ -1,7 +1,7 @@
 import auth from "../firebase/firebase-auth.js";
 import db from "../firebase/firebase-db.js";
 import { friendlyAuthError } from "./auth-errors.js";
-import { TRIAL_REGISTRATION_ENABLED } from "../subscriptions/trial-rollout.js";
+import { TRIAL_REGISTRATION_ENABLED } from "../subscriptions/trial-rollout.js?v=20261016-free-trial1";
 
 import {
   createUserWithEmailAndPassword,
