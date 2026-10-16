@@ -175,6 +175,7 @@ async function loadOverview() {
     const [
       totalUsers,
       activeUsers,
+      trialUsers,
       pendingUsers,
       totalProjects,
       totalOperators,
@@ -189,6 +190,7 @@ async function loadOverview() {
     ] = await Promise.all([
       countDocs("users"),
       countDocs("users", [where("subscriptionStatus", "==", "active")]),
+      countDocs("users", [where("subscriptionStatus", "==", "trial")]),
       countDocs("users", [where("subscriptionStatus", "==", "pending")]),
       countDocs("projects"),
       countDocs("operators"),
@@ -207,7 +209,7 @@ async function loadOverview() {
     const outstanding = Math.max(0, netCommission - confirmedPaid);
 
     $("metricUsers").innerText = totalUsers.toLocaleString("ar-EG");
-    $("metricUsersMeta").innerText = `${activeUsers} نشط · ${pendingUsers} بانتظار التفعيل`;
+    $("metricUsersMeta").innerText = `${activeUsers} نشط · ${trialUsers} تجربة مجانية · ${pendingUsers} بانتظار التفعيل`;
     $("metricPendingSubscriptionPayments").innerText = pendingSubscriptionPayments == null
       ? "—"
       : pendingSubscriptionPayments.toLocaleString("ar-EG");
