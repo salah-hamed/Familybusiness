@@ -30,6 +30,10 @@ service cloud.firestore {
   function merchantTransferCycleFinanceReviewPath(id){ return /databases/$(database)/documents/merchantTransferCycleFinanceReviews/$(id); }
   function subscriptionGrantPath(grantId){ return /databases/$(database)/documents/subscriptionGrants/$(grantId); }
   function platformCounterPath(counterId){ return /databases/$(database)/documents/platformCounters/$(counterId); }
+  function trialRegistrationEnabled(){
+   let config=/databases/$(database)/documents/platformSettings/trialRegistration;
+   return exists(config) && get(config).data.enabled==true;
+  }
   function userExists(uid){ return exists(userPath(uid)); }
   function userData(uid){ return get(userPath(uid)).data; }
   function isAdmin(){ return signedIn() && userExists(request.auth.uid) && userData(request.auth.uid).role == "admin"; }
@@ -1202,6 +1206,7 @@ service cloud.firestore {
       )
       || (
         request.resource.data.isActive == true
+        && trialRegistrationEnabled()
         && request.resource.data.subscriptionStatus == "trial"
         && request.resource.data.accessModel == "merchant_trial_v1"
         && request.resource.data.firstMerchantLinkedAt == null
@@ -1562,6 +1567,18 @@ service cloud.firestore {
    allow delete: if false;
   }
 
+
+  match /platformSettings/{settingId} {
+   allow get: if isAdmin();
+   allow list: if false;
+   allow create, update: if isAdmin()
+    && settingId=="trialRegistration"
+    && request.resource.data.enabled is bool
+    && request.resource.data.updatedBy==request.auth.uid
+    && request.resource.data.updatedAt==request.time
+    && request.resource.data.keys().hasOnly(["enabled","updatedAt","updatedBy"]);
+   allow delete: if false;
+  }
 
   // Only cutover assignment fields can move; the prior project identity
   // and operational merchant remain immutable. Cache two getAfter reads.
