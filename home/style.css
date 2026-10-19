@@ -99,3 +99,56 @@
 }
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 
+
+/* Family Business launch identity: royal blue, white and warm gold */
+:root{--ink:#17233f;--green:#2456d6;--green2:#4778f5;--orange:#d7a63a;--gold:#e8bd55;--blue:#2456d6;--purple:#4e56c9;--money:#f7df9a;--surface:#fff;--muted:#65718a;--fb-brand:#2456d6;--fb-accent:#e8bd55;--fb-page:#f7f9ff;--fb-line:#e1e7f5}
+body{background:radial-gradient(circle at 95% 4%,rgba(36,86,214,.10),transparent 25%),radial-gradient(circle at 5% 18%,rgba(232,189,85,.12),transparent 23%),#f7f9ff;color:var(--ink)}
+.siteHeader{background:rgba(255,255,255,.94);border-bottom-color:#e3e9f7}
+.brandMark{background:linear-gradient(135deg,#2456d6,#4778f5);box-shadow:0 9px 22px rgba(36,86,214,.2)}
+.headerCta,.primaryCta{background:linear-gradient(135deg,#2456d6,#4778f5);box-shadow:0 12px 28px rgba(36,86,214,.22)}
+.kicker{background:linear-gradient(135deg,#edf2ff,#fff7df);color:#2148aa;border-color:rgba(36,86,214,.12)}
+.hero h1 em{background:linear-gradient(90deg,#2456d6,#4778f5,#c18d20);-webkit-background-clip:text;background-clip:text;color:transparent}
+.incomeBoard{background:linear-gradient(145deg,#1b2b55 0%,#2456d6 68%,#344aa3 100%);box-shadow:0 28px 70px rgba(25,48,103,.18)}
+.bigStatement{background:linear-gradient(110deg,#1b2b55 0%,#2456d6 55%,#344aa3 100%)}
+.bigStatement h2 span{color:#f7d77d}
+.flowProfit{background:#eff4ff!important;border-color:#c9d7ff!important}
+.magicSection{background:linear-gradient(135deg,#fffaf0 0%,#f4f7ff 45%,#eef3ff 100%);border-color:#e3e9f7}
+.magicKicker{background:#fff7df;color:#78550a;border-color:#f0dfb2}
+.magicCopy h2 em{color:#2456d6}
+.magicBenefits article>span{background:linear-gradient(135deg,#2456d6,#4778f5)}
+.magicPromise{background:#1b2b55;border-right-color:#e8bd55}
+.magicTool{border-top-color:#2456d6}
+.magicToolHead>span{background:#edf2ff}
+.magicButton{background:linear-gradient(90deg,#2456d6,#4778f5,#d3a53b)}
+.partnerAppPreview{border-top-color:#2456d6}
+.liveBadge{background:#edf2ff;color:#2148aa}
+.ownerCounter{background:linear-gradient(135deg,#1b2b55,#2456d6);border-color:#1b2b55}
+.ownerCounter>span{background:#f7df9a;color:#65470a}
+.projectCard .projectIncome{color:#2456d6}
+.project-supermarket:before,.project-restaurant:before,.project-bakery:before,.project-laundry:before{background:#2456d6}
+.project-supermarket,.project-restaurant,.project-bakery,.project-laundry{background:linear-gradient(180deg,#f2f5ff,#fff 48%)}
+.noStartGrid article:nth-child(n){border-top-color:#d9e2fb;background:#fff}
+.stepsGrid article:nth-child(n){border-top-color:#2456d6}
+.stepsGrid article:nth-child(n)>span{background:#edf2ff;color:#2148aa}
+.projectCountSummary{background:#edf2ff;color:#2148aa}.projectCountSummary span{color:#65718a}
+.priceCard{border-color:#e1e7f5;box-shadow:0 12px 30px rgba(25,48,103,.05)}
+.featuredPrice{border:2px solid #2456d6;background:#fff;box-shadow:0 18px 45px rgba(36,86,214,.12)}
+.priceCard a{background:linear-gradient(135deg,#2456d6,#4778f5)}
+.finalCta{background:radial-gradient(circle at 15% 20%,rgba(232,189,85,.16),transparent 26%),radial-gradient(circle at 85% 80%,rgba(71,120,245,.2),transparent 28%),linear-gradient(135deg,#1b2b55,#2456d6)}
+.finalCta>a{background:linear-gradient(90deg,#f7df9a,#fff0c3);color:#1b2b55;box-shadow:0 14px 30px rgba(232,189,85,.18)}
+.footerBrand .brandMark{background:#edf2ff;color:#2456d6}.footerContact a{color:#2456d6}
+.pricingCards{align-items:stretch}
+.launchOffer{position:relative;overflow:hidden;border:2px solid #2456d6!important;box-shadow:0 22px 52px rgba(36,86,214,.14)}
+.offerRibbon{display:inline-flex;background:#fff2c9;color:#74520b!important;border-radius:999px;padding:6px 10px;font-size:11px!important;font-weight:950}
+.oldActivationPrice{display:flex;flex-direction:column;gap:0;margin-top:13px;color:#7a8498}
+.oldActivationPrice s{font-size:18px;font-weight:800;color:#929bb0}.oldActivationPrice span{font-size:10px}
+.launchOffer h3{font-size:23px;margin:8px 0}.launchOffer .freePrice{font-size:40px;color:#2456d6}
+.offerDays{margin-top:12px;padding:12px 8px;background:#f1f5ff;border:1px solid #dfe7ff;border-radius:14px;font-size:12px;font-weight:850;color:#283654}
+.offerDays span{color:#2148aa;font-weight:950}.offerDays i{font-style:normal;color:#c18d20;padding:0 3px}
+.offerRenewal{margin:10px 0 0;font-size:13px;font-weight:900;color:#36476f}
+.launchOffer a{font-size:15px;padding:14px;margin-top:16px}.offerFinePrint{font-size:10px!important;line-height:1.6}
+.standardPlan{background:#f8f9fc;border:1px solid #e5e9f2;opacity:.72;filter:saturate(.55);pointer-events:none;user-select:none;box-shadow:none}
+.standardPlan h3{font-size:16px}.standardActivation{color:#66718a!important;text-decoration:line-through;text-decoration-thickness:2px;font-size:25px!important}
+.standardPlan p{font-size:11px;color:#6b7489;margin:0}.standardMonthly{font-size:21px;font-weight:950;color:#445170;margin-top:5px}.standardMonthly small{font-size:11px;font-weight:700}
+.standardUnavailable{margin-top:18px;padding:10px;border:1px solid #e0e5ef;border-radius:12px;color:#7b8498;text-align:center;font-size:11px;font-weight:900;background:#f1f3f8}
+@media(max-width:620px){.launchOffer .freePrice{font-size:38px}.offerDays{font-size:11px}}
