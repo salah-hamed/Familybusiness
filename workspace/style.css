@@ -414,3 +414,14 @@ body{
 @media(max-width:620px){
   .paymentInstructions{grid-template-columns:1fr}
 }
+
+
+/* Workspace visual polish — no markup or behavior changes */
+:root{--ws-ink:#17251d;--ws-green:#16a36a;--ws-line:#e1e9e2;--ws-muted:#66756b}
+body{color:var(--ws-ink);background:radial-gradient(circle at 95% 0,rgba(22,163,106,.08),transparent 25%),#f5f8f5}
+.workspaceHero{background:radial-gradient(circle at 10% 15%,rgba(245,158,11,.16),transparent 26%),radial-gradient(circle at 90% 80%,rgba(22,163,106,.2),transparent 30%),linear-gradient(135deg,#0b2d1e,#18563a);box-shadow:0 20px 46px rgba(18,61,42,.14)}
+.workspaceBrand .brandMark{background:linear-gradient(135deg,#123d2a,#16a36a)}
+:where(button,a,input,select,textarea):focus-visible{outline:3px solid rgba(22,163,106,.38);outline-offset:3px}
+@media(max-width:680px){.workspaceShell{width:calc(100% - 22px);padding:12px 0 90px}.workspaceTop{gap:10px;align-items:center}.workspaceHero{grid-template-columns:minmax(0,1fr);padding:22px 18px;border-radius:24px;gap:18px}.workspaceHero h1{font-size:clamp(26px,7vw,36px)}.heroStats{grid-template-columns:repeat(2,minmax(0,1fr))}.quickJourney{grid-template-columns:minmax(0,1fr);gap:8px}.quickJourney article{min-width:0}.workspaceShell button,.workspaceShell a{touch-action:manipulation}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
