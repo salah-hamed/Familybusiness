@@ -59,18 +59,21 @@ body {
 :where(.eyebrow, .sectionKicker, .cardEyebrow, .sectionLabel, .section-kicker) {
   color: var(--fb-gold-deep);
 }
-:where(.topbar, .heroPanel, .workspaceHero, .heroCard, .dashboardHeader,
-       .operatorHeader, .merchantHero, .pageHero, .mainHero) {
+:where(.topbar, .topBar, .storeHeader, .restaurantHero, .adminHeader, .heroPanel,
+       .workspaceHero, .heroCard, .dashboardHeader, .operatorHeader,
+       .merchantHero, .pageHero, .mainHero) {
   background: linear-gradient(135deg, #173b91 0%, #2456d6 72%, #315fe0 100%);
   color: #fff;
   box-shadow: 0 18px 42px rgba(23, 59, 145, .16);
 }
-:where(.topbar, .heroPanel, .workspaceHero, .heroCard, .dashboardHeader,
-       .operatorHeader, .merchantHero, .pageHero, .mainHero)
+:where(.topbar, .topBar, .storeHeader, .restaurantHero, .adminHeader, .heroPanel,
+       .workspaceHero, .heroCard, .dashboardHeader, .operatorHeader,
+       .merchantHero, .pageHero, .mainHero)
   :where(.eyebrow, .sectionKicker, .cardEyebrow, .sectionLabel, .section-kicker) {
   color: #ffe7a3;
 }
-:where(.heroPanel p, .workspaceHero p, .topbar p, .heroCard p, .dashboardHeader p) {
+:where(.heroPanel p, .workspaceHero p, .topbar p, .topBar p, .storeHeader p,
+       .restaurantHero p, .adminHeader p, .heroCard p, .dashboardHeader p) {
   color: rgba(255,255,255,.88);
 }
 :where(.brandMark, .logo-icon, .workspaceLogo, .appLogo) {
