@@ -219,3 +219,15 @@ body{
   text-decoration:none;
 }
 .support-link:hover{text-decoration:underline}
+
+
+/* FB mobile UX polish — visual-only overrides */
+:root{--fb-brand:#123d2a;--fb-accent:#16a36a;--fb-page:#f5f8f5;--fb-line:#e1e9e2}
+body{background:radial-gradient(circle at 90% 0,rgba(22,163,106,.09),transparent 28%),var(--fb-page);color:#17251d}
+.auth-card{border:1px solid rgba(18,61,42,.08);border-radius:24px;box-shadow:0 22px 60px rgba(18,61,42,.10)}
+.logo-icon{background:linear-gradient(135deg,#123d2a,#16a36a);box-shadow:0 12px 28px rgba(22,163,106,.22)}
+#registerBtn{background:linear-gradient(135deg,#123d2a,#16a36a);box-shadow:0 10px 24px rgba(22,163,106,.22);min-height:50px}
+#loginBtn{color:#16734b}
+:where(button,a,input):focus-visible{outline:3px solid rgba(22,163,106,.35);outline-offset:3px}
+@media(max-width:520px){.auth-card{padding:28px 20px;border-radius:22px}.auth-card input{min-height:48px;font-size:16px}.auth-card button{min-height:48px}}
+

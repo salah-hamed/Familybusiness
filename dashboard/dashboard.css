@@ -15,3 +15,16 @@ body.laundryDashboard{background:linear-gradient(180deg,#f0f9ff 0%,#eaf7fd 100%)
 .cleanerSelect:focus{border-color:#818cf8;box-shadow:0 0 0 4px rgba(99,102,241,.09)}
 .assignCleanerBtn{padding:11px 13px;white-space:nowrap}
 @media(max-width:760px){.cleanerAssignmentControls{grid-template-columns:1fr}.cleanerAssignmentHeader{align-items:flex-start;flex-direction:column}.cleanerAssignmentHeader span{text-align:right}}
+
+
+/* Subscriber dashboard mobile-first refinement */
+:root{--fb-brand:#123d2a;--fb-accent:#16a36a;--fb-line:#e1e9e2}
+body{background:radial-gradient(circle at 95% 0,rgba(22,163,106,.07),transparent 24%),linear-gradient(180deg,#f7faf7 0%,#f0f5f0 100%);color:#17251d}
+.dashboardHeader{background:radial-gradient(circle at 90% 15%,rgba(245,158,11,.14),transparent 28%),linear-gradient(135deg,#123d2a,#17613f);box-shadow:0 18px 42px rgba(18,61,42,.18)}
+.card,.statCard{border:1px solid rgba(18,61,42,.07);box-shadow:0 8px 24px rgba(18,61,42,.055)}
+.primaryBtn{background:linear-gradient(135deg,#123d2a,#16a36a);box-shadow:0 8px 18px rgba(22,163,106,.18)}
+.secondaryBtn{background:#e8f5ed;color:#145b3a}
+:where(button,a,input,select,textarea):focus-visible{outline:3px solid rgba(22,163,106,.38);outline-offset:3px}
+@media(max-width:640px){.dashboardShell{padding:12px 10px 100px}.dashboardHeader{padding:20px 16px;border-radius:22px;flex-direction:column;gap:12px}.dashboardHeader h1{font-size:clamp(24px,7vw,30px)}.card{padding:16px;border-radius:19px}.sectionHeading{align-items:flex-start;flex-wrap:wrap}.quickActions{grid-template-columns:1fr 1fr}.quickActions>*:first-child{grid-column:1/-1}.statGrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.statCard{min-width:0;padding:13px;overflow-wrap:anywhere}.tableWrap{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}.dataTable{min-width:620px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+

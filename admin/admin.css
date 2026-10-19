@@ -73,3 +73,14 @@ button{cursor:pointer}
 .transferPreflightInput input{min-width:200px;max-width:100%;border:1px solid var(--line);border-radius:10px;padding:9px}
 .transferPreflightResult{white-space:pre-line;font-size:13px;line-height:1.7;color:var(--ink);margin-top:10px}
 .transferPreflightResult:empty{display:none}
+
+
+/* Admin control center responsive polish — keep existing operations intact */
+:root{--fb-brand:#123d2a;--fb-accent:#16a36a;--fb-line:#e1e9e2}
+body{background:radial-gradient(circle at 95% 0,rgba(22,163,106,.07),transparent 25%),#f5f8f5;color:#17251d}
+.adminHeader,.heroPanel{background:radial-gradient(circle at 90% 12%,rgba(245,158,11,.15),transparent 27%),linear-gradient(135deg,#123d2a,#18563a);box-shadow:0 18px 42px rgba(18,61,42,.14)}
+.metricCard,.cardList>*{border-color:rgba(18,61,42,.08)}
+:where(button,a,input,select,textarea):focus-visible{outline:3px solid rgba(22,163,106,.38);outline-offset:3px}
+@media(max-width:700px){.adminShell{width:calc(100% - 20px);padding:12px 0 90px}.adminHeader{padding:20px 16px;border-radius:22px;flex-direction:column;gap:14px}.adminHeader h1{font-size:clamp(24px,7vw,32px)}.headerMeta{width:100%;flex-wrap:wrap}.headerMeta button{width:100%}.heroPanel{padding:20px 16px;border-radius:22px;gap:14px}.metricGrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.metricCard{min-width:0;padding:13px;overflow-wrap:anywhere}.adminTabs{display:flex;overflow-x:auto;gap:8px;padding-bottom:8px;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}.adminTabs .tabBtn{flex:0 0 auto;scroll-snap-align:start;white-space:nowrap}.filterGrid{grid-template-columns:minmax(0,1fr)}.tableWrap{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}.dataTable{min-width:680px}.sectionHead{gap:10px;align-items:flex-start;flex-wrap:wrap}.adminSection{min-width:0}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
