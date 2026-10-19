@@ -14,10 +14,10 @@
 
 :root{
 
-  --primary:#4f46e5;
-  --secondary:#06b6d4;
+  --primary:#2456d6;
+  --secondary:#e8bd55;
 
-  --bg:#f3f6fb;
+  --bg:#f7f9ff;
 
   --card:#ffffff;
 
@@ -543,8 +543,8 @@ button:active{
   background:
   linear-gradient(
   135deg,
-  #4f46e5,
-  #06b6d4
+  #2456d6,
+  #e8bd55
   );
 
   box-shadow:
