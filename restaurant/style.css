@@ -5,3 +5,32 @@ body{background:linear-gradient(180deg,#fff3e8 0,#faf8f6 42%,#f3f4f6 100%)}
 .eyebrow{color:#fdba74}
 .stepPill,.statusPill{background:#fff0e6;color:#9a3412}
 .copyBtn{background:#fff0e6;color:#9a3412}
+
+
+/* Family Business mobile visual consistency — additive styling only */
+:root{--fb-brand:#123d2a;--fb-accent:#16a36a;--fb-page:#f5f8f5;--fb-line:#e1e9e2;--fb-ink:#17251d;--fb-muted:#66756b}
+*{box-sizing:border-box}
+body{color:var(--fb-ink)}
+:where(button,a,input,select,textarea){-webkit-tap-highlight-color:transparent}
+:where(button,a,input,select,textarea):focus-visible{outline:3px solid rgba(22,163,106,.4);outline-offset:3px}
+.shell{width:min(100% - 24px,980px);margin-inline:auto}
+.card,.subcard,.rowCard,.orderCard,.statCard,.productManagerCard{border-radius:18px}
+.primary,.primaryBtn{min-height:46px}
+input,select,textarea{max-width:100%;min-height:44px}
+img{max-width:100%}
+@media(max-width:640px){
+ .shell{width:calc(100% - 20px);padding-bottom:max(24px,env(safe-area-inset-bottom))}
+ .topbar,.sectionHead,.rowTop,.orderTop{gap:10px;flex-wrap:wrap}
+ .card,.subcard{padding:15px;border-radius:17px}
+ .formGrid,.metaGrid,.statGrid,.stats,.pricingGrid,.productEditGrid{grid-template-columns:minmax(0,1fr)!important}
+ .actions,.orderActions{display:flex;flex-wrap:wrap;gap:8px}
+ .actions>* ,.orderActions>*{flex:1 1 130px;min-width:0}
+ .tabs{display:flex;gap:8px;overflow-x:auto;max-width:100%;padding-bottom:8px;-webkit-overflow-scrolling:touch}
+ .tabs>*{flex:0 0 auto;white-space:nowrap}
+ .catalogGrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .catalogItem{min-width:0}
+ .linkBox,.customerLinkBox{overflow-wrap:anywhere;word-break:break-word}
+}
+@media(max-width:380px){.catalogGrid{grid-template-columns:minmax(0,1fr)}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+
