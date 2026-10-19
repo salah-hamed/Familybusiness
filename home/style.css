@@ -79,3 +79,23 @@
 }
 
 .projectCountSummary{display:flex;align-items:center;gap:12px;margin-top:20px;padding:15px 18px;border-radius:16px;background:#edf8f0;color:#175b37}.projectCountSummary strong{font-size:17px}.projectCountSummary span{color:#64736a;font-size:13px}
+
+
+/* Family Business responsive design refinement — additive only */
+:root{--fb-brand:#123d2a;--fb-accent:#16a36a;--fb-page:#f5f8f5;--fb-line:#e1e9e2}
+:where(a,button,input,select,textarea){-webkit-tap-highlight-color:transparent}
+:where(a,button,input,select,textarea):focus-visible{outline:3px solid rgba(22,163,106,.38);outline-offset:3px}
+@media(max-width:620px){
+  .siteHeader{gap:10px;padding:10px 14px;flex-wrap:wrap}
+  .headerNav{gap:12px;max-width:100%;overflow-x:auto;scrollbar-width:none}
+  .headerNav a{white-space:nowrap}
+  .headerCta{padding:10px 12px;white-space:nowrap}
+  .hero{width:calc(100% - 28px);padding:38px 0 34px;grid-template-columns:minmax(0,1fr);gap:24px}
+  .hero h1{font-size:clamp(32px,9vw,44px);line-height:1.25}
+  .hero p{font-size:15px}
+  .primaryCta,.secondaryCta{min-height:48px;width:100%;padding:13px 16px}
+  .hero>*,.hero section{min-width:0}
+  img,video{max-width:100%;height:auto}
+}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
