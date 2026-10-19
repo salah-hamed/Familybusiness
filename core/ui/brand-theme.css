@@ -1,0 +1,110 @@
+/* Family Business shared brand theme — visual-only overrides.
+   Palette: royal blue, white, warm gold.
+   Intentionally contains no JavaScript, layout rewrites, or behavior changes. */
+:root {
+  color-scheme: light;
+  --fb-brand: #2456d6;
+  --fb-brand-deep: #173b91;
+  --fb-gold: #e8bd55;
+  --fb-gold-deep: #9a6b08;
+  --fb-page: #f7f9ff;
+  --fb-panel: #ffffff;
+  --fb-ink: #172554;
+  --fb-muted: #64748b;
+  --fb-line: #dce5f5;
+  --primary: #2456d6;
+  --secondary: #e8bd55;
+  --brand: #2456d6;
+  --brand-2: #173b91;
+  --green: #2456d6;
+  --deep: #173b91;
+  --ws-green: #2456d6;
+  --ws-ink: #172554;
+  --ws-orange: #e8bd55;
+  --ws-gold: #c99a2e;
+  --bg: #f7f9ff;
+  --ink: #172554;
+  --line: #dce5f5;
+}
+html { accent-color: var(--fb-brand); }
+body {
+  color: var(--fb-ink);
+  background-color: var(--fb-page);
+}
+:where(input, select, textarea) { accent-color: var(--fb-brand); }
+:where(input, select, textarea):focus {
+  border-color: var(--fb-brand) !important;
+  box-shadow: 0 0 0 3px rgba(36, 86, 214, .13) !important;
+}
+:where(button, a, input, select, textarea):focus-visible {
+  outline-color: rgba(36, 86, 214, .55);
+}
+:where(.card, .subcard, .adminCard, .metricCard, .statCard, .projectCard,
+       .rowCard, .orderCard, .productCard, .auth-card, .sectionCard) {
+  border-color: var(--fb-line);
+  box-shadow: 0 10px 28px rgba(23, 59, 145, .06);
+}
+:where(.primary, .primaryBtn, .primaryButton, .btn-primary, .primaryMarketing,
+       .payment, #registerBtn, #submitPaymentProofBtn, .tabBtn.active) {
+  background: linear-gradient(135deg, var(--fb-brand), var(--fb-brand-deep));
+  border-color: var(--fb-brand);
+  color: #fff;
+}
+:where(.secondary, .secondaryBtn, .btn-secondary, .tabBtn:not(.active),
+       .tabs button, .ghost, .text-action) {
+  border-color: #d7e2fb;
+  background-color: #eef3ff;
+  color: var(--fb-brand-deep);
+}
+:where(.eyebrow, .sectionKicker, .cardEyebrow, .sectionLabel, .section-kicker) {
+  color: var(--fb-gold-deep);
+}
+:where(.topbar, .heroPanel, .workspaceHero, .heroCard, .dashboardHeader,
+       .operatorHeader, .merchantHero, .pageHero, .mainHero) {
+  background: linear-gradient(135deg, #173b91 0%, #2456d6 72%, #315fe0 100%);
+  color: #fff;
+  box-shadow: 0 18px 42px rgba(23, 59, 145, .16);
+}
+:where(.topbar, .heroPanel, .workspaceHero, .heroCard, .dashboardHeader,
+       .operatorHeader, .merchantHero, .pageHero, .mainHero)
+  :where(.eyebrow, .sectionKicker, .cardEyebrow, .sectionLabel, .section-kicker) {
+  color: #ffe7a3;
+}
+:where(.heroPanel p, .workspaceHero p, .topbar p, .heroCard p, .dashboardHeader p) {
+  color: rgba(255,255,255,.88);
+}
+:where(.brandMark, .logo-icon, .workspaceLogo, .appLogo) {
+  background: linear-gradient(135deg, var(--fb-brand), var(--fb-brand-deep));
+  box-shadow: 0 10px 24px rgba(36, 86, 214, .2);
+}
+:where(.adminTabs, .tabs, .bottomNav, .navBar, .tabBar) {
+  border-color: var(--fb-line);
+}
+:where(.tabBtn.active, .navItem.active, .tabs button.active) {
+  color: var(--fb-brand-deep);
+  box-shadow: 0 4px 14px rgba(23, 59, 145, .10);
+}
+:where(.billingBadge, .marketingBadge, .visualBadge, .sectionCounter) {
+  border-color: rgba(232, 189, 85, .55);
+}
+:where(.metricCard.moneyCard, .revenueStat, .accentNew, .accentAccepted, .accentDone) {
+  border-top-color: var(--fb-gold);
+}
+:where(.statusPill, .pill, .badge, .statusBadge) {
+  border-color: #dce5f5;
+}
+:where(.support-link, .switch-mode a, .auth-card a:not(.button), .textLink) {
+  color: var(--fb-brand);
+}
+:where(.projectCard:before, .progressBar, .progressFill, .fbGuideProgressBar) {
+  background: linear-gradient(90deg, var(--fb-brand), var(--fb-gold));
+}
+:where(.workspaceHero, .heroPanel, .topbar, .dashboardHeader, .heroCard) {
+  border-color: rgba(232, 189, 85, .35);
+}
+:where(.subscriptionCard, .quickCard, .marketingCard, .visualMarketingBox) {
+  border-color: var(--fb-line);
+}
+@media (prefers-reduced-motion: reduce) {
+  :where(button, a, input, select, textarea) { scroll-behavior: auto; }
+}
