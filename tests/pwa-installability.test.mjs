@@ -50,6 +50,30 @@ const surfaces = [
     surface: "laundry",
     manifest: "../../pwa/manifests/laundry.webmanifest",
     install: "../../pwa/install.js"
+  },
+  {
+    path: "supermarket-operator/index.html",
+    surface: "supermarket-operator",
+    manifest: "../pwa/manifests/supermarket-operator.webmanifest",
+    install: "../pwa/install.js"
+  },
+  {
+    path: "restaurant-operator/index.html",
+    surface: "restaurant-operator",
+    manifest: "../pwa/manifests/restaurant-operator.webmanifest",
+    install: "../pwa/install.js"
+  },
+  {
+    path: "bakery-operator/index.html",
+    surface: "bakery-operator",
+    manifest: "../pwa/manifests/bakery-operator.webmanifest",
+    install: "../pwa/install.js"
+  },
+  {
+    path: "laundry-operator/index.html",
+    surface: "laundry-operator",
+    manifest: "../pwa/manifests/laundry-operator.webmanifest",
+    install: "../pwa/install.js"
   }
 ];
 
@@ -60,7 +84,11 @@ const manifestPaths = [
   "pwa/manifests/supermarket.webmanifest",
   "pwa/manifests/restaurant.webmanifest",
   "pwa/manifests/bakery.webmanifest",
-  "pwa/manifests/laundry.webmanifest"
+  "pwa/manifests/laundry.webmanifest",
+  "pwa/manifests/supermarket-operator.webmanifest",
+  "pwa/manifests/restaurant-operator.webmanifest",
+  "pwa/manifests/bakery-operator.webmanifest",
+  "pwa/manifests/laundry-operator.webmanifest"
 ];
 
 test("all requested surfaces expose manifest, install manager, mobile capability and touch icon", () => {
