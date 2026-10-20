@@ -231,3 +231,22 @@ test("customer pages pass the real business name to the PWA identity", () => {
     assert.match(source, /window\.FamilyBusinessPwa\?\.setBrand\(installName\)/, path);
   }
 });
+
+test("operator PWA preserves project and WhatsApp invite context when installed and reopened", () => {
+  const installer = readFileSync("pwa/install.js", "utf8");
+  assert.match(installer, /function buildOperatorManifest\(\)/);
+  assert.match(installer, /start\.searchParams\.set\("project", projectId\)/);
+  assert.match(installer, /start\.searchParams\.set\("invite", inviteToken\)/);
+  assert.match(installer, /familybusiness:pwa:operator-launch:/);
+  assert.match(installer, /restoreOperatorLaunch\(\)/);
+  for (const path of [
+    "supermarket-operator/app.js",
+    "restaurant-operator/app.js",
+    "bakery-operator/app.js",
+    "laundry-operator/app.js"
+  ]) {
+    const source = readFileSync(path, "utf8");
+    assert.match(source, /resolveOperatorLaunchParams\(\)/, path);
+    assert.match(source, /location\.replace\(saved\.toString\(\)\)/, path);
+  }
+});
