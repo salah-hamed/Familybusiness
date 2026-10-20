@@ -8,7 +8,7 @@
   "scope": "../../templates/supermarket/",
   "display": "standalone",
   "background_color": "#f8fafc",
-  "theme_color": "#16a34a",
+  "theme_color": "#2456d6",
   "icons": [
     {
       "src": "../icons/supermarket-192.png",
