@@ -22,7 +22,34 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 const $=id=>document.getElementById(id);
-const params=new URLSearchParams(location.search);
+function resolveOperatorLaunchParams(){
+  const currentParams = new URLSearchParams(location.search);
+  const storageKey = "familybusiness:pwa:operator-launch:" + location.pathname;
+  if(currentParams.get("project") && currentParams.get("invite")){
+    try{
+      const saved = new URL(location.href);
+      saved.hash = "";
+      localStorage.setItem(storageKey, saved.toString());
+    }catch{}
+    return currentParams;
+  }
+  const standalone = window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator.standalone === true;
+  if(standalone){
+    try{
+      const raw = localStorage.getItem(storageKey);
+      if(raw){
+        const saved = new URL(raw);
+        if(saved.origin === location.origin && saved.pathname === location.pathname && saved.searchParams.get("project") && saved.searchParams.get("invite")){
+          location.replace(saved.toString());
+          return new URLSearchParams(saved.search);
+        }
+      }
+    }catch{}
+  }
+  return currentParams;
+}
+
+const params=resolveOperatorLaunchParams();
 const projectId=params.get("project")||"";
 const inviteToken=params.get("invite")||"";
 const inviteAuthEmail=buildOperatorAuthEmail(inviteToken);
