@@ -1,100 +1,133 @@
 /* Family Business shared brand theme — visual-only overrides.
-   Palette: royal blue, white, warm gold.
-   Intentionally contains no JavaScript, layout rewrites, or behavior changes. */
+   Brand: royal blue + white + warm gold.
+   Keep semantic status colors (success, warning, error) distinct from brand colors.
+   Do not add behavior, layout rewrites, or application logic here. */
 :root {
   color-scheme: light;
   --fb-brand: #2456d6;
   --fb-brand-deep: #173b91;
+  --fb-brand-soft: #eef3ff;
   --fb-gold: #e8bd55;
-  --fb-gold-deep: #9a6b08;
+  --fb-gold-deep: #8a620b;
   --fb-page: #f7f9ff;
   --fb-panel: #ffffff;
   --fb-ink: #172554;
   --fb-muted: #64748b;
   --fb-line: #dce5f5;
-  --primary: #2456d6;
-  --secondary: #e8bd55;
-  --brand: #2456d6;
-  --brand-2: #173b91;
-  --green: #2456d6;
-  --deep: #173b91;
-  --ws-green: #2456d6;
-  --ws-ink: #172554;
-  --ws-orange: #e8bd55;
+  --fb-focus: rgba(36, 86, 214, .18);
+
+  /* Compatibility tokens used by existing CSS files. */
+  --primary: var(--fb-brand);
+  --brand: var(--fb-brand);
+  --brand-2: var(--fb-brand-deep);
+  --deep: var(--fb-brand-deep);
+  --green: #15803d; /* Keep success meaning green. */
+  --ws-green: var(--fb-brand);
+  --ws-ink: var(--fb-ink);
+  --ws-orange: var(--fb-gold);
   --ws-gold: #c99a2e;
-  --bg: #f7f9ff;
-  --ink: #172554;
-  --line: #dce5f5;
+  --bg: var(--fb-page);
+  --ink: var(--fb-ink);
+  --line: var(--fb-line);
 }
+
 html { accent-color: var(--fb-brand); }
 body {
   color: var(--fb-ink);
   background-color: var(--fb-page);
 }
+
 :is(input, select, textarea) { accent-color: var(--fb-brand); }
 :is(input, select, textarea):focus {
-  border-color: var(--fb-brand) !important;
-  box-shadow: 0 0 0 3px rgba(36, 86, 214, .13) !important;
+  border-color: var(--fb-brand);
+  box-shadow: 0 0 0 3px var(--fb-focus);
 }
 :is(button, a, input, select, textarea):focus-visible {
-  outline-color: rgba(36, 86, 214, .55);
+  outline: 2px solid rgba(36, 86, 214, .65);
+  outline-offset: 2px;
 }
+
+/* Shared surfaces: borders and shadows only; do not force card backgrounds. */
 :is(.card, .subcard, .adminCard, .metricCard, .statCard, .projectCard,
-       .rowCard, .orderCard, .productCard, .auth-card, .sectionCard) {
+    .rowCard, .orderCard, .productCard, .auth-card, .sectionCard,
+    .quickCard, .subscriptionCard, .marketingCard, .visualMarketingBox) {
   border-color: var(--fb-line);
-  box-shadow: 0 10px 28px rgba(23, 59, 145, .06);
+  box-shadow: 0 8px 24px rgba(23, 59, 145, .055);
 }
-:is(.primary, .primaryBtn, .primaryButton, .btn-primary, .primaryMarketing,
-       .payment, #registerBtn, #submitPaymentProofBtn, .tabBtn.active) {
+
+/* Primary actions only. Status chips and generic text classes are deliberately excluded. */
+:is(button, a, input[type="button"], input[type="submit"]):is(
+  .primary, .primaryBtn, .primaryButton, .btn-primary, .primaryMarketing,
+  .payment, #registerBtn, #submitPaymentProofBtn
+) {
   background: linear-gradient(135deg, var(--fb-brand), var(--fb-brand-deep));
   border-color: var(--fb-brand);
   color: #fff;
 }
-:is(.secondary, .secondaryBtn, .btn-secondary, .tabBtn:not(.active),
-       .tabs button, .ghost, .text-action) {
+:is(button, a, input[type="button"], input[type="submit"]):is(
+  .primary, .primaryBtn, .primaryButton, .btn-primary, .primaryMarketing,
+  .payment, #registerBtn, #submitPaymentProofBtn
+):hover {
+  filter: brightness(.97);
+}
+
+/* Secondary actions and inactive navigation are kept light and readable. */
+:is(button, a, input[type="button"], input[type="submit"]):is(
+  .secondary, .secondaryBtn, .btn-secondary, .ghost, .text-action
+),
+:is(.tabBtn:not(.active), .tabs button:not(.active)) {
   border-color: #d7e2fb;
-  background-color: #eef3ff;
+  background-color: var(--fb-brand-soft);
   color: var(--fb-brand-deep);
 }
-:is(.eyebrow, .sectionKicker, .cardEyebrow, .sectionLabel, .section-kicker) {
-  color: var(--fb-gold-deep);
-}
+
+/* Brand headers: only explicit header/hero component names, not generic .heroCard. */
 :is(.topbar, .topBar, .storeHeader, .restaurantHero, .adminHeader, .heroPanel,
-       .workspaceHero, .heroCard, .dashboardHeader, .operatorHeader,
-       .merchantHero, .pageHero, .mainHero) {
+    .workspaceHero, .dashboardHeader, .operatorHeader, .merchantHero,
+    .pageHero, .mainHero, .hero) {
   background: linear-gradient(135deg, #173b91 0%, #2456d6 72%, #315fe0 100%);
   color: #fff;
-  box-shadow: 0 18px 42px rgba(23, 59, 145, .16);
+  border-color: rgba(232, 189, 85, .35);
 }
 :is(.topbar, .topBar, .storeHeader, .restaurantHero, .adminHeader, .heroPanel,
-       .workspaceHero, .heroCard, .dashboardHeader, .operatorHeader,
-       .merchantHero, .pageHero, .mainHero)
+    .workspaceHero, .dashboardHeader, .operatorHeader, .merchantHero,
+    .pageHero, .mainHero, .hero)
   :is(.eyebrow, .sectionKicker, .cardEyebrow, .sectionLabel, .section-kicker) {
   color: #ffe7a3;
 }
 :is(.heroPanel p, .workspaceHero p, .topbar p, .topBar p, .storeHeader p,
-       .restaurantHero p, .adminHeader p, .heroCard p, .dashboardHeader p) {
-  color: rgba(255,255,255,.88);
+    .restaurantHero p, .adminHeader p, .dashboardHeader p, .operatorHeader p,
+    .merchantHero p, .pageHero p, .mainHero p, .hero p) {
+  color: rgba(255, 255, 255, .9);
 }
+
+/* Logo accents and navigation states. */
 :is(.brandMark, .logo-icon, .workspaceLogo, .appLogo) {
   background: linear-gradient(135deg, var(--fb-brand), var(--fb-brand-deep));
-  box-shadow: 0 10px 24px rgba(36, 86, 214, .2);
+  box-shadow: 0 8px 20px rgba(36, 86, 214, .18);
 }
 :is(.adminTabs, .tabs, .bottomNav, .navBar, .tabBar) {
   border-color: var(--fb-line);
 }
 :is(.tabBtn.active, .navItem.active, .tabs button.active) {
   color: var(--fb-brand-deep);
-  box-shadow: 0 4px 14px rgba(23, 59, 145, .10);
+  border-color: rgba(36, 86, 214, .24);
+  box-shadow: 0 4px 14px rgba(23, 59, 145, .09);
+}
+
+/* Gold is a highlight, never a replacement for status colors. */
+:is(.eyebrow, .sectionKicker, .cardEyebrow, .sectionLabel, .section-kicker) {
+  color: var(--fb-gold-deep);
 }
 :is(.billingBadge, .marketingBadge, .visualBadge, .sectionCounter) {
-  border-color: rgba(232, 189, 85, .55);
+  border-color: rgba(232, 189, 85, .65);
 }
 :is(.metricCard.moneyCard, .revenueStat, .accentNew, .accentAccepted, .accentDone) {
   border-top-color: var(--fb-gold);
 }
 :is(.statusPill, .pill, .badge, .statusBadge) {
-  border-color: #dce5f5;
+  border-color: var(--fb-line);
+  /* Intentionally do not override background/text colors: these may encode order state. */
 }
 :is(.support-link, .switch-mode a, .auth-card a:not(.button), .textLink) {
   color: var(--fb-brand);
@@ -102,12 +135,7 @@ body {
 :is(.projectCard:before, .progressBar, .progressFill, .fbGuideProgressBar) {
   background: linear-gradient(90deg, var(--fb-brand), var(--fb-gold));
 }
-:is(.workspaceHero, .heroPanel, .topbar, .dashboardHeader, .heroCard) {
-  border-color: rgba(232, 189, 85, .35);
-}
-:is(.subscriptionCard, .quickCard, .marketingCard, .visualMarketingBox) {
-  border-color: var(--fb-line);
-}
+
 @media (prefers-reduced-motion: reduce) {
   :is(button, a, input, select, textarea) { scroll-behavior: auto; }
 }
