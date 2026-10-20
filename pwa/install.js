@@ -6,6 +6,7 @@ const swUrl = new URL("service-worker.js", repoRoot);
 const projectId = new URLSearchParams(location.search).get("project") || "";
 
 const CUSTOMER_SURFACES = new Set(["supermarket","restaurant","bakery","laundry"]);
+const OPERATOR_SURFACES = new Set(["supermarket-operator","restaurant-operator","bakery-operator","laundry-operator"]);
 const SURFACE_CONFIG = {
   platform: { name: "Family Business", icon: "icon", theme: "#0f172a" },
   workspace: { name: "مساحة عمل Family Business", icon: "icon", theme: "#0f172a" },
@@ -13,7 +14,11 @@ const SURFACE_CONFIG = {
   supermarket: { name: "السوبرماركت", icon: "supermarket", theme: "#16a34a" },
   restaurant: { name: "المطعم", icon: "restaurant", theme: "#EA580C" },
   bakery: { name: "المخبز", icon: "bakery", theme: "#D97706" },
-  laundry: { name: "المغسلة", icon: "laundry", theme: "#0ea5e9" }
+  laundry: { name: "المغسلة", icon: "laundry", theme: "#2456d6" },
+  "supermarket-operator": { name: "لوحة تشغيل السوبرماركت", icon: "supermarket", theme: "#2456d6" },
+  "restaurant-operator": { name: "لوحة تشغيل المطعم", icon: "restaurant", theme: "#2456d6" },
+  "bakery-operator": { name: "لوحة تشغيل المخبز", icon: "bakery", theme: "#2456d6" },
+  "laundry-operator": { name: "لوحة تشغيل المغسلة", icon: "laundry", theme: "#2456d6" }
 };
 
 const isStandalone = () =>
@@ -184,7 +189,7 @@ function recentlyDismissed(){
 }
 
 function installIconMarkup(extraClass = ""){
-  if(templateSurface()){
+  if(templateSurface() || OPERATOR_SURFACES.has(surface)){
     return '<div class="fbPwaInstallIcon ' + extraClass + '"><img src="' + iconUrl(192) + '" alt=""></div>';
   }
   return '<div class="fbPwaInstallIcon ' + extraClass + '">FB</div>';

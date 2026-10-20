@@ -1,0 +1,26 @@
+{
+  "name": "لوحة تشغيل المخبز",
+  "short_name": "لوحة تشغيل المخبز",
+  "lang": "ar",
+  "dir": "rtl",
+  "id": "../../bakery-operator/",
+  "start_url": "../../bakery-operator/?source=pwa",
+  "scope": "../../bakery-operator/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2456d6",
+  "icons": [
+    {
+      "src": "../icons/bakery-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "../icons/bakery-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
