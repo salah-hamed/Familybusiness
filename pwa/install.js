@@ -4,6 +4,7 @@ const scriptUrl = new URL(import.meta.url);
 const repoRoot = new URL("../", scriptUrl);
 const swUrl = new URL("service-worker.js", repoRoot);
 const projectId = new URLSearchParams(location.search).get("project") || "";
+const inviteToken = new URLSearchParams(location.search).get("invite") || "";
 
 const CUSTOMER_SURFACES = new Set(["supermarket","restaurant","bakery","laundry"]);
 const OPERATOR_SURFACES = new Set(["supermarket-operator","restaurant-operator","bakery-operator","laundry-operator"]);
@@ -126,6 +127,87 @@ function applyProjectManifest(name = currentBrandName){
     document.head.appendChild(appleTitle);
   }
   appleTitle.content = manifest.short_name;
+}
+
+
+function operatorSurface(){
+  return OPERATOR_SURFACES.has(surface);
+}
+
+function buildOperatorManifest(){
+  if(!operatorSurface() || !projectId || !inviteToken) return null;
+  const config = SURFACE_CONFIG[surface] || SURFACE_CONFIG.platform;
+  const start = new URL(location.href);
+  start.hash = "";
+  start.search = "";
+  start.searchParams.set("project", projectId);
+  start.searchParams.set("invite", inviteToken);
+  start.searchParams.set("source", "pwa");
+  const scope = new URL("./", location.href);
+  scope.search = "";
+  scope.hash = "";
+  const id = new URL("./", location.href);
+  id.searchParams.set("project", projectId);
+  return {
+    id: id.href,
+    name: config.name,
+    short_name: config.name.slice(0, 30),
+    lang: "ar",
+    dir: "rtl",
+    start_url: start.href,
+    scope: scope.href,
+    display: "standalone",
+    background_color: "#ffffff",
+    theme_color: config.theme,
+    icons: [
+      { src: iconUrl(192), sizes: "192x192", type: "image/png", purpose: "any maskable" },
+      { src: iconUrl(512), sizes: "512x512", type: "image/png", purpose: "any maskable" }
+    ]
+  };
+}
+
+function applyOperatorManifest(){
+  const manifest = buildOperatorManifest();
+  if(!manifest || !manifestLink) return;
+  const previous = dynamicManifestUrl;
+  dynamicManifestUrl = URL.createObjectURL(new Blob([JSON.stringify(manifest)], { type: "application/manifest+json" }));
+  manifestLink.href = dynamicManifestUrl;
+  if(previous) window.setTimeout(() => URL.revokeObjectURL(previous), 30000);
+  const touchIcon = document.querySelector('link[rel="apple-touch-icon"]');
+  if(touchIcon) touchIcon.href = iconUrl(192);
+}
+
+function operatorLaunchStorageKey(){
+  return "familybusiness:pwa:operator-launch:" + location.pathname;
+}
+
+function persistOperatorLaunch(){
+  if(!operatorSurface() || !projectId || !inviteToken) return;
+  try{
+    const saved = new URL(location.href);
+    saved.hash = "";
+    saved.searchParams.set("source", "pwa");
+    localStorage.setItem(operatorLaunchStorageKey(), saved.toString());
+  }catch(error){
+    console.warn("PWA_OPERATOR_LAUNCH_SAVE_FAILED", error);
+  }
+}
+
+function restoreOperatorLaunch(){
+  if(!operatorSurface() || isStandalone() === false) return false;
+  const params = new URLSearchParams(location.search);
+  if(params.get("project") && params.get("invite")) return false;
+  try{
+    const raw = localStorage.getItem(operatorLaunchStorageKey());
+    if(!raw) return false;
+    const target = new URL(raw);
+    if(target.origin !== location.origin || target.pathname !== location.pathname) return false;
+    if(!target.searchParams.get("project") || !target.searchParams.get("invite")) return false;
+    location.replace(target.toString());
+    return true;
+  }catch{
+    return false;
+  }
 }
 
 function refreshInstallUi(){
@@ -291,9 +373,13 @@ window.addEventListener("appinstalled", () => {
 if(templateSurface() && projectId){
   applyProjectManifest(currentBrandName);
 }
+if(operatorSurface() && projectId && inviteToken){
+  applyOperatorManifest();
+  persistOperatorLaunch();
+}
 persistTemplateLaunch();
 
-if(restoreTemplateLaunch()) {
+if(restoreTemplateLaunch() || restoreOperatorLaunch()) {
   // Stop normal page boot from doing useful work before the redirect completes.
 } else {
   registerServiceWorker();
