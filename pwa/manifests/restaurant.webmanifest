@@ -8,7 +8,7 @@
   "scope": "../../templates/restaurant/",
   "display": "standalone",
   "background_color": "#fff7ed",
-  "theme_color": "#EA580C",
+  "theme_color": "#2456d6",
   "icons": [
     {
       "src": "../icons/restaurant-192.png",

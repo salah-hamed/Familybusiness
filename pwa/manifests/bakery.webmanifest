@@ -8,7 +8,7 @@
   "scope": "../../templates/bakery/",
   "display": "standalone",
   "background_color": "#fffbeb",
-  "theme_color": "#D97706",
+  "theme_color": "#2456d6",
   "icons": [
     {
       "src": "../icons/bakery-192.png",
