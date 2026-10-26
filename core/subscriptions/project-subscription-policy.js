@@ -23,16 +23,6 @@ function validDate(value) {
   return date instanceof Date && Number.isFinite(date.getTime()) ? date : null;
 }
 
-function result(phase, allowed, deadline = null, requiresPayment = false) {
-  return {
-    phase,
-    allowed,
-    requiresPayment,
-    deadline,
-    remainingMilliseconds: deadline ? Math.max(0, deadline.getTime() - result.now) : null
-  };
-}
-
 /**
  * Resolves one project's billing state, independent of all other projects.
  * Expected project fields:
