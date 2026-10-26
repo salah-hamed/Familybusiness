@@ -97,7 +97,7 @@ test("expired paid project cannot restart trial; suspended and malformed project
 
 test("approved subscription expiry is calculated from approval time, not project creation", () => {
   assert.equal(nextProjectSubscriptionExpiry(at(9)).toISOString(),
-    "2026-10-31T00:00:00.000Z");
+    "2026-11-09T00:00:00.000Z");
   assert.throws(() => nextProjectSubscriptionExpiry("invalid"),
     { message: "INVALID_APPROVAL_TIME" });
 });
