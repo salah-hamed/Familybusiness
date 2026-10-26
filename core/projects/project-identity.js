@@ -6,7 +6,7 @@
  * Runtime creation must not switch to these IDs until Firestore Rules accept
  * the same contract; this helper intentionally does not alter legacy lookups.
  */
-const SAFE_SEGMENT = /^[A-Za-z0-9-]{1,128}$/;
+const SAFE_SEGMENT = /^[A-Za-z0-9_-]{1,128}$/;
 const SUPPORTED_TEMPLATES = new Set(["supermarket", "restaurant", "bakery", "laundry"]);
 
 export function getLegacyProjectDocId(ownerId, templateId) {
