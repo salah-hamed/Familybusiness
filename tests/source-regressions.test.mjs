@@ -838,3 +838,18 @@ test("Firebase Hosting publishes runtime assets only and applies baseline securi
   assert.equal(laundry.includes("salah-hamed.github.io/Familybusiness"), false);
   assert.equal(laundry.includes('class="platformCtaLink" href="../../"'), true);
 });
+
+
+test("admin commission aggregate has a matching version-controlled composite index", () => {
+  const config = JSON.parse(readFileSync("firestore.indexes.json", "utf8"));
+  const found = config.indexes.some(index =>
+    index.collectionGroup === "commissionLedger"
+    && index.queryScope === "COLLECTION"
+    && JSON.stringify(index.fields) === JSON.stringify([
+      { fieldPath: "sourceType", order: "ASCENDING" },
+      { fieldPath: "amount", order: "ASCENDING" }
+    ])
+  );
+
+  assert.equal(found, true, "admin aggregate on commissionLedger filtered by sourceType needs the amount index");
+});
