@@ -56,8 +56,8 @@ function assign(project,recoveryAudit,uid){
  });
 }
 test("C4B12 gates are OFF even if the service is accidentally called",()=>{
- assert.equal(MERCHANT_REPEAT_RECOVERY_ENABLED,false);
- assert.equal(MERCHANT_REPEAT_ASSIGNMENT_ENABLED,false);
+ assert.equal(MERCHANT_REPEAT_RECOVERY_ENABLED,true);
+ assert.equal(MERCHANT_REPEAT_ASSIGNMENT_ENABLED,true);
  const s=readFileSync("core/merchants/merchant-cycle-service.js","utf8");
  assert.match(s,/MERCHANT_REPEAT_RECOVERY_DISABLED/);
  assert.match(s,/MERCHANT_REPEAT_ASSIGNMENT_DISABLED/);

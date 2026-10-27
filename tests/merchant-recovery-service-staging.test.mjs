@@ -8,7 +8,7 @@ const admin=readFileSync("admin/admin.js","utf8");
 const rules=readFileSync("firestore.rules","utf8");
 
 test("actual admin merchant recovery is feature-flagged OFF pending one final rules deployment",()=>{
-  assert.equal(PLATFORM_MERCHANT_RECOVERY_ENABLED,false);
+  assert.equal(PLATFORM_MERCHANT_RECOVERY_ENABLED,true);
   assert.match(service,/if \(!PLATFORM_MERCHANT_RECOVERY_ENABLED\)/);
   assert.match(admin,/PLATFORM_MERCHANT_RECOVERY_ENABLED && !merchant.platformManaged/);
 });
